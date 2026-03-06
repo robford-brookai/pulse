@@ -139,5 +139,47 @@ services:
       retries: 10
       start_period: 30s
 
+  hasura-init:
+    image: python:3.13-slim
+    command: >
+      bash -c "
+        pip install httpx --quiet &&
+        python /scripts/apply_metadata.py
+      "
+    environment:
+      HASURA_URL: http://hasura:8080
+      HASURA_GRAPHQL_ADMIN_SECRET: ${HASURA_GRAPHQL_ADMIN_SECRET:-changeme_admin_secret}
+    volumes:
+      - ./hasura:/scripts:ro
+    depends_on:
+      hasura:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
+  pocar-connector:
+    build:
+      context: ..
+      dockerfile: services/pocar-connector/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ocean:changeme@postgres:5432/ocean}
+      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      POCAR_WEBHOOK_SECRET: ${POCAR_WEBHOOK_SECRET:-dev_secret}
+    ports:
+      - "8002:8000"
+    depends_on:
+      hasura:
+        condition: service_healthy
+      redpanda-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
 volumes:
   postgres_data:
