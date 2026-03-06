@@ -236,6 +236,12 @@ services:
       SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-}
       OPS_SLACK_CHANNEL: ${OPS_SLACK_CHANNEL:-#care-alerts-ops}
       HASURA_URL: http://hasura:8080
+      HASURA_GRAPHQL_ADMIN_SECRET: ${HASURA_GRAPHQL_ADMIN_SECRET:-changeme_admin_secret}
+      ZCC_ACCOUNT_ID: ${ZCC_ACCOUNT_ID:-}
+      ZCC_CLIENT_ID: ${ZCC_CLIENT_ID:-}
+      ZCC_CLIENT_SECRET: ${ZCC_CLIENT_SECRET:-}
+      ZCC_DEFAULT_QUEUE_ID: ${ZCC_DEFAULT_QUEUE_ID:-}
+      PHI_STORE_URL: ${PHI_STORE_URL:-}
     ports:
       - "8005:8000"
     depends_on:
