@@ -77,7 +77,7 @@ async def write_event(event_bytes: bytes, topic: str = "unknown") -> None:
                     "audit_id": str(uuid.uuid4()),
                     "event_id": event_data["event_id"],
                     "action_type": "event.ingested",
-                    "actor_id": event_data.get("actor_id", "system"),
+                    "actor_id": event_data.get("actor_id") or "system",
                     "source_system": event_data.get("source_system", "unknown"),
                     "entity_type": event_data.get("entity_type"),
                     "entity_id": event_data.get("entity_id"),
