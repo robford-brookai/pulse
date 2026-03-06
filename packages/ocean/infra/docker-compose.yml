@@ -181,5 +181,27 @@ services:
       retries: 10
       start_period: 30s
 
+  graph-projection:
+    build:
+      context: ..
+      dockerfile: services/graph-projection/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ocean:changeme@postgres:5432/ocean}
+      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+    ports:
+      - "8003:8000"
+    depends_on:
+      hasura-init:
+        condition: service_completed_successfully
+      redpanda-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
 volumes:
   postgres_data:
