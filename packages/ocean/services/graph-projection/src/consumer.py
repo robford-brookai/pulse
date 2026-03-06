@@ -16,6 +16,8 @@ from confluent_kafka.aio import AIOConsumer as Consumer
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.handlers.alerts import handle_alert_claimed, handle_alert_created, handle_alert_resolved
+from src.handlers.interactions import handle_call_connected, handle_call_started
+from src.handlers.outcomes import handle_call_completed, handle_call_missed
 from src.handlers.signals import handle_signal_anomalous, handle_signal_missing, handle_signal_received
 from src.handlers.tasks import handle_task_assigned, handle_task_completed, handle_task_created
 
@@ -48,6 +50,10 @@ EVENT_HANDLERS: dict = {
     "task.created": handle_task_created,
     "task.completed": handle_task_completed,
     "task.assigned": handle_task_assigned,
+    "call.started": handle_call_started,
+    "call.connected": handle_call_connected,
+    "call.completed": handle_call_completed,
+    "call.missed": handle_call_missed,
 }
 
 
