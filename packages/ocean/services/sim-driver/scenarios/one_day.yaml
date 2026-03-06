@@ -1,0 +1,74 @@
+name: one_day
+description: "Compressed 8-hour day of care coordination activity (960x compression = 30 wall-clock minutes)"
+compression_ratio: 960  # 8 sim-hours = 30 wall-clock minutes
+
+patients:
+  - patient_id: "sim-pt-001"
+    clinic_id: "clinic-demo"
+    assigned_agent: coordinator_alice
+    signals:
+      - sim_hour: 9.0
+        type: glucose
+        value: 218
+        unit: mg/dL
+        anomalous: true
+      - sim_hour: 13.5
+        type: spo2
+        value: 87
+        unit: "%"
+        anomalous: true
+      - sim_hour: 15.0
+        type: weight
+        value: 89
+        unit: kg
+        anomalous: false
+
+  - patient_id: "sim-pt-002"
+    clinic_id: "clinic-demo"
+    assigned_agent: coordinator_bob
+    signals:
+      - sim_hour: 10.0
+        type: weight
+        value: 112
+        unit: kg
+        anomalous: true
+      - sim_hour: 14.0
+        type: glucose
+        value: 195
+        unit: mg/dL
+        anomalous: false
+
+  - patient_id: "sim-pt-003"
+    clinic_id: "clinic-demo"
+    assigned_agent: coordinator_alice
+    signals:
+      - sim_hour: 11.5
+        type: spo2
+        value: 82
+        unit: "%"
+        anomalous: true
+
+  - patient_id: "sim-pt-004"
+    clinic_id: "clinic-demo"
+    assigned_agent: coordinator_bob
+    signals:
+      - sim_hour: 12.0
+        type: glucose
+        value: 340
+        unit: mg/dL
+        anomalous: true
+
+  - patient_id: "sim-pt-005"
+    clinic_id: "clinic-demo"
+    assigned_agent: coordinator_alice
+    signals:
+      - sim_hour: 9.5
+        type: glucose
+        value: 165
+        unit: mg/dL
+        anomalous: false
+      - sim_hour: 16.0
+        type: spo2
+        value: 91
+        unit: "%"
+        anomalous: false

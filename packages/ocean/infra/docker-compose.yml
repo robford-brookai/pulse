@@ -63,7 +63,7 @@ services:
     restart: "no"
 
   postgres:
-    image: postgres:16
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_DB: ocean
       POSTGRES_USER: ocean
@@ -273,6 +273,50 @@ services:
       hasura-init:
         condition: service_completed_successfully
       redpanda-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  sim-driver:
+    profiles: [sim]
+    build:
+      context: ..
+      dockerfile: services/sim-driver/Dockerfile
+    environment:
+      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN_SIM:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports:
+      - "8060:8000"
+    depends_on:
+      redpanda-init:
+        condition: service_completed_successfully
+      slack-bot:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  stacte-bridge:
+    build:
+      context: ..
+      dockerfile: services/stacte-bridge/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ocean:changeme@postgres:5432/ocean}
+      VOYAGE_API_KEY: ${VOYAGE_API_KEY:-}
+    ports:
+      - "8070:8000"
+    depends_on:
+      migrate:
         condition: service_completed_successfully
     restart: unless-stopped
     healthcheck:
