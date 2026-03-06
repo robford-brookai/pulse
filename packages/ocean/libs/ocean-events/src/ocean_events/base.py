@@ -78,7 +78,7 @@ class BaseEvent(BaseModel):
                 )
 
     @model_validator(mode="after")
-    def _check_payload_phi(self) -> "BaseEvent":
+    def _check_payload_phi(self) -> BaseEvent:
         phi_keys = _PHI_FIELD_NAMES.intersection(self.payload.keys())
         if phi_keys:
             raise ValueError(
