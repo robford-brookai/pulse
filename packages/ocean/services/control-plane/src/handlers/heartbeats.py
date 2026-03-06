@@ -1,12 +1,35 @@
-"""Connector heartbeat handlers — stub. Implemented in 03-02."""
+"""Control plane handler for connector.heartbeat events."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
+import sqlalchemy as sa
 import structlog
-from sqlalchemy.ext.asyncio import AsyncSession
 
 log = structlog.get_logger()
 
 
-async def handle_connector_heartbeat(event_data: dict, session: AsyncSession) -> None:
-    """Handle connector.heartbeat events from ocean.ops. Stub — implemented in 03-02."""
-    log.debug("connector_heartbeat_stub", event_type=event_data.get("event_type"))
+async def handle_connector_heartbeat(event_data: dict, session, producer=None) -> None:
+    """Handle connector.heartbeat events: upsert connector_health with last_seen timestamp."""
+    payload = event_data.get("payload", {})
+    # Prefer explicit connector_id in payload; fall back to source_system
+    connector_id = payload.get("connector_id") or event_data.get("source_system", "unknown")
+    connector_name = payload.get("connector_name", connector_id)
+    now = datetime.now(tz=timezone.utc)
+
+    await session.execute(
+        sa.text(
+            "INSERT INTO connector_health (connector_id, connector_name, last_seen, created_at) "
+            "VALUES (:connector_id, :connector_name, :last_seen, :created_at) "
+            "ON CONFLICT (connector_id) DO UPDATE SET "
+            "  connector_name = EXCLUDED.connector_name, "
+            "  last_seen = EXCLUDED.last_seen"
+        ),
+        {
+            "connector_id": connector_id,
+            "connector_name": connector_name,
+            "last_seen": now,
+            "created_at": now,
+        },
+    )
+    log.debug("heartbeat_recorded", connector_id=connector_id)
