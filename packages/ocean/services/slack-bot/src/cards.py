@@ -169,6 +169,40 @@ def rejection_confirmed_card(draft_id: str, actor_id: str) -> list[dict]:
     ]
 
 
+def human_gate_confirmed_card(draft_id: str, actor_id: str) -> list[dict]:
+    """Build the card shown after a human gate action is confirmed."""
+    return [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": "[CONFIRMED] Human Gate", "emoji": True},
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"Action confirmed by `{actor_id}`\nDraft: `{draft_id}`",
+            },
+        },
+    ]
+
+
+def human_gate_overridden_card(draft_id: str, actor_id: str) -> list[dict]:
+    """Build the card shown after a human gate action is overridden."""
+    return [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": "[OVERRIDDEN] Human Gate", "emoji": True},
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"Action overridden by `{actor_id}`\nDraft: `{draft_id}`",
+            },
+        },
+    ]
+
+
 def claimed_card(task_id: str, actor_id: str) -> list[dict]:
     """Build the card shown after a task is claimed. No action buttons."""
     return [

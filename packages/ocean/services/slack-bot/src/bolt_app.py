@@ -14,6 +14,8 @@ from src.ai_events import publish_ai_event
 from src.cards import (
     approval_confirmed_card,
     claimed_card,
+    human_gate_confirmed_card,
+    human_gate_overridden_card,
     outreach_draft_card,
     rejection_confirmed_card,
     resolved_card,
@@ -356,3 +358,77 @@ async def handle_outreach_reject(ack, body, client) -> None:
         text=f"Draft rejected by {actor_id}",
     )
     log.info("outreach_rejected", draft_id=draft_id, actor_id=actor_id)
+
+
+# ---------------------------------------------------------------------------
+# Action handlers — human gate confirm and override (Phase 5)
+# ---------------------------------------------------------------------------
+
+@bolt_app.action("human_gate_confirm")
+async def handle_human_gate_confirm(ack, body, client) -> None:
+    """Handle human_gate_confirm button press from sim-driver human gate.
+
+    Ack-first. Updates message with confirmed card, publishes ai.output.confirmed event.
+    """
+    await ack()
+
+    draft_id: str = body["actions"][0]["value"]
+    actor_id: str = body["user"]["id"]
+    channel_id: str = body["container"]["channel_id"]
+    message_ts: str = body["container"]["message_ts"]
+
+    log.info("human_gate_confirm_received", draft_id=draft_id, actor_id=actor_id)
+
+    await publish_ai_event(
+        publisher=_publisher,
+        event_type="ai.output.confirmed",
+        task_id=draft_id,
+        patient_id="unknown",
+        payload={
+            "draft_id": draft_id,
+            "actor_id": actor_id,
+        },
+    )
+
+    await client.chat_update(
+        channel=channel_id,
+        ts=message_ts,
+        blocks=human_gate_confirmed_card(draft_id, actor_id),
+        text=f"Human gate confirmed by {actor_id}",
+    )
+    log.info("human_gate_confirmed", draft_id=draft_id, actor_id=actor_id)
+
+
+@bolt_app.action("human_gate_override")
+async def handle_human_gate_override(ack, body, client) -> None:
+    """Handle human_gate_override button press from sim-driver human gate.
+
+    Ack-first. Updates message with override card, publishes ai.output.overridden event.
+    """
+    await ack()
+
+    draft_id: str = body["actions"][0]["value"]
+    actor_id: str = body["user"]["id"]
+    channel_id: str = body["container"]["channel_id"]
+    message_ts: str = body["container"]["message_ts"]
+
+    log.info("human_gate_override_received", draft_id=draft_id, actor_id=actor_id)
+
+    await publish_ai_event(
+        publisher=_publisher,
+        event_type="ai.output.overridden",
+        task_id=draft_id,
+        patient_id="unknown",
+        payload={
+            "draft_id": draft_id,
+            "actor_id": actor_id,
+        },
+    )
+
+    await client.chat_update(
+        channel=channel_id,
+        ts=message_ts,
+        blocks=human_gate_overridden_card(draft_id, actor_id),
+        text=f"Human gate overridden by {actor_id}",
+    )
+    log.info("human_gate_overridden", draft_id=draft_id, actor_id=actor_id)

@@ -21,35 +21,35 @@ router = APIRouter()
 _SCHEMA_SUMMARY = {
     "tables": [
         {
-            "name": "patients",
+            "table":"patients",
             "description": "Root entity. patient_id (PK), clinic_id, enrollment_status, enrolled_at, updated_at",
         },
         {
-            "name": "signals",
+            "table":"signals",
             "description": "Biometric signals. signal_id (PK), patient_id (FK), signal_type, value, unit, received_at, anomalous",
         },
         {
-            "name": "alerts",
+            "table":"alerts",
             "description": "Clinical alerts. alert_id (PK), patient_id (FK), alert_type, severity, status, source_system, created_at, updated_at",
         },
         {
-            "name": "tasks",
+            "table":"tasks",
             "description": "Care coordination tasks. task_id (PK), alert_id (FK), patient_id (FK), task_type, priority, status, assigned_to, created_at",
         },
         {
-            "name": "interactions",
+            "table":"interactions",
             "description": "Call interactions. interaction_id (PK), task_id (FK), patient_id (FK), interaction_type, outcome, started_at, completed_at",
         },
         {
-            "name": "outcomes",
+            "table":"outcomes",
             "description": "Call outcomes. outcome_id (PK), interaction_id (FK), patient_id (FK), outcome_type, resolution_status, notes, recorded_at",
         },
         {
-            "name": "ai_drafts",
+            "table":"ai_drafts",
             "description": "AI-generated outreach drafts. draft_id (PK), task_id (FK), patient_id, alert_id, draft_text, status, actor_id, created_at",
         },
         {
-            "name": "patient_graph_summary",
+            "table":"patient_graph_summary",
             "description": "Materialized view. patient_id (PK), enrollment_status, alert_count, task_count, interaction_count, outcome_count, last_alert_at, last_call_at, alert_types[], outcome_types[]",
         },
     ],

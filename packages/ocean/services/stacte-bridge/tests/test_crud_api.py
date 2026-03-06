@@ -18,7 +18,7 @@ def test_get_schema_returns_tables_and_relationships():
     schema = _SCHEMA_SUMMARY
     assert "tables" in schema
     assert "relationships" in schema
-    table_names = [t["name"] for t in schema["tables"]]
+    table_names = [t["table"] for t in schema["tables"]]
     assert "patients" in table_names
     assert "alerts" in table_names
     assert "tasks" in table_names
@@ -30,7 +30,7 @@ def test_get_schema_returns_tables_and_relationships():
 def test_get_schema_tables_have_description():
     """Each table in schema has a description field."""
     for table in _SCHEMA_SUMMARY["tables"]:
-        assert "name" in table
+        assert "table" in table
         assert "description" in table
         assert len(table["description"]) > 0
 
