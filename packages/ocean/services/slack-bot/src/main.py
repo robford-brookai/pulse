@@ -1,25 +1,80 @@
 # AUDIT-04 GATE: Anthropic HIPAA BAA must be confirmed before deploying to production.
 # This service is safe to build and test locally. Production deploy is blocked until BAA is in place.
 # Track BAA status: [link to Linear/Notion issue]
-"""slack-bot FastAPI app — health endpoint and Slack bolt integration."""
+"""slack-bot FastAPI app — health endpoint, Slack bolt integration, background tasks."""
 from __future__ import annotations
 
+import asyncio
 import os
 from contextlib import asynccontextmanager
 
 import structlog
 from fastapi import FastAPI, Request, Response
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 log = structlog.get_logger()
 
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
 SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN", "")
 SLACK_SIGNING_SECRET = os.environ.get("SLACK_SIGNING_SECRET", "")
+OPS_SLACK_CHANNEL = os.environ.get("OPS_SLACK_CHANNEL", "#care-alerts-ops")
+HASURA_URL = os.environ.get("HASURA_URL", "http://localhost:8090")
+REDPANDA_BROKERS = os.environ.get("REDPANDA_BROKERS", "localhost:9092")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     log.info("slack_bot_starting")
+
+    engine = None
+    session_maker = None
+
+    if DATABASE_URL:
+        engine = create_async_engine(DATABASE_URL, echo=False)
+        session_maker = async_sessionmaker(engine, expire_on_commit=False)
+    else:
+        log.warning("DATABASE_URL_not_set_skipping_db")
+
+    if not SLACK_BOT_TOKEN:
+        log.warning("SLACK_BOT_TOKEN_not_set_skipping_consumers_and_poller")
+        yield
+        if engine:
+            await engine.dispose()
+        log.info("slack_bot_stopped")
+        return
+
+    from slack_sdk.web.async_client import AsyncWebClient
+
+    from src import consumer as consumer_module
+    from src.bolt_app import bolt_handler
+    from src.health_poller import poll_connector_health
+
+    slack_client = AsyncWebClient(token=SLACK_BOT_TOKEN)
+
+    async def _slack_events_endpoint(request: Request) -> Response:
+        return await bolt_handler.handle(request)
+
+    app.add_api_route("/slack/events", _slack_events_endpoint, methods=["POST"])
+
+    consumer_task = asyncio.create_task(
+        consumer_module.run_consumer(slack_client, session_maker, REDPANDA_BROKERS, HASURA_URL)
+    )
+    poller_task = asyncio.create_task(
+        poll_connector_health(slack_client, OPS_SLACK_CHANNEL, session_maker)
+    )
+
+    log.info("slack_bot_started", brokers=REDPANDA_BROKERS, ops_channel=OPS_SLACK_CHANNEL)
     yield
+
+    consumer_task.cancel()
+    poller_task.cancel()
+    try:
+        await asyncio.gather(consumer_task, poller_task, return_exceptions=True)
+    except Exception:
+        pass
+
+    if engine:
+        await engine.dispose()
     log.info("slack_bot_stopped")
 
 
