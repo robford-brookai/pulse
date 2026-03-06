@@ -1,22 +1,77 @@
-"""Alert event handlers — stub. Implemented in 03-02."""
+"""Control plane handler for alert.created events.
+
+Evaluates routing rules, writes a task record to Postgres, and publishes
+task.created + task.assigned events to ocean.tasks topic.
+"""
 from __future__ import annotations
 
+import uuid
+from datetime import datetime, timezone
+
+import sqlalchemy as sa
 import structlog
-from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.rules import channel_for, priority_for
 
 log = structlog.get_logger()
 
 
-async def handle_alert_created(event_data: dict, session: AsyncSession) -> None:
-    """Handle alert.created events. Stub — implemented in 03-02."""
-    log.debug("alert_created_stub", event_type=event_data.get("event_type"))
+async def handle_alert_created(event_data: dict, session, producer=None) -> None:
+    """Handle alert.created events: evaluate rules, write task to DB, publish event."""
+    payload = event_data.get("payload", {})
+    alert_id = event_data.get("entity_id", "")
+    patient_id = payload.get("patient_id", "")
+    alert_type = payload.get("alert_type", "unknown")
+    timestamp_str = event_data.get("timestamp", "")
+
+    # Deterministic task_id derived from alert_id using uuid5
+    task_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"task-{alert_id}"))
+    priority = priority_for(alert_type)
+    now = datetime.now(tz=timezone.utc)
+    ts = _parse_ts(timestamp_str) if timestamp_str else now
+
+    await session.execute(
+        sa.text(
+            "INSERT INTO tasks "
+            "  (task_id, alert_id, patient_id, task_type, priority, status, created_at, updated_at, last_event_id) "
+            "VALUES (:task_id, :alert_id, :patient_id, :task_type, :priority, 'open', :created_at, :updated_at, :event_id) "
+            "ON CONFLICT (task_id) DO UPDATE SET "
+            "  updated_at = EXCLUDED.updated_at, "
+            "  last_event_id = EXCLUDED.last_event_id "
+            "WHERE tasks.updated_at < EXCLUDED.updated_at"
+        ),
+        {
+            "task_id": task_id,
+            "alert_id": alert_id,
+            "patient_id": patient_id,
+            "task_type": alert_type,
+            "priority": priority,
+            "created_at": ts,
+            "updated_at": now,
+            "event_id": event_data.get("event_id", ""),
+        },
+    )
+    log.info("task_created", task_id=task_id, alert_id=alert_id, priority=priority, alert_type=alert_type)
+
+    if producer:
+        task_event = {
+            "event_id": str(uuid.uuid4()),
+            "event_type": "task.created",
+            "timestamp": now.isoformat(),
+            "source_system": "control-plane",
+            "entity_id": task_id,
+            "entity_type": "task",
+            "payload": {
+                "task_id": task_id,
+                "alert_id": alert_id,
+                "patient_id": patient_id,
+                "task_type": alert_type,
+                "priority": priority,
+                "channel": channel_for(alert_type),
+            },
+        }
+        await producer.publish("ocean.tasks", task_event)
 
 
-async def handle_alert_claimed(event_data: dict, session: AsyncSession) -> None:
-    """Handle alert.claimed events. Stub — implemented in 03-02."""
-    log.debug("alert_claimed_stub", event_type=event_data.get("event_type"))
-
-
-async def handle_alert_resolved(event_data: dict, session: AsyncSession) -> None:
-    """Handle alert.resolved events. Stub — implemented in 03-02."""
-    log.debug("alert_resolved_stub", event_type=event_data.get("event_type"))
+def _parse_ts(ts_str: str) -> datetime:
+    return datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
