@@ -203,5 +203,55 @@ services:
       retries: 10
       start_period: 30s
 
+  control-plane:
+    build:
+      context: ..
+      dockerfile: services/control-plane/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ocean:changeme@postgres:5432/ocean}
+      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+    ports:
+      - "8004:8000"
+    depends_on:
+      hasura-init:
+        condition: service_completed_successfully
+      redpanda-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  slack-bot:
+    build:
+      context: ..
+      dockerfile: services/slack-bot/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ocean:changeme@postgres:5432/ocean}
+      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-}
+      OPS_SLACK_CHANNEL: ${OPS_SLACK_CHANNEL:-#care-alerts-ops}
+      HASURA_URL: http://hasura:8080
+    ports:
+      - "8005:8000"
+    depends_on:
+      control-plane:
+        condition: service_healthy
+      redpanda-init:
+        condition: service_completed_successfully
+      hasura-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
 volumes:
   postgres_data:
