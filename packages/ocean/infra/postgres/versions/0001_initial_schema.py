@@ -67,10 +67,26 @@ def upgrade() -> None:
     op.create_index("ix_audit_log_event_id", "audit_log", ["event_id"])
 
     # Enforce append-only on audit_log at the database level (AUDIT-02)
-    # The ocean application user cannot UPDATE or DELETE audit_log rows.
-    op.execute("REVOKE UPDATE, DELETE ON TABLE audit_log FROM PUBLIC;")
+    # Table owner (ocean) cannot have privileges revoked — use a trigger instead.
+    # A BEFORE UPDATE OR DELETE trigger raises an exception unconditionally,
+    # preventing any modification regardless of the connecting role.
+    op.execute("""
+        CREATE OR REPLACE FUNCTION audit_log_immutable()
+        RETURNS TRIGGER LANGUAGE plpgsql AS $$
+        BEGIN
+            RAISE EXCEPTION 'audit_log is append-only: UPDATE and DELETE are not permitted (HIPAA 45 C.F.R. § 164.312(b))';
+        END;
+        $$;
+    """)
+    op.execute("""
+        CREATE TRIGGER audit_log_no_update_delete
+        BEFORE UPDATE OR DELETE ON audit_log
+        FOR EACH ROW EXECUTE FUNCTION audit_log_immutable();
+    """)
 
 
 def downgrade() -> None:
+    op.execute("DROP TRIGGER IF EXISTS audit_log_no_update_delete ON audit_log;")
+    op.execute("DROP FUNCTION IF EXISTS audit_log_immutable();")
     op.drop_table("audit_log")
     op.drop_table("events")

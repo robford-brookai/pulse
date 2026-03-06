@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import structlog
 from confluent_kafka import KafkaError
-from confluent_kafka.asyncio import Consumer
+from confluent_kafka.aio import AIOConsumer as Consumer
 
 log = structlog.get_logger()
 
@@ -38,7 +38,7 @@ async def run_consumer(writer, bootstrap_servers: str) -> None:
         "enable.auto.commit": False,  # CRITICAL: manual commit only after DB write
     }
     consumer = Consumer(conf)
-    consumer.subscribe(TOPICS)
+    await consumer.subscribe(TOPICS)
     log.info("consumer_started", topics=TOPICS, brokers=bootstrap_servers)
 
     try:
@@ -62,7 +62,8 @@ async def run_consumer(writer, bootstrap_servers: str) -> None:
             try:
                 await writer.write_event(msg.value(), topic=msg.topic())
                 # Commit only after successful DB write — if write fails, message is redelivered
-                consumer.commit(message=msg, asynchronous=False)
+                # AIOConsumer.commit is a coroutine; equivalent to asynchronous=False (awaited)
+                await consumer.commit(message=msg)
             except Exception:
                 log.exception(
                     "write_failed_no_commit",
@@ -72,5 +73,5 @@ async def run_consumer(writer, bootstrap_servers: str) -> None:
                 )
                 # Do NOT commit — message will be redelivered on restart
     finally:
-        consumer.close()
+        await consumer.close()
         log.info("consumer_closed")

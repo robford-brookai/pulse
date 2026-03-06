@@ -56,7 +56,9 @@ async def write_event(event_bytes: bytes, topic: str = "unknown") -> None:
                     "source_system": event_data.get("source_system", "unknown"),
                     "correlation_id": event_data.get("correlation_id", ""),
                     "actor_id": event_data.get("actor_id"),
-                    "timestamp": event_data.get("timestamp"),
+                    "timestamp": datetime.fromisoformat(
+                        event_data.get("timestamp", "").replace("Z", "+00:00")
+                    ),
                     "payload": json.dumps(event_data.get("payload", {})),
                 },
             )
@@ -79,7 +81,7 @@ async def write_event(event_bytes: bytes, topic: str = "unknown") -> None:
                     "source_system": event_data.get("source_system", "unknown"),
                     "entity_type": event_data.get("entity_type"),
                     "entity_id": event_data.get("entity_id"),
-                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+                    "timestamp": datetime.now(tz=timezone.utc),
                     "detail": json.dumps(
                         {
                             "event_type": event_data.get("event_type"),

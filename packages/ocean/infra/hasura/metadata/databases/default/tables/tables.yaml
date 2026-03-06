@@ -1,0 +1,6 @@
+- table:
+    schema: public
+    name: events
+- table:
+    schema: public
+    name: audit_log
