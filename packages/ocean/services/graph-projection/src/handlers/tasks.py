@@ -79,3 +79,24 @@ async def handle_task_assigned(event_data: dict, session) -> None:
         },
     )
     log.info("task_assigned", task_id=task_id)
+
+
+async def handle_task_claimed(event_data: dict, session) -> None:
+    """Project task.claimed — update status to 'claimed' and set assigned_to from actor_id."""
+    task_id = event_data.get("entity_id", "")
+    now = datetime.now(tz=timezone.utc)
+    payload = event_data.get("payload", {})
+    await session.execute(
+        sa.text(
+            "UPDATE tasks SET status='claimed', assigned_to=:assigned_to, "
+            "updated_at=:updated_at, last_event_id=:event_id "
+            "WHERE task_id=:task_id"
+        ),
+        {
+            "task_id": task_id,
+            "assigned_to": payload.get("actor_id"),
+            "updated_at": now,
+            "event_id": event_data.get("event_id", ""),
+        },
+    )
+    log.info("task_claimed", task_id=task_id)

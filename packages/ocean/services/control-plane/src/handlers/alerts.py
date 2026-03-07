@@ -72,6 +72,23 @@ async def handle_alert_created(event_data: dict, session, producer=None) -> None
         }
         await producer.publish("ocean.tasks", task_event)
 
+        assigned_to = payload.get("assigned_to")
+        if assigned_to:
+            assigned_event = {
+                "event_id": str(uuid.uuid4()),
+                "event_type": "task.assigned",
+                "timestamp": now.isoformat(),
+                "source_system": "control-plane",
+                "entity_id": task_id,
+                "entity_type": "task",
+                "payload": {
+                    "task_id": task_id,
+                    "assigned_to": assigned_to,
+                },
+            }
+            await producer.publish("ocean.tasks", assigned_event)
+            log.info("task_assigned_published", task_id=task_id, assigned_to=assigned_to)
+
 
 def _parse_ts(ts_str: str) -> datetime:
     return datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
