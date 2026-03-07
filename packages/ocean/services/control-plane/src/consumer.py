@@ -37,7 +37,7 @@ EVENT_HANDLERS: dict = {
 }
 
 
-async def dispatch(event_data: dict, session: AsyncSession) -> None:
+async def dispatch(event_data: dict, session: AsyncSession, producer=None) -> None:
     """Dispatch an event to the appropriate handler.
 
     Unknown event types are silently skipped (forward compatible).
@@ -47,10 +47,10 @@ async def dispatch(event_data: dict, session: AsyncSession) -> None:
     if handler is None:
         log.debug("event_type_skipped", event_type=event_type)
         return
-    await handler(event_data, session)
+    await handler(event_data, session, producer=producer)
 
 
-async def run_consumer(session_maker: async_sessionmaker, bootstrap_servers: str) -> None:
+async def run_consumer(session_maker: async_sessionmaker, bootstrap_servers: str, publisher=None) -> None:
     """Run the control-plane consumer loop."""
     conf = {**CONSUMER_CONFIG, "bootstrap.servers": bootstrap_servers}
     consumer = Consumer(conf)
@@ -78,7 +78,7 @@ async def run_consumer(session_maker: async_sessionmaker, bootstrap_servers: str
                 event_data = json.loads(msg.value())
                 async with session_maker() as session:
                     async with session.begin():
-                        await dispatch(event_data, session)
+                        await dispatch(event_data, session, producer=publisher)
                 await consumer.commit(message=msg)
             except Exception:
                 log.exception(

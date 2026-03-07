@@ -26,8 +26,14 @@ async def lifespan(app: FastAPI):
     session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     bootstrap_servers = os.environ.get("REDPANDA_BROKERS", "redpanda:29092")
+
+    from src.producer import RedpandaPublisher
+
+    publisher = RedpandaPublisher(bootstrap_servers)
+    log.info("control_plane_publisher_created", brokers=bootstrap_servers)
+
     log.info("starting_control_plane_consumer", brokers=bootstrap_servers)
-    asyncio.create_task(consumer.run_consumer(session_maker, bootstrap_servers))
+    asyncio.create_task(consumer.run_consumer(session_maker, bootstrap_servers, publisher=publisher))
 
     yield
 
