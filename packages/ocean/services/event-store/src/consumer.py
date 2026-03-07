@@ -21,6 +21,8 @@ TOPICS = [
     "ocean.outcomes",
     "ocean.ai-ops",
     "ocean.audit",
+    "ocean.logistics",
+    "ocean.ops",
 ]
 
 
