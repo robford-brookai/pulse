@@ -14,6 +14,7 @@ topics=(
   "ocean.ai-ops"
   "ocean.audit"
   "ocean.ops"
+  "ocean.logistics"
 )
 
 echo "Creating Ocean topics on broker: $REDPANDA_BROKERS"

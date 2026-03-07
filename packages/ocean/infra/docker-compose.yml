@@ -282,6 +282,29 @@ services:
       retries: 10
       start_period: 30s
 
+  impilo-connector:
+    build:
+      context: ..
+      dockerfile: services/impilo-connector/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ocean:changeme@postgres:5432/ocean}
+      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      IMPILO_API_KEY: ${IMPILO_API_KEY:-dev_impilo_key}
+    ports:
+      - "8007:8000"
+    depends_on:
+      hasura:
+        condition: service_healthy
+      redpanda-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
   sim-driver:
     profiles: [sim]
     build:
