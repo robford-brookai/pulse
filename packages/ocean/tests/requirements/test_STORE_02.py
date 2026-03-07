@@ -11,6 +11,8 @@ import importlib.util
 import json
 import os
 import pathlib
+import uuid
+from datetime import datetime, timezone
 
 import pytest
 import pytest_asyncio
@@ -47,7 +49,7 @@ async def writer_mod(postgres_container, event_store_tables, session_factory):
 
 
 @pytest_asyncio.fixture
-async def clean_tables(session_factory):
+async def clean_tables(session_factory, event_store_tables):
     async with session_factory() as session:
         async with session.begin():
             await session.execute(
@@ -61,25 +63,27 @@ async def clean_tables(session_factory):
     yield
 
 
+def _make_event(index: int = 0) -> dict:
+    return {
+        "event_id": str(uuid.uuid4()),
+        "event_type": "test.created",
+        "schema_version": "1.0.0",
+        "entity_type": "test",
+        "entity_id": f"test-{index:03d}",
+        "source_system": "test",
+        "correlation_id": "",
+        "actor_id": "test",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "payload": {},
+    }
+
+
 async def test_append_only_5_events(writer_mod, session_factory, clean_tables):
     """Write 5 events via writer.write_event(), verify 5 rows in events table."""
-    import uuid
-    from datetime import datetime, timezone
-
     for i in range(5):
-        event = {
-            "event_id": str(uuid.uuid4()),
-            "event_type": "test.created",
-            "schema_version": "1.0.0",
-            "entity_type": "test",
-            "entity_id": f"test-{i:03d}",
-            "source_system": "test",
-            "correlation_id": "",
-            "actor_id": "test",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "payload": {},
-        }
-        await writer_mod.write_event(json.dumps(event).encode(), topic="ocean.signals")
+        await writer_mod.write_event(
+            json.dumps(_make_event(index=i)).encode(), topic="ocean.signals"
+        )
 
     async with session_factory() as session:
         result = await session.execute(sa.text("SELECT COUNT(*) FROM events"))
@@ -87,7 +91,7 @@ async def test_append_only_5_events(writer_mod, session_factory, clean_tables):
     assert count == 5, f"Expected 5 events, got {count}"
 
 
-async def test_append_only_by_convention_no_delete_in_writer(writer_mod):
+def test_append_only_by_convention_no_delete_in_writer():
     """writer module exposes only write_event -- no delete or update functions.
 
     The append-only guarantee for events is enforced by convention: the application
@@ -95,11 +99,11 @@ async def test_append_only_by_convention_no_delete_in_writer(writer_mod):
     """
     import inspect
 
+    mod = _load_writer()
     public_funcs = [
-        name for name, obj in inspect.getmembers(writer_mod)
+        name for name, obj in inspect.getmembers(mod)
         if callable(obj) and not name.startswith("_")
     ]
-    # write_event should be the only public function
     assert "write_event" in public_funcs
     assert "delete_event" not in public_funcs
     assert "update_event" not in public_funcs

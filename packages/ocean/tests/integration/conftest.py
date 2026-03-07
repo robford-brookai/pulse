@@ -181,53 +181,59 @@ def consume_one(bootstrap_servers: str, topic: str, timeout: float = 10.0) -> di
 # Event-store tables (events + audit_log) for STORE / AUDIT requirement tests
 # ---------------------------------------------------------------------------
 
-_EVENT_STORE_DDL = """
-CREATE TABLE IF NOT EXISTS events (
-    event_id UUID PRIMARY KEY,
-    event_type TEXT NOT NULL,
-    schema_version TEXT NOT NULL DEFAULT '1.0.0',
-    entity_type TEXT NOT NULL,
-    entity_id TEXT NOT NULL,
-    source_system TEXT NOT NULL,
-    correlation_id TEXT NOT NULL,
-    actor_id TEXT,
-    timestamp TIMESTAMPTZ NOT NULL,
-    payload JSONB NOT NULL DEFAULT '{}',
-    ingested_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS audit_log (
-    audit_id UUID PRIMARY KEY,
-    event_id UUID,
-    action_type TEXT NOT NULL,
-    actor_id TEXT NOT NULL,
-    source_system TEXT NOT NULL,
-    entity_type TEXT,
-    entity_id TEXT,
-    timestamp TIMESTAMPTZ NOT NULL,
-    detail JSONB NOT NULL DEFAULT '{}',
-    recorded_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE OR REPLACE FUNCTION audit_log_immutable()
-RETURNS TRIGGER LANGUAGE plpgsql AS $$
-BEGIN
-    RAISE EXCEPTION 'audit_log is append-only: UPDATE and DELETE are not permitted (HIPAA 45 C.F.R. %% 164.312(b))';
-END;
-$$;
-
-DROP TRIGGER IF EXISTS audit_log_no_update_delete ON audit_log;
-CREATE TRIGGER audit_log_no_update_delete
-BEFORE UPDATE OR DELETE ON audit_log
-FOR EACH ROW EXECUTE FUNCTION audit_log_immutable();
-"""
+_EVENT_STORE_STATEMENTS = [
+    """
+    CREATE TABLE IF NOT EXISTS events (
+        event_id UUID PRIMARY KEY,
+        event_type TEXT NOT NULL,
+        schema_version TEXT NOT NULL DEFAULT '1.0.0',
+        entity_type TEXT NOT NULL,
+        entity_id TEXT NOT NULL,
+        source_system TEXT NOT NULL,
+        correlation_id TEXT NOT NULL,
+        actor_id TEXT,
+        timestamp TIMESTAMPTZ NOT NULL,
+        payload JSONB NOT NULL DEFAULT '{}',
+        ingested_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS audit_log (
+        audit_id UUID PRIMARY KEY,
+        event_id UUID,
+        action_type TEXT NOT NULL,
+        actor_id TEXT NOT NULL,
+        source_system TEXT NOT NULL,
+        entity_type TEXT,
+        entity_id TEXT,
+        timestamp TIMESTAMPTZ NOT NULL,
+        detail JSONB NOT NULL DEFAULT '{}',
+        recorded_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+    """,
+    """
+    CREATE OR REPLACE FUNCTION audit_log_immutable()
+    RETURNS TRIGGER LANGUAGE plpgsql AS $$
+    BEGIN
+        RAISE EXCEPTION 'audit_log is append-only: UPDATE and DELETE are not permitted';
+    END;
+    $$
+    """,
+    "DROP TRIGGER IF EXISTS audit_log_no_update_delete ON audit_log",
+    """
+    CREATE TRIGGER audit_log_no_update_delete
+    BEFORE UPDATE OR DELETE ON audit_log
+    FOR EACH ROW EXECUTE FUNCTION audit_log_immutable()
+    """,
+]
 
 
 @pytest_asyncio.fixture(scope="session")
 async def event_store_tables(async_engine):
     """Create events and audit_log tables with immutability trigger (from migration 0001)."""
     async with async_engine.begin() as conn:
-        await conn.execute(sa.text(_EVENT_STORE_DDL))
+        for stmt in _EVENT_STORE_STATEMENTS:
+            await conn.execute(sa.text(stmt))
     yield async_engine
 
 

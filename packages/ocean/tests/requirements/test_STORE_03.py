@@ -10,6 +10,8 @@ import importlib.util
 import json
 import os
 import pathlib
+import uuid
+from datetime import datetime, timezone
 
 import pytest
 import pytest_asyncio
@@ -46,7 +48,7 @@ async def writer_mod(postgres_container, event_store_tables, session_factory):
 
 
 @pytest_asyncio.fixture
-async def clean_tables(session_factory):
+async def clean_tables(session_factory, event_store_tables):
     async with session_factory() as session:
         async with session.begin():
             await session.execute(
@@ -62,9 +64,6 @@ async def clean_tables(session_factory):
 
 async def test_replay_idempotent(writer_mod, session_factory, clean_tables):
     """Write 10 events, replay same 10, verify row count unchanged."""
-    import uuid
-    from datetime import datetime, timezone
-
     event_ids = [str(uuid.uuid4()) for _ in range(10)]
 
     def _make_events():
@@ -93,7 +92,7 @@ async def test_replay_idempotent(writer_mod, session_factory, clean_tables):
         count = result.scalar()
     assert count == 10, f"Expected 10 events after first write, got {count}"
 
-    # Replay — same event_ids
+    # Replay -- same event_ids
     for event in _make_events():
         await writer_mod.write_event(json.dumps(event).encode(), topic="ocean.signals")
 

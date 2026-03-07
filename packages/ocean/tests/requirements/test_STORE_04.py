@@ -11,6 +11,8 @@ import importlib.util
 import json
 import os
 import pathlib
+import uuid
+from datetime import datetime, timezone
 
 import pytest
 import pytest_asyncio
@@ -47,7 +49,7 @@ async def writer_mod(postgres_container, event_store_tables, session_factory):
 
 
 @pytest_asyncio.fixture
-async def clean_tables(session_factory):
+async def clean_tables(session_factory, event_store_tables):
     async with session_factory() as session:
         async with session.begin():
             await session.execute(
@@ -63,26 +65,11 @@ async def clean_tables(session_factory):
 
 def test_offset_tracking_auto_commit_disabled():
     """Consumer config must have enable.auto.commit=False for manual offset commit."""
-    consumer_mod = _load_module("consumer")
-
-    # The consumer creates its config inside run_consumer. We inspect the source
-    # to verify the setting. Alternatively, we can check TOPICS are defined.
-    import ast
     import inspect
 
+    consumer_mod = _load_module("consumer")
     source = inspect.getsource(consumer_mod.run_consumer)
-    tree = ast.parse(source)
 
-    # Walk AST to find the dict with enable.auto.commit
-    found = False
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Constant) and node.value == "enable.auto.commit":
-            found = True
-        if isinstance(node, ast.NameConstant) and node.value is False:
-            # Python 3.7 compat
-            pass
-
-    # Simpler: just check the source text
     assert '"enable.auto.commit": False' in source or "'enable.auto.commit': False" in source, (
         "Consumer must have enable.auto.commit=False for manual offset commit"
     )
@@ -92,9 +79,6 @@ async def test_offset_tracking_write_event_populates_both_tables(
     writer_mod, session_factory, clean_tables
 ):
     """write_event writes to both events AND audit_log in same transaction."""
-    import uuid
-    from datetime import datetime, timezone
-
     event = {
         "event_id": str(uuid.uuid4()),
         "event_type": "test.created",
