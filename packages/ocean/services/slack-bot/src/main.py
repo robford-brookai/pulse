@@ -49,7 +49,20 @@ async def lifespan(app: FastAPI):
     from src.bolt_app import bolt_handler
     from src.health_poller import poll_connector_health
 
+    from src.bolt_app import set_session_maker, set_publisher, set_hasura_secret
+    from src.publisher import RedpandaPublisher
+
     slack_client = AsyncWebClient(token=SLACK_BOT_TOKEN)
+
+    # Wire bolt_app dependencies (BUG 2 fix)
+    if session_maker is not None:
+        set_session_maker(session_maker)
+    publisher = RedpandaPublisher(REDPANDA_BROKERS)
+    set_publisher(publisher)
+
+    hasura_secret = os.environ.get("HASURA_GRAPHQL_ADMIN_SECRET", "")
+    if hasura_secret:
+        set_hasura_secret(hasura_secret)
 
     async def _slack_events_endpoint(request: Request) -> Response:
         return await bolt_handler.handle(request)
@@ -57,7 +70,7 @@ async def lifespan(app: FastAPI):
     app.add_api_route("/slack/events", _slack_events_endpoint, methods=["POST"])
 
     consumer_task = asyncio.create_task(
-        consumer_module.run_consumer(slack_client, session_maker, REDPANDA_BROKERS, HASURA_URL)
+        consumer_module.run_consumer(slack_client, session_maker, REDPANDA_BROKERS, HASURA_URL, publisher=publisher)
     )
     poller_task = asyncio.create_task(
         poll_connector_health(slack_client, OPS_SLACK_CHANNEL, session_maker)
