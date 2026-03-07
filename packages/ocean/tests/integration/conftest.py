@@ -16,9 +16,12 @@ import json
 import pathlib
 import sys
 import time
+import uuid
+from datetime import datetime, timezone
 
 import pytest
 import pytest_asyncio
+import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 _ROOT = pathlib.Path(__file__).parents[2]
@@ -172,3 +175,106 @@ def consume_one(bootstrap_servers: str, topic: str, timeout: float = 10.0) -> di
     finally:
         consumer.close()
     return None
+
+
+# ---------------------------------------------------------------------------
+# Event-store tables (events + audit_log) for STORE / AUDIT requirement tests
+# ---------------------------------------------------------------------------
+
+_EVENT_STORE_DDL = """
+CREATE TABLE IF NOT EXISTS events (
+    event_id UUID PRIMARY KEY,
+    event_type TEXT NOT NULL,
+    schema_version TEXT NOT NULL DEFAULT '1.0.0',
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    source_system TEXT NOT NULL,
+    correlation_id TEXT NOT NULL,
+    actor_id TEXT,
+    timestamp TIMESTAMPTZ NOT NULL,
+    payload JSONB NOT NULL DEFAULT '{}',
+    ingested_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+    audit_id UUID PRIMARY KEY,
+    event_id UUID,
+    action_type TEXT NOT NULL,
+    actor_id TEXT NOT NULL,
+    source_system TEXT NOT NULL,
+    entity_type TEXT,
+    entity_id TEXT,
+    timestamp TIMESTAMPTZ NOT NULL,
+    detail JSONB NOT NULL DEFAULT '{}',
+    recorded_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE OR REPLACE FUNCTION audit_log_immutable()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE EXCEPTION 'audit_log is append-only: UPDATE and DELETE are not permitted (HIPAA 45 C.F.R. %% 164.312(b))';
+END;
+$$;
+
+DROP TRIGGER IF EXISTS audit_log_no_update_delete ON audit_log;
+CREATE TRIGGER audit_log_no_update_delete
+BEFORE UPDATE OR DELETE ON audit_log
+FOR EACH ROW EXECUTE FUNCTION audit_log_immutable();
+"""
+
+
+@pytest_asyncio.fixture(scope="session")
+async def event_store_tables(async_engine):
+    """Create events and audit_log tables with immutability trigger (from migration 0001)."""
+    async with async_engine.begin() as conn:
+        await conn.execute(sa.text(_EVENT_STORE_DDL))
+    yield async_engine
+
+
+def produce_ocean_event(
+    producer,
+    topic: str,
+    event_id: str | None = None,
+) -> dict:
+    """Build and produce a minimal valid Ocean event to the given topic.
+
+    Returns the event dict that was produced.
+    """
+    eid = event_id or str(uuid.uuid4())
+    event = {
+        "event_id": eid,
+        "event_type": "test.created",
+        "schema_version": "1.0.0",
+        "entity_type": "test",
+        "entity_id": "test-001",
+        "source_system": "test",
+        "correlation_id": "",
+        "actor_id": "test",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "payload": {},
+    }
+    producer.produce(topic, json.dumps(event).encode())
+    producer.flush()
+    return event
+
+
+async def poll_row_count(
+    session_factory,
+    table: str,
+    expected: int,
+    timeout: float = 10.0,
+) -> int:
+    """Poll SELECT COUNT(*) FROM table until count >= expected or timeout.
+
+    Returns the final count.
+    """
+    deadline = time.time() + timeout
+    count = 0
+    while time.time() < deadline:
+        async with session_factory() as session:
+            result = await session.execute(sa.text(f"SELECT COUNT(*) FROM {table}"))
+            count = result.scalar()
+        if count >= expected:
+            return count
+        await asyncio.sleep(0.2)
+    return count
