@@ -1,6 +1,7 @@
 """impilo-connector FastAPI app -- lifespan, health, and webhook router."""
 from __future__ import annotations
 
+import asyncio
 import os
 from contextlib import asynccontextmanager
 
@@ -8,6 +9,7 @@ import structlog
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from src.heartbeat import publish_heartbeat
 from src.producer import RedpandaPublisher
 from src.receiver import router
 
@@ -32,9 +34,19 @@ async def lifespan(app: FastAPI):
     app.state.publisher = publisher
     log.info("impilo_connector_started", brokers=bootstrap_servers)
 
+    heartbeat_task = asyncio.create_task(
+        publish_heartbeat(publisher, "impilo-connector", "Impilo RPM")
+    )
+
     yield
 
-    # Shutdown
+    # Shutdown — cancel heartbeat before closing publisher
+    heartbeat_task.cancel()
+    try:
+        await heartbeat_task
+    except asyncio.CancelledError:
+        pass
+
     await publisher.close()
     await engine.dispose()
     log.info("impilo_connector_stopped")

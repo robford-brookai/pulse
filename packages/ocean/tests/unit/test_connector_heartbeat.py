@@ -11,6 +11,8 @@ from utils import setup_service
 
 setup_service("pocar-connector")
 
+import src.heartbeat as heartbeat_mod  # noqa: E402
+
 from src.heartbeat import HEARTBEAT_INTERVAL_SECS, publish_heartbeat  # noqa: E402
 
 
@@ -22,7 +24,7 @@ async def test_heartbeat_publishes_correct_topic_and_key():
     async def cancel_after_first_sleep(secs):
         raise asyncio.CancelledError
 
-    with patch("src.heartbeat.asyncio.sleep", side_effect=cancel_after_first_sleep):
+    with patch.object(heartbeat_mod.asyncio, "sleep", side_effect=cancel_after_first_sleep):
         with pytest.raises(asyncio.CancelledError):
             await publish_heartbeat(publisher, "pocar-connector", "POCAR")
 
@@ -39,7 +41,7 @@ async def test_heartbeat_payload_contains_connector_fields():
     async def cancel_after_first_sleep(secs):
         raise asyncio.CancelledError
 
-    with patch("src.heartbeat.asyncio.sleep", side_effect=cancel_after_first_sleep):
+    with patch.object(heartbeat_mod.asyncio, "sleep", side_effect=cancel_after_first_sleep):
         with pytest.raises(asyncio.CancelledError):
             await publish_heartbeat(publisher, "pocar-connector", "POCAR")
 
@@ -57,7 +59,7 @@ async def test_heartbeat_event_has_base_envelope_fields():
     async def cancel_after_first_sleep(secs):
         raise asyncio.CancelledError
 
-    with patch("src.heartbeat.asyncio.sleep", side_effect=cancel_after_first_sleep):
+    with patch.object(heartbeat_mod.asyncio, "sleep", side_effect=cancel_after_first_sleep):
         with pytest.raises(asyncio.CancelledError):
             await publish_heartbeat(publisher, "test-connector", "Test")
 
@@ -98,7 +100,7 @@ async def test_heartbeat_catches_publish_exceptions():
 
     publisher.publish.side_effect = RuntimeError("broker down")
 
-    with patch("src.heartbeat.asyncio.sleep", side_effect=fail_then_cancel):
+    with patch.object(heartbeat_mod.asyncio, "sleep", side_effect=fail_then_cancel):
         with pytest.raises(asyncio.CancelledError):
             await publish_heartbeat(publisher, "pocar-connector", "POCAR")
 
@@ -114,7 +116,7 @@ async def test_heartbeat_cancelled_error_propagates():
     async def cancel_immediately(secs):
         raise asyncio.CancelledError
 
-    with patch("src.heartbeat.asyncio.sleep", side_effect=cancel_immediately):
+    with patch.object(heartbeat_mod.asyncio, "sleep", side_effect=cancel_immediately):
         with pytest.raises(asyncio.CancelledError):
             await publish_heartbeat(publisher, "pocar-connector", "POCAR")
 
