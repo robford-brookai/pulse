@@ -164,6 +164,43 @@ class TestHandleAlertCreated:
         assert "channel" in task_event["payload"]
         assert task_event["payload"]["channel"] == "#care-alerts-glucose"
 
+    @pytest.mark.asyncio
+    async def test_task_assigned_published_when_assigned_to_present(self):
+        """When payload has assigned_to, producer.publish is called twice: task.created + task.assigned."""
+        from src.handlers.alerts import handle_alert_created
+
+        session = AsyncMock()
+        producer = AsyncMock()
+        event = _make_alert_event(alert_type="glucose")
+        event["payload"]["assigned_to"] = "nurse-jane"
+
+        await handle_alert_created(event, session, producer=producer)
+
+        assert producer.publish.call_count == 2
+        first_call_event = producer.publish.call_args_list[0][0][1]
+        second_call_event = producer.publish.call_args_list[1][0][1]
+        assert first_call_event["event_type"] == "task.created"
+        assert second_call_event["event_type"] == "task.assigned"
+        assert second_call_event["payload"]["assigned_to"] == "nurse-jane"
+        assert second_call_event["entity_type"] == "task"
+        assert second_call_event["source_system"] == "control-plane"
+
+    @pytest.mark.asyncio
+    async def test_task_assigned_not_published_when_assigned_to_absent(self):
+        """Without assigned_to in payload, producer.publish is called once (task.created only)."""
+        from src.handlers.alerts import handle_alert_created
+
+        session = AsyncMock()
+        producer = AsyncMock()
+        event = _make_alert_event(alert_type="glucose")
+        # No assigned_to in payload
+
+        await handle_alert_created(event, session, producer=producer)
+
+        assert producer.publish.call_count == 1
+        published_event = producer.publish.call_args[0][1]
+        assert published_event["event_type"] == "task.created"
+
 
 # ---------------------------------------------------------------------------
 # Heartbeat handler tests
