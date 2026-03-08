@@ -3,7 +3,10 @@ from __future__ import annotations
 
 from typing import Literal
 
-SourceSystem = Literal["pocar", "zcc", "ocean", "linear", "github", "hubspot"]
+SourceSystem = Literal[
+    "pocar", "zcc", "ocean", "linear", "github", "hubspot",
+    "control-plane", "agent-worker", "call-simulator", "sim-driver",
+]
 
 EntityType = Literal["patient", "alert", "task", "interaction", "outcome", "signal"]
 
@@ -42,4 +45,6 @@ EventType = Literal[
     "ai.summary.generated",
     "ai.response.drafted",
     "ai.output.approved",
+    "ai.recommendation.generated",
+    "ai.output.rejected",
 ]
