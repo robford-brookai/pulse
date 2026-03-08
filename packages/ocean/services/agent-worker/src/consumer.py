@@ -52,11 +52,12 @@ async def handle_message(
 
     # Build alert context from task event payload
     payload = event_data.get("payload", {})
+    raw_signal = payload.get("signal_type", payload.get("task_type", ""))
     alert_context = {
         "priority": payload.get("priority", ""),
-        "signal_type": payload.get("signal_type", payload.get("task_type", "")),
+        "signal_type": raw_signal.removesuffix("_anomaly"),
         "severity": payload.get("severity", payload.get("priority", "")).upper(),
-        "patient_id": event_data.get("entity_id", payload.get("patient_id", "")),
+        "patient_id": payload.get("patient_id", event_data.get("entity_id", "")),
         "value": payload.get("value"),
         "anomalous": payload.get("anomalous"),
     }
@@ -72,7 +73,7 @@ async def handle_message(
     approved = action == "approve" and random.random() < approve_rate
 
     # Publish approved/rejected decision
-    await publish_ai_decision(publisher, event_data, action, confidence, persona, approved)
+    await publish_ai_decision(publisher, event_data, action, confidence, persona, approved, alert_context)
 
     # Complete the task
     await publish_task_completed(publisher, event_data, persona)

@@ -67,6 +67,8 @@ async def handle_alert_created(event_data: dict, session, producer=None) -> None
                 "patient_id": patient_id,
                 "task_type": alert_type,
                 "priority": priority,
+                "severity": payload.get("severity", ""),
+                "signal_type": payload.get("signal_type", ""),
                 "channel": channel_for(alert_type),
             },
         }

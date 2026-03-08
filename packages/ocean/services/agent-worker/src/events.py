@@ -72,6 +72,7 @@ async def publish_ai_decision(
     confidence: float,
     persona: Persona,
     approved: bool,
+    alert_context: dict | None = None,
 ) -> None:
     """Publish ai.output.approved or ai.output.rejected to ocean.ai-ops.
 
@@ -93,6 +94,10 @@ async def publish_ai_decision(
             payload["missed_call_retry_count"] = persona.missed_call_retry_count
             payload["retry_delay_seconds"] = persona.retry_delay_seconds
             payload["compression_ratio"] = compression_ratio
+            if alert_context:
+                payload["patient_id"] = alert_context.get("patient_id", "")
+                payload["severity"] = alert_context.get("severity", "")
+                payload["signal_type"] = alert_context.get("signal_type", "")
 
         event = build_agent_event(
             event_type=event_type,
