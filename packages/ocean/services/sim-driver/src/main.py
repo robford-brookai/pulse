@@ -1,4 +1,9 @@
-"""sim-driver FastAPI app — lifespan + /simulate endpoint."""
+"""sim-driver FastAPI app -- lifespan + /simulate endpoint.
+
+Publishes source-only events (signal.received, alert.created) via PatientSimulator.
+The /simulate response includes enriched metadata and an agent_hook advertising
+the consumer contract for Phase 11's agent-worker.
+"""
 from __future__ import annotations
 
 import asyncio
@@ -6,11 +11,13 @@ import os
 from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import BackgroundTasks, FastAPI, HTTPException
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, ValidationError
 
 from src.publisher import RedpandaPublisher
 from src.scenario_engine import ScenarioEngine
+
+__version__ = "2.0.0"
 
 log = structlog.get_logger()
 
@@ -35,7 +42,7 @@ async def lifespan(app: FastAPI):
     log.info("sim_driver_stopped")
 
 
-app = FastAPI(title="sim-driver", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="sim-driver", version="2.0.0", lifespan=lifespan)
 
 
 class SimulateRequest(BaseModel):
@@ -55,8 +62,8 @@ async def health() -> dict:
 async def simulate(req: SimulateRequest) -> dict:
     """Start a named scenario in the background.
 
-    Returns immediately. The scenario runs asynchronously.
-    POST /simulate {"scenario": "smoke_test"}
+    Returns immediately with enriched metadata including patient count,
+    expected events, estimated duration, and agent_hook consumer contract.
     """
     if _publisher is None:
         raise HTTPException(status_code=503, detail="Publisher not initialized")
@@ -64,13 +71,28 @@ async def simulate(req: SimulateRequest) -> dict:
     if req.scenario in _active_scenarios and not _active_scenarios[req.scenario].done():
         return {"status": "already_running", "scenario": req.scenario}
 
-    engine = ScenarioEngine(scenario_name=req.scenario, publisher=_publisher)
+    try:
+        engine = ScenarioEngine(scenario_name=req.scenario, publisher=_publisher)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors())
 
     task = asyncio.create_task(_run_scenario(engine, req.scenario))
     _active_scenarios[req.scenario] = task
 
     log.info("scenario_started", scenario=req.scenario)
-    return {"status": "started", "scenario": req.scenario}
+    return {
+        "status": "started",
+        "scenario": req.scenario,
+        "patients": engine.patient_count,
+        "expected_events": engine.expected_event_count,
+        "estimated_duration_seconds": round(engine.estimated_duration_seconds, 1),
+        "agent_hook": {
+            "description": "Source events will trigger control-plane task creation. Agent-worker (Phase 11) consumes from ocean.tasks.",
+            "consumer_topics": ["ocean.tasks"],
+            "source_filter": "control-plane",
+            "personas_available": 3,
+        },
+    }
 
 
 async def _run_scenario(engine: ScenarioEngine, name: str) -> None:
