@@ -30,6 +30,9 @@ def _task_created_event(
     event_type: str = "task.created",
     entity_id: str = "task-001",
     correlation_id: str = "corr-001",
+    patient_id: str = "pt-001",
+    severity: str = "CRITICAL",
+    signal_type: str = "glucose",
 ) -> dict:
     return {
         "event_id": "evt-001",
@@ -41,7 +44,12 @@ def _task_created_event(
         "entity_id": entity_id,
         "correlation_id": correlation_id,
         "actor_id": None,
-        "payload": {"priority": "urgent"},
+        "payload": {
+            "priority": "urgent",
+            "patient_id": patient_id,
+            "severity": severity,
+            "signal_type": signal_type,
+        },
     }
 
 
@@ -158,6 +166,108 @@ class TestClaimCompetition:
             event, [alice], publisher, claimed, compression_ratio=100000,
         )
         assert "task-200" in claimed
+
+
+class TestAlertContextBuilding:
+    """Verify alert_context is built correctly from task.created payload."""
+
+    async def test_patient_id_from_payload(self):
+        """patient_id should come from payload.patient_id, not entity_id."""
+        event = _task_created_event(entity_id="task-001", patient_id="pt-abc")
+        publisher = AsyncMock()
+        persona = _make_persona()
+
+        with (
+            patch("src.consumer.compete_for_claim", new_callable=AsyncMock) as mock_claim,
+            patch("src.consumer.decide_with_fallback", new_callable=AsyncMock) as mock_decide,
+            patch("src.consumer.publish_ai_recommendation", new_callable=AsyncMock),
+            patch("src.consumer.publish_ai_decision", new_callable=AsyncMock) as mock_decision,
+            patch("src.consumer.publish_task_completed", new_callable=AsyncMock),
+        ):
+            mock_claim.return_value = persona
+            mock_decide.return_value = ("approve", 1.0)
+            await handle_message(event, [persona], publisher, set())
+
+            # publish_ai_decision receives alert_context with patient_id
+            call_args = mock_decision.call_args
+            alert_context = call_args[0][6]  # 7th positional arg
+            assert alert_context["patient_id"] == "pt-abc"
+
+    async def test_severity_from_payload(self):
+        """severity should come from payload.severity."""
+        event = _task_created_event(severity="URGENT")
+        publisher = AsyncMock()
+        persona = _make_persona()
+
+        with (
+            patch("src.consumer.compete_for_claim", new_callable=AsyncMock) as mock_claim,
+            patch("src.consumer.decide_with_fallback", new_callable=AsyncMock) as mock_decide,
+            patch("src.consumer.publish_ai_recommendation", new_callable=AsyncMock),
+            patch("src.consumer.publish_ai_decision", new_callable=AsyncMock) as mock_decision,
+            patch("src.consumer.publish_task_completed", new_callable=AsyncMock),
+        ):
+            mock_claim.return_value = persona
+            mock_decide.return_value = ("approve", 1.0)
+            await handle_message(event, [persona], publisher, set())
+
+            call_args = mock_decision.call_args
+            alert_context = call_args[0][6]
+            assert alert_context["severity"] == "URGENT"
+
+    async def test_signal_type_anomaly_suffix_stripped(self):
+        """signal_type 'glucose_anomaly' should resolve to 'glucose'."""
+        event = _task_created_event(signal_type="glucose_anomaly")
+        publisher = AsyncMock()
+        persona = _make_persona()
+
+        with (
+            patch("src.consumer.compete_for_claim", new_callable=AsyncMock) as mock_claim,
+            patch("src.consumer.decide_with_fallback", new_callable=AsyncMock) as mock_decide,
+            patch("src.consumer.publish_ai_recommendation", new_callable=AsyncMock),
+            patch("src.consumer.publish_ai_decision", new_callable=AsyncMock) as mock_decision,
+            patch("src.consumer.publish_task_completed", new_callable=AsyncMock),
+        ):
+            mock_claim.return_value = persona
+            mock_decide.return_value = ("approve", 0.8)
+            await handle_message(event, [persona], publisher, set())
+
+            call_args = mock_decision.call_args
+            alert_context = call_args[0][6]
+            assert alert_context["signal_type"] == "glucose"
+
+
+class TestApprovalEventPayload:
+    """Verify approved events include patient_id, severity, signal_type."""
+
+    async def test_approved_event_includes_patient_id(self):
+        """ai.output.approved must include patient_id for call-simulator."""
+        from src.events import publish_ai_decision
+
+        publisher = AsyncMock()
+        task_data = {"entity_id": "task-001", "correlation_id": "corr-001"}
+        persona = _make_persona()
+        alert_context = {"patient_id": "pt-xyz", "severity": "CRITICAL", "signal_type": "glucose"}
+
+        await publish_ai_decision(publisher, task_data, "approve", 1.0, persona, True, alert_context)
+
+        call_args = publisher.publish.call_args
+        event = call_args[0][1]
+        assert event["payload"]["patient_id"] == "pt-xyz"
+
+    async def test_approved_event_includes_severity(self):
+        from src.events import publish_ai_decision
+
+        publisher = AsyncMock()
+        task_data = {"entity_id": "task-001", "correlation_id": "corr-001"}
+        persona = _make_persona()
+        alert_context = {"patient_id": "pt-xyz", "severity": "URGENT", "signal_type": "spo2"}
+
+        await publish_ai_decision(publisher, task_data, "approve", 0.8, persona, True, alert_context)
+
+        call_args = publisher.publish.call_args
+        event = call_args[0][1]
+        assert event["payload"]["severity"] == "URGENT"
+        assert event["payload"]["signal_type"] == "spo2"
 
 
 class TestHealthEndpoint:
