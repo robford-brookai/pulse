@@ -329,6 +329,53 @@ services:
       retries: 10
       start_period: 30s
 
+  agent-worker:
+    profiles: [sim]
+    build:
+      context: ..
+      dockerfile: services/agent-worker/Dockerfile
+    environment:
+      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      HASURA_URL: http://hasura:8080
+      HASURA_ADMIN_SECRET: ${HASURA_GRAPHQL_ADMIN_SECRET:-changeme_admin_secret}
+      COMPRESSION_RATIO: ${COMPRESSION_RATIO:-960}
+      AGENTS_MD_PATH: /app/agents.md
+    ports:
+      - "8061:8000"
+    depends_on:
+      redpanda-init:
+        condition: service_completed_successfully
+      control-plane:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  call-simulator:
+    profiles: [sim]
+    build:
+      context: ..
+      dockerfile: services/call-simulator/Dockerfile
+    environment:
+      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+    ports:
+      - "8062:8000"
+    depends_on:
+      redpanda-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
   stacte-bridge:
     build:
       context: ..
