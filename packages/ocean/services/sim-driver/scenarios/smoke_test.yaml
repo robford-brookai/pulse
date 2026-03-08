@@ -1,11 +1,11 @@
 name: smoke_test
-description: "5-minute CI smoke scenario: 3 patients, 2 alerts, 1 outreach"
+description: "5-minute CI smoke scenario: 3 patients, 2 alerts"
 compression_ratio: 720  # 1 simulated hour = 5 wall-clock seconds
 
 patients:
   - patient_id: "sim-pt-smoke-001"
     clinic_id: "clinic-demo"
-    assigned_agent: coordinator_alice
+    source: pocar
     signals:
       - sim_hour: 0.1
         type: glucose
@@ -20,17 +20,18 @@ patients:
 
   - patient_id: "sim-pt-smoke-002"
     clinic_id: "clinic-demo"
-    assigned_agent: coordinator_bob
+    source: impilo
     signals:
       - sim_hour: 0.2
         type: spo2
         value: 88
         unit: "%"
         anomalous: true
+        severity_hint: URGENT
 
   - patient_id: "sim-pt-smoke-003"
     clinic_id: "clinic-demo"
-    assigned_agent: coordinator_alice
+    source: pocar
     signals:
       - sim_hour: 0.15
         type: glucose
