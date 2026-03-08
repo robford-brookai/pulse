@@ -30,7 +30,7 @@ async def lifespan(app: FastAPI):
     global _publisher, _consumer_task
 
     brokers = os.environ.get("REDPANDA_BROKERS", "redpanda:29092")
-    agents_path = os.environ.get("AGENTS_MD_PATH", "/app/agents.md")
+    agents_path = os.environ.get("AGENTS_MD_PATH", "/app/AGENTS.md")
     compression = float(os.environ.get("COMPRESSION_RATIO", "960"))
 
     _publisher = RedpandaPublisher(bootstrap_servers=brokers)

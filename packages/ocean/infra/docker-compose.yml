@@ -340,7 +340,7 @@ services:
       HASURA_URL: http://hasura:8080
       HASURA_ADMIN_SECRET: ${HASURA_GRAPHQL_ADMIN_SECRET:-changeme_admin_secret}
       COMPRESSION_RATIO: ${COMPRESSION_RATIO:-960}
-      AGENTS_MD_PATH: /app/agents.md
+      AGENTS_MD_PATH: /app/AGENTS.md
     ports:
       - "8061:8000"
     depends_on:

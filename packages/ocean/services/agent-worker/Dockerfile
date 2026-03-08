@@ -11,7 +11,8 @@ RUN uv pip install --system --no-cache \
     "confluent-kafka==2.13.2" \
     "pydantic>=2.0" \
     "pyyaml>=6.0" \
-    "structlog==25.5.0"
+    "structlog==25.5.0" \
+    "anthropic>=0.49.0"
 
 # Install ocean-events shared library
 COPY libs/ocean-events /app/ocean-events
@@ -21,6 +22,6 @@ RUN uv pip install --system /app/ocean-events
 COPY services/agent-worker/src ./src
 
 # Copy AGENTS.md for persona loading
-COPY agents.md /app/agents.md
+COPY AGENTS.md /app/AGENTS.md
 
 CMD ["python", "-m", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8061"]

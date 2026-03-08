@@ -16,9 +16,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 # Ensure ocean-events is importable when running outside installed packages
-sys.path.insert(
-    0, str(Path(__file__).resolve().parents[3] / "libs" / "ocean-events" / "src")
-)
+try:
+    _lib_path = Path(__file__).resolve().parents[3] / "libs" / "ocean-events" / "src"
+    if _lib_path.exists():
+        sys.path.insert(0, str(_lib_path))
+except IndexError:
+    pass  # In Docker, ocean-events is pip-installed
 
 from ocean_events.base import BaseEvent  # noqa: E402
 

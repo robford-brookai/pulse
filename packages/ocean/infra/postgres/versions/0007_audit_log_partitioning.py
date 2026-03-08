@@ -83,7 +83,13 @@ def upgrade() -> None:
     # 5. Create DEFAULT partition for rows outside defined ranges
     op.execute("CREATE TABLE audit_log_default PARTITION OF audit_log DEFAULT;")
 
-    # 6. Re-create indexes on parent (auto-inherited by partitions)
+    # 6. Drop legacy indexes (rename_table keeps old index names on audit_log_legacy)
+    op.execute("DROP INDEX IF EXISTS ix_audit_log_timestamp;")
+    op.execute("DROP INDEX IF EXISTS ix_audit_log_actor;")
+    op.execute("DROP INDEX IF EXISTS ix_audit_log_entity;")
+    op.execute("DROP INDEX IF EXISTS ix_audit_log_event_id;")
+
+    # 7. Re-create indexes on parent (auto-inherited by partitions)
     op.execute("CREATE INDEX ix_audit_log_timestamp ON audit_log (timestamp);")
     op.execute("CREATE INDEX ix_audit_log_actor ON audit_log (actor_id);")
     op.execute("CREATE INDEX ix_audit_log_entity ON audit_log (entity_type, entity_id);")
