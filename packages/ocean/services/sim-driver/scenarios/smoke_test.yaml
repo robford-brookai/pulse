@@ -1,5 +1,5 @@
 name: smoke_test
-description: "5-minute CI smoke scenario: 3 patients, 2 alerts"
+description: "5-minute CI smoke scenario: 3 patients, all CRITICAL for happy-path approve"
 compression_ratio: 720  # 1 simulated hour = 5 wall-clock seconds
 
 patients:
@@ -12,6 +12,7 @@ patients:
         value: 225
         unit: mg/dL
         anomalous: true
+        severity_hint: CRITICAL
       - sim_hour: 0.3
         type: weight
         value: 78
@@ -27,7 +28,7 @@ patients:
         value: 88
         unit: "%"
         anomalous: true
-        severity_hint: URGENT
+        severity_hint: CRITICAL
 
   - patient_id: "sim-pt-smoke-003"
     clinic_id: "clinic-demo"
@@ -38,3 +39,4 @@ patients:
         value: 310
         unit: mg/dL
         anomalous: true
+        severity_hint: CRITICAL
