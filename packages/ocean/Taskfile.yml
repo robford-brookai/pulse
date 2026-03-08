@@ -1,0 +1,106 @@
+# https://taskfile.dev
+version: "3"
+
+vars:
+  COMPOSE_FILE: infra/docker-compose.yml
+
+includes:
+  sim-driver:
+    taskfile: ./services/sim-driver/Taskfile.yml
+    dir: ./services/sim-driver
+    optional: true
+  agent-worker:
+    taskfile: ./services/agent-worker/Taskfile.yml
+    dir: ./services/agent-worker
+    optional: true
+  call-simulator:
+    taskfile: ./services/call-simulator/Taskfile.yml
+    dir: ./services/call-simulator
+    optional: true
+
+tasks:
+  # --- Testing ---
+
+  test:
+    desc: Run all unit tests (root + services)
+    cmds:
+      - python -m pytest tests/ -x -q -m "not integration"
+      - task: test:services
+
+  test:services:
+    desc: Run tests for all services with test directories
+    cmds:
+      - for: [sim-driver, event-store, control-plane, graph-projection, slack-bot, pocar-connector, impilo-connector, zcc-connector, stacte-bridge]
+        cmd: |
+          if [ -d "services/{{.ITEM}}/tests" ]; then
+            echo "=== {{.ITEM}} ===" && cd services/{{.ITEM}} && python -m pytest tests/ -x -q && cd ../..
+          fi
+
+  test:root:
+    desc: Run root-level tests only
+    cmds:
+      - python -m pytest tests/ -x -q -m "not integration"
+
+  test:integration:
+    desc: Run integration tests (requires Docker stack)
+    cmds:
+      - python -m pytest tests/ -x -q -m integration
+
+  test:lib:
+    desc: Run ocean-events library tests
+    dir: libs/ocean-events
+    cmds:
+      - python -m pytest tests/ -x -q
+
+  # --- Docker Compose ---
+
+  up:
+    desc: Start core stack (no sim profile)
+    cmds:
+      - docker compose -f {{.COMPOSE_FILE}} up -d
+
+  up:sim:
+    desc: Start full stack with simulation services
+    cmds:
+      - docker compose -f {{.COMPOSE_FILE}} --profile sim up -d
+
+  down:
+    desc: Stop all services
+    cmds:
+      - docker compose -f {{.COMPOSE_FILE}} --profile sim down
+
+  logs:
+    desc: Follow logs for all services
+    cmds:
+      - docker compose -f {{.COMPOSE_FILE}} --profile sim logs -f
+
+  ps:
+    desc: Show running containers
+    cmds:
+      - docker compose -f {{.COMPOSE_FILE}} --profile sim ps
+
+  # --- Linting ---
+
+  lint:
+    desc: Run ruff check + format on entire repo
+    cmds:
+      - ruff check .
+      - ruff format --check .
+
+  lint:fix:
+    desc: Auto-fix ruff issues
+    cmds:
+      - ruff check --fix .
+      - ruff format .
+
+  # --- Infra ---
+
+  topics:
+    desc: Create Redpanda topics (idempotent)
+    cmds:
+      - bash infra/redpanda/topics.sh
+
+  migrate:
+    desc: Run Alembic migrations
+    cmds:
+      - docker compose -f {{.COMPOSE_FILE}} run --rm migrate
