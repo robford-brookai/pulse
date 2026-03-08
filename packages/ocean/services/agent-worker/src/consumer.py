@@ -1,17 +1,20 @@
 """Async Kafka consumer for agent-worker.
 
 Reads from ocean.tasks, filters for task.created from control-plane only,
-and dispatches to claim competition.
+dispatches to claim competition, then runs AI decision pipeline.
 """
 from __future__ import annotations
 
 import json
+import random
 
 import structlog
 from confluent_kafka import KafkaError
 from confluent_kafka.aio import AIOConsumer as Consumer
 
 from src.claim import compete_for_claim
+from src.decision import decide_with_fallback
+from src.events import publish_ai_decision, publish_ai_recommendation, publish_task_completed
 from src.personas import Persona
 from src.publisher import RedpandaPublisher
 
@@ -43,7 +46,45 @@ async def handle_message(
         log.debug("skipped_event_type", event_type=event_type)
         return "skipped_type"
 
-    await compete_for_claim(event_data, personas, publisher, claimed_tasks)
+    persona = await compete_for_claim(event_data, personas, publisher, claimed_tasks)
+    if persona is None:
+        return "dispatched"
+
+    # Build alert context from task event payload
+    payload = event_data.get("payload", {})
+    alert_context = {
+        "priority": payload.get("priority", ""),
+        "signal_type": payload.get("signal_type", payload.get("task_type", "")),
+        "severity": payload.get("severity", payload.get("priority", "")).upper(),
+        "patient_id": event_data.get("entity_id", payload.get("patient_id", "")),
+        "value": payload.get("value"),
+        "anomalous": payload.get("anomalous"),
+    }
+
+    # AI decision pipeline (falls back to deterministic rules)
+    action, confidence = await decide_with_fallback(alert_context)
+
+    # Publish recommendation
+    await publish_ai_recommendation(publisher, event_data, action, confidence, persona)
+
+    # Persona approve-rate gate (post-LLM)
+    approve_rate = persona.outreach_approve_rate or 0.5
+    approved = action == "approve" and random.random() < approve_rate
+
+    # Publish approved/rejected decision
+    await publish_ai_decision(publisher, event_data, action, confidence, persona, approved)
+
+    # Complete the task
+    await publish_task_completed(publisher, event_data, persona)
+
+    log.info(
+        "decision_cycle_complete",
+        persona=persona.id,
+        action=action,
+        confidence=confidence,
+        approved=approved,
+        entity_id=event_data.get("entity_id", ""),
+    )
     return "dispatched"
 
 
