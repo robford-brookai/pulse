@@ -1,76 +1,101 @@
-"""Tests for scenario_engine — YAML loading and per-patient scheduling."""
+"""Tests for refactored ScenarioEngine — Pydantic validation and PatientSimulator wiring."""
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
 import pathlib
+import sys
+from unittest.mock import AsyncMock, patch
 
 import pytest
-import sys
+from pydantic import ValidationError
 
 # Add service src to path
 _SVC = pathlib.Path(__file__).parents[1]
 if str(_SVC) not in sys.path:
     sys.path.insert(0, str(_SVC))
 
+# Ensure ocean-events is importable
+sys.path.insert(
+    0, str(pathlib.Path(__file__).resolve().parents[3] / "libs" / "ocean-events" / "src")
+)
+
+from src.models import ScenarioConfig
 from src.scenario_engine import load_scenario, ScenarioEngine
 
 
-def test_load_smoke_test_scenario():
-    """smoke_test.yaml loads with expected structure."""
-    scenario = load_scenario("smoke_test")
-    assert scenario["name"] == "smoke_test"
-    assert "compression_ratio" in scenario
-    patients = scenario["patients"]
-    assert len(patients) >= 3
-    # Each patient has at least one signal
-    for p in patients:
-        assert "patient_id" in p
-        assert "signals" in p
-        assert len(p["signals"]) >= 1
+class TestLoadScenario:
+    """load_scenario returns a validated ScenarioConfig."""
+
+    def test_returns_scenario_config(self) -> None:
+        config = load_scenario("smoke_test")
+        assert isinstance(config, ScenarioConfig)
+
+    def test_smoke_test_has_three_patients(self) -> None:
+        config = load_scenario("smoke_test")
+        assert len(config.patients) == 3
+
+    def test_smoke_test_patient_has_source(self) -> None:
+        config = load_scenario("smoke_test")
+        assert config.patients[0].source == "pocar"
+        assert config.patients[1].source == "impilo"
+
+    def test_invalid_scenario_raises(self, tmp_path: pathlib.Path) -> None:
+        """A YAML file missing patient_id should raise ValidationError."""
+        bad_yaml = tmp_path / "bad.yaml"
+        bad_yaml.write_text(
+            "name: bad\npatients:\n  - clinic_id: x\n    signals: []\n"
+        )
+        with patch("src.scenario_engine._SCENARIOS_DIR", tmp_path):
+            with pytest.raises(ValidationError):
+                load_scenario("bad")
 
 
-def test_load_one_day_scenario():
-    """one_day.yaml loads with 5 patients."""
-    scenario = load_scenario("one_day")
-    assert scenario["name"] == "one_day"
-    assert scenario["compression_ratio"] == 960
-    assert len(scenario["patients"]) >= 5
+class TestScenarioEngineProperties:
+    """ScenarioEngine exposes patient_count, expected_event_count, estimated_duration_seconds."""
+
+    def test_patient_count(self) -> None:
+        pub = AsyncMock()
+        engine = ScenarioEngine(scenario_name="smoke_test", publisher=pub)
+        assert engine.patient_count == 3
+
+    def test_expected_event_count(self) -> None:
+        """smoke_test: 4 signals total, 3 anomalous -> 4 + 3 = 7 events."""
+        pub = AsyncMock()
+        engine = ScenarioEngine(scenario_name="smoke_test", publisher=pub)
+        assert engine.expected_event_count == 7
+
+    def test_estimated_duration_seconds(self) -> None:
+        """Max sim_hour across all patients is 0.3 (patient 1).
+        estimated = 0.3 * 3600 / 720 = 1.5 seconds."""
+        pub = AsyncMock()
+        engine = ScenarioEngine(scenario_name="smoke_test", publisher=pub)
+        assert engine.estimated_duration_seconds == pytest.approx(1.5, rel=0.01)
+
+    def test_scenario_name(self) -> None:
+        pub = AsyncMock()
+        engine = ScenarioEngine(scenario_name="smoke_test", publisher=pub)
+        assert engine.scenario_name == "smoke_test"
 
 
-def test_scenario_engine_name():
-    """ScenarioEngine exposes scenario name."""
-    pub = AsyncMock()
-    engine = ScenarioEngine(scenario_name="smoke_test", publisher=pub)
-    assert engine.scenario_name == "smoke_test"
-    assert engine.compression_ratio > 0
+class TestScenarioEngineRun:
+    """ScenarioEngine.run creates PatientSimulator per patient and calls run()."""
 
+    @pytest.mark.asyncio
+    async def test_run_publishes_events(self) -> None:
+        pub = AsyncMock()
+        pub.publish = AsyncMock()
+        engine = ScenarioEngine(scenario_name="smoke_test", publisher=pub)
 
-@pytest.mark.asyncio
-async def test_scenario_engine_run_calls_publisher():
-    """ScenarioEngine.run publishes at least one event per anomalous signal."""
-    pub = AsyncMock()
-    pub.publish = AsyncMock()
+        with patch("src.scenario_engine.sim_sleep", new=AsyncMock(return_value=None)):
+            with patch("src.clock.sim_sleep", new=AsyncMock(return_value=None)):
+                await engine.run()
 
-    engine = ScenarioEngine(scenario_name="smoke_test", publisher=pub)
+        # 7 expected events (4 signals + 3 alerts)
+        assert pub.publish.call_count == 7
 
-    # Patch sim_sleep and claim delay to return immediately
-    with patch("asyncio.sleep", new=AsyncMock(return_value=None)):
-        with patch("src.agent_runner.AsyncAnthropic") as mock_anthropic:
-            mock_client = MagicMock()
-            mock_client.messages.create = AsyncMock(
-                return_value=MagicMock(content=[MagicMock(text="APPROVE — glucose is high.")])
-            )
-            mock_anthropic.return_value = mock_client
-            with patch("src.llm_judge.AsyncAnthropic") as mock_judge:
-                mock_judge_client = MagicMock()
-                mock_judge_client.messages.create = AsyncMock(
-                    return_value=MagicMock(
-                        content=[MagicMock(text='{"score": 0.85, "reasoning": "Appropriate action."}')]
-                    )
-                )
-                mock_judge.return_value = mock_judge_client
-                with patch("src.human_gate.httpx.AsyncClient"):
-                    await engine.run()
-
-    # At minimum: signal events + alert events were published
-    assert pub.publish.call_count > 0
+    @pytest.mark.asyncio
+    async def test_run_does_not_import_state_machine(self) -> None:
+        """Verify no imports of deleted modules."""
+        import src.scenario_engine as mod
+        source = pathlib.Path(mod.__file__).read_text()
+        assert "state_machine" not in source
+        assert "agent_runner" not in source
