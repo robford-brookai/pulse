@@ -12,6 +12,8 @@ from uuid import uuid4
 
 import structlog
 
+from src.publisher import RedpandaPublisher
+
 log = structlog.get_logger()
 
 TOPIC = "ocean.interactions"
@@ -38,7 +40,7 @@ def build_call_event(
     }
 
 
-async def simulate_call(approval_event: dict, publisher) -> None:
+async def simulate_call(approval_event: dict, publisher: RedpandaPublisher) -> None:
     """Run a full call lifecycle based on an outreach approval event.
 
     Extracts persona configuration from the approval payload and simulates

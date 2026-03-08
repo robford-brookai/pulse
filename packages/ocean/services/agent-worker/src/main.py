@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI):
     )
 
     _consumer_task = asyncio.create_task(
-        run_consumer(personas, brokers, _publisher, _claimed_tasks)
+        run_consumer(personas, brokers, _publisher, _claimed_tasks)  # personas, bootstrap_servers, publisher, claimed_tasks
     )
 
     yield

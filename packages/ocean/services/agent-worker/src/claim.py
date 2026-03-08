@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 import structlog
 
 from src.personas import Persona
+from src.publisher import RedpandaPublisher
 
 log = structlog.get_logger()
 
@@ -16,7 +17,7 @@ log = structlog.get_logger()
 async def compete_for_claim(
     task_event: dict,
     personas: list[Persona],
-    publisher,
+    publisher: RedpandaPublisher,
     claimed_tasks: set[str],
     compression_ratio: float = 960,
 ) -> Persona | None:

@@ -13,6 +13,7 @@ from confluent_kafka.aio import AIOConsumer as Consumer
 
 from src.claim import compete_for_claim
 from src.personas import Persona
+from src.publisher import RedpandaPublisher
 
 log = structlog.get_logger()
 
@@ -28,7 +29,7 @@ CONSUMER_CONFIG: dict = {
 async def handle_message(
     event_data: dict,
     personas: list[Persona],
-    publisher,
+    publisher: RedpandaPublisher,
     claimed_tasks: set[str],
 ) -> str:
     """Process a single deserialized event. Returns status string for testing."""
@@ -49,7 +50,7 @@ async def handle_message(
 async def run_consumer(
     personas: list[Persona],
     bootstrap_servers: str,
-    publisher,
+    publisher: RedpandaPublisher,
     claimed_tasks: set[str],
 ) -> None:
     """Run the agent-worker consumer loop."""

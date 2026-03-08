@@ -3,13 +3,13 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 
+import structlog
 from confluent_kafka import Consumer, KafkaError
 
 from src.call_sim import simulate_call
 
-log = logging.getLogger(__name__)
+log = structlog.get_logger()
 
 TOPIC = "ocean.ai-ops"
 GROUP_ID = "call-simulator"
@@ -44,14 +44,19 @@ class AIOConsumer:
             msg = await loop.run_in_executor(None, self._consumer.poll, 1.0)
             if msg is None:
                 continue
-            if msg.error():
-                if msg.error().code() == KafkaError._PARTITION_EOF:
+
+            error = msg.error()
+            if error:
+                if error.code() == KafkaError._PARTITION_EOF:
                     continue
-                log.error("consumer_error", error=str(msg.error()))
+                log.error("consumer_error", error=str(error))
                 continue
 
             try:
-                event_data = json.loads(msg.value().decode("utf-8"))
+                msg_value = msg.value()
+                if msg_value is None:
+                    continue
+                event_data = json.loads(msg_value.decode("utf-8"))
             except (json.JSONDecodeError, UnicodeDecodeError) as exc:
                 log.warning("consumer_decode_error", error=str(exc))
                 self._consumer.commit(message=msg, asynchronous=False)
