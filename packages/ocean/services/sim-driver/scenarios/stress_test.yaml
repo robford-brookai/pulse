@@ -1,0 +1,794 @@
+name: stress_test
+description: "Throughput test: 50 concurrent patients, 400+ events, staggered arrival"
+compression_ratio: 1920
+
+patients:
+  # --- Batch 1: sim_hour 0.05 (patients 001-010) ---
+  - patient_id: "sim-pt-stress-001"
+    clinic_id: "clinic-stress"
+    source: pocar
+    signals:
+      - sim_hour: 0.05
+        type: glucose
+        value: 290
+        unit: mg/dL
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.06
+        type: weight
+        value: 78
+        unit: kg
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-002"
+    clinic_id: "clinic-stress"
+    source: impilo
+    signals:
+      - sim_hour: 0.05
+        type: glucose
+        value: 310
+        unit: mg/dL
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.06
+        type: heart_rate
+        value: 72
+        unit: bpm
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-003"
+    clinic_id: "clinic-stress"
+    source: pocar
+    signals:
+      - sim_hour: 0.05
+        type: glucose
+        value: 275
+        unit: mg/dL
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.06
+        type: spo2
+        value: 97
+        unit: "%"
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-004"
+    clinic_id: "clinic-stress"
+    source: impilo
+    signals:
+      - sim_hour: 0.05
+        type: glucose
+        value: 200
+        unit: mg/dL
+        anomalous: true
+        severity_hint: URGENT
+      - sim_hour: 0.06
+        type: glucose
+        value: 105
+        unit: mg/dL
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-005"
+    clinic_id: "clinic-stress"
+    source: pocar
+    signals:
+      - sim_hour: 0.05
+        type: spo2
+        value: 89
+        unit: "%"
+        anomalous: true
+        severity_hint: URGENT
+      - sim_hour: 0.06
+        type: weight
+        value: 78
+        unit: kg
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-006"
+    clinic_id: "clinic-stress"
+    source: impilo
+    signals:
+      - sim_hour: 0.05
+        type: glucose
+        value: 210
+        unit: mg/dL
+        anomalous: true
+        severity_hint: URGENT
+      - sim_hour: 0.06
+        type: heart_rate
+        value: 72
+        unit: bpm
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-007"
+    clinic_id: "clinic-stress"
+    source: pocar
+    signals:
+      - sim_hour: 0.05
+        type: spo2
+        value: 90
+        unit: "%"
+        anomalous: true
+        severity_hint: URGENT
+      - sim_hour: 0.06
+        type: spo2
+        value: 97
+        unit: "%"
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-008"
+    clinic_id: "clinic-stress"
+    source: impilo
+    signals:
+      - sim_hour: 0.05
+        type: heart_rate
+        value: 115
+        unit: bpm
+        anomalous: true
+      - sim_hour: 0.06
+        type: glucose
+        value: 105
+        unit: mg/dL
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-009"
+    clinic_id: "clinic-stress"
+    source: pocar
+    signals:
+      - sim_hour: 0.05
+        type: heart_rate
+        value: 120
+        unit: bpm
+        anomalous: true
+      - sim_hour: 0.06
+        type: weight
+        value: 78
+        unit: kg
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-010"
+    clinic_id: "clinic-stress"
+    source: impilo
+    signals:
+      - sim_hour: 0.05
+        type: heart_rate
+        value: 118
+        unit: bpm
+        anomalous: true
+      - sim_hour: 0.06
+        type: weight
+        value: 80
+        unit: kg
+        anomalous: false
+
+  # --- Batch 2: sim_hour 0.10 (patients 011-020) ---
+  - patient_id: "sim-pt-stress-011"
+    clinic_id: "clinic-stress"
+    source: pocar
+    signals:
+      - sim_hour: 0.1
+        type: glucose
+        value: 300
+        unit: mg/dL
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.11
+        type: heart_rate
+        value: 72
+        unit: bpm
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-012"
+    clinic_id: "clinic-stress"
+    source: impilo
+    signals:
+      - sim_hour: 0.1
+        type: glucose
+        value: 285
+        unit: mg/dL
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.11
+        type: spo2
+        value: 97
+        unit: "%"
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-013"
+    clinic_id: "clinic-stress"
+    source: pocar
+    signals:
+      - sim_hour: 0.1
+        type: glucose
+        value: 330
+        unit: mg/dL
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.11
+        type: glucose
+        value: 105
+        unit: mg/dL
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-014"
+    clinic_id: "clinic-stress"
+    source: impilo
+    signals:
+      - sim_hour: 0.1
+        type: glucose
+        value: 195
+        unit: mg/dL
+        anomalous: true
+        severity_hint: URGENT
+      - sim_hour: 0.11
+        type: weight
+        value: 78
+        unit: kg
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-015"
+    clinic_id: "clinic-stress"
+    source: pocar
+    signals:
+      - sim_hour: 0.1
+        type: spo2
+        value: 88
+        unit: "%"
+        anomalous: true
+        severity_hint: URGENT
+      - sim_hour: 0.11
+        type: heart_rate
+        value: 72
+        unit: bpm
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-016"
+    clinic_id: "clinic-stress"
+    source: impilo
+    signals:
+      - sim_hour: 0.1
+        type: glucose
+        value: 205
+        unit: mg/dL
+        anomalous: true
+        severity_hint: URGENT
+      - sim_hour: 0.11
+        type: spo2
+        value: 97
+        unit: "%"
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-017"
+    clinic_id: "clinic-stress"
+    source: pocar
+    signals:
+      - sim_hour: 0.1
+        type: spo2
+        value: 91
+        unit: "%"
+        anomalous: true
+        severity_hint: URGENT
+      - sim_hour: 0.11
+        type: glucose
+        value: 105
+        unit: mg/dL
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-018"
+    clinic_id: "clinic-stress"
+    source: impilo
+    signals:
+      - sim_hour: 0.1
+        type: heart_rate
+        value: 112
+        unit: bpm
+        anomalous: true
+      - sim_hour: 0.11
+        type: weight
+        value: 78
+        unit: kg
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-019"
+    clinic_id: "clinic-stress"
+    source: pocar
+    signals:
+      - sim_hour: 0.1
+        type: heart_rate
+        value: 125
+        unit: bpm
+        anomalous: true
+      - sim_hour: 0.11
+        type: heart_rate
+        value: 72
+        unit: bpm
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-020"
+    clinic_id: "clinic-stress"
+    source: impilo
+    signals:
+      - sim_hour: 0.1
+        type: heart_rate
+        value: 108
+        unit: bpm
+        anomalous: true
+      - sim_hour: 0.11
+        type: spo2
+        value: 97
+        unit: "%"
+        anomalous: false
+
+  # --- Batch 3: sim_hour 0.15 (patients 021-030) ---
+  - patient_id: "sim-pt-stress-021"
+    clinic_id: "clinic-stress"
+    source: pocar
+    signals:
+      - sim_hour: 0.15
+        type: glucose
+        value: 260
+        unit: mg/dL
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.16
+        type: spo2
+        value: 97
+        unit: "%"
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-022"
+    clinic_id: "clinic-stress"
+    source: impilo
+    signals:
+      - sim_hour: 0.15
+        type: glucose
+        value: 305
+        unit: mg/dL
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.16
+        type: glucose
+        value: 105
+        unit: mg/dL
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-023"
+    clinic_id: "clinic-stress"
+    source: pocar
+    signals:
+      - sim_hour: 0.15
+        type: glucose
+        value: 295
+        unit: mg/dL
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.16
+        type: weight
+        value: 78
+        unit: kg
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-024"
+    clinic_id: "clinic-stress"
+    source: impilo
+    signals:
+      - sim_hour: 0.15
+        type: glucose
+        value: 190
+        unit: mg/dL
+        anomalous: true
+        severity_hint: URGENT
+      - sim_hour: 0.16
+        type: heart_rate
+        value: 72
+        unit: bpm
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-025"
+    clinic_id: "clinic-stress"
+    source: pocar
+    signals:
+      - sim_hour: 0.15
+        type: spo2
+        value: 87
+        unit: "%"
+        anomalous: true
+        severity_hint: URGENT
+      - sim_hour: 0.16
+        type: spo2
+        value: 97
+        unit: "%"
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-026"
+    clinic_id: "clinic-stress"
+    source: impilo
+    signals:
+      - sim_hour: 0.15
+        type: glucose
+        value: 215
+        unit: mg/dL
+        anomalous: true
+        severity_hint: URGENT
+      - sim_hour: 0.16
+        type: glucose
+        value: 105
+        unit: mg/dL
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-027"
+    clinic_id: "clinic-stress"
+    source: pocar
+    signals:
+      - sim_hour: 0.15
+        type: spo2
+        value: 89
+        unit: "%"
+        anomalous: true
+        severity_hint: URGENT
+      - sim_hour: 0.16
+        type: weight
+        value: 78
+        unit: kg
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-028"
+    clinic_id: "clinic-stress"
+    source: impilo
+    signals:
+      - sim_hour: 0.15
+        type: heart_rate
+        value: 130
+        unit: bpm
+        anomalous: true
+      - sim_hour: 0.16
+        type: heart_rate
+        value: 72
+        unit: bpm
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-029"
+    clinic_id: "clinic-stress"
+    source: pocar
+    signals:
+      - sim_hour: 0.15
+        type: heart_rate
+        value: 122
+        unit: bpm
+        anomalous: true
+      - sim_hour: 0.16
+        type: spo2
+        value: 97
+        unit: "%"
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-030"
+    clinic_id: "clinic-stress"
+    source: impilo
+    signals:
+      - sim_hour: 0.15
+        type: heart_rate
+        value: 116
+        unit: bpm
+        anomalous: true
+      - sim_hour: 0.16
+        type: glucose
+        value: 105
+        unit: mg/dL
+        anomalous: false
+
+  # --- Batch 4: sim_hour 0.20 (patients 031-040) ---
+  - patient_id: "sim-pt-stress-031"
+    clinic_id: "clinic-stress"
+    source: pocar
+    signals:
+      - sim_hour: 0.2
+        type: glucose
+        value: 340
+        unit: mg/dL
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.21
+        type: glucose
+        value: 105
+        unit: mg/dL
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-032"
+    clinic_id: "clinic-stress"
+    source: impilo
+    signals:
+      - sim_hour: 0.2
+        type: glucose
+        value: 270
+        unit: mg/dL
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.21
+        type: weight
+        value: 78
+        unit: kg
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-033"
+    clinic_id: "clinic-stress"
+    source: pocar
+    signals:
+      - sim_hour: 0.2
+        type: glucose
+        value: 315
+        unit: mg/dL
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.21
+        type: heart_rate
+        value: 72
+        unit: bpm
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-034"
+    clinic_id: "clinic-stress"
+    source: impilo
+    signals:
+      - sim_hour: 0.2
+        type: glucose
+        value: 185
+        unit: mg/dL
+        anomalous: true
+        severity_hint: URGENT
+      - sim_hour: 0.21
+        type: spo2
+        value: 97
+        unit: "%"
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-035"
+    clinic_id: "clinic-stress"
+    source: pocar
+    signals:
+      - sim_hour: 0.2
+        type: spo2
+        value: 90
+        unit: "%"
+        anomalous: true
+        severity_hint: URGENT
+      - sim_hour: 0.21
+        type: glucose
+        value: 105
+        unit: mg/dL
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-036"
+    clinic_id: "clinic-stress"
+    source: impilo
+    signals:
+      - sim_hour: 0.2
+        type: glucose
+        value: 220
+        unit: mg/dL
+        anomalous: true
+        severity_hint: URGENT
+      - sim_hour: 0.21
+        type: weight
+        value: 78
+        unit: kg
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-037"
+    clinic_id: "clinic-stress"
+    source: pocar
+    signals:
+      - sim_hour: 0.2
+        type: spo2
+        value: 88
+        unit: "%"
+        anomalous: true
+        severity_hint: URGENT
+      - sim_hour: 0.21
+        type: heart_rate
+        value: 72
+        unit: bpm
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-038"
+    clinic_id: "clinic-stress"
+    source: impilo
+    signals:
+      - sim_hour: 0.2
+        type: heart_rate
+        value: 119
+        unit: bpm
+        anomalous: true
+      - sim_hour: 0.21
+        type: spo2
+        value: 97
+        unit: "%"
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-039"
+    clinic_id: "clinic-stress"
+    source: pocar
+    signals:
+      - sim_hour: 0.2
+        type: heart_rate
+        value: 128
+        unit: bpm
+        anomalous: true
+      - sim_hour: 0.21
+        type: glucose
+        value: 105
+        unit: mg/dL
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-040"
+    clinic_id: "clinic-stress"
+    source: impilo
+    signals:
+      - sim_hour: 0.2
+        type: heart_rate
+        value: 114
+        unit: bpm
+        anomalous: true
+      - sim_hour: 0.21
+        type: weight
+        value: 75
+        unit: kg
+        anomalous: false
+
+  # --- Batch 5: sim_hour 0.25 (patients 041-050) ---
+  - patient_id: "sim-pt-stress-041"
+    clinic_id: "clinic-stress"
+    source: pocar
+    signals:
+      - sim_hour: 0.25
+        type: glucose
+        value: 255
+        unit: mg/dL
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.26
+        type: weight
+        value: 78
+        unit: kg
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-042"
+    clinic_id: "clinic-stress"
+    source: impilo
+    signals:
+      - sim_hour: 0.25
+        type: glucose
+        value: 320
+        unit: mg/dL
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.26
+        type: heart_rate
+        value: 72
+        unit: bpm
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-043"
+    clinic_id: "clinic-stress"
+    source: pocar
+    signals:
+      - sim_hour: 0.25
+        type: glucose
+        value: 288
+        unit: mg/dL
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.26
+        type: spo2
+        value: 97
+        unit: "%"
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-044"
+    clinic_id: "clinic-stress"
+    source: impilo
+    signals:
+      - sim_hour: 0.25
+        type: glucose
+        value: 198
+        unit: mg/dL
+        anomalous: true
+        severity_hint: URGENT
+      - sim_hour: 0.26
+        type: glucose
+        value: 105
+        unit: mg/dL
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-045"
+    clinic_id: "clinic-stress"
+    source: pocar
+    signals:
+      - sim_hour: 0.25
+        type: spo2
+        value: 86
+        unit: "%"
+        anomalous: true
+        severity_hint: URGENT
+      - sim_hour: 0.26
+        type: weight
+        value: 78
+        unit: kg
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-046"
+    clinic_id: "clinic-stress"
+    source: impilo
+    signals:
+      - sim_hour: 0.25
+        type: glucose
+        value: 225
+        unit: mg/dL
+        anomalous: true
+        severity_hint: URGENT
+      - sim_hour: 0.26
+        type: heart_rate
+        value: 72
+        unit: bpm
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-047"
+    clinic_id: "clinic-stress"
+    source: pocar
+    signals:
+      - sim_hour: 0.25
+        type: spo2
+        value: 91
+        unit: "%"
+        anomalous: true
+        severity_hint: URGENT
+      - sim_hour: 0.26
+        type: spo2
+        value: 97
+        unit: "%"
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-048"
+    clinic_id: "clinic-stress"
+    source: impilo
+    signals:
+      - sim_hour: 0.25
+        type: heart_rate
+        value: 126
+        unit: bpm
+        anomalous: true
+      - sim_hour: 0.26
+        type: glucose
+        value: 105
+        unit: mg/dL
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-049"
+    clinic_id: "clinic-stress"
+    source: pocar
+    signals:
+      - sim_hour: 0.25
+        type: heart_rate
+        value: 110
+        unit: bpm
+        anomalous: true
+      - sim_hour: 0.26
+        type: weight
+        value: 78
+        unit: kg
+        anomalous: false
+
+  - patient_id: "sim-pt-stress-050"
+    clinic_id: "clinic-stress"
+    source: impilo
+    signals:
+      - sim_hour: 0.25
+        type: heart_rate
+        value: 121
+        unit: bpm
+        anomalous: true
+      - sim_hour: 0.26
+        type: glucose
+        value: 100
+        unit: mg/dL
+        anomalous: false
