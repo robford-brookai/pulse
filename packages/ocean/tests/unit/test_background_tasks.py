@@ -44,6 +44,7 @@ async def test_event_store_startup_creates_consumer_task(monkeypatch):
 
     startup_task = asyncio.create_task(startup())
     await asyncio.sleep(0)
+    await asyncio.sleep(0)  # second yield lets inner consumer task start
     startup_task.cancel()
     for t in created_tasks:
         t.cancel()
