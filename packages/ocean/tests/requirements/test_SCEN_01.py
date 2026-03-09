@@ -1,7 +1,7 @@
-"""SCEN-01: smoke_test.yaml provides a 3-patient happy-path scenario.
+"""SCEN-01: smoke_test.yaml provides a 50-patient happy-path scenario.
 
-Requirement: The smoke_test scenario has 3 patients, all anomalous signals
-carry severity_hint for deterministic approve path, and compression_ratio
+Requirement: The smoke_test scenario has 50 patients, all anomalous signals
+carry severity_hint CRITICAL for deterministic approve path, and compression_ratio
 keeps the scenario under 2 minutes wall-clock time.
 """
 from __future__ import annotations
@@ -34,9 +34,9 @@ def _load_scenario():
     return ScenarioConfig(**raw)
 
 
-def test_has_three_patients():
+def test_has_fifty_patients():
     scenario = _load_scenario()
-    assert len(scenario.patients) == 3
+    assert len(scenario.patients) == 50
 
 
 def test_all_anomalous_signals_have_severity_hint():

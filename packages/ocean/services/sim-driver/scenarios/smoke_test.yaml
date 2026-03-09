@@ -1,5 +1,5 @@
 name: smoke_test
-description: "5-minute CI smoke scenario: 3 patients, all CRITICAL for happy-path approve"
+description: "CI smoke scenario: 50 patients, all CRITICAL for happy-path approve"
 compression_ratio: 720  # 1 simulated hour = 5 wall-clock seconds
 
 patients:
@@ -7,36 +7,628 @@ patients:
     clinic_id: "clinic-demo"
     source: pocar
     signals:
-      - sim_hour: 0.1
+      - sim_hour: 0.05
         type: glucose
         value: 225
-        unit: mg/dL
+        unit: "mg/dL"
         anomalous: true
         severity_hint: CRITICAL
-      - sim_hour: 0.3
-        type: weight
-        value: 78
-        unit: kg
-        anomalous: false
 
   - patient_id: "sim-pt-smoke-002"
     clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.07
+        type: glucose
+        value: 310
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-003"
+    clinic_id: "clinic-demo"
     source: impilo
     signals:
+      - sim_hour: 0.09
+        type: spo2
+        value: 88
+        unit: "%"
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.14
+        type: weight
+        value: 73
+        unit: "kg"
+        anomalous: false
+
+  - patient_id: "sim-pt-smoke-004"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.11
+        type: glucose
+        value: 280
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-005"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.13
+        type: spo2
+        value: 85
+        unit: "%"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-006"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.15
+        type: glucose
+        value: 225
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
       - sim_hour: 0.2
+        type: weight
+        value: 76
+        unit: "kg"
+        anomalous: false
+
+  - patient_id: "sim-pt-smoke-007"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.17
+        type: glucose
+        value: 310
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-008"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.19
         type: spo2
         value: 88
         unit: "%"
         anomalous: true
         severity_hint: CRITICAL
 
-  - patient_id: "sim-pt-smoke-003"
+  - patient_id: "sim-pt-smoke-009"
     clinic_id: "clinic-demo"
     source: pocar
     signals:
-      - sim_hour: 0.15
+      - sim_hour: 0.21
+        type: glucose
+        value: 280
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.26
+        type: weight
+        value: 79
+        unit: "kg"
+        anomalous: false
+
+  - patient_id: "sim-pt-smoke-010"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.23
+        type: spo2
+        value: 85
+        unit: "%"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-011"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.25
+        type: glucose
+        value: 225
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-012"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.27
         type: glucose
         value: 310
-        unit: mg/dL
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.32
+        type: weight
+        value: 82
+        unit: "kg"
+        anomalous: false
+
+  - patient_id: "sim-pt-smoke-013"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.29
+        type: spo2
+        value: 88
+        unit: "%"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-014"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.31
+        type: glucose
+        value: 280
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-015"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.33
+        type: spo2
+        value: 85
+        unit: "%"
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.38
+        type: weight
+        value: 85
+        unit: "kg"
+        anomalous: false
+
+  - patient_id: "sim-pt-smoke-016"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.35
+        type: glucose
+        value: 225
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-017"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.37
+        type: glucose
+        value: 310
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-018"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.39
+        type: spo2
+        value: 88
+        unit: "%"
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.44
+        type: weight
+        value: 88
+        unit: "kg"
+        anomalous: false
+
+  - patient_id: "sim-pt-smoke-019"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.41
+        type: glucose
+        value: 280
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-020"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.43
+        type: spo2
+        value: 85
+        unit: "%"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-021"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.45
+        type: glucose
+        value: 225
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.5
+        type: weight
+        value: 71
+        unit: "kg"
+        anomalous: false
+
+  - patient_id: "sim-pt-smoke-022"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.47
+        type: glucose
+        value: 310
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-023"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.49
+        type: spo2
+        value: 88
+        unit: "%"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-024"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.51
+        type: glucose
+        value: 280
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.56
+        type: weight
+        value: 74
+        unit: "kg"
+        anomalous: false
+
+  - patient_id: "sim-pt-smoke-025"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.53
+        type: spo2
+        value: 85
+        unit: "%"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-026"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.55
+        type: glucose
+        value: 225
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-027"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.57
+        type: glucose
+        value: 310
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.62
+        type: weight
+        value: 77
+        unit: "kg"
+        anomalous: false
+
+  - patient_id: "sim-pt-smoke-028"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.59
+        type: spo2
+        value: 88
+        unit: "%"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-029"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.61
+        type: glucose
+        value: 280
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-030"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.63
+        type: spo2
+        value: 85
+        unit: "%"
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.68
+        type: weight
+        value: 80
+        unit: "kg"
+        anomalous: false
+
+  - patient_id: "sim-pt-smoke-031"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.65
+        type: glucose
+        value: 225
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-032"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.67
+        type: glucose
+        value: 310
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-033"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.69
+        type: spo2
+        value: 88
+        unit: "%"
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.74
+        type: weight
+        value: 83
+        unit: "kg"
+        anomalous: false
+
+  - patient_id: "sim-pt-smoke-034"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.71
+        type: glucose
+        value: 280
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-035"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.73
+        type: spo2
+        value: 85
+        unit: "%"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-036"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.75
+        type: glucose
+        value: 225
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.8
+        type: weight
+        value: 86
+        unit: "kg"
+        anomalous: false
+
+  - patient_id: "sim-pt-smoke-037"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.77
+        type: glucose
+        value: 310
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-038"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.79
+        type: spo2
+        value: 88
+        unit: "%"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-039"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.81
+        type: glucose
+        value: 280
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.86
+        type: weight
+        value: 89
+        unit: "kg"
+        anomalous: false
+
+  - patient_id: "sim-pt-smoke-040"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.83
+        type: spo2
+        value: 85
+        unit: "%"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-041"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.85
+        type: glucose
+        value: 225
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-042"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.87
+        type: glucose
+        value: 310
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.92
+        type: weight
+        value: 72
+        unit: "kg"
+        anomalous: false
+
+  - patient_id: "sim-pt-smoke-043"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.89
+        type: spo2
+        value: 88
+        unit: "%"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-044"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.91
+        type: glucose
+        value: 280
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-045"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.93
+        type: spo2
+        value: 85
+        unit: "%"
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.98
+        type: weight
+        value: 75
+        unit: "kg"
+        anomalous: false
+
+  - patient_id: "sim-pt-smoke-046"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.95
+        type: glucose
+        value: 225
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-047"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.97
+        type: glucose
+        value: 310
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-048"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.99
+        type: spo2
+        value: 88
+        unit: "%"
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 1.04
+        type: weight
+        value: 78
+        unit: "kg"
+        anomalous: false
+
+  - patient_id: "sim-pt-smoke-049"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 1.01
+        type: glucose
+        value: 280
+        unit: "mg/dL"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-smoke-050"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 1.03
+        type: spo2
+        value: 85
+        unit: "%"
         anomalous: true
         severity_hint: CRITICAL
