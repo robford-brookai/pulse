@@ -24,6 +24,7 @@ def _make_alert_event(alert_type: str = "glucose", alert_id: str = "alert-abc-12
         "source_system": "glucose-connector",
         "entity_id": alert_id,
         "entity_type": "alert",
+        "correlation_id": "corr-test-123",
         "payload": {
             "patient_id": "patient-xyz",
             "alert_type": alert_type,
@@ -121,6 +122,8 @@ class TestHandleAlertCreated:
         assert topic == "ocean.tasks"
         assert task_event["event_type"] == "task.created"
         assert task_event["entity_type"] == "task"
+        assert task_event["schema_version"] == "1.0.0"
+        assert task_event["correlation_id"] == "corr-test-123"
 
     @pytest.mark.asyncio
     async def test_no_producer_does_not_raise(self):
@@ -184,6 +187,8 @@ class TestHandleAlertCreated:
         assert second_call_event["payload"]["assigned_to"] == "nurse-jane"
         assert second_call_event["entity_type"] == "task"
         assert second_call_event["source_system"] == "control-plane"
+        assert second_call_event["schema_version"] == "1.0.0"
+        assert second_call_event["correlation_id"] == "corr-test-123"
 
     @pytest.mark.asyncio
     async def test_task_assigned_not_published_when_assigned_to_absent(self):

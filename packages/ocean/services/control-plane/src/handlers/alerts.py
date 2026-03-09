@@ -57,10 +57,12 @@ async def handle_alert_created(event_data: dict, session, producer=None) -> None
         task_event = {
             "event_id": str(uuid.uuid4()),
             "event_type": "task.created",
+            "schema_version": "1.0.0",
             "timestamp": now.isoformat(),
             "source_system": "control-plane",
             "entity_id": task_id,
             "entity_type": "task",
+            "correlation_id": event_data.get("correlation_id", ""),
             "payload": {
                 "task_id": task_id,
                 "alert_id": alert_id,
@@ -79,10 +81,12 @@ async def handle_alert_created(event_data: dict, session, producer=None) -> None
             assigned_event = {
                 "event_id": str(uuid.uuid4()),
                 "event_type": "task.assigned",
+                "schema_version": "1.0.0",
                 "timestamp": now.isoformat(),
                 "source_system": "control-plane",
                 "entity_id": task_id,
                 "entity_type": "task",
+                "correlation_id": event_data.get("correlation_id", ""),
                 "payload": {
                     "task_id": task_id,
                     "assigned_to": assigned_to,
