@@ -20,6 +20,7 @@ from src.cards import (
     rejection_confirmed_card,
     resolved_card,
 )
+from src.slash_commands import handle_ocean_command, set_slash_deps
 from src.zcc_dispatch import dispatch_zcc_outbound_call, get_zcc_oauth_token
 
 if TYPE_CHECKING:
@@ -62,6 +63,9 @@ bolt_app = AsyncApp(
     signing_secret=os.environ.get("SLACK_SIGNING_SECRET", "test-secret"),
 )
 bolt_handler = AsyncSlackRequestHandler(bolt_app)
+
+# Register /ocean slash command
+bolt_app.command("/ocean")(handle_ocean_command)
 
 
 # ---------------------------------------------------------------------------

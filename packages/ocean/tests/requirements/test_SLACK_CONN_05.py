@@ -1,10 +1,9 @@
 """SLACK-CONN-05: Slash commands — /ocean status, patient, sim, help."""
 from __future__ import annotations
 
-import ast
 import re
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -114,86 +113,108 @@ class TestHandleOceanCommand:
 
     @pytest.mark.asyncio
     async def test_ack_called_first(self, _clear_slash_modules):
-        """ack() must be called before respond() per Slack 3-second timeout."""
+        """ack() must be called before respond()."""
         mod = _import_slash_commands()
 
         call_order = []
-        ack = AsyncMock(side_effect=lambda: call_order.append("ack"))
-        respond = AsyncMock(side_effect=lambda **kw: call_order.append("respond"))
+        ack = AsyncMock(
+            side_effect=lambda: call_order.append("ack"),
+        )
+        respond = AsyncMock(
+            side_effect=lambda **kw: call_order.append("respond"),
+        )
         body = {"text": "help", "user_id": "U123"}
 
-        await mod.handle_ocean_command(ack=ack, body=body, respond=respond)
+        await mod.handle_ocean_command(
+            ack=ack, body=body, respond=respond,
+        )
 
-        assert call_order[0] == "ack", "ack() must be called before respond()"
+        assert call_order[0] == "ack"
 
     @pytest.mark.asyncio
     async def test_status_subcommand(self, _clear_slash_modules):
         """'status' subcommand calls build_status_response."""
         mod = _import_slash_commands()
-
         ack = AsyncMock()
         respond = AsyncMock()
         body = {"text": "status", "user_id": "U123"}
+        block = [{"type": "section", "text": {"type": "mrkdwn", "text": "t"}}]
 
-        with patch.object(mod, "build_status_response", new_callable=AsyncMock) as mock_status:
-            mock_status.return_value = [{"type": "section", "text": {"type": "mrkdwn", "text": "test"}}]
-            await mod.handle_ocean_command(ack=ack, body=body, respond=respond)
+        with patch.object(
+            mod, "build_status_response", new_callable=AsyncMock,
+        ) as mock_status:
+            mock_status.return_value = block
+            await mod.handle_ocean_command(
+                ack=ack, body=body, respond=respond,
+            )
             mock_status.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_patient_subcommand_passes_id(self, _clear_slash_modules):
         """'patient P123' passes P123 to build_patient_response."""
         mod = _import_slash_commands()
-
         ack = AsyncMock()
         respond = AsyncMock()
         body = {"text": "patient P123", "user_id": "U123"}
+        block = [{"type": "section", "text": {"type": "mrkdwn", "text": "t"}}]
 
-        with patch.object(mod, "build_patient_response", new_callable=AsyncMock) as mock_patient:
-            mock_patient.return_value = [{"type": "section", "text": {"type": "mrkdwn", "text": "test"}}]
-            await mod.handle_ocean_command(ack=ack, body=body, respond=respond)
+        with patch.object(
+            mod, "build_patient_response", new_callable=AsyncMock,
+        ) as mock_patient:
+            mock_patient.return_value = block
+            await mod.handle_ocean_command(
+                ack=ack, body=body, respond=respond,
+            )
             mock_patient.assert_awaited_once_with("P123")
 
     @pytest.mark.asyncio
     async def test_sim_subcommand_passes_scenario(self, _clear_slash_modules):
         """'sim pilot_demo' passes pilot_demo to trigger_sim_response."""
         mod = _import_slash_commands()
-
         ack = AsyncMock()
         respond = AsyncMock()
         body = {"text": "sim pilot_demo", "user_id": "U123"}
+        block = [{"type": "section", "text": {"type": "mrkdwn", "text": "t"}}]
 
-        with patch.object(mod, "trigger_sim_response", new_callable=AsyncMock) as mock_sim:
-            mock_sim.return_value = [{"type": "section", "text": {"type": "mrkdwn", "text": "test"}}]
-            await mod.handle_ocean_command(ack=ack, body=body, respond=respond)
+        with patch.object(
+            mod, "trigger_sim_response", new_callable=AsyncMock,
+        ) as mock_sim:
+            mock_sim.return_value = block
+            await mod.handle_ocean_command(
+                ack=ack, body=body, respond=respond,
+            )
             mock_sim.assert_awaited_once_with("pilot_demo")
 
     @pytest.mark.asyncio
     async def test_empty_text_returns_help(self, _clear_slash_modules):
         """Empty text defaults to help."""
         mod = _import_slash_commands()
-
         ack = AsyncMock()
         respond = AsyncMock()
         body = {"text": "", "user_id": "U123"}
+        block = [{"type": "section", "text": {"type": "mrkdwn", "text": "h"}}]
 
         with patch.object(mod, "build_help_response") as mock_help:
-            mock_help.return_value = [{"type": "section", "text": {"type": "mrkdwn", "text": "help"}}]
-            await mod.handle_ocean_command(ack=ack, body=body, respond=respond)
+            mock_help.return_value = block
+            await mod.handle_ocean_command(
+                ack=ack, body=body, respond=respond,
+            )
             mock_help.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_unknown_subcommand_returns_help(self, _clear_slash_modules):
         """Unknown subcommand returns help response."""
         mod = _import_slash_commands()
-
         ack = AsyncMock()
         respond = AsyncMock()
         body = {"text": "foobar", "user_id": "U123"}
+        block = [{"type": "section", "text": {"type": "mrkdwn", "text": "h"}}]
 
         with patch.object(mod, "build_help_response") as mock_help:
-            mock_help.return_value = [{"type": "section", "text": {"type": "mrkdwn", "text": "help"}}]
-            await mod.handle_ocean_command(ack=ack, body=body, respond=respond)
+            mock_help.return_value = block
+            await mod.handle_ocean_command(
+                ack=ack, body=body, respond=respond,
+            )
             mock_help.assert_called_once()
 
 

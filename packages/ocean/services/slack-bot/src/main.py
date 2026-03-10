@@ -64,6 +64,7 @@ async def lifespan(app: FastAPI):
     from src.health_poller import poll_connector_health
 
     from src.bolt_app import set_session_maker, set_publisher, set_hasura_secret
+    from src.slash_commands import set_slash_deps
     from src.publisher import RedpandaPublisher
 
     from src.thread_manager import ThreadManager
@@ -86,6 +87,9 @@ async def lifespan(app: FastAPI):
     hasura_secret = os.environ.get("HASURA_GRAPHQL_ADMIN_SECRET", "")
     if hasura_secret:
         set_hasura_secret(hasura_secret)
+
+    # Wire slash command dependencies (Phase 15 Plan 04)
+    set_slash_deps(HASURA_URL, hasura_secret)
 
     # Wire MCP server dependencies (Phase 15 Plan 03)
     from src.mcp_server import set_mcp_deps
