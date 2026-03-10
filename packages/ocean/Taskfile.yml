@@ -89,6 +89,13 @@ tasks:
       - cmd: 'curl -s -X POST http://localhost:8060/simulate -H "Content-Type: application/json" -d "{\"scenario\":\"{{.SCENARIO}}\"}"'
       - cmd: echo ""
 
+  tunnel:
+    desc: Start ngrok tunnel to slack-bot (required for Slack events/commands in local dev)
+    cmds:
+      - echo "Starting ngrok tunnel to slack-bot on port 8005..."
+      - echo "Update Slack app Request URLs with the HTTPS URL shown below + /slack/events"
+      - ngrok http 8005
+
   ps:
     desc: Show running containers
     cmds:
