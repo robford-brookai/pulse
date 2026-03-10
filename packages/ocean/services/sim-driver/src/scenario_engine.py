@@ -6,12 +6,17 @@ by a PatientSimulator that publishes signal.received and alert.created events.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import pathlib
+import time
+import uuid
+from datetime import UTC, datetime
 
 import structlog
 import yaml
+from ocean_events.base import BaseEvent
 
-from src.clock import sim_sleep
+from src.clock import sim_sleep  # noqa: F401  — patch target for tests
 from src.models import PatientConfig, ScenarioConfig
 from src.patient_simulator import PatientSimulator
 
@@ -79,8 +84,15 @@ class ScenarioEngine:
         return (max_hour * 3600) / self._config.compression_ratio
 
     async def run(self) -> None:
-        """Schedule all patient signal streams and run them concurrently."""
+        """Schedule all patient signal streams and run them concurrently.
+
+        Publishes scenario.started before patients run and
+        scenario.completed with stats after all patients finish.
+        """
         self._running = True
+        start_time = time.monotonic()
+        patient_ids = [p.patient_id for p in self._config.patients]
+
         log.info(
             "scenario_starting",
             name=self.scenario_name,
@@ -88,13 +100,73 @@ class ScenarioEngine:
             compression_ratio=self._config.compression_ratio,
         )
 
+        # Publish scenario.started bookend
+        await self._publish_bookend(
+            event_type="scenario.started",
+            payload={
+                "scenario_name": self.scenario_name,
+                "patients": patient_ids,
+                "flow_combos": self.patient_count,
+            },
+        )
+
         patient_tasks = [
             self._run_patient(p) for p in self._config.patients
         ]
-        await asyncio.gather(*patient_tasks, return_exceptions=True)
+        await asyncio.gather(
+            *patient_tasks, return_exceptions=True
+        )
 
+        elapsed = time.monotonic() - start_time
         self._running = False
+
+        # Count events from publisher calls for stats
+        alerts = sum(
+            1
+            for p in self._config.patients
+            for s in p.signals
+            if s.anomalous
+        )
+
+        # Publish scenario.completed bookend
+        await self._publish_bookend(
+            event_type="scenario.completed",
+            payload={
+                "scenario_name": self.scenario_name,
+                "patients_count": len(patient_ids),
+                "alerts_generated": alerts,
+                "tasks_created": alerts,
+                "duration_seconds": round(elapsed, 2),
+            },
+        )
+
         log.info("scenario_completed", name=self.scenario_name)
+
+    async def _publish_bookend(
+        self,
+        event_type: str,
+        payload: dict,
+    ) -> None:
+        """Publish a scenario bookend event to ocean.ops."""
+        key = f"sim:{self.scenario_name}:{event_type}"
+        event_id = uuid.UUID(
+            bytes=hashlib.sha256(key.encode()).digest()[:16]
+        )
+        event = BaseEvent(
+            event_id=event_id,
+            event_type=event_type,
+            schema_version="1.0.0",
+            timestamp=datetime.now(UTC),
+            source_system="sim-driver",
+            entity_type="signal",
+            entity_id=self.scenario_name,
+            correlation_id=f"sim-{event_id}",
+            actor_id=None,
+            payload=payload,
+        )
+        await self._publisher.publish(
+            "ocean.ops", event.model_dump(mode="json")
+        )
 
     async def _run_patient(self, patient: PatientConfig) -> None:
         """Drive one patient through their scheduled signal sequence."""

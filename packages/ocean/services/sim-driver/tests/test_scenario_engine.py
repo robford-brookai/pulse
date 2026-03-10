@@ -19,7 +19,7 @@ sys.path.insert(
 )
 
 from src.models import ScenarioConfig
-from src.scenario_engine import load_scenario, ScenarioEngine
+from src.scenario_engine import ScenarioEngine, load_scenario
 
 
 class TestLoadScenario:
@@ -89,8 +89,10 @@ class TestScenarioEngineRun:
             with patch("src.clock.sim_sleep", new=AsyncMock(return_value=None)):
                 await engine.run()
 
-        # 7 expected events (4 signals + 3 alerts)
-        assert pub.publish.call_count == 7
+        # Expected: patient events + 2 bookend events (started + completed)
+        # smoke_test has 50 patients; exact count depends on scenario config
+        expected_patient_events = engine.expected_event_count
+        assert pub.publish.call_count == expected_patient_events + 2
 
     @pytest.mark.asyncio
     async def test_run_does_not_import_state_machine(self) -> None:
