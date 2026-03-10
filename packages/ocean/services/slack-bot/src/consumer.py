@@ -204,7 +204,7 @@ async def handle_task_claimed(
     """Handle task.claimed: extract actor, queue thread update, update parent status."""
     task_id = await _extract_task_id(event_data)
     payload = event_data.get("payload", {})
-    actor = payload.get("persona_name") or payload.get("actor", "unknown")
+    actor = payload.get("persona_id") or event_data.get("actor_id", "unknown")
     if thread_manager:
         await thread_manager.queue_update(task_id, {"type": "claimed", "actor": actor})
         await thread_manager.update_parent_status(task_id, "CLAIMED")

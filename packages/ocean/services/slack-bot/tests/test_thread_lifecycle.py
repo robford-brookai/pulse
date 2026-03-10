@@ -278,13 +278,14 @@ class TestConsumerHandlers:
         event_data = {
             "event_type": "task.claimed",
             "entity_id": "task-1",
-            "payload": {"task_id": "task-1", "actor": "Nurse Maria", "persona_name": "Maria"},
+            "actor_id": "nurse-maria",
+            "payload": {"task_id": "task-1", "persona_id": "nurse-maria", "persona_role": "RN"},
         }
         await handle_task_claimed(event_data, **deps)
         deps["thread_manager"].queue_update.assert_called_once()
         update = deps["thread_manager"].queue_update.call_args[0][1]
         assert update["type"] == "claimed"
-        assert "Maria" in str(update.get("actor", ""))
+        assert "nurse-maria" in str(update.get("actor", ""))
 
     @pytest.mark.asyncio
     async def test_handle_task_claimed_updates_parent_status(self, deps):

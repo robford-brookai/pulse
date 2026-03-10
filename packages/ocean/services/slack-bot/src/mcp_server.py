@@ -263,11 +263,11 @@ async def sim_trigger(scenario: str = "pilot_demo", compression_ratio: float = 1
     """Trigger a simulation scenario via sim-driver."""
     log.info("mcp_tool_call", tool="sim_trigger", scenario=scenario, ratio=compression_ratio)
     try:
-        sim_url = os.environ.get("SIM_DRIVER_URL", "http://localhost:8060")
+        sim_url = os.environ.get("SIM_DRIVER_URL", "http://sim-driver:8060")
         async with httpx.AsyncClient() as client:
             resp = await client.post(
-                f"{sim_url}/scenarios/{scenario}/run",
-                json={"compression_ratio": compression_ratio},
+                f"{sim_url}/simulate",
+                json={"scenario": scenario, "compression_ratio": compression_ratio},
                 timeout=30.0,
             )
             resp.raise_for_status()

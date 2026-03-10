@@ -274,8 +274,8 @@ async def trigger_sim_response(scenario: str) -> list[dict]:
         sim_url = "http://sim-driver:8060"
         async with httpx.AsyncClient() as client:
             resp = await client.post(
-                f"{sim_url}/scenarios/{scenario}/run",
-                json={},
+                f"{sim_url}/simulate",
+                json={"scenario": scenario},
                 timeout=30.0,
             )
             resp.raise_for_status()

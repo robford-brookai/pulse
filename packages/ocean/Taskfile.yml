@@ -57,29 +57,29 @@ tasks:
   up:
     desc: Start core stack (no sim profile)
     cmds:
-      - docker compose -f {{.COMPOSE_FILE}} up -d
+      - docker compose --env-file .env -f {{.COMPOSE_FILE}} up -d
 
   up:sim:
     desc: Start full stack with simulation services
     cmds:
-      - docker compose -f {{.COMPOSE_FILE}} --profile sim up -d
+      - docker compose --env-file .env -f {{.COMPOSE_FILE}} --profile sim up -d
 
   down:
     desc: Stop all services
     cmds:
-      - docker compose -f {{.COMPOSE_FILE}} --profile sim down
+      - docker compose --env-file .env -f {{.COMPOSE_FILE}} --profile sim down
 
   logs:
     desc: Follow logs for all services
     cmds:
-      - docker compose -f {{.COMPOSE_FILE}} --profile sim logs -f
+      - docker compose --env-file .env -f {{.COMPOSE_FILE}} --profile sim logs -f
 
   logs:sim:
     desc: Stream sim event flow to logs/sim.log
     cmds:
       - mkdir -p logs
       - echo "Writing sim logs to logs/sim.log — tail -f logs/sim.log to follow"
-      - docker compose -f {{.COMPOSE_FILE}} logs -f --tail=0 sim-driver control-plane agent-worker call-simulator event-store > logs/sim.log 2>&1
+      - docker compose --env-file .env -f {{.COMPOSE_FILE}} logs -f --tail=0 sim-driver control-plane agent-worker call-simulator event-store > logs/sim.log 2>&1
 
   sim:
     desc: "Run a simulation scenario (default: smoke_test). Usage: task sim SCENARIO=pilot_demo"
@@ -92,7 +92,7 @@ tasks:
   ps:
     desc: Show running containers
     cmds:
-      - docker compose -f {{.COMPOSE_FILE}} --profile sim ps
+      - docker compose --env-file .env -f {{.COMPOSE_FILE}} --profile sim ps
 
   # --- Linting ---
 
@@ -118,4 +118,4 @@ tasks:
   migrate:
     desc: Run Alembic migrations
     cmds:
-      - docker compose -f {{.COMPOSE_FILE}} run --rm migrate
+      - docker compose --env-file .env -f {{.COMPOSE_FILE}} run --rm migrate

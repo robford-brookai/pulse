@@ -241,6 +241,7 @@ services:
       ZCC_CLIENT_ID: ${ZCC_CLIENT_ID:-}
       ZCC_CLIENT_SECRET: ${ZCC_CLIENT_SECRET:-}
       ZCC_DEFAULT_QUEUE_ID: ${ZCC_DEFAULT_QUEUE_ID:-}
+      MCP_API_KEY: ${MCP_API_KEY:-}
       PHI_STORE_URL: ${PHI_STORE_URL:-}
     ports:
       - "8005:8000"

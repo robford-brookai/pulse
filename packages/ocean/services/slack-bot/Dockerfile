@@ -13,6 +13,10 @@ RUN uv pip install --system --no-cache -e /libs/ocean-events
 # Copy slack-bot pyproject.toml and install deps
 COPY services/slack-bot/pyproject.toml .
 
+# Install ocean-connector-mcp library
+COPY libs/ocean-connector-mcp /libs/ocean-connector-mcp
+RUN uv pip install --system --no-cache -e /libs/ocean-connector-mcp
+
 # Install dependencies (ocean-events already installed above)
 RUN uv pip install --system --no-cache \
     fastapi==0.135.1 \
@@ -22,6 +26,9 @@ RUN uv pip install --system --no-cache \
     "confluent-kafka==2.13.2" \
     "slack-bolt==1.27.0" \
     "anthropic==0.84.0" \
+    "httpx>=0.28" \
+    "fastmcp>=3.1.0" \
+    "aiohttp>=3.10" \
     "structlog==25.5.0"
 
 # Copy source code
