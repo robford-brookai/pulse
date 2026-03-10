@@ -47,4 +47,6 @@ EventType = Literal[
     "ai.output.approved",
     "ai.recommendation.generated",
     "ai.output.rejected",
+    "scenario.started",
+    "scenario.completed",
 ]
