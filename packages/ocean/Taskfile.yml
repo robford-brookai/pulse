@@ -74,6 +74,21 @@ tasks:
     cmds:
       - docker compose -f {{.COMPOSE_FILE}} --profile sim logs -f
 
+  logs:sim:
+    desc: Stream sim event flow to logs/sim.log
+    cmds:
+      - mkdir -p logs
+      - echo "Writing sim logs to logs/sim.log — tail -f logs/sim.log to follow"
+      - docker compose -f {{.COMPOSE_FILE}} logs -f --tail=0 sim-driver control-plane agent-worker call-simulator event-store > logs/sim.log 2>&1
+
+  sim:
+    desc: "Run a simulation scenario (default: smoke_test). Usage: task sim SCENARIO=pilot_demo"
+    vars:
+      SCENARIO: '{{.SCENARIO | default "smoke_test"}}'
+    cmds:
+      - cmd: 'curl -s -X POST http://localhost:8060/simulate -H "Content-Type: application/json" -d "{\"scenario\":\"{{.SCENARIO}}\"}"'
+      - cmd: echo ""
+
   ps:
     desc: Show running containers
     cmds:
