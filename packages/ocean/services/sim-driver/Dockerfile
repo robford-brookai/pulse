@@ -22,4 +22,4 @@ RUN uv pip install --system /app/ocean-events
 COPY services/sim-driver/src ./src
 COPY services/sim-driver/scenarios ./scenarios
 
-CMD ["python", "-m", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
