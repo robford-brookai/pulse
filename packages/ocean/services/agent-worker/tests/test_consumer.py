@@ -281,3 +281,60 @@ class TestHealthEndpoint:
         data = resp.json()
         assert data["status"] == "ok"
         assert data["service"] == "agent-worker"
+
+
+class TestResetEndpoint:
+    """POST /reset clears _claimed_tasks and returns 200."""
+
+    async def test_reset_returns_ok(self):
+        from src.main import app
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app)
+        resp = client.post("/reset")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "ok"
+        assert data["claimed_tasks_cleared"] is True
+
+    async def test_reset_clears_claimed_tasks(self):
+        from src.main import app, _claimed_tasks
+        from fastapi.testclient import TestClient
+
+        # Add items to _claimed_tasks
+        _claimed_tasks.add("task-aaa")
+        _claimed_tasks.add("task-bbb")
+        assert len(_claimed_tasks) >= 2
+
+        client = TestClient(app)
+        resp = client.post("/reset")
+        assert resp.status_code == 200
+        assert len(_claimed_tasks) == 0
+
+
+class TestRerunAfterReset:
+    """After claiming, resetting, and re-submitting the same event, it dispatches."""
+
+    async def test_rerun_dispatches_after_reset(self):
+        from src.main import app, _claimed_tasks
+        from fastapi.testclient import TestClient
+
+        # 1. Add entity_id to claimed set (simulating a prior claim)
+        _claimed_tasks.add("task-001")
+
+        # 2. Call /reset to clear
+        client = TestClient(app)
+        resp = client.post("/reset")
+        assert resp.status_code == 200
+        assert len(_claimed_tasks) == 0
+
+        # 3. Submit the same task.created event -- should dispatch, not skip
+        event = _task_created_event(entity_id="task-001")
+        publisher = AsyncMock()
+        personas = [_make_persona(delay=(0, 0))]
+
+        with patch("src.consumer.compete_for_claim", new_callable=AsyncMock) as mock_claim:
+            mock_claim.return_value = personas[0]
+            result = await handle_message(event, personas, publisher, _claimed_tasks)
+
+        assert result == "dispatched"

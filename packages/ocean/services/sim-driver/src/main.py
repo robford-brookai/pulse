@@ -10,6 +10,7 @@ import asyncio
 import os
 from contextlib import asynccontextmanager
 
+import httpx
 import structlog
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ValidationError
@@ -97,6 +98,14 @@ async def simulate(req: SimulateRequest) -> dict:
 
 async def _run_scenario(engine: ScenarioEngine, name: str) -> None:
     try:
+        # Reset agent-worker claimed_tasks before each scenario run
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                resp = await client.post("http://agent-worker:8061/reset")
+                log.info("agent_worker_reset", status=resp.status_code)
+        except Exception as exc:
+            log.warning("agent_worker_reset_failed", error=str(exc))
+
         await engine.run()
         log.info("scenario_finished", scenario=name)
     except asyncio.CancelledError:

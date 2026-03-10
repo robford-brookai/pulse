@@ -63,3 +63,12 @@ app = FastAPI(title="agent-worker", version=__version__, lifespan=lifespan)
 @app.get("/health")
 async def health() -> dict:
     return {"status": "ok", "service": "agent-worker"}
+
+
+@app.post("/reset")
+async def reset() -> dict:
+    """Clear claimed_tasks set so scenarios can be re-run cleanly."""
+    count = len(_claimed_tasks)
+    _claimed_tasks.clear()
+    log.info("claimed_tasks_cleared", count_before=count)
+    return {"status": "ok", "claimed_tasks_cleared": True}
