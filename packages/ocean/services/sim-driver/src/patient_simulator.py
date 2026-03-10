@@ -25,8 +25,12 @@ except IndexError:
 
 from ocean_events.base import BaseEvent  # noqa: E402
 
+import structlog  # noqa: E402
+
 from src.clock import sim_sleep  # noqa: E402
 from src.models import PatientConfig, SignalConfig, resolve_source  # noqa: E402
+
+log = structlog.get_logger()
 
 __version__ = "1.0.0"
 
@@ -78,12 +82,23 @@ class PatientSimulator:
             await self._publisher.publish(
                 "ocean.signals", signal_event.model_dump(mode="json")
             )
+            log.info(
+                f"[SIM] Patient {self._patient.patient_id}: {signal.type} reading"
+                f" {signal.value} {signal.unit}"
+                f"{' (anomalous)' if signal.anomalous else ''}"
+                f" at hour {signal.sim_hour}"
+            )
 
             # Publish alert.created only for anomalous signals
             if signal.anomalous:
                 alert_event = self._build_alert_event(signal, idx)
                 await self._publisher.publish(
                     "ocean.alerts", alert_event.model_dump(mode="json")
+                )
+                severity = self._resolve_severity(signal)
+                log.info(
+                    f"[SIM] Patient {self._patient.patient_id}:"
+                    f" ALERT {signal.type}_anomaly severity={severity}"
                 )
 
     def _build_signal_event(self, signal: SignalConfig, idx: int) -> BaseEvent:

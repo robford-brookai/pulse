@@ -61,6 +61,8 @@ async def compete_for_claim(
 
         # Claim it
         claimed_tasks.add(entity_id)
+        patient_id = task_event.get("payload", {}).get("patient_id", "unknown")
+        log.info(f"[CLAIM] {persona.id} claimed task for patient {patient_id}")
 
         # Build task.claimed event with BaseEvent envelope
         correlation_id = task_event.get("correlation_id", "")

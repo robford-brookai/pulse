@@ -64,6 +64,10 @@ async def handle_message(
 
     # AI decision pipeline (falls back to deterministic rules)
     action, confidence = await decide_with_fallback(alert_context)
+    log.info(
+        f"[AI] Patient {alert_context['patient_id']}: {action}"
+        f" (confidence={confidence:.2f}) by {persona.id}"
+    )
 
     # Publish recommendation
     await publish_ai_recommendation(publisher, event_data, action, confidence, persona)
@@ -71,6 +75,10 @@ async def handle_message(
     # Persona approve-rate gate (post-LLM)
     approve_rate = persona.outreach_approve_rate or 0.5
     approved = action == "approve" and random.random() < approve_rate
+    log.info(
+        f"[GATE] Patient {alert_context['patient_id']}:"
+        f" outreach {'APPROVED' if approved else 'REJECTED'} by {persona.id}"
+    )
 
     # Publish approved/rejected decision
     await publish_ai_decision(publisher, event_data, action, confidence, persona, approved, alert_context)

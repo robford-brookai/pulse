@@ -70,6 +70,7 @@ async def simulate_call(approval_event: dict, publisher: RedpandaPublisher) -> N
         )
         await publisher.publish(TOPIC, started)
         log.info("call_started", interaction_id=interaction_id, attempt=attempt + 1)
+        log.info(f"[CALL] Patient {patient_id}: call attempt {attempt + 1} started")
 
         # Ring delay
         ring_delay = random.uniform(5, 15) / compression_ratio
@@ -88,6 +89,7 @@ async def simulate_call(approval_event: dict, publisher: RedpandaPublisher) -> N
             )
             await publisher.publish(TOPIC, connected)
             log.info("call_connected", interaction_id=interaction_id)
+            log.info(f"[CALL] Patient {patient_id}: call CONNECTED")
 
             # Talk delay
             talk_duration = random.uniform(60, 300)
@@ -103,6 +105,7 @@ async def simulate_call(approval_event: dict, publisher: RedpandaPublisher) -> N
             )
             await publisher.publish(TOPIC, completed)
             log.info("call_completed", interaction_id=interaction_id, duration=talk_duration)
+            log.info(f"[CALL] Patient {patient_id}: call COMPLETED, duration {round(talk_duration, 1)}s")
             return  # Call succeeded, no more retries
 
         # Publish call.missed
@@ -114,6 +117,7 @@ async def simulate_call(approval_event: dict, publisher: RedpandaPublisher) -> N
         )
         await publisher.publish(TOPIC, missed)
         log.info("call_missed", interaction_id=interaction_id, attempt=attempt + 1)
+        log.info(f"[CALL] Patient {patient_id}: call MISSED (attempt {attempt + 1})")
 
         # Wait before retry (skip wait after last attempt)
         if attempt < max_attempts - 1:

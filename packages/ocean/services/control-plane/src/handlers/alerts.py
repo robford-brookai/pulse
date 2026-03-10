@@ -52,6 +52,7 @@ async def handle_alert_created(event_data: dict, session, producer=None) -> None
         },
     )
     log.info("task_created", task_id=task_id, alert_id=alert_id, priority=priority, alert_type=alert_type)
+    log.info(f"[TASK] Patient {patient_id}: task created ({alert_type}, priority={priority})")
 
     if producer:
         task_event = {
