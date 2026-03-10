@@ -5,6 +5,7 @@ Verifies:
 - EVENT_HANDLERS has all 11 event type keys
 - lifecycle stub handlers call thread_manager.queue_update
 """
+
 from __future__ import annotations
 
 import importlib
@@ -50,7 +51,10 @@ class TestConsumerGroupIsolation:
     def test_group_id_is_slack_bot_worker(self):
         source = (_ROOT / "services" / "slack-bot" / "src" / "consumer.py").read_text()
         assert '"slack-bot-worker"' in source
-        assert '"agent-worker"' not in source or "agent-worker" in source.split("slack-bot-worker")[0] is False
+        assert (
+            '"agent-worker"' not in source
+            or "agent-worker" in source.split("slack-bot-worker")[0] is False
+        )
 
 
 class TestEventHandlerRegistry:
@@ -82,7 +86,7 @@ class TestEventHandlerRegistry:
 
 
 class TestLifecycleHandlers:
-    """Verify stub handlers call thread_manager.queue_update."""
+    """Verify lifecycle handlers call thread_manager.queue_update."""
 
     @pytest.fixture()
     def consumer_mod(self):
@@ -94,13 +98,12 @@ class TestLifecycleHandlers:
         [
             ("handle_task_claimed", "task.claimed"),
             ("handle_task_completed", "task.completed"),
-            ("handle_scenario_started", "scenario.started"),
-            ("handle_scenario_completed", "scenario.completed"),
         ],
     )
     async def test_lifecycle_handler_queues_update(self, consumer_mod, handler_name, event_type):
         mock_thread_manager = AsyncMock()
         mock_thread_manager.queue_update = AsyncMock()
+        mock_thread_manager.update_parent_status = AsyncMock()
 
         event_data = {
             "event_type": event_type,
@@ -121,3 +124,36 @@ class TestLifecycleHandlers:
         mock_thread_manager.queue_update.assert_called_once()
         call_args = mock_thread_manager.queue_update.call_args
         assert call_args[0][0] == "task-test"  # task_id
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "handler_name,event_type",
+        [
+            ("handle_scenario_started", "scenario.started"),
+            ("handle_scenario_completed", "scenario.completed"),
+        ],
+    )
+    async def test_scenario_handler_posts_card_directly(
+        self, consumer_mod, handler_name, event_type
+    ):
+        """Scenario handlers post cards directly to channel, not via thread_manager."""
+        mock_slack = AsyncMock()
+        mock_slack.chat_postMessage = AsyncMock(return_value={"ok": True})
+
+        event_data = {
+            "event_type": event_type,
+            "entity_id": "smoke_test",
+            "payload": {"scenario_name": "smoke_test", "patients": ["p1"]},
+        }
+
+        handler = getattr(consumer_mod, handler_name)
+        await handler(
+            event_data,
+            slack_client=mock_slack,
+            session_maker=MagicMock(),
+            hasura_url="http://localhost:8090",
+            publisher=AsyncMock(),
+            thread_manager=AsyncMock(),
+        )
+
+        mock_slack.chat_postMessage.assert_called_once()

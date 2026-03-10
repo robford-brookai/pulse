@@ -4,16 +4,14 @@ Plan 15-02 Task 1: Verifies ThreadManager posts consolidated Block Kit thread
 replies with reply_broadcast=False, retries on missing parent, and
 lifecycle_update_blocks builds structured sections.
 """
+
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from src.cards import lifecycle_update_blocks, scenario_started_card, scenario_completed_card
+from src.cards import lifecycle_update_blocks
 from src.thread_manager import ThreadManager
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -64,7 +62,14 @@ class TestLifecycleUpdateBlocks:
         assert "Nurse Maria" in text
 
     def test_single_ai_recommendation(self):
-        updates = [{"type": "ai_recommendation", "action": "Schedule call", "confidence": "HIGH", "reasoning": "Patient missed 2 readings"}]
+        updates = [
+            {
+                "type": "ai_recommendation",
+                "action": "Schedule call",
+                "confidence": "HIGH",
+                "reasoning": "Patient missed 2 readings",
+            }
+        ]
         blocks = lifecycle_update_blocks(updates)
         text = _extract_all_text(blocks)
         assert "Schedule call" in text
@@ -135,7 +140,9 @@ class TestPostThreadReply:
         assert call_kwargs.get("reply_broadcast") is False
 
     @pytest.mark.asyncio
-    async def test_posts_blocks_from_lifecycle_update_blocks(self, thread_manager, mock_slack_client, mock_session):
+    async def test_posts_blocks_from_lifecycle_update_blocks(
+        self, thread_manager, mock_slack_client, mock_session
+    ):
         _setup_thread_lookup(mock_session, thread_ts="111.222", channel="#ocean-critical")
         updates = [{"type": "claimed", "actor": "Nurse B"}]
         await thread_manager._post_thread_reply("task-1", updates)
@@ -144,10 +151,11 @@ class TestPostThreadReply:
         assert isinstance(call_kwargs["blocks"], list)
 
     @pytest.mark.asyncio
-    async def test_retries_once_when_parent_not_found(self, thread_manager, mock_slack_client, mock_session):
+    async def test_retries_once_when_parent_not_found(
+        self, thread_manager, mock_slack_client, mock_session
+    ):
         """If get_thread_ts returns None first, retries after 2s."""
         call_count = 0
-        original_get = thread_manager.get_thread_ts
 
         async def mock_get(task_id):
             nonlocal call_count
@@ -169,8 +177,11 @@ class TestPostThreadReply:
         mock_slack_client.chat_postMessage.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_skips_when_parent_not_found_after_retry(self, thread_manager, mock_slack_client, mock_session):
+    async def test_skips_when_parent_not_found_after_retry(
+        self, thread_manager, mock_slack_client, mock_session
+    ):
         """If get_thread_ts returns None both times, skips posting."""
+
         async def mock_get(task_id):
             return None
 
@@ -192,7 +203,9 @@ class TestFlushAfter:
     """_flush_after waits delay then flushes pending batch."""
 
     @pytest.mark.asyncio
-    async def test_flush_after_sleeps_then_posts(self, thread_manager, mock_slack_client, mock_session):
+    async def test_flush_after_sleeps_then_posts(
+        self, thread_manager, mock_slack_client, mock_session
+    ):
         _setup_thread_lookup(mock_session, thread_ts="111.222", channel="#ocean-critical")
         thread_manager._batches["task-1"] = [{"type": "claimed", "actor": "Nurse A"}]
 
@@ -228,7 +241,9 @@ class TestUpdateParentStatus:
         mock_slack_client.chat_update.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_chat_update_includes_status_in_text(self, thread_manager, mock_slack_client, mock_session):
+    async def test_chat_update_includes_status_in_text(
+        self, thread_manager, mock_slack_client, mock_session
+    ):
         _setup_parent_lookup(mock_session, channel="#ocean-critical", message_ts="111.222")
         await thread_manager.update_parent_status("task-1", "CLAIMED")
         call_kwargs = mock_slack_client.chat_update.call_args[1]

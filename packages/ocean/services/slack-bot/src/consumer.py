@@ -7,6 +7,7 @@ and simulation bookends.
 Consumer group: slack-bot-worker (receives events independently of other consumers).
 Manual offset commit — offset committed only AFTER successful handler return.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -21,7 +22,12 @@ from confluent_kafka.aio import AIOConsumer as Consumer
 
 from src.ai_events import publish_ai_event
 from src.ai_summary import generate_summary_with_context
-from src.cards import alert_card, outreach_draft_card
+from src.cards import (
+    alert_card,
+    outreach_draft_card,
+    scenario_completed_card,
+    scenario_started_card,
+)
 
 log = structlog.get_logger()
 
@@ -103,7 +109,9 @@ async def handle_task_created(
     )
 
     # Store parent message for thread tracking (Phase 15)
-    message_ts = response.get("ts", "") if isinstance(response, dict) else getattr(response, "ts", "")
+    message_ts = (
+        response.get("ts", "") if isinstance(response, dict) else getattr(response, "ts", "")
+    )
     if thread_manager and message_ts:
         await thread_manager.store_parent_message(task_id, channel, message_ts)
 
@@ -130,10 +138,7 @@ async def handle_task_created(
 
     # Create and post outreach draft
     draft_id = str(uuid4())
-    draft_text = (
-        f"Patient {patient_hash} has a {severity} {alert_type} alert. "
-        "Please follow up."
-    )
+    draft_text = f"Patient {patient_hash} has a {severity} {alert_type} alert. Please follow up."
 
     if session_maker is not None:
         async with session_maker() as session:
@@ -188,84 +193,179 @@ async def _extract_task_id(event_data: dict) -> str:
 
 
 async def handle_task_claimed(
-    event_data: dict, *, slack_client, session_maker, hasura_url: str, publisher=None, thread_manager=None,
+    event_data: dict,
+    *,
+    slack_client,
+    session_maker,
+    hasura_url: str,
+    publisher=None,
+    thread_manager=None,
 ) -> None:
-    """Queue task.claimed lifecycle update."""
+    """Handle task.claimed: extract actor, queue thread update, update parent status."""
     task_id = await _extract_task_id(event_data)
+    payload = event_data.get("payload", {})
+    actor = payload.get("persona_name") or payload.get("actor", "unknown")
     if thread_manager:
-        await thread_manager.queue_update(task_id, {"event_type": "task.claimed", "data": event_data.get("payload", {})})
-    log.info("task_claimed_queued", task_id=task_id)
+        await thread_manager.queue_update(task_id, {"type": "claimed", "actor": actor})
+        await thread_manager.update_parent_status(task_id, "CLAIMED")
+    log.info("task_claimed_handled", task_id=task_id, actor=actor)
 
 
 async def handle_task_completed(
-    event_data: dict, *, slack_client, session_maker, hasura_url: str, publisher=None, thread_manager=None,
+    event_data: dict,
+    *,
+    slack_client,
+    session_maker,
+    hasura_url: str,
+    publisher=None,
+    thread_manager=None,
 ) -> None:
-    """Queue task.completed lifecycle update."""
+    """Handle task.completed: queue thread update, update parent to RESOLVED."""
     task_id = await _extract_task_id(event_data)
     if thread_manager:
-        await thread_manager.queue_update(task_id, {"event_type": "task.completed", "data": event_data.get("payload", {})})
-    log.info("task_completed_queued", task_id=task_id)
+        await thread_manager.queue_update(task_id, {"type": "task_completed"})
+        await thread_manager.update_parent_status(task_id, "RESOLVED")
+    log.info("task_completed_handled", task_id=task_id)
 
 
 async def handle_ai_recommendation(
-    event_data: dict, *, slack_client, session_maker, hasura_url: str, publisher=None, thread_manager=None,
+    event_data: dict,
+    *,
+    slack_client,
+    session_maker,
+    hasura_url: str,
+    publisher=None,
+    thread_manager=None,
 ) -> None:
-    """Queue ai.recommendation.generated lifecycle update."""
+    """Handle ai.recommendation.generated: extract action, confidence, reasoning."""
     task_id = await _extract_task_id(event_data)
+    payload = event_data.get("payload", {})
     if thread_manager:
-        await thread_manager.queue_update(task_id, {"event_type": "ai.recommendation.generated", "data": event_data.get("payload", {})})
-    log.info("ai_recommendation_queued", task_id=task_id)
+        await thread_manager.queue_update(
+            task_id,
+            {
+                "type": "ai_recommendation",
+                "action": payload.get("action", ""),
+                "confidence": payload.get("confidence", ""),
+                "reasoning": payload.get("reasoning", ""),
+            },
+        )
+    log.info("ai_recommendation_handled", task_id=task_id)
 
 
 async def handle_ai_approved(
-    event_data: dict, *, slack_client, session_maker, hasura_url: str, publisher=None, thread_manager=None,
+    event_data: dict,
+    *,
+    slack_client,
+    session_maker,
+    hasura_url: str,
+    publisher=None,
+    thread_manager=None,
 ) -> None:
-    """Queue ai.output.approved lifecycle update."""
+    """Handle ai.output.approved: extract actor."""
     task_id = await _extract_task_id(event_data)
+    payload = event_data.get("payload", {})
+    actor = payload.get("actor", "unknown")
     if thread_manager:
-        await thread_manager.queue_update(task_id, {"event_type": "ai.output.approved", "data": event_data.get("payload", {})})
-    log.info("ai_approved_queued", task_id=task_id)
+        await thread_manager.queue_update(task_id, {"type": "ai_approved", "actor": actor})
+    log.info("ai_approved_handled", task_id=task_id)
 
 
 async def handle_ai_rejected(
-    event_data: dict, *, slack_client, session_maker, hasura_url: str, publisher=None, thread_manager=None,
+    event_data: dict,
+    *,
+    slack_client,
+    session_maker,
+    hasura_url: str,
+    publisher=None,
+    thread_manager=None,
 ) -> None:
-    """Queue ai.output.rejected lifecycle update."""
+    """Handle ai.output.rejected: extract actor and reason."""
     task_id = await _extract_task_id(event_data)
+    payload = event_data.get("payload", {})
+    actor = payload.get("actor", "unknown")
+    reason = payload.get("reason", "")
     if thread_manager:
-        await thread_manager.queue_update(task_id, {"event_type": "ai.output.rejected", "data": event_data.get("payload", {})})
-    log.info("ai_rejected_queued", task_id=task_id)
+        await thread_manager.queue_update(
+            task_id, {"type": "ai_rejected", "actor": actor, "reason": reason}
+        )
+    log.info("ai_rejected_handled", task_id=task_id)
 
 
 async def handle_call_event(
-    event_data: dict, *, slack_client, session_maker, hasura_url: str, publisher=None, thread_manager=None,
+    event_data: dict,
+    *,
+    slack_client,
+    session_maker,
+    hasura_url: str,
+    publisher=None,
+    thread_manager=None,
 ) -> None:
-    """Queue call lifecycle update (connected, missed, completed)."""
+    """Handle call events (connected, missed, completed): extract outcome and duration."""
     task_id = await _extract_task_id(event_data)
+    payload = event_data.get("payload", {})
     event_type = event_data.get("event_type", "call.unknown")
+    outcome = payload.get("outcome") or event_type.split(".")[-1]
+    duration = payload.get("duration_seconds")
     if thread_manager:
-        await thread_manager.queue_update(task_id, {"event_type": event_type, "data": event_data.get("payload", {})})
-    log.info("call_event_queued", task_id=task_id, event_type=event_type)
+        update = {"type": "call_outcome", "outcome": outcome}
+        if duration is not None:
+            update["duration_seconds"] = duration
+        await thread_manager.queue_update(task_id, update)
+    log.info("call_event_handled", task_id=task_id, event_type=event_type, outcome=outcome)
 
 
 async def handle_scenario_started(
-    event_data: dict, *, slack_client, session_maker, hasura_url: str, publisher=None, thread_manager=None,
+    event_data: dict,
+    *,
+    slack_client,
+    session_maker,
+    hasura_url: str,
+    publisher=None,
+    thread_manager=None,
 ) -> None:
-    """Queue scenario.started lifecycle update."""
-    task_id = await _extract_task_id(event_data)
-    if thread_manager:
-        await thread_manager.queue_update(task_id, {"event_type": "scenario.started", "data": event_data.get("payload", {})})
-    log.info("scenario_started_queued", task_id=task_id)
+    """Handle scenario.started: post header card directly to #ocean-alerts."""
+    payload = event_data.get("payload", {})
+    scenario_name = payload.get("scenario_name", "unknown")
+    patients = payload.get("patients", [])
+    flow_combos = payload.get("flow_combos", [])
+    blocks = scenario_started_card(scenario_name, patients, flow_combos)
+    try:
+        await slack_client.chat_postMessage(
+            channel=DEFAULT_CHANNEL,
+            blocks=blocks,
+            text=f"[SIMULATION] {scenario_name} started",
+        )
+    except Exception:
+        log.warning("scenario_started_card_post_failed", scenario_name=scenario_name, exc_info=True)
+    log.info("scenario_started_posted", scenario_name=scenario_name)
 
 
 async def handle_scenario_completed(
-    event_data: dict, *, slack_client, session_maker, hasura_url: str, publisher=None, thread_manager=None,
+    event_data: dict,
+    *,
+    slack_client,
+    session_maker,
+    hasura_url: str,
+    publisher=None,
+    thread_manager=None,
 ) -> None:
-    """Queue scenario.completed lifecycle update."""
-    task_id = await _extract_task_id(event_data)
-    if thread_manager:
-        await thread_manager.queue_update(task_id, {"event_type": "scenario.completed", "data": event_data.get("payload", {})})
-    log.info("scenario_completed_queued", task_id=task_id)
+    """Handle scenario.completed: post footer card with stats to #ocean-alerts."""
+    payload = event_data.get("payload", {})
+    scenario_name = payload.get("scenario_name", "unknown")
+    stats = {k: v for k, v in payload.items() if k != "scenario_name"}
+    blocks = scenario_completed_card(scenario_name, stats)
+    try:
+        await slack_client.chat_postMessage(
+            channel=DEFAULT_CHANNEL,
+            blocks=blocks,
+            text=f"[SIMULATION COMPLETE] {scenario_name}",
+        )
+    except Exception:
+        log.warning(
+            "scenario_completed_card_post_failed", scenario_name=scenario_name, exc_info=True
+        )
+    log.info("scenario_completed_posted", scenario_name=scenario_name)
 
 
 EVENT_HANDLERS: dict = {

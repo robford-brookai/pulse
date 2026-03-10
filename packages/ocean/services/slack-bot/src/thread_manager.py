@@ -4,6 +4,7 @@ Queues lifecycle events into organic batches (3-9s random delay) and posts
 consolidated thread replies. Persists parent message_ts in slack_messages
 for thread continuity across restarts.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -70,11 +71,21 @@ class ThreadManager:
             await self._post_thread_reply(task_id, updates)
 
     async def _post_thread_reply(self, task_id: str, updates: list[dict]) -> None:
-        """Post consolidated thread reply for batched updates."""
+        """Post consolidated thread reply for batched updates.
+
+        Retries once after 2s if the parent message hasn't been stored yet
+        (race between parent post and first lifecycle event).
+        """
+        from src.cards import lifecycle_update_blocks
+
         thread_ts = await self.get_thread_ts(task_id)
         if not thread_ts:
-            log.warning("thread_ts_not_found_skipping_reply", task_id=task_id)
-            return
+            log.warning("parent_not_posted_yet", task_id=task_id)
+            await asyncio.sleep(2)
+            thread_ts = await self.get_thread_ts(task_id)
+            if not thread_ts:
+                log.error("parent_still_not_found_skipping", task_id=task_id)
+                return
 
         # Look up channel from slack_messages
         async with self._session_maker() as session:
@@ -88,34 +99,22 @@ class ThreadManager:
                 return
             channel = row.channel
 
-        # Build consolidated blocks
-        lines = []
-        for u in updates:
-            event_type = u.get("event_type", "update")
-            lines.append(f"*{event_type}*")
-
-        blocks = [
-            {
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": "\n".join(lines)},
-            }
-        ]
+        blocks = lifecycle_update_blocks(updates)
 
         await self._slack.chat_postMessage(
             channel=channel,
             thread_ts=thread_ts,
             blocks=blocks,
-            text=f"{len(updates)} update(s)",
+            text="Lifecycle update",
+            reply_broadcast=False,
         )
-        log.info("thread_reply_posted", task_id=task_id, update_count=len(updates))
+        log.info("thread_reply_posted", task_id=task_id, batch_size=len(updates))
 
     async def update_parent_status(self, task_id: str, new_status: str) -> None:
         """Update the parent message header with a status prefix."""
         async with self._session_maker() as session:
             result = await session.execute(
-                sa.text(
-                    "SELECT channel, message_ts FROM slack_messages WHERE task_id = :task_id"
-                ),
+                sa.text("SELECT channel, message_ts FROM slack_messages WHERE task_id = :task_id"),
                 {"task_id": task_id},
             )
             row = result.fetchone()

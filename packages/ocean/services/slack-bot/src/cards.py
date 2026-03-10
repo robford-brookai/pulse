@@ -1,4 +1,5 @@
 """Slack Block Kit card builders."""
+
 from __future__ import annotations
 
 
@@ -112,8 +113,7 @@ def outreach_draft_card(task_id: str, draft_id: str, draft_text: str) -> list[di
             "text": {
                 "type": "mrkdwn",
                 "text": (
-                    f"*AI: Outreach Draft*\n_{draft_text}_\n\n"
-                    "_Review and approve before dispatch._"
+                    f"*AI: Outreach Draft*\n_{draft_text}_\n\n_Review and approve before dispatch._"
                 ),
             },
         },
@@ -242,8 +242,111 @@ def resolved_card(task_id: str, actor_id: str) -> list[dict]:
     ]
 
 
+def lifecycle_update_blocks(updates: list[dict]) -> list[dict]:
+    """Build consolidated Block Kit blocks from a batch of lifecycle events.
+
+    Each update gets a section with event type header and relevant fields.
+    Dividers separate multiple updates. Supported types: claimed,
+    ai_recommendation, ai_approved, ai_rejected, call_outcome, task_completed.
+    """
+    blocks: list[dict] = []
+
+    for i, update in enumerate(updates):
+        if i > 0:
+            blocks.append({"type": "divider"})
+
+        update_type = update.get("type", "update")
+
+        if update_type == "claimed":
+            actor = update.get("actor", "Unknown")
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*Task Claimed*\nClaimed by `{actor}`",
+                    },
+                }
+            )
+
+        elif update_type == "ai_recommendation":
+            action = update.get("action", "")
+            confidence = update.get("confidence", "")
+            reasoning = update.get("reasoning", "")
+            text = f"*AI Recommendation*\n*Action:* {action}\n*Confidence:* {confidence}"
+            if reasoning:
+                text += f"\n_Reasoning: {reasoning}_"
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": text},
+                }
+            )
+
+        elif update_type == "ai_approved":
+            actor = update.get("actor", "Unknown")
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*AI Output Approved*\nApproved by `{actor}`",
+                    },
+                }
+            )
+
+        elif update_type == "ai_rejected":
+            actor = update.get("actor", "Unknown")
+            reason = update.get("reason", "")
+            text = f"*AI Output Rejected*\nRejected by `{actor}`"
+            if reason:
+                text += f"\n_Reason: {reason}_"
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": text},
+                }
+            )
+
+        elif update_type == "call_outcome":
+            outcome = update.get("outcome", "unknown")
+            duration = update.get("duration_seconds")
+            text = f"*Call Outcome*\nOutcome: {outcome}"
+            if duration is not None:
+                text += f"\nDuration: {duration}s"
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": text},
+                }
+            )
+
+        elif update_type == "task_completed":
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "*Task Completed*\nTask has been resolved.",
+                    },
+                }
+            )
+
+        else:
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": f"*{update_type}*"},
+                }
+            )
+
+    return blocks
+
+
 def scenario_started_card(
-    scenario_name: str, patients: list[str], flow_combos: list[str],
+    scenario_name: str,
+    patients: list[str],
+    flow_combos: list[str],
 ) -> list[dict]:
     """Build a card for scenario.started event with simulation label."""
     patient_list = ", ".join(f"`{p}`" for p in patients[:5])
@@ -282,6 +385,9 @@ def scenario_completed_card(scenario_name: str, stats: dict) -> list[dict]:
         },
         {
             "type": "section",
-            "text": {"type": "mrkdwn", "text": "\n".join(stat_lines) if stat_lines else "_No stats_"},
+            "text": {
+                "type": "mrkdwn",
+                "text": "\n".join(stat_lines) if stat_lines else "_No stats_",
+            },
         },
     ]
