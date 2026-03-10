@@ -2,15 +2,17 @@
 from __future__ import annotations
 
 import ast
-import importlib
 import os
 import re
-import sys
-import textwrap
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
+from starlette.applications import Starlette
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse, PlainTextResponse
+from starlette.routing import Route
+from starlette.testclient import TestClient
 
 SERVICES_ROOT = Path(__file__).resolve().parents[2] / "services" / "slack-bot"
 MCP_SERVER_PATH = SERVICES_ROOT / "src" / "mcp_server.py"
@@ -20,6 +22,7 @@ MAIN_PATH = SERVICES_ROOT / "src" / "main.py"
 # ---------------------------------------------------------------------------
 # Source-inspection helpers
 # ---------------------------------------------------------------------------
+
 
 def _read_source(path: Path) -> str:
     return path.read_text()
@@ -50,14 +53,18 @@ class TestMCPServerSourceInspection:
         for node in ast.walk(tree):
             if isinstance(node, ast.AsyncFunctionDef):
                 for dec in node.decorator_list:
-                    if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Attribute):
-                        if dec.func.attr == "tool":
-                            tool_funcs.append(node.name)
+                    if (
+                        isinstance(dec, ast.Call)
+                        and isinstance(dec.func, ast.Attribute)
+                        and dec.func.attr == "tool"
+                    ):
+                        tool_funcs.append(node.name)
         expected_prefixes = {"slack_", "ocean_", "sim_"}
         for name in tool_funcs:
             prefix = name.split("_")[0] + "_"
             assert prefix in expected_prefixes, (
-                f"Tool '{name}' doesn't follow domain_action naming (expected prefix in {expected_prefixes})"
+                f"Tool '{name}' doesn't follow domain_action naming "
+                f"(expected prefix in {expected_prefixes})"
             )
 
     def test_expected_tools_present(self):
@@ -102,10 +109,37 @@ class TestMainSourceInspection:
         source = _read_source(MAIN_PATH)
         assert "X-Api-Key" in source, "Middleware should check X-Api-Key header"
 
+    def test_middleware_uses_mcp_api_key_env(self):
+        source = _read_source(MAIN_PATH)
+        assert "MCP_API_KEY" in source, "Middleware should read MCP_API_KEY from env"
+
 
 # ---------------------------------------------------------------------------
-# Unit tests for MCPApiKeyMiddleware
+# Unit tests for MCPApiKeyMiddleware behavior
 # ---------------------------------------------------------------------------
+# We extract the middleware logic from main.py source via AST and reconstruct
+# it here to test in isolation, avoiding heavy service dependency imports.
+
+
+def _build_middleware_from_source() -> type:
+    """Parse MCPApiKeyMiddleware from main.py source and return the class."""
+    source = _read_source(MAIN_PATH)
+    tree = ast.parse(source)
+
+    # Find the MCPApiKeyMiddleware class definition
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == "MCPApiKeyMiddleware":
+            # Reconstruct the class in a clean namespace
+            class_source = ast.get_source_segment(source, node)
+            namespace = {
+                "BaseHTTPMiddleware": BaseHTTPMiddleware,
+                "JSONResponse": JSONResponse,
+                "os": os,
+            }
+            exec(class_source, namespace)  # noqa: S102
+            return namespace["MCPApiKeyMiddleware"]
+
+    raise RuntimeError("MCPApiKeyMiddleware not found in main.py")
 
 
 class TestMCPApiKeyMiddleware:
@@ -113,37 +147,9 @@ class TestMCPApiKeyMiddleware:
 
     @pytest.fixture(autouse=True)
     def _load_middleware(self):
-        """Import MCPApiKeyMiddleware from main.py using isolated import."""
-        # Clear cached src.* modules to avoid cross-service collisions
-        to_remove = [k for k in sys.modules if k.startswith("src.") or k == "src"]
-        for k in to_remove:
-            del sys.modules[k]
+        self.middleware_cls = _build_middleware_from_source()
 
-        spec = importlib.util.spec_from_file_location("slack_bot_main", MAIN_PATH)
-        mod = importlib.util.module_from_spec(spec)
-        # Patch heavy imports that aren't needed for middleware testing
-        with patch.dict(sys.modules, {
-            "slack_sdk": type(sys)("slack_sdk"),
-            "slack_sdk.web.async_client": type(sys)("slack_sdk.web.async_client"),
-            "slack_bolt": type(sys)("slack_bolt"),
-            "slack_bolt.async_app": type(sys)("slack_bolt.async_app"),
-            "slack_bolt.adapter.fastapi.async_handler": type(sys)("slack_bolt.adapter.fastapi.async_handler"),
-            "confluent_kafka": type(sys)("confluent_kafka"),
-        }):
-            try:
-                spec.loader.exec_module(mod)
-            except Exception:
-                pass
-        self.middleware_cls = getattr(mod, "MCPApiKeyMiddleware", None)
-        assert self.middleware_cls is not None, "MCPApiKeyMiddleware not found in main.py"
-
-    @pytest.mark.asyncio
-    async def test_returns_401_when_api_key_missing(self):
-        from starlette.testclient import TestClient
-        from starlette.applications import Starlette
-        from starlette.responses import PlainTextResponse
-        from starlette.routing import Route
-
+    def test_returns_401_when_api_key_missing(self):
         async def mcp_endpoint(request):
             return PlainTextResponse("ok")
 
@@ -155,13 +161,19 @@ class TestMCPApiKeyMiddleware:
             resp = client.get("/mcp/sse")
             assert resp.status_code == 401
 
-    @pytest.mark.asyncio
-    async def test_passes_through_with_correct_key(self):
-        from starlette.testclient import TestClient
-        from starlette.applications import Starlette
-        from starlette.responses import PlainTextResponse
-        from starlette.routing import Route
+    def test_returns_401_when_api_key_wrong(self):
+        async def mcp_endpoint(request):
+            return PlainTextResponse("ok")
 
+        test_app = Starlette(routes=[Route("/mcp/sse", mcp_endpoint)])
+        test_app.add_middleware(self.middleware_cls)
+
+        with patch.dict(os.environ, {"MCP_API_KEY": "test-secret-key"}):
+            client = TestClient(test_app, raise_server_exceptions=False)
+            resp = client.get("/mcp/sse", headers={"X-Api-Key": "wrong-key"})
+            assert resp.status_code == 401
+
+    def test_passes_through_with_correct_key(self):
         async def mcp_endpoint(request):
             return PlainTextResponse("ok")
 
@@ -173,13 +185,7 @@ class TestMCPApiKeyMiddleware:
             resp = client.get("/mcp/sse", headers={"X-Api-Key": "test-secret-key"})
             assert resp.status_code == 200
 
-    @pytest.mark.asyncio
-    async def test_passes_through_for_non_mcp_paths(self):
-        from starlette.testclient import TestClient
-        from starlette.applications import Starlette
-        from starlette.responses import PlainTextResponse
-        from starlette.routing import Route
-
+    def test_passes_through_for_non_mcp_paths(self):
         async def health_endpoint(request):
             return PlainTextResponse("healthy")
 

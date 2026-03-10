@@ -11,6 +11,8 @@ from contextlib import asynccontextmanager
 import structlog
 from fastapi import FastAPI, Request, Response
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 
 log = structlog.get_logger()
 
@@ -20,6 +22,18 @@ SLACK_SIGNING_SECRET = os.environ.get("SLACK_SIGNING_SECRET", "")
 OPS_SLACK_CHANNEL = os.environ.get("OPS_SLACK_CHANNEL", "#care-alerts-ops")
 HASURA_URL = os.environ.get("HASURA_URL", "http://localhost:8090")
 REDPANDA_BROKERS = os.environ.get("REDPANDA_BROKERS", "localhost:9092")
+
+
+class MCPApiKeyMiddleware(BaseHTTPMiddleware):
+    """Enforce X-Api-Key header on all /mcp requests."""
+
+    async def dispatch(self, request, call_next):
+        if request.url.path.startswith("/mcp"):
+            api_key = request.headers.get("X-Api-Key", "")
+            expected = os.environ.get("MCP_API_KEY", "")
+            if not expected or api_key != expected:
+                return JSONResponse({"error": "unauthorized"}, status_code=401)
+        return await call_next(request)
 
 
 @asynccontextmanager
@@ -73,6 +87,11 @@ async def lifespan(app: FastAPI):
     if hasura_secret:
         set_hasura_secret(hasura_secret)
 
+    # Wire MCP server dependencies (Phase 15 Plan 03)
+    from src.mcp_server import set_mcp_deps
+
+    set_mcp_deps(slack_client, session_maker, publisher, HASURA_URL, hasura_secret)
+
     # Create ThreadManager for thread tracking (Phase 15)
     thread_manager = ThreadManager(slack_client, session_maker)
 
@@ -107,6 +126,12 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="slack-bot", version="0.1.0", lifespan=lifespan)
+
+# Mount MCP server at /mcp (Phase 15 Plan 03)
+from src.mcp_server import create_mcp_app  # noqa: E402
+
+app.mount("/mcp", create_mcp_app())
+app.add_middleware(MCPApiKeyMiddleware)
 
 
 @app.get("/health")
