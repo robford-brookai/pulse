@@ -52,7 +52,16 @@ async def lifespan(app: FastAPI):
     from src.bolt_app import set_session_maker, set_publisher, set_hasura_secret
     from src.publisher import RedpandaPublisher
 
+    from src.thread_manager import ThreadManager
+
     slack_client = AsyncWebClient(token=SLACK_BOT_TOKEN)
+
+    # Validate Slack token at startup (Phase 15)
+    try:
+        auth_response = await slack_client.auth_test()
+        log.info("slack_connected", workspace=auth_response["team"], bot=auth_response["user"])
+    except Exception:
+        log.warning("slack_not_configured_headless_mode")
 
     # Wire bolt_app dependencies (BUG 2 fix)
     if session_maker is not None:
@@ -64,13 +73,19 @@ async def lifespan(app: FastAPI):
     if hasura_secret:
         set_hasura_secret(hasura_secret)
 
+    # Create ThreadManager for thread tracking (Phase 15)
+    thread_manager = ThreadManager(slack_client, session_maker)
+
     async def _slack_events_endpoint(request: Request) -> Response:
         return await bolt_handler.handle(request)
 
     app.add_api_route("/slack/events", _slack_events_endpoint, methods=["POST"])
 
     consumer_task = asyncio.create_task(
-        consumer_module.run_consumer(slack_client, session_maker, REDPANDA_BROKERS, HASURA_URL, publisher=publisher)
+        consumer_module.run_consumer(
+            slack_client, session_maker, REDPANDA_BROKERS, HASURA_URL,
+            publisher=publisher, thread_manager=thread_manager,
+        )
     )
     poller_task = asyncio.create_task(
         poll_connector_health(slack_client, OPS_SLACK_CHANNEL, session_maker)

@@ -11,6 +11,7 @@ def alert_card(
     ai_summary: str,
     hasura_url: str,
     cited_signals: list[str] | None = None,
+    status: str | None = None,
 ) -> list[dict]:
     """Build the initial alert card posted to care team channel.
 
@@ -22,11 +23,15 @@ def alert_card(
       4: section  — Context signals citation
       5: divider
       6: actions  — Claim, Resolve, View Context buttons
+
+    Phase 15: optional status parameter prepends [STATUS] to header.
     """
     if cited_signals is None:
         cited_signals = []
 
     header_text = f"[{severity}] {alert_type.replace('_', ' ').title()}"
+    if status:
+        header_text = f"[{status.upper()}] {header_text}"
     signals_text = f"_Context signals: {', '.join(cited_signals) if cited_signals else 'none'}_"
 
     return [
@@ -233,5 +238,50 @@ def resolved_card(task_id: str, actor_id: str) -> list[dict]:
                 "type": "mrkdwn",
                 "text": f"*Resolved by:*\n`{actor_id}`",
             },
+        },
+    ]
+
+
+def scenario_started_card(
+    scenario_name: str, patients: list[str], flow_combos: list[str],
+) -> list[dict]:
+    """Build a card for scenario.started event with simulation label."""
+    patient_list = ", ".join(f"`{p}`" for p in patients[:5])
+    if len(patients) > 5:
+        patient_list += f" (+{len(patients) - 5} more)"
+    flow_list = ", ".join(flow_combos[:5])
+    if len(flow_combos) > 5:
+        flow_list += f" (+{len(flow_combos) - 5} more)"
+
+    return [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": f"[SIMULATION] {scenario_name}", "emoji": True},
+        },
+        {
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": f"*Patients:*\n{patient_list}"},
+                {"type": "mrkdwn", "text": f"*Flows:*\n{flow_list}"},
+            ],
+        },
+    ]
+
+
+def scenario_completed_card(scenario_name: str, stats: dict) -> list[dict]:
+    """Build a footer card for scenario.completed with core stats."""
+    stat_lines = [f"*{k}:* {v}" for k, v in stats.items()]
+    return [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": f"[SIMULATION COMPLETE] {scenario_name}",
+                "emoji": True,
+            },
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": "\n".join(stat_lines) if stat_lines else "_No stats_"},
         },
     ]

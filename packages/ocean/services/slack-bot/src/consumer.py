@@ -1,7 +1,8 @@
 """Async Kafka consumer for slack-bot.
 
-Reads from ocean.tasks; dispatches task.created events to post alert cards
-to the routed Slack channel.
+Reads from ocean.tasks, ocean.ai-ops, ocean.interactions, ocean.ops;
+dispatches events to handlers for alert cards, lifecycle thread updates,
+and simulation bookends.
 
 Consumer group: slack-bot-worker (receives events independently of other consumers).
 Manual offset commit — offset committed only AFTER successful handler return.
@@ -24,13 +25,21 @@ from src.cards import alert_card, outreach_draft_card
 
 log = structlog.get_logger()
 
-TOPICS = ["ocean.tasks"]
+TOPICS = ["ocean.tasks", "ocean.ai-ops", "ocean.interactions", "ocean.ops"]
 
 CONSUMER_CONFIG: dict = {
     "group.id": "slack-bot-worker",
     "auto.offset.reset": "earliest",
     "enable.auto.commit": False,
 }
+
+# Priority-based channel routing for alert cards
+CHANNEL_MAP: dict[str, str] = {
+    "CRITICAL": "#ocean-critical",
+    "URGENT": "#ocean-urgent",
+    "ROUTINE": "#ocean-routine",
+}
+DEFAULT_CHANNEL = "#ocean-alerts"
 
 
 async def handle_task_created(
@@ -40,6 +49,7 @@ async def handle_task_created(
     session_maker,
     hasura_url: str,
     publisher=None,
+    thread_manager=None,
 ) -> None:
     """Handle task.created event: generate AI summary, build card, post to Slack.
 
@@ -47,6 +57,10 @@ async def handle_task_created(
     - Calls generate_summary_with_context with Hasura graph context
     - Posts outreach draft card with Approve/Reject gate
     - Publishes ai.summary.generated and ai.response.drafted events
+
+    Phase 15 upgrade:
+    - Priority-based channel routing via CHANNEL_MAP
+    - Stores parent message_ts via thread_manager
     """
     payload = event_data.get("payload", {})
 
@@ -55,8 +69,10 @@ async def handle_task_created(
     alert_type = payload.get("task_type", "unknown")
     severity = payload.get("priority", "routine").upper()
     timestamp = event_data.get("timestamp", "")
-    channel = payload.get("channel", "#care-alerts-general")
     alert_id = payload.get("alert_id", "")
+
+    # Priority-based channel routing (Phase 15)
+    channel = CHANNEL_MAP.get(severity, DEFAULT_CHANNEL)
 
     hasura_secret = os.environ.get("HASURA_GRAPHQL_ADMIN_SECRET", "")
 
@@ -80,11 +96,16 @@ async def handle_task_created(
         cited_signals=cited_signals,
     )
 
-    await slack_client.chat_postMessage(
+    response = await slack_client.chat_postMessage(
         channel=channel,
         blocks=blocks,
         text=f"[{severity}] {alert_type} alert",
     )
+
+    # Store parent message for thread tracking (Phase 15)
+    message_ts = response.get("ts", "") if isinstance(response, dict) else getattr(response, "ts", "")
+    if thread_manager and message_ts:
+        await thread_manager.store_parent_message(task_id, channel, message_ts)
 
     log.info(
         "alert_card_posted",
@@ -155,8 +176,110 @@ async def handle_task_created(
     log.info("outreach_draft_posted", task_id=task_id, draft_id=draft_id)
 
 
+# ---------------------------------------------------------------------------
+# Lifecycle stub handlers — queue updates through ThreadManager
+# ---------------------------------------------------------------------------
+
+
+async def _extract_task_id(event_data: dict) -> str:
+    """Extract task_id from event payload or entity_id."""
+    payload = event_data.get("payload", {})
+    return payload.get("task_id") or event_data.get("entity_id", "unknown")
+
+
+async def handle_task_claimed(
+    event_data: dict, *, slack_client, session_maker, hasura_url: str, publisher=None, thread_manager=None,
+) -> None:
+    """Queue task.claimed lifecycle update."""
+    task_id = await _extract_task_id(event_data)
+    if thread_manager:
+        await thread_manager.queue_update(task_id, {"event_type": "task.claimed", "data": event_data.get("payload", {})})
+    log.info("task_claimed_queued", task_id=task_id)
+
+
+async def handle_task_completed(
+    event_data: dict, *, slack_client, session_maker, hasura_url: str, publisher=None, thread_manager=None,
+) -> None:
+    """Queue task.completed lifecycle update."""
+    task_id = await _extract_task_id(event_data)
+    if thread_manager:
+        await thread_manager.queue_update(task_id, {"event_type": "task.completed", "data": event_data.get("payload", {})})
+    log.info("task_completed_queued", task_id=task_id)
+
+
+async def handle_ai_recommendation(
+    event_data: dict, *, slack_client, session_maker, hasura_url: str, publisher=None, thread_manager=None,
+) -> None:
+    """Queue ai.recommendation.generated lifecycle update."""
+    task_id = await _extract_task_id(event_data)
+    if thread_manager:
+        await thread_manager.queue_update(task_id, {"event_type": "ai.recommendation.generated", "data": event_data.get("payload", {})})
+    log.info("ai_recommendation_queued", task_id=task_id)
+
+
+async def handle_ai_approved(
+    event_data: dict, *, slack_client, session_maker, hasura_url: str, publisher=None, thread_manager=None,
+) -> None:
+    """Queue ai.output.approved lifecycle update."""
+    task_id = await _extract_task_id(event_data)
+    if thread_manager:
+        await thread_manager.queue_update(task_id, {"event_type": "ai.output.approved", "data": event_data.get("payload", {})})
+    log.info("ai_approved_queued", task_id=task_id)
+
+
+async def handle_ai_rejected(
+    event_data: dict, *, slack_client, session_maker, hasura_url: str, publisher=None, thread_manager=None,
+) -> None:
+    """Queue ai.output.rejected lifecycle update."""
+    task_id = await _extract_task_id(event_data)
+    if thread_manager:
+        await thread_manager.queue_update(task_id, {"event_type": "ai.output.rejected", "data": event_data.get("payload", {})})
+    log.info("ai_rejected_queued", task_id=task_id)
+
+
+async def handle_call_event(
+    event_data: dict, *, slack_client, session_maker, hasura_url: str, publisher=None, thread_manager=None,
+) -> None:
+    """Queue call lifecycle update (connected, missed, completed)."""
+    task_id = await _extract_task_id(event_data)
+    event_type = event_data.get("event_type", "call.unknown")
+    if thread_manager:
+        await thread_manager.queue_update(task_id, {"event_type": event_type, "data": event_data.get("payload", {})})
+    log.info("call_event_queued", task_id=task_id, event_type=event_type)
+
+
+async def handle_scenario_started(
+    event_data: dict, *, slack_client, session_maker, hasura_url: str, publisher=None, thread_manager=None,
+) -> None:
+    """Queue scenario.started lifecycle update."""
+    task_id = await _extract_task_id(event_data)
+    if thread_manager:
+        await thread_manager.queue_update(task_id, {"event_type": "scenario.started", "data": event_data.get("payload", {})})
+    log.info("scenario_started_queued", task_id=task_id)
+
+
+async def handle_scenario_completed(
+    event_data: dict, *, slack_client, session_maker, hasura_url: str, publisher=None, thread_manager=None,
+) -> None:
+    """Queue scenario.completed lifecycle update."""
+    task_id = await _extract_task_id(event_data)
+    if thread_manager:
+        await thread_manager.queue_update(task_id, {"event_type": "scenario.completed", "data": event_data.get("payload", {})})
+    log.info("scenario_completed_queued", task_id=task_id)
+
+
 EVENT_HANDLERS: dict = {
     "task.created": handle_task_created,
+    "task.claimed": handle_task_claimed,
+    "task.completed": handle_task_completed,
+    "ai.recommendation.generated": handle_ai_recommendation,
+    "ai.output.approved": handle_ai_approved,
+    "ai.output.rejected": handle_ai_rejected,
+    "call.connected": handle_call_event,
+    "call.missed": handle_call_event,
+    "call.completed": handle_call_event,
+    "scenario.started": handle_scenario_started,
+    "scenario.completed": handle_scenario_completed,
 }
 
 
@@ -166,10 +289,12 @@ async def run_consumer(
     bootstrap_servers: str,
     hasura_url: str,
     publisher=None,
+    thread_manager=None,
 ) -> None:
     """Run the slack-bot consumer loop.
 
-    Polls ocean.tasks, dispatches to EVENT_HANDLERS, commits only on success.
+    Polls ocean.tasks, ocean.ai-ops, ocean.interactions, ocean.ops;
+    dispatches to EVENT_HANDLERS, commits only on success.
     Logs and re-raises on unexpected error — the asyncio.create_task caller
     in main.py handles restarts.
     """
@@ -206,6 +331,7 @@ async def run_consumer(
                         session_maker=session_maker,
                         hasura_url=hasura_url,
                         publisher=publisher,
+                        thread_manager=thread_manager,
                     )
                 else:
                     log.debug("event_type_skipped", event_type=event_type)

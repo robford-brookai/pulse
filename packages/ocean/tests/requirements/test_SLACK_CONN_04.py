@@ -20,11 +20,17 @@ _ROOT = pathlib.Path(__file__).parents[2]
 
 
 def _import_thread_manager():
-    """Import ThreadManager from slack-bot service (hyphenated dir name)."""
+    """Import ThreadManager from slack-bot service (isolated from other src.* modules)."""
     svc_src = _ROOT / "services" / "slack-bot"
     if str(svc_src) not in sys.path:
         sys.path.insert(0, str(svc_src))
-    mod = importlib.import_module("src.thread_manager")
+    mod_name = "slack_bot_thread_manager"
+    if mod_name in sys.modules:
+        return sys.modules[mod_name].ThreadManager
+    spec = importlib.util.spec_from_file_location(mod_name, svc_src / "src" / "thread_manager.py")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[mod_name] = mod
+    spec.loader.exec_module(mod)
     return mod.ThreadManager
 
 
