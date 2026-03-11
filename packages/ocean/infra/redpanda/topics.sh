@@ -11,6 +11,7 @@ topics=(
   "ocean.tasks"
   "ocean.interactions"
   "ocean.outcomes"
+  "ocean.tickets"
   "ocean.ai-ops"
   "ocean.audit"
   "ocean.ops"

@@ -6,7 +6,7 @@ handle_ticket_updated: Validates state transitions, publishes state change event
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import sqlalchemy as sa
 import structlog
@@ -47,7 +47,7 @@ async def handle_ticket_created(event_data: dict, session, producer=None) -> Non
     timestamp_str = event_data.get("timestamp", "")
 
     ticket_id = str(uuid.uuid4())
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     ts = _parse_ts(timestamp_str) if timestamp_str else now
 
     # Generate human-readable ID from per-category sequence
@@ -152,7 +152,7 @@ async def handle_ticket_updated(event_data: dict, session, producer=None) -> Non
     waiting_reason = payload.get("waiting_reason")
     task_ids = payload.get("task_ids", [])
     alert_ids = payload.get("alert_ids", [])
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
 
     # Fetch current status
     result = await session.execute(

@@ -53,7 +53,9 @@ async def dispatch(event_data: dict, session: AsyncSession, producer=None) -> No
     await handler(event_data, session, producer=producer)
 
 
-async def run_consumer(session_maker: async_sessionmaker, bootstrap_servers: str, publisher=None) -> None:
+async def run_consumer(
+    session_maker: async_sessionmaker, bootstrap_servers: str, publisher=None,
+) -> None:
     """Run the control-plane consumer loop."""
     conf = {**CONSUMER_CONFIG, "bootstrap.servers": bootstrap_servers}
     consumer = Consumer(conf)
@@ -79,9 +81,8 @@ async def run_consumer(session_maker: async_sessionmaker, bootstrap_servers: str
 
             try:
                 event_data = json.loads(msg.value())
-                async with session_maker() as session:
-                    async with session.begin():
-                        await dispatch(event_data, session, producer=publisher)
+                async with session_maker() as session, session.begin():
+                    await dispatch(event_data, session, producer=publisher)
                 await consumer.commit(message=msg)
             except Exception:
                 log.exception(

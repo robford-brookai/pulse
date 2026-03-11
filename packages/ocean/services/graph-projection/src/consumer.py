@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 
-import sqlalchemy as sa
 import structlog
 from confluent_kafka import KafkaError
 from confluent_kafka.aio import AIOConsumer as Consumer
@@ -18,8 +17,22 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from src.handlers.alerts import handle_alert_claimed, handle_alert_created, handle_alert_resolved
 from src.handlers.interactions import handle_call_connected, handle_call_started
 from src.handlers.outcomes import handle_call_completed, handle_call_missed
-from src.handlers.signals import handle_signal_anomalous, handle_signal_missing, handle_signal_received
-from src.handlers.tasks import handle_task_assigned, handle_task_claimed, handle_task_completed, handle_task_created
+from src.handlers.signals import (
+    handle_signal_anomalous,
+    handle_signal_missing,
+    handle_signal_received,
+)
+from src.handlers.tasks import (
+    handle_task_assigned,
+    handle_task_claimed,
+    handle_task_completed,
+    handle_task_created,
+)
+from src.handlers.tickets import (
+    handle_ticket_created,
+    handle_ticket_resolved,
+    handle_ticket_updated,
+)
 
 log = structlog.get_logger()
 
@@ -29,6 +42,7 @@ TOPICS = [
     "ocean.tasks",
     "ocean.interactions",
     "ocean.outcomes",
+    "ocean.tickets",
     "ocean.ai-ops",
     "ocean.audit",
 ]
@@ -55,6 +69,9 @@ EVENT_HANDLERS: dict = {
     "call.connected": handle_call_connected,
     "call.completed": handle_call_completed,
     "call.missed": handle_call_missed,
+    "ticket.created": handle_ticket_created,
+    "ticket.updated": handle_ticket_updated,
+    "ticket.resolved": handle_ticket_resolved,
 }
 
 
@@ -97,9 +114,8 @@ async def run_consumer(session_maker: async_sessionmaker, bootstrap_servers: str
 
             try:
                 event_data = json.loads(msg.value())
-                async with session_maker() as session:
-                    async with session.begin():
-                        await dispatch(event_data, session)
+                async with session_maker() as session, session.begin():
+                    await dispatch(event_data, session)
                 await consumer.commit(message=msg)
             except Exception:
                 log.exception(
