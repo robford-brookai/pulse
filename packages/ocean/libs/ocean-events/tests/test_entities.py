@@ -125,13 +125,13 @@ def test_alert_valid():
         alert_id="al-001",
         patient_id="pt-001",
         alert_type="glucose_missing",
-        severity="urgent",
+        severity="critical",
         status="open",
         source_system="pocar",
         created_at=_now(),
         correlation_id="corr-001",
     )
-    assert a.severity == "urgent"
+    assert a.severity == "critical"
     assert a.status == "open"
 
 
@@ -153,7 +153,7 @@ def test_task_status_literal():
             alert_id="al-001",
             patient_id="pt-001",
             task_type="call_patient",
-            priority="routine",
+            priority="medium",
             status="bogus",  # not in Literal
             created_at=_now(),
         )
@@ -168,12 +168,12 @@ def test_task_valid():
         alert_id="al-001",
         patient_id="pt-001",
         task_type="call_patient",
-        priority="routine",
+        priority="medium",
         status="open",
         assigned_to=None,
         created_at=_now(),
     )
-    assert t.priority == "routine"
+    assert t.priority == "medium"
     assert t.assigned_to is None
 
 

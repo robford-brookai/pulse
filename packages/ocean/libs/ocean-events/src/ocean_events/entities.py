@@ -17,6 +17,10 @@ from ocean_events.types import (
     ResolutionStatus,
     TaskPriority,
     TaskStatus,
+    TicketCategory,
+    TicketPriority,
+    TicketStatus,
+    WaitingReason,
 )
 
 
@@ -74,7 +78,7 @@ class Task(BaseModel):
     """Operational task assigned to a care team member."""
 
     task_id: str
-    alert_id: str
+    alert_id: str | None = None
     patient_id: str  # opaque hash
     task_type: str  # "call_patient" | "review_chart"
     priority: TaskPriority
@@ -108,3 +112,22 @@ class Outcome(BaseModel):
     resolution_status: ResolutionStatus
     notes: str | None = None
     recorded_at: datetime
+
+
+class Ticket(BaseModel):
+    """Operational ticket for cross-functional work items.
+
+    human_id uses per-category prefix (DEV-00001, ACT-00001, etc.).
+    patient_id is optional — engineering tickets have no patient.
+    """
+
+    ticket_id: str
+    human_id: str
+    category: TicketCategory
+    priority: TicketPriority
+    status: TicketStatus
+    patient_id: str | None = None
+    description: str
+    waiting_reason: WaitingReason | None = None
+    created_at: datetime
+    correlation_id: str

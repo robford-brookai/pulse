@@ -9,8 +9,10 @@ from ocean_events.entities import (
     Patient,
     Signal,
     Task,
+    Ticket,
 )
 from ocean_events.types import (
+    CATEGORY_PREFIXES,
     AlertSeverity,
     AlertStatus,
     EntityType,
@@ -20,6 +22,10 @@ from ocean_events.types import (
     SourceSystem,
     TaskPriority,
     TaskStatus,
+    TicketCategory,
+    TicketPriority,
+    TicketStatus,
+    WaitingReason,
 )
 
 __all__ = [
@@ -34,9 +40,11 @@ __all__ = [
     "Patient",
     "Signal",
     "Task",
+    "Ticket",
     # Types
     "AlertSeverity",
     "AlertStatus",
+    "CATEGORY_PREFIXES",
     "EntityType",
     "EventType",
     "InteractionOutcome",
@@ -44,4 +52,8 @@ __all__ = [
     "SourceSystem",
     "TaskPriority",
     "TaskStatus",
+    "TicketCategory",
+    "TicketPriority",
+    "TicketStatus",
+    "WaitingReason",
 ]

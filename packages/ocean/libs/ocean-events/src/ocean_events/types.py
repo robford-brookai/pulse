@@ -8,13 +8,28 @@ SourceSystem = Literal[
     "control-plane", "agent-worker", "call-simulator", "sim-driver",
 ]
 
-EntityType = Literal["patient", "alert", "task", "interaction", "outcome", "signal"]
+EntityType = Literal["patient", "alert", "task", "interaction", "outcome", "signal", "ticket"]
 
-AlertSeverity = Literal["urgent", "routine", "low"]
+AlertSeverity = Literal["critical", "high", "medium", "low"]
 
 AlertStatus = Literal["open", "claimed", "resolved", "dismissed"]
 
-TaskPriority = Literal["urgent", "routine", "low"]
+TaskPriority = Literal["critical", "high", "medium", "low"]
+
+TicketCategory = Literal["device_issue", "patient_activation", "clinical_support", "engineering_it"]
+
+TicketStatus = Literal["open", "in_progress", "waiting", "resolved"]
+
+TicketPriority = Literal["critical", "high", "medium", "low"]
+
+WaitingReason = Literal["external_block", "timed_pause", "patient_response"]
+
+CATEGORY_PREFIXES: dict[str, str] = {
+    "device_issue": "DEV",
+    "patient_activation": "ACT",
+    "clinical_support": "CLN",
+    "engineering_it": "ENG",
+}
 
 TaskStatus = Literal["open", "claimed", "completed", "canceled"]
 
@@ -47,6 +62,9 @@ EventType = Literal[
     "ai.output.approved",
     "ai.recommendation.generated",
     "ai.output.rejected",
+    "ticket.created",
+    "ticket.updated",
+    "ticket.resolved",
     "scenario.started",
     "scenario.completed",
 ]
