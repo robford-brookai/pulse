@@ -1,7 +1,7 @@
 """Tests for ticket-related types, entity, and priority unification."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import get_args
 
 import pytest
@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 
 def _now() -> datetime:
-    return datetime.now(tz=timezone.utc)
+    return datetime.now(tz=UTC)
 
 
 # ---------------------------------------------------------------------------
@@ -252,4 +252,8 @@ class TestExports:
             WaitingReason,
         )
 
-        assert all(t is not None for t in [TicketCategory, TicketStatus, TicketPriority, WaitingReason, CATEGORY_PREFIXES])
+        all_types = [
+            TicketCategory, TicketStatus, TicketPriority,
+            WaitingReason, CATEGORY_PREFIXES,
+        ]
+        assert all(t is not None for t in all_types)
