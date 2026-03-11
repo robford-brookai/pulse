@@ -16,12 +16,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.handlers.alerts import handle_alert_created
 from src.handlers.heartbeats import handle_connector_heartbeat
+from src.handlers.tickets import handle_ticket_created, handle_ticket_updated
 
 log = structlog.get_logger()
 
 TOPICS = [
     "ocean.alerts",
     "ocean.ops",
+    "ocean.tickets",
 ]
 
 CONSUMER_CONFIG: dict = {
@@ -30,10 +32,11 @@ CONSUMER_CONFIG: dict = {
     "enable.auto.commit": False,
 }
 
-# Handlers registered here; additional handlers added in 03-02
 EVENT_HANDLERS: dict = {
     "alert.created": handle_alert_created,
     "connector.heartbeat": handle_connector_heartbeat,
+    "ticket.created": handle_ticket_created,
+    "ticket.updated": handle_ticket_updated,
 }
 
 

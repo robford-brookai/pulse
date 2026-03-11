@@ -53,8 +53,8 @@ def _make_heartbeat_event(connector_id: str = "glucose-connector") -> dict:
 
 class TestHandleAlertCreated:
     @pytest.mark.asyncio
-    async def test_glucose_alert_inserts_with_urgent_priority(self):
-        """handle_alert_created with alert_type='glucose' uses priority='urgent'."""
+    async def test_glucose_alert_inserts_with_critical_priority(self):
+        """handle_alert_created with alert_type='glucose' uses priority='critical'."""
         from src.handlers.alerts import handle_alert_created
 
         session = AsyncMock()
@@ -65,15 +65,15 @@ class TestHandleAlertCreated:
         assert session.execute.called
         _, kwargs = session.execute.call_args
         params = session.execute.call_args[0][1]
-        assert params["priority"] == "urgent"
+        assert params["priority"] == "critical"
         assert params["task_type"] == "glucose"
         # status is a literal in the SQL string, not a bound param
         sql_text = str(session.execute.call_args[0][0])
         assert "open" in sql_text
 
     @pytest.mark.asyncio
-    async def test_unknown_alert_type_uses_routine_priority(self):
-        """Unknown alert_type falls back to priority='routine'."""
+    async def test_unknown_alert_type_uses_medium_priority(self):
+        """Unknown alert_type falls back to priority='medium'."""
         from src.handlers.alerts import handle_alert_created
 
         session = AsyncMock()
@@ -82,7 +82,7 @@ class TestHandleAlertCreated:
         await handle_alert_created(event, session)
 
         params = session.execute.call_args[0][1]
-        assert params["priority"] == "routine"
+        assert params["priority"] == "medium"
 
     @pytest.mark.asyncio
     async def test_task_id_is_deterministic(self):
