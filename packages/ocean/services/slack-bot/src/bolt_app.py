@@ -1,9 +1,11 @@
-"""Slack Bolt action handlers — Claim, Resolve, Outreach Approve/Reject."""
+"""Slack Bolt action handlers — Claim, Resolve, Outreach Approve/Reject, Ticket Create."""
 from __future__ import annotations
 
+import json
 import os
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 import sqlalchemy as sa
 import structlog
@@ -21,7 +23,7 @@ from src.cards import (
     ticket_claimed_card,
     ticket_resolved_card,
 )
-from src.slash_commands import handle_ocean_command
+from src.slash_commands import CATEGORY_CHANNEL_MAP, build_ticket_modal, handle_ocean_command
 from src.zcc_dispatch import dispatch_zcc_outbound_call, get_zcc_oauth_token
 
 if TYPE_CHECKING:
@@ -633,3 +635,114 @@ async def handle_ticket_resume(ack, body, client) -> None:
         text=f"Ticket resumed by {actor_id}",
     )
     log.info("ticket_resumed", ticket_id=ticket_id, actor_id=actor_id)
+
+
+# ---------------------------------------------------------------------------
+# Ticket creation modal submission + message shortcut (Phase 17 Plan 02)
+# ---------------------------------------------------------------------------
+
+OPS_CHANNEL = os.environ.get("OPS_SLACK_CHANNEL", "#care-alerts-ops")
+
+
+@bolt_app.view("ticket_create_modal")
+async def handle_ticket_create_modal(ack, body, client) -> None:
+    """Handle ticket_create_modal submission.
+
+    Publishes ticket.create.requested to ocean.tickets and sends ephemeral
+    routing confirmation. human_id is NOT included — control-plane assigns
+    it asynchronously after processing the event.
+    """
+    await ack()
+
+    view = body["view"]
+    user_id = body["user"]["id"]
+    values = view["state"]["values"]
+
+    category = values["category_block"]["category_select"]["selected_option"]["value"]
+    description = values["description_block"]["description_input"]["value"]
+    priority = values["priority_block"]["priority_select"]["selected_option"]["value"]
+    patient_id = (values["patient_block"]["patient_input"].get("value") or "")
+    related_ticket = (values["related_block"]["related_input"].get("value") or "")
+
+    # Parse private_metadata for source_message_url
+    try:
+        metadata = json.loads(view.get("private_metadata") or "{}")
+    except (json.JSONDecodeError, TypeError):
+        metadata = {}
+    source_message_url = metadata.get("source_message_url")
+
+    now = datetime.now(UTC)
+    event = {
+        "event_id": str(uuid4()),
+        "event_type": "ticket.create.requested",
+        "schema_version": "1.0.0",
+        "timestamp": now.isoformat(),
+        "source_system": "slack-bot",
+        "entity_type": "ticket",
+        "correlation_id": str(uuid4()),
+        "payload": {
+            "category": category,
+            "priority": priority,
+            "description": description,
+            "patient_id": patient_id,
+            "source_message_url": source_message_url,
+            "creator_slack_id": user_id,
+            "related_ticket_human_id": related_ticket,
+            "task_ids": [],
+            "alert_ids": [],
+        },
+    }
+
+    if _publisher is not None:
+        await _publisher.publish("ocean.tickets", event)
+
+    channel = CATEGORY_CHANNEL_MAP.get(category, "#ocean-devices")
+    await client.chat_postEphemeral(
+        channel=OPS_CHANNEL,
+        user=user_id,
+        text=f"Ticket request submitted, routing to {channel}...",
+    )
+    log.info("ticket_create_modal_submitted", category=category, user=user_id)
+
+
+async def handle_create_ocean_ticket_shortcut(ack, body, client) -> None:
+    """Handle 'Create Ocean Ticket' message shortcut / action.
+
+    Opens ticket modal with description pre-filled from message text
+    and source_message_url stored in private_metadata.
+    """
+    await ack()
+
+    message = body.get("message", {})
+    message_text = message.get("text", "")
+    channel_id = body.get("channel", {}).get("id", "")
+    message_ts = message.get("ts", "")
+
+    # Get permalink for the source message
+    source_message_url = None
+    if channel_id and message_ts:
+        try:
+            result = await client.chat_getPermalink(channel=channel_id, message_ts=message_ts)
+            source_message_url = result.get("permalink")
+        except Exception:
+            log.warning("permalink_fetch_failed", channel=channel_id, ts=message_ts)
+
+    metadata = json.dumps({
+        "source_message_url": source_message_url,
+    })
+
+    modal = build_ticket_modal(
+        private_metadata=metadata,
+        prefill_description=message_text,
+    )
+
+    await client.views_open(
+        trigger_id=body["trigger_id"],
+        view=modal,
+    )
+    log.info("ticket_shortcut_opened", channel=channel_id)
+
+
+# Register message shortcut and action
+bolt_app.shortcut("create_ocean_ticket")(handle_create_ocean_ticket_shortcut)
+bolt_app.action("create_ocean_ticket")(handle_create_ocean_ticket_shortcut)

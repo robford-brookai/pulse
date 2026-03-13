@@ -1,5 +1,7 @@
-"""Slash command handlers for /ocean subcommands (status, patient, sim, help)."""
+"""Slash command handlers for /ocean subcommands (status, patient, sim, ticket, help)."""
 from __future__ import annotations
+
+import json
 
 import httpx
 import structlog
@@ -305,6 +307,102 @@ async def trigger_sim_response(scenario: str) -> list[dict]:
         ]
 
 
+CATEGORY_CHANNEL_MAP: dict[str, str] = {
+    "device_issue": "#ocean-devices",
+    "patient_activation": "#ocean-activation",
+    "clinical_support": "#ocean-clinical",
+    "engineering_it": "#ocean-engineering",
+}
+
+
+def build_ticket_modal(private_metadata: str = "", prefill_description: str = "") -> dict:
+    """Build the Slack modal view JSON for ticket creation.
+
+    Args:
+        private_metadata: JSON string with source_message_url etc.
+        prefill_description: Pre-filled description text (from message action).
+    """
+    description_element: dict = {
+        "type": "plain_text_input",
+        "action_id": "description_input",
+        "multiline": True,
+        "placeholder": {"type": "plain_text", "text": "Describe the issue..."},
+    }
+    if prefill_description:
+        description_element["initial_value"] = prefill_description
+
+    return {
+        "type": "modal",
+        "callback_id": "ticket_create_modal",
+        "title": {"type": "plain_text", "text": "Create Ticket"},
+        "submit": {"type": "plain_text", "text": "Create"},
+        "private_metadata": private_metadata,
+        "blocks": [
+            {
+                "type": "input",
+                "block_id": "category_block",
+                "element": {
+                    "type": "static_select",
+                    "action_id": "category_select",
+                    "placeholder": {"type": "plain_text", "text": "Select category"},
+                    "options": [
+                        {"text": {"type": "plain_text", "text": "Device Issue"}, "value": "device_issue"},
+                        {"text": {"type": "plain_text", "text": "Patient Activation"}, "value": "patient_activation"},
+                        {"text": {"type": "plain_text", "text": "Clinical Support"}, "value": "clinical_support"},
+                        {"text": {"type": "plain_text", "text": "Engineering / IT"}, "value": "engineering_it"},
+                    ],
+                },
+                "label": {"type": "plain_text", "text": "Category"},
+            },
+            {
+                "type": "input",
+                "block_id": "description_block",
+                "element": description_element,
+                "label": {"type": "plain_text", "text": "Description"},
+            },
+            {
+                "type": "input",
+                "block_id": "priority_block",
+                "element": {
+                    "type": "static_select",
+                    "action_id": "priority_select",
+                    "placeholder": {"type": "plain_text", "text": "Select priority"},
+                    "initial_option": {"text": {"type": "plain_text", "text": "Medium"}, "value": "medium"},
+                    "options": [
+                        {"text": {"type": "plain_text", "text": "Critical"}, "value": "critical"},
+                        {"text": {"type": "plain_text", "text": "High"}, "value": "high"},
+                        {"text": {"type": "plain_text", "text": "Medium"}, "value": "medium"},
+                        {"text": {"type": "plain_text", "text": "Low"}, "value": "low"},
+                    ],
+                },
+                "label": {"type": "plain_text", "text": "Priority"},
+            },
+            {
+                "type": "input",
+                "block_id": "patient_block",
+                "optional": True,
+                "element": {
+                    "type": "plain_text_input",
+                    "action_id": "patient_input",
+                    "placeholder": {"type": "plain_text", "text": "Patient ID (optional)"},
+                },
+                "label": {"type": "plain_text", "text": "Patient ID"},
+            },
+            {
+                "type": "input",
+                "block_id": "related_block",
+                "optional": True,
+                "element": {
+                    "type": "plain_text_input",
+                    "action_id": "related_input",
+                    "placeholder": {"type": "plain_text", "text": "e.g. DEV-00041"},
+                },
+                "label": {"type": "plain_text", "text": "Related Ticket"},
+            },
+        ],
+    }
+
+
 def build_help_response() -> list[dict]:
     """Build Block Kit blocks listing all /ocean subcommands."""
     return [
@@ -322,6 +420,7 @@ def build_help_response() -> list[dict]:
                     " last sim, active alerts\n"
                     "  `/ocean patient <id>` -- Patient summary card with timeline\n"
                     "  `/ocean sim <scenario>` -- Trigger a simulation run\n"
+                    "  `/ocean ticket` -- Create a new ticket (opens modal)\n"
                     "  `/ocean help` -- Show this help message"
                 ),
             },
@@ -334,11 +433,12 @@ def build_help_response() -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-async def handle_ocean_command(ack, body, respond) -> None:
+async def handle_ocean_command(ack, body, respond, client=None) -> None:
     """/ocean slash command router.
 
     Must ack() first (Slack 3-second timeout), then parse subcommand
-    and dispatch to the appropriate builder.
+    and dispatch to the appropriate builder. The `client` kwarg is
+    injected by Bolt and required for the `ticket` subcommand (modal).
     """
     await ack()
 
@@ -348,6 +448,16 @@ async def handle_ocean_command(ack, body, respond) -> None:
     arg = parts[1].strip() if len(parts) > 1 else ""
 
     log.info("ocean_command", subcommand=subcommand, arg=arg)
+
+    if subcommand == "ticket":
+        if client is None:
+            log.error("ticket_subcommand_requires_client")
+            return
+        await client.views_open(
+            trigger_id=body["trigger_id"],
+            view=build_ticket_modal(),
+        )
+        return
 
     if subcommand == "status":
         blocks = await build_status_response()
