@@ -1,8 +1,6 @@
 """Tests for ticket card Block Kit builders."""
 from __future__ import annotations
 
-import pytest
-
 from src.cards import (
     ticket_card,
     ticket_claimed_card,

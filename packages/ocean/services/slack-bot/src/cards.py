@@ -434,7 +434,10 @@ def ticket_card(
                 {"type": "mrkdwn", "text": f"*Category:*\n{category}"},
                 {"type": "mrkdwn", "text": f"*Priority:*\n{priority_emoji} {priority}"},
                 {"type": "mrkdwn", "text": f"*Patient:*\n`{patient_id or 'unknown'}`"},
-                {"type": "mrkdwn", "text": f"*Creator:*\n<@{creator_id}>" if creator_id else "*Creator:*\nunknown"},
+                {
+                    "type": "mrkdwn",
+                    "text": f"*Creator:*\n<@{creator_id}>" if creator_id else "*Creator:*\nunknown",
+                },
             ],
         },
         {"type": "divider"},

@@ -110,6 +110,118 @@ class ThreadManager:
         )
         log.info("thread_reply_posted", task_id=task_id, batch_size=len(updates))
 
+    # -----------------------------------------------------------------
+    # Ticket-specific methods (Phase 17) — use ticket_id column
+    # -----------------------------------------------------------------
+
+    async def store_ticket_parent(
+        self, ticket_id: str, channel: str, message_ts: str
+    ) -> None:
+        """INSERT parent message for a ticket into slack_messages."""
+        async with self._session_maker() as session:
+            await session.execute(
+                sa.text(
+                    "INSERT INTO slack_messages "
+                    "(task_id, ticket_id, channel, message_ts, thread_ts) "
+                    "VALUES ('', :ticket_id, :channel, :message_ts, :thread_ts)"
+                ),
+                {
+                    "ticket_id": ticket_id,
+                    "channel": channel,
+                    "message_ts": message_ts,
+                    "thread_ts": message_ts,
+                },
+            )
+            await session.commit()
+        log.info("ticket_parent_stored", ticket_id=ticket_id, channel=channel, ts=message_ts)
+
+    async def get_ticket_thread_ts(self, ticket_id: str) -> str | None:
+        """Look up thread_ts for a ticket_id from slack_messages."""
+        async with self._session_maker() as session:
+            result = await session.execute(
+                sa.text(
+                    "SELECT thread_ts FROM slack_messages WHERE ticket_id = :ticket_id"
+                ),
+                {"ticket_id": ticket_id},
+            )
+            row = result.fetchone()
+            return row.thread_ts if row else None
+
+    async def get_ticket_channel(self, ticket_id: str) -> str | None:
+        """Look up channel for a ticket_id from slack_messages."""
+        async with self._session_maker() as session:
+            result = await session.execute(
+                sa.text(
+                    "SELECT channel FROM slack_messages WHERE ticket_id = :ticket_id"
+                ),
+                {"ticket_id": ticket_id},
+            )
+            row = result.fetchone()
+            return row.channel if row else None
+
+    async def get_ticket_message_ts(self, ticket_id: str) -> str | None:
+        """Look up message_ts for a ticket_id from slack_messages."""
+        async with self._session_maker() as session:
+            result = await session.execute(
+                sa.text(
+                    "SELECT message_ts FROM slack_messages WHERE ticket_id = :ticket_id"
+                ),
+                {"ticket_id": ticket_id},
+            )
+            row = result.fetchone()
+            return row.message_ts if row else None
+
+    async def queue_ticket_update(self, ticket_id: str, update: dict) -> None:
+        """Append update to batch for ticket_id, start flush timer if needed."""
+        key = f"ticket:{ticket_id}"
+        if key not in self._batches:
+            self._batches[key] = []
+        self._batches[key].append(update)
+
+        if key not in self._timers or self._timers[key].done():
+            delay = random.uniform(3.0, 9.0)
+            self._timers[key] = asyncio.create_task(
+                self._flush_ticket_after(ticket_id, delay)
+            )
+
+    async def _flush_ticket_after(self, ticket_id: str, delay: float) -> None:
+        """Sleep then flush the batch for ticket_id."""
+        await asyncio.sleep(delay)
+        key = f"ticket:{ticket_id}"
+        updates = self._batches.pop(key, [])
+        if updates:
+            await self._post_ticket_thread_reply(ticket_id, updates)
+
+    async def _post_ticket_thread_reply(
+        self, ticket_id: str, updates: list[dict]
+    ) -> None:
+        """Post consolidated thread reply for batched ticket updates."""
+        from src.cards import lifecycle_update_blocks
+
+        thread_ts = await self.get_ticket_thread_ts(ticket_id)
+        if not thread_ts:
+            log.warning("ticket_parent_not_posted_yet", ticket_id=ticket_id)
+            await asyncio.sleep(2)
+            thread_ts = await self.get_ticket_thread_ts(ticket_id)
+            if not thread_ts:
+                log.error("ticket_parent_still_not_found_skipping", ticket_id=ticket_id)
+                return
+
+        channel = await self.get_ticket_channel(ticket_id)
+        if not channel:
+            log.warning("ticket_channel_not_found_skipping", ticket_id=ticket_id)
+            return
+
+        blocks = lifecycle_update_blocks(updates)
+        await self._slack.chat_postMessage(
+            channel=channel,
+            thread_ts=thread_ts,
+            blocks=blocks,
+            text="Ticket update",
+            reply_broadcast=False,
+        )
+        log.info("ticket_thread_reply_posted", ticket_id=ticket_id, batch_size=len(updates))
+
     async def update_parent_status(self, task_id: str, new_status: str) -> None:
         """Update the parent message header with a status prefix."""
         async with self._session_maker() as session:
