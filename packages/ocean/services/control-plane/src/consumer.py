@@ -35,6 +35,7 @@ CONSUMER_CONFIG: dict = {
 EVENT_HANDLERS: dict = {
     "alert.created": handle_alert_created,
     "connector.heartbeat": handle_connector_heartbeat,
+    "ticket.create.requested": handle_ticket_created,
     "ticket.created": handle_ticket_created,
     "ticket.updated": handle_ticket_updated,
 }

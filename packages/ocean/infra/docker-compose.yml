@@ -306,6 +306,26 @@ services:
       retries: 10
       start_period: 30s
 
+  linear-connector:
+    build:
+      context: ..
+      dockerfile: services/linear-connector/Dockerfile
+    environment:
+      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      LINEAR_WEBHOOK_SECRET: ${LINEAR_WEBHOOK_SECRET:-dev_secret}
+    ports:
+      - "8008:8000"
+    depends_on:
+      redpanda-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
   sim-driver:
     profiles: [sim]
     build:
