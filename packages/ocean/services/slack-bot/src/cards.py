@@ -343,6 +343,199 @@ def lifecycle_update_blocks(updates: list[dict]) -> list[dict]:
     return blocks
 
 
+# ---------------------------------------------------------------------------
+# Ticket card builders (Phase 17)
+# ---------------------------------------------------------------------------
+
+STATUS_EMOJIS: dict[str, str] = {
+    "open": ":large_green_circle:",
+    "in_progress": ":large_yellow_circle:",
+    "waiting": ":large_orange_circle:",
+    "resolved": ":white_check_mark:",
+}
+
+PRIORITY_EMOJIS: dict[str, str] = {
+    "critical": ":red_circle:",
+    "high": ":large_orange_circle:",
+    "medium": ":large_yellow_circle:",
+    "low": ":white_circle:",
+}
+
+# Buttons per ticket status
+_TICKET_BUTTONS: dict[str, list[tuple[str, str, str | None]]] = {
+    # (action_id, label, style)
+    "open": [
+        ("ticket_claim", "Claim", "primary"),
+        ("ticket_resolve", "Resolve", "danger"),
+        ("ticket_wait", "Wait", None),
+    ],
+    "in_progress": [
+        ("ticket_resolve", "Resolve", "danger"),
+        ("ticket_wait", "Wait", None),
+    ],
+    "waiting": [
+        ("ticket_resume", "Resume", "primary"),
+        ("ticket_resolve", "Resolve", "danger"),
+    ],
+}
+
+
+def _ticket_action_buttons(ticket_id: str, status: str) -> list[dict]:
+    """Build action button elements for a given ticket status."""
+    buttons = _TICKET_BUTTONS.get(status, [])
+    elements = []
+    for action_id, label, style in buttons:
+        btn: dict = {
+            "type": "button",
+            "action_id": action_id,
+            "text": {"type": "plain_text", "text": label, "emoji": False},
+            "value": ticket_id,
+        }
+        if style:
+            btn["style"] = style
+        elements.append(btn)
+    return elements
+
+
+def ticket_card(
+    ticket_id: str,
+    human_id: str,
+    category: str,
+    priority: str,
+    status: str,
+    description: str,
+    ai_summary: str,
+    patient_id: str | None = None,
+    creator_id: str | None = None,
+) -> list[dict]:
+    """Build a ticket card with status-dependent action buttons.
+
+    Block layout:
+      0: header  — status_emoji + human_id + STATUS
+      1: section — 4 mrkdwn fields (category, priority, patient, creator)
+      2: divider
+      3: section — description
+      4: section — AI summary ("AI: ...")
+      5: divider
+      6: actions — buttons based on status (omitted for resolved)
+    """
+    status_emoji = STATUS_EMOJIS.get(status, "")
+    priority_emoji = PRIORITY_EMOJIS.get(priority, "")
+    header_text = f"{status_emoji} {human_id} [{status.upper()}]"
+
+    blocks: list[dict] = [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": header_text, "emoji": True},
+        },
+        {
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": f"*Category:*\n{category}"},
+                {"type": "mrkdwn", "text": f"*Priority:*\n{priority_emoji} {priority}"},
+                {"type": "mrkdwn", "text": f"*Patient:*\n`{patient_id or 'unknown'}`"},
+                {"type": "mrkdwn", "text": f"*Creator:*\n<@{creator_id}>" if creator_id else "*Creator:*\nunknown"},
+            ],
+        },
+        {"type": "divider"},
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": description},
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"*AI:* {ai_summary}"},
+        },
+        {"type": "divider"},
+    ]
+
+    elements = _ticket_action_buttons(ticket_id, status)
+    if elements:
+        blocks.append(
+            {
+                "type": "actions",
+                "block_id": f"ticket_actions_{ticket_id}",
+                "elements": elements,
+            }
+        )
+
+    return blocks
+
+
+def ticket_claimed_card(ticket_id: str, human_id: str, actor_id: str) -> list[dict]:
+    """Card shown after a ticket is claimed — IN PROGRESS state."""
+    return [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": f":large_yellow_circle: {human_id} [IN PROGRESS]",
+                "emoji": True,
+            },
+        },
+        {
+            "type": "context",
+            "elements": [
+                {"type": "mrkdwn", "text": f"Claimed by <@{actor_id}>"},
+            ],
+        },
+        {
+            "type": "actions",
+            "block_id": f"ticket_actions_{ticket_id}",
+            "elements": _ticket_action_buttons(ticket_id, "in_progress"),
+        },
+    ]
+
+
+def ticket_waiting_card(
+    ticket_id: str, human_id: str, waiting_reason: str
+) -> list[dict]:
+    """Card shown when a ticket enters waiting state."""
+    return [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": f":large_orange_circle: {human_id} [WAITING]",
+                "emoji": True,
+            },
+        },
+        {
+            "type": "context",
+            "elements": [
+                {"type": "mrkdwn", "text": f"Reason: {waiting_reason}"},
+            ],
+        },
+        {
+            "type": "actions",
+            "block_id": f"ticket_actions_{ticket_id}",
+            "elements": _ticket_action_buttons(ticket_id, "waiting"),
+        },
+    ]
+
+
+def ticket_resolved_card(
+    ticket_id: str, human_id: str, actor_id: str, duration_str: str
+) -> list[dict]:
+    """Card shown when a ticket is resolved — no action buttons."""
+    return [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": f":white_check_mark: {human_id} [RESOLVED]",
+                "emoji": True,
+            },
+        },
+        {
+            "type": "context",
+            "elements": [
+                {"type": "mrkdwn", "text": f"Resolved by <@{actor_id}> ({duration_str})"},
+            ],
+        },
+    ]
+
+
 def scenario_started_card(
     scenario_name: str,
     patients: list[str],
