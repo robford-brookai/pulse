@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from src.heartbeat import publish_heartbeat
 from src.producer import RedpandaPublisher
 from src.receiver import router
+from src.sqs_consumer import sqs_consumer_loop
 
 log = structlog.get_logger()
 
@@ -38,9 +39,24 @@ async def lifespan(app: FastAPI):
         publish_heartbeat(publisher, "impilo-connector", "Impilo RPM")
     )
 
+    sqs_queue_url = os.environ.get("SQS_QUEUE_URL")
+    sqs_task = None
+    if sqs_queue_url:
+        sqs_task = asyncio.create_task(sqs_consumer_loop(publisher, sqs_queue_url))
+        log.info("sqs_consumer_started", queue_url=sqs_queue_url)
+    else:
+        log.info("sqs_consumer_disabled")
+
     yield
 
-    # Shutdown — cancel heartbeat before closing publisher
+    # Shutdown — cancel background tasks before closing publisher
+    if sqs_task is not None:
+        sqs_task.cancel()
+        try:
+            await sqs_task
+        except asyncio.CancelledError:
+            pass
+
     heartbeat_task.cancel()
     try:
         await heartbeat_task
