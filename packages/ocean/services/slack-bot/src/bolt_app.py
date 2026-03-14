@@ -746,3 +746,186 @@ async def handle_create_ocean_ticket_shortcut(ack, body, client) -> None:
 # Register message shortcut and action
 bolt_app.shortcut("create_ocean_ticket")(handle_create_ocean_ticket_shortcut)
 bolt_app.action("create_ocean_ticket")(handle_create_ocean_ticket_shortcut)
+
+
+# ---------------------------------------------------------------------------
+# RMA action handlers (Phase 19)
+# ---------------------------------------------------------------------------
+
+
+async def _lookup_rma_context(ticket_id: str) -> dict:
+    """Look up patient, device, and order info for RMA modal from graph DB."""
+    result = {"ticket_id": ticket_id, "patient_id": "", "device_id": "", "order_id": ""}
+    if _session_maker is None:
+        return result
+
+    async with _session_maker() as session:
+        # Get patient_id from ticket
+        ticket_result = await session.execute(
+            sa.text("SELECT patient_id FROM tickets WHERE ticket_id = :ticket_id"),
+            {"ticket_id": ticket_id},
+        )
+        row = ticket_result.fetchone()
+        if row is None:
+            return result
+        patient_id = row.patient_id
+        result["patient_id"] = patient_id
+
+        # Get order_id from fulfillments
+        ful_result = await session.execute(
+            sa.text(
+                "SELECT order_id FROM fulfillments "
+                "WHERE patient_id = :patient_id "
+                "ORDER BY created_at DESC LIMIT 1"
+            ),
+            {"patient_id": patient_id},
+        )
+        result["order_id"] = ful_result.scalar_one_or_none() or ""
+
+        # Get device_id from device_associations
+        dev_result = await session.execute(
+            sa.text(
+                "SELECT device_id FROM device_associations "
+                "WHERE patient_id = :patient_id AND status = 'active' LIMIT 1"
+            ),
+            {"patient_id": patient_id},
+        )
+        result["device_id"] = dev_result.scalar_one_or_none() or ""
+
+    return result
+
+
+def _build_rma_modal(metadata: dict) -> dict:
+    """Build the RMA creation modal view."""
+    return {
+        "type": "modal",
+        "callback_id": "rma_create_modal",
+        "private_metadata": json.dumps(metadata),
+        "title": {"type": "plain_text", "text": "Create RMA"},
+        "submit": {"type": "plain_text", "text": "Submit"},
+        "blocks": [
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": (
+                            f"*Patient:* `{metadata.get('patient_id', '')}`  |  "
+                            f"*Device:* `{metadata.get('device_id', '')}`  |  "
+                            f"*Order:* `{metadata.get('order_id', '')}`"
+                        ),
+                    },
+                ],
+            },
+            {
+                "type": "input",
+                "block_id": "reason_block",
+                "element": {
+                    "type": "static_select",
+                    "action_id": "reason_select",
+                    "placeholder": {"type": "plain_text", "text": "Select reason"},
+                    "options": [
+                        {
+                            "text": {"type": "plain_text", "text": "Defective"},
+                            "value": "defective",
+                        },
+                        {
+                            "text": {"type": "plain_text", "text": "Wrong Device"},
+                            "value": "wrong_device",
+                        },
+                        {
+                            "text": {"type": "plain_text", "text": "Patient Request"},
+                            "value": "patient_request",
+                        },
+                        {
+                            "text": {"type": "plain_text", "text": "Other"},
+                            "value": "other",
+                        },
+                    ],
+                },
+                "label": {"type": "plain_text", "text": "Return Reason"},
+            },
+        ],
+    }
+
+
+@bolt_app.action("ticket_create_rma")
+async def handle_ticket_create_rma(ack, body, client) -> None:
+    """Handle Create RMA button — open modal with pre-populated patient/device/order data."""
+    await ack()
+
+    ticket_id: str = body["actions"][0]["value"]
+    trigger_id: str = body["trigger_id"]
+
+    log.info("ticket_create_rma_received", ticket_id=ticket_id)
+
+    metadata = await _lookup_rma_context(ticket_id)
+    modal = _build_rma_modal(metadata)
+
+    await client.views_open(trigger_id=trigger_id, view=modal)
+
+
+@bolt_app.view("rma_create_modal")
+async def handle_rma_create_modal(ack, body, client) -> None:
+    """Handle RMA modal submission — publish ticket.rma.requested event."""
+    await ack()
+
+    view = body["view"]
+    user_id = body["user"]["id"]
+    values = view["state"]["values"]
+    reason = values["reason_block"]["reason_select"]["selected_option"]["value"]
+
+    try:
+        metadata = json.loads(view.get("private_metadata") or "{}")
+    except (json.JSONDecodeError, TypeError):
+        metadata = {}
+
+    ticket_id = metadata.get("ticket_id", "")
+    patient_id = metadata.get("patient_id", "")
+    device_id = metadata.get("device_id", "")
+    order_id = metadata.get("order_id", "")
+
+    log.info("rma_modal_submitted", ticket_id=ticket_id, reason=reason)
+
+    if _publisher is not None:
+        now = datetime.now(UTC)
+        event = {
+            "event_id": str(uuid4()),
+            "event_type": "ticket.rma.requested",
+            "schema_version": "1.0.0",
+            "timestamp": now.isoformat(),
+            "source_system": "slack-bot",
+            "entity_id": ticket_id,
+            "entity_type": "ticket",
+            "correlation_id": str(uuid4()),
+            "payload": {
+                "ticket_id": ticket_id,
+                "patient_id": patient_id,
+                "device_id": device_id,
+                "order_id": order_id,
+                "reason": reason,
+            },
+        }
+        await _publisher.publish("ocean.tickets", event)
+
+    await client.chat_postEphemeral(
+        channel=OPS_CHANNEL,
+        user=user_id,
+        text=f"RMA request submitted for {ticket_id}",
+    )
+
+
+@bolt_app.action("ticket_retry_rma")
+async def handle_ticket_retry_rma(ack, body, client) -> None:
+    """Handle Retry RMA button — re-open RMA modal with same context."""
+    await ack()
+
+    ticket_id: str = body["actions"][0]["value"]
+    trigger_id: str = body["trigger_id"]
+
+    log.info("ticket_retry_rma_received", ticket_id=ticket_id)
+
+    metadata = await _lookup_rma_context(ticket_id)
+    modal = _build_rma_modal(metadata)
+
+    await client.views_open(trigger_id=trigger_id, view=modal)

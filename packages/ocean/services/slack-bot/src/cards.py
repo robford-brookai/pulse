@@ -380,8 +380,14 @@ _TICKET_BUTTONS: dict[str, list[tuple[str, str, str | None]]] = {
 }
 
 
-def _ticket_action_buttons(ticket_id: str, status: str) -> list[dict]:
-    """Build action button elements for a given ticket status."""
+def _ticket_action_buttons(
+    ticket_id: str, status: str, category: str | None = None
+) -> list[dict]:
+    """Build action button elements for a given ticket status.
+
+    When status is in_progress and category is device_issue, appends a
+    "Create RMA" button for Impilo return initiation.
+    """
     buttons = _TICKET_BUTTONS.get(status, [])
     elements = []
     for action_id, label, style in buttons:
@@ -394,6 +400,18 @@ def _ticket_action_buttons(ticket_id: str, status: str) -> list[dict]:
         if style:
             btn["style"] = style
         elements.append(btn)
+
+    if status == "in_progress" and category == "device_issue":
+        elements.append(
+            {
+                "type": "button",
+                "action_id": "ticket_create_rma",
+                "text": {"type": "plain_text", "text": "Create RMA", "emoji": False},
+                "style": "primary",
+                "value": ticket_id,
+            }
+        )
+
     return elements
 
 
@@ -407,12 +425,14 @@ def ticket_card(
     ai_summary: str,
     patient_id: str | None = None,
     creator_id: str | None = None,
+    rma_status: str | None = None,
+    rma_return_id: str | None = None,
 ) -> list[dict]:
     """Build a ticket card with status-dependent action buttons.
 
     Block layout:
-      0: header  — status_emoji + human_id + STATUS
-      1: section — 4 mrkdwn fields (category, priority, patient, creator)
+      0: header  — status_emoji + human_id + STATUS (with [RMA] badge if rma_return_id)
+      1: section — 4-5 mrkdwn fields (category, priority, patient, creator, +RMA status)
       2: divider
       3: section — description
       4: section — AI summary ("AI: ...")
@@ -422,6 +442,20 @@ def ticket_card(
     status_emoji = STATUS_EMOJIS.get(status, "")
     priority_emoji = PRIORITY_EMOJIS.get(priority, "")
     header_text = f"{status_emoji} {human_id} [{status.upper()}]"
+    if rma_return_id:
+        header_text = f"[RMA] {header_text}"
+
+    fields = [
+        {"type": "mrkdwn", "text": f"*Category:*\n{category}"},
+        {"type": "mrkdwn", "text": f"*Priority:*\n{priority_emoji} {priority}"},
+        {"type": "mrkdwn", "text": f"*Patient:*\n`{patient_id or 'unknown'}`"},
+        {
+            "type": "mrkdwn",
+            "text": f"*Creator:*\n<@{creator_id}>" if creator_id else "*Creator:*\nunknown",
+        },
+    ]
+    if rma_status:
+        fields.append({"type": "mrkdwn", "text": f"*RMA:*\n{rma_status}"})
 
     blocks: list[dict] = [
         {
@@ -430,15 +464,7 @@ def ticket_card(
         },
         {
             "type": "section",
-            "fields": [
-                {"type": "mrkdwn", "text": f"*Category:*\n{category}"},
-                {"type": "mrkdwn", "text": f"*Priority:*\n{priority_emoji} {priority}"},
-                {"type": "mrkdwn", "text": f"*Patient:*\n`{patient_id or 'unknown'}`"},
-                {
-                    "type": "mrkdwn",
-                    "text": f"*Creator:*\n<@{creator_id}>" if creator_id else "*Creator:*\nunknown",
-                },
-            ],
+            "fields": fields,
         },
         {"type": "divider"},
         {
@@ -452,7 +478,7 @@ def ticket_card(
         {"type": "divider"},
     ]
 
-    elements = _ticket_action_buttons(ticket_id, status)
+    elements = _ticket_action_buttons(ticket_id, status, category=category)
     if elements:
         blocks.append(
             {
@@ -465,14 +491,22 @@ def ticket_card(
     return blocks
 
 
-def ticket_claimed_card(ticket_id: str, human_id: str, actor_id: str) -> list[dict]:
+def ticket_claimed_card(
+    ticket_id: str,
+    human_id: str,
+    actor_id: str,
+    rma_return_id: str | None = None,
+) -> list[dict]:
     """Card shown after a ticket is claimed — IN PROGRESS state."""
+    header_text = f":large_yellow_circle: {human_id} [IN PROGRESS]"
+    if rma_return_id:
+        header_text = f"[RMA] {header_text}"
     return [
         {
             "type": "header",
             "text": {
                 "type": "plain_text",
-                "text": f":large_yellow_circle: {human_id} [IN PROGRESS]",
+                "text": header_text,
                 "emoji": True,
             },
         },

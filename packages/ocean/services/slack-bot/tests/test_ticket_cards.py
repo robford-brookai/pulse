@@ -117,13 +117,14 @@ class TestTicketCardInProgress:
         header_text = blocks[0]["text"]["text"]
         assert ":large_yellow_circle:" in header_text
 
-    def test_in_progress_has_2_buttons(self):
+    def test_in_progress_has_3_buttons_for_device_issue(self):
         blocks = ticket_card(
             TICKET_ID, HUMAN_ID, CATEGORY, PRIORITY, "in_progress",
             DESCRIPTION, AI_SUMMARY,
         )
         actions = [b for b in blocks if b["type"] == "actions"][0]
-        assert len(actions["elements"]) == 2
+        # 2 base buttons + Create RMA for device_issue
+        assert len(actions["elements"]) == 3
 
     def test_in_progress_action_ids(self):
         blocks = ticket_card(
@@ -134,6 +135,7 @@ class TestTicketCardInProgress:
         action_ids = [el["action_id"] for el in actions["elements"]]
         assert "ticket_resolve" in action_ids
         assert "ticket_wait" in action_ids
+        assert "ticket_create_rma" in action_ids
 
 
 class TestTicketClaimedCard:
