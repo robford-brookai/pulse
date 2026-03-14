@@ -15,10 +15,11 @@ from confluent_kafka.aio import AIOConsumer as Consumer
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.handlers.alerts import handle_alert_created
+from src.handlers.deliveries import handle_delivery_notification
 from src.handlers.heartbeats import handle_connector_heartbeat
 from src.handlers.tickets import (
-    handle_rma_requested,
     handle_return_status_update,
+    handle_rma_requested,
     handle_ticket_created,
     handle_ticket_updated,
 )
@@ -46,6 +47,7 @@ EVENT_HANDLERS: dict = {
     "ticket.updated": handle_ticket_updated,
     "ticket.rma.requested": handle_rma_requested,
     "return.updated": handle_return_status_update,
+    "fulfillment.updated": handle_delivery_notification,
 }
 
 
