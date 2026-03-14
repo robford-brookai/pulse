@@ -8,6 +8,7 @@ dependencies = [
     "sqlalchemy==2.0.48",
     "asyncpg==0.31.0",
     "confluent-kafka==2.13.2",
+    "httpx>=0.28",
     "structlog==25.5.0",
     "ocean-events",
 ]

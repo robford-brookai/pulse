@@ -210,6 +210,8 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ocean:changeme@postgres:5432/ocean}
       REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      IMPILO_API_URL: ${IMPILO_API_URL:-}
+      IMPILO_API_KEY: ${IMPILO_API_KEY:-}
     ports:
       - "8004:8000"
     depends_on:
