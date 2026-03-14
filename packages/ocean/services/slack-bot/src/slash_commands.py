@@ -158,12 +158,27 @@ async def build_status_response() -> list[dict]:
     return blocks
 
 
+_TIMELINE_EMOJI: dict[str, str] = {
+    "alert": ":rotating_light:",
+    "task": ":clipboard:",
+    "ticket": ":ticket:",
+    "fulfillment": ":package:",
+    "return": ":leftwards_arrow_with_hook:",
+    "device": ":electric_plug:",
+    "interaction": ":telephone_receiver:",
+    "signal": ":chart_with_upwards_trend:",
+}
+
+_TIMELINE_MAX_ENTRIES = 30
+
+
 async def build_patient_response(patient_id: str) -> list[dict]:
     """Build Block Kit blocks for /ocean patient <id>.
 
-    Queries Hasura for patient signals, alerts, tasks, and interactions.
-    Returns summary card + chronological timeline. No PHI -- uses patient
-    hash and categorical fields only.
+    Queries the patient_timeline view for a consolidated timeline across
+    alerts, tasks, tickets, fulfillments, returns, devices, interactions,
+    and signals. Returns summary card + chronological timeline.
+    No PHI -- uses patient hash and categorical fields only.
     """
     blocks: list[dict] = [
         {
@@ -174,26 +189,21 @@ async def build_patient_response(patient_id: str) -> list[dict]:
 
     try:
         result = await _hasura_query(
-            """query GetPatient($pid: String!) {
+            """query GetPatientTimeline($pid: String!) {
                 patients(where: {patient_id: {_eq: $pid}}) {
-                    patient_id status
-                    signals(order_by: {created_at: desc}, limit: 10) {
-                        type value created_at
-                    }
-                    alerts(where: {status: {_eq: "open"}}, order_by: {created_at: desc}) {
-                        id severity status created_at
-                    }
-                    tasks(order_by: {created_at: desc}, limit: 10) {
-                        id status priority type
-                    }
-                    interactions(order_by: {created_at: desc}, limit: 1) {
-                        id type outcome created_at
-                    }
+                    patient_id enrollment_status
+                }
+                patient_timeline(
+                    where: {patient_id: {_eq: $pid}}
+                    order_by: {created_at: desc}
+                ) {
+                    event_type event_id status summary created_at
                 }
             }""",
             {"pid": patient_id},
         )
         patients = result.get("data", {}).get("patients", [])
+        timeline = result.get("data", {}).get("patient_timeline", [])
 
         if not patients:
             blocks.append({
@@ -204,60 +214,91 @@ async def build_patient_response(patient_id: str) -> list[dict]:
 
         patient = patients[0]
 
-        # Summary section
-        open_alerts = patient.get("alerts", [])
-        active_tasks = [
-            t for t in patient.get("tasks", [])
-            if t.get("status") in ("open", "claimed")
+        # Compute summary counts from timeline rows
+        open_alerts = sum(
+            1 for e in timeline
+            if e.get("event_type") == "alert" and e.get("status") == "open"
+        )
+        active_tasks = sum(
+            1 for e in timeline
+            if e.get("event_type") == "task"
+            and e.get("status") in ("open", "claimed")
+        )
+        open_tickets = sum(
+            1 for e in timeline
+            if e.get("event_type") == "ticket"
+            and e.get("status") in ("open", "in_progress", "waiting")
+        )
+        active_devices = sum(
+            1 for e in timeline
+            if e.get("event_type") == "device"
+            and e.get("status") == "associated"
+        )
+        pending_fulfillments = sum(
+            1 for e in timeline
+            if e.get("event_type") == "fulfillment"
+            and e.get("status") not in ("delivered", "cancelled")
+        )
+
+        # Last RMA
+        rma_entries = [
+            e for e in timeline if e.get("event_type") == "return"
         ]
-        last_interaction = patient.get("interactions", [])
+        last_rma = rma_entries[0].get("summary", "None") if rma_entries else "None"
+
+        # Last interaction
+        interaction_entries = [
+            e for e in timeline if e.get("event_type") == "interaction"
+        ]
+        last_interaction_text = ""
+        if interaction_entries:
+            li = interaction_entries[0]
+            last_interaction_text = (
+                f"*Last Interaction:* {li.get('summary', 'n/a')}"
+                f" at {li.get('created_at', '')}"
+            )
 
         summary_lines = [
-            f"*Status:* {patient.get('status', 'unknown')}",
-            f"*Open Alerts:* {len(open_alerts)}",
-            f"*Active Tasks:* {len(active_tasks)}",
+            f"*Status:* {patient.get('enrollment_status', 'unknown')}",
+            f"*Open Alerts:* {open_alerts}",
+            f"*Active Tasks:* {active_tasks}",
+            f"*Open Tickets:* {open_tickets}",
+            f"*Active Devices:* {active_devices}",
+            f"*Pending Fulfillments:* {pending_fulfillments}",
+            f"*Last RMA:* {last_rma}",
         ]
-        if last_interaction:
-            li = last_interaction[0]
-            li_type = li.get("type", "unknown")
-            li_outcome = li.get("outcome", "n/a")
-            li_time = li.get("created_at", "")
-            summary_lines.append(
-                f"*Last Interaction:* {li_type}"
-                f" ({li_outcome}) at {li_time}"
-            )
+        if last_interaction_text:
+            summary_lines.append(last_interaction_text)
 
         blocks.append({
             "type": "section",
             "text": {"type": "mrkdwn", "text": "\n".join(summary_lines)},
         })
 
-        # Timeline -- merge signals, alerts, tasks by timestamp
-        timeline_items = []
-        for sig in patient.get("signals", []):
-            ts = sig.get("created_at", "")
-            desc = f"Signal: {sig.get('type')} = {sig.get('value')}"
-            timeline_items.append((ts, desc))
-        for alert in open_alerts:
-            ts = alert.get("created_at", "")
-            sev = alert.get("severity")
-            desc = f"Alert: {sev} ({alert.get('status')})"
-            timeline_items.append((ts, desc))
-        for task in patient.get("tasks", []):
-            tid = task.get("id", "")
-            desc = f"Task: {task.get('type')} [{task.get('status')}]"
-            timeline_items.append((tid, desc))
+        # Timeline section with emoji prefixes
+        total_events = len(timeline)
+        display_entries = timeline[:_TIMELINE_MAX_ENTRIES]
 
-        timeline_items.sort(key=lambda x: x[0], reverse=True)
+        if display_entries:
+            timeline_lines = []
+            if total_events > _TIMELINE_MAX_ENTRIES:
+                timeline_lines.append(
+                    f"_Showing {_TIMELINE_MAX_ENTRIES} of {total_events}"
+                    " events. Use GraphQL for full history._"
+                )
+            for entry in display_entries:
+                etype = entry.get("event_type", "")
+                emoji = _TIMELINE_EMOJI.get(etype, ":grey_question:")
+                ts = entry.get("created_at", "")
+                summary = entry.get("summary", "")
+                timeline_lines.append(f"  {emoji} {ts}: {summary}")
 
-        if timeline_items:
-            timeline_text = "\n".join(
-                f"  {ts}: {desc}"
-                for ts, desc in timeline_items[:10]
-            )
             blocks.append({
                 "type": "section",
-                "text": {"type": "mrkdwn", "text": f"*Timeline*\n{timeline_text}"},
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*Timeline*\n" + "\n".join(timeline_lines),
+                },
             })
 
     except Exception as exc:
@@ -418,7 +459,7 @@ def build_help_response() -> list[dict]:
                     "*Available commands:*\n"
                     "  `/ocean status` -- Service health, task counts,"
                     " last sim, active alerts\n"
-                    "  `/ocean patient <id>` -- Patient summary card with timeline\n"
+                    "  `/ocean patient <id>` -- Patient summary card with consolidated timeline\n"
                     "  `/ocean sim <scenario>` -- Trigger a simulation run\n"
                     "  `/ocean ticket` -- Create a new ticket (opens modal)\n"
                     "  `/ocean help` -- Show this help message"
