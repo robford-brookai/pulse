@@ -4,12 +4,11 @@ from __future__ import annotations
 import json
 import os
 import sys
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -200,7 +199,8 @@ class TestHandleReturnUpdated:
         assert params["status"] == "initiated"
         assert params["reason"] == "defective"
         # raw_payload should be serialized JSONB
-        assert json.loads(params["raw_payload"]) == {"original": "impilo_data", "return_id": "RET-001"}
+        expected_raw = {"original": "impilo_data", "return_id": "RET-001"}
+        assert json.loads(params["raw_payload"]) == expected_raw
 
     @pytest.mark.asyncio
     async def test_sql_has_updated_at_guard(self, mock_session):
@@ -260,6 +260,11 @@ class TestHandleDeviceDisassociated:
     async def test_updates_device_to_removed(self, mock_session):
         """handle_device_disassociated sets status='removed' and removed_at."""
         from src.handlers.logistics import handle_device_disassociated
+
+        # Simulate UPDATE returning 1 row affected
+        result_mock = MagicMock()
+        result_mock.rowcount = 1
+        mock_session.execute = AsyncMock(return_value=result_mock)
 
         event = _make_device_disassociated_event()
         await handle_device_disassociated(event, mock_session)
