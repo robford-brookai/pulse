@@ -24,6 +24,7 @@ from src.ai_events import publish_ai_event
 from src.ai_summary import generate_summary_with_context
 from src.cards import (
     alert_card,
+    delivery_card,
     outreach_draft_card,
     scenario_completed_card,
     scenario_started_card,
@@ -720,6 +721,63 @@ async def handle_rma_status(
     log.info("rma_status_handled", ticket_id=ticket_id, status=status)
 
 
+# ---------------------------------------------------------------------------
+# Delivery event handlers (Phase 19)
+# ---------------------------------------------------------------------------
+
+
+async def handle_delivery_notify(
+    event_data: dict,
+    *,
+    slack_client,
+    session_maker,
+    hasura_url: str,
+    publisher=None,
+    thread_manager=None,
+) -> None:
+    """Handle delivery.notify: post delivery card to channel, store for claim tracking."""
+    payload = event_data.get("payload", {})
+    order_id = payload.get("order_id", "")
+    patient_id = payload.get("patient_id", "")
+    device_type = payload.get("device_type", "Unknown device")
+    days_since_consent = payload.get("days_since_consent", 0)
+    shipping_option = payload.get("shipping_option", "")
+    tracking_numbers = payload.get("tracking_numbers", [])
+    active_alerts_count = payload.get("active_alerts_count", 0)
+    device_history_count = payload.get("device_history_count", 0)
+    channel = payload.get("channel", "#ocean-activation")
+
+    blocks = delivery_card(
+        order_id=order_id,
+        patient_id=patient_id,
+        device_type=device_type,
+        days_since_consent=days_since_consent,
+        shipping_option=shipping_option,
+        tracking_numbers=tracking_numbers,
+        active_alerts_count=active_alerts_count,
+        device_history_count=device_history_count,
+    )
+
+    response = await slack_client.chat_postMessage(
+        channel=channel,
+        blocks=blocks,
+        text=f"Device Delivered - {device_type} for patient {patient_id}",
+    )
+
+    message_ts = (
+        response.get("ts", "") if isinstance(response, dict) else getattr(response, "ts", "")
+    )
+    if thread_manager and message_ts:
+        await thread_manager.store_parent_message(f"delivery:{order_id}", channel, message_ts)
+
+    log.info(
+        "delivery_card_posted",
+        order_id=order_id,
+        channel=channel,
+        device_type=device_type,
+    )
+
+
 EVENT_HANDLERS: dict = {
     "task.created": handle_task_created,
     "task.claimed": handle_task_claimed,
@@ -738,6 +796,7 @@ EVENT_HANDLERS: dict = {
     "ticket.rma.created": handle_rma_created,
     "ticket.rma.failed": handle_rma_failed,
     "ticket.rma.status": handle_rma_status,
+    "delivery.notify": handle_delivery_notify,
 }
 
 

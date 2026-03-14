@@ -573,6 +573,139 @@ def ticket_resolved_card(
     ]
 
 
+# ---------------------------------------------------------------------------
+# Delivery card builders (Phase 19)
+# ---------------------------------------------------------------------------
+
+
+def delivery_card(
+    order_id: str,
+    patient_id: str,
+    device_type: str,
+    days_since_consent: int,
+    shipping_option: str,
+    tracking_numbers: list[str],
+    active_alerts_count: int,
+    device_history_count: int,
+) -> list[dict]:
+    """Build a delivery notification card for proactive intake handoff.
+
+    Block layout (mirrors alert_card pattern):
+      0: header   - "Device Delivered - {device_type}"
+      1: section  - 4 mrkdwn fields (patient, days, shipping, device history)
+      2: divider
+      3: section  - active alerts count
+      4: divider
+      5: actions  - Claim (primary), Resolve
+    """
+    shipping_text = f"*Shipping:*\n{shipping_option}"
+    if tracking_numbers:
+        shipping_text += f" ({', '.join(tracking_numbers)})"
+
+    history_label = "Replacement" if device_history_count > 1 else "First device"
+
+    return [
+        # Block 0: header
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": f"Device Delivered - {device_type}",
+                "emoji": True,
+            },
+        },
+        # Block 1: detail fields
+        {
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": f"*Patient:*\n`{patient_id}`"},
+                {"type": "mrkdwn", "text": f"*Days Since Consent:*\n{days_since_consent} days"},
+                {"type": "mrkdwn", "text": shipping_text},
+                {
+                    "type": "mrkdwn",
+                    "text": f"*Device History:*\n{history_label} ({device_history_count} total)",
+                },
+            ],
+        },
+        # Block 2: divider
+        {"type": "divider"},
+        # Block 3: active alerts
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*Active Alerts:* {active_alerts_count}",
+            },
+        },
+        # Block 4: divider
+        {"type": "divider"},
+        # Block 5: actions
+        {
+            "type": "actions",
+            "block_id": f"delivery_actions_{order_id}",
+            "elements": [
+                {
+                    "type": "button",
+                    "action_id": "delivery_claim",
+                    "text": {"type": "plain_text", "text": "Claim", "emoji": False},
+                    "style": "primary",
+                    "value": order_id,
+                },
+                {
+                    "type": "button",
+                    "action_id": "delivery_resolve",
+                    "text": {"type": "plain_text", "text": "Resolve", "emoji": False},
+                    "value": order_id,
+                },
+            ],
+        },
+    ]
+
+
+def delivery_claimed_card(
+    order_id: str, patient_id: str, device_type: str, actor_id: str
+) -> list[dict]:
+    """Card shown after a delivery handoff is claimed."""
+    return [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": f"[CLAIMED] Device Delivered - {device_type}",
+                "emoji": True,
+            },
+        },
+        {
+            "type": "context",
+            "elements": [
+                {"type": "mrkdwn", "text": f"Claimed by <@{actor_id}> | Patient: `{patient_id}`"},
+            ],
+        },
+    ]
+
+
+def delivery_resolved_card(
+    order_id: str, patient_id: str, device_type: str, actor_id: str
+) -> list[dict]:
+    """Card shown after a delivery handoff is resolved."""
+    return [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": f"[COMPLETE] Device Delivered - {device_type}",
+                "emoji": True,
+            },
+        },
+        {
+            "type": "context",
+            "elements": [
+                {"type": "mrkdwn", "text": f"Handoff complete | Patient: `{patient_id}`"},
+            ],
+        },
+    ]
+
+
 def scenario_started_card(
     scenario_name: str,
     patients: list[str],

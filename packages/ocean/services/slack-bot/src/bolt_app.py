@@ -16,6 +16,8 @@ from src.ai_events import publish_ai_event
 from src.cards import (
     approval_confirmed_card,
     claimed_card,
+    delivery_claimed_card,
+    delivery_resolved_card,
     human_gate_confirmed_card,
     human_gate_overridden_card,
     rejection_confirmed_card,
@@ -929,3 +931,96 @@ async def handle_ticket_retry_rma(ack, body, client) -> None:
     modal = _build_rma_modal(metadata)
 
     await client.views_open(trigger_id=trigger_id, view=modal)
+
+
+# ---------------------------------------------------------------------------
+# Delivery action handlers (Phase 19 Plan 02)
+# ---------------------------------------------------------------------------
+
+
+@bolt_app.action("delivery_claim")
+async def handle_delivery_claim(ack, body, client) -> None:
+    """Handle delivery_claim button — update card, post thread reply, publish event."""
+    await ack()
+
+    order_id: str = body["actions"][0]["value"]
+    actor_id: str = body["user"]["id"]
+    channel_id: str = body["container"]["channel_id"]
+    message_ts: str = body["container"]["message_ts"]
+
+    log.info("delivery_claim_received", order_id=order_id, actor_id=actor_id)
+
+    await client.chat_update(
+        channel=channel_id,
+        ts=message_ts,
+        blocks=delivery_claimed_card(order_id, order_id, "Device", actor_id),
+        text=f"Delivery claimed by {actor_id}",
+    )
+
+    await client.chat_postMessage(
+        channel=channel_id,
+        thread_ts=message_ts,
+        text=f"Claimed by <@{actor_id}> -- ready for patient onboarding call",
+        reply_broadcast=False,
+    )
+
+    if _publisher is not None:
+        await _publisher.publish(
+            "ocean.tickets",
+            {
+                "event_type": "delivery.claimed",
+                "entity_id": order_id,
+                "entity_type": "fulfillment",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "payload": {
+                    "order_id": order_id,
+                    "actor_id": actor_id,
+                },
+            },
+        )
+
+    log.info("delivery_claimed", order_id=order_id, actor_id=actor_id)
+
+
+@bolt_app.action("delivery_resolve")
+async def handle_delivery_resolve(ack, body, client) -> None:
+    """Handle delivery_resolve button — mark handoff complete."""
+    await ack()
+
+    order_id: str = body["actions"][0]["value"]
+    actor_id: str = body["user"]["id"]
+    channel_id: str = body["container"]["channel_id"]
+    message_ts: str = body["container"]["message_ts"]
+
+    log.info("delivery_resolve_received", order_id=order_id, actor_id=actor_id)
+
+    await client.chat_update(
+        channel=channel_id,
+        ts=message_ts,
+        blocks=delivery_resolved_card(order_id, order_id, "Device", actor_id),
+        text="Delivery handoff complete",
+    )
+
+    await client.chat_postMessage(
+        channel=channel_id,
+        thread_ts=message_ts,
+        text="Handoff complete",
+        reply_broadcast=False,
+    )
+
+    if _publisher is not None:
+        await _publisher.publish(
+            "ocean.tickets",
+            {
+                "event_type": "delivery.resolved",
+                "entity_id": order_id,
+                "entity_type": "fulfillment",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "payload": {
+                    "order_id": order_id,
+                    "actor_id": actor_id,
+                },
+            },
+        )
+
+    log.info("delivery_resolved", order_id=order_id, actor_id=actor_id)
