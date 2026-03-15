@@ -1,5 +1,7 @@
-"""Slash command handlers for /ocean subcommands (status, patient, sim, help)."""
+"""Slash command handlers for /ocean subcommands (status, patient, sim, ticket, help)."""
 from __future__ import annotations
+
+from datetime import UTC, datetime
 
 import httpx
 import structlog
@@ -60,13 +62,21 @@ async def build_status_response() -> list[dict]:
     try:
         # Service health from connector_health table
         health_result = await _hasura_query(
-            "query { connector_health { name status } }"
+            "query { connector_health(order_by: {connector_name: asc})"
+            " { connector_name last_seen } }"
         )
         services = health_result.get("data", {}).get("connector_health", [])
         if services:
-            health_lines = "\n".join(
-                f"  {s['name']}: {s['status']}" for s in services
-            )
+            now = datetime.now(tz=UTC)
+            health_lines = []
+            for s in services:
+                name = s["connector_name"]
+                last_seen = datetime.fromisoformat(s["last_seen"])
+                age_secs = (now - last_seen).total_seconds()
+                age_min = int(age_secs / 60)
+                status = "ok" if age_secs < 300 else "stale"
+                health_lines.append(f"  {name}: {status} ({age_min}m ago)")
+            health_lines = "\n".join(health_lines)
         else:
             health_lines = "  No services reporting"
 
@@ -108,18 +118,25 @@ async def build_status_response() -> list[dict]:
             "text": {"type": "mrkdwn", "text": task_text},
         })
 
-        # Last simulation timestamp
+        # Last simulation from projected simulations table
         sim_result = await _hasura_query(
             """query {
-                events(
-                    where: {event_type: {_eq: "scenario.completed"}}
-                    order_by: {timestamp: desc}
-                    limit: 1
-                ) { timestamp }
+                simulations(order_by: {completed_at: desc}, limit: 1) {
+                    scenario_name completed_at patients_count
+                }
             }"""
         )
-        sim_events = sim_result.get("data", {}).get("events", [])
-        last_sim = sim_events[0]["timestamp"] if sim_events else "No simulations run"
+        sims = sim_result.get("data", {}).get("simulations", [])
+        if sims:
+            s = sims[0]
+            sim_ts = datetime.fromisoformat(s["completed_at"])
+            sim_age = int((datetime.now(tz=UTC) - sim_ts).total_seconds() / 60)
+            last_sim = (
+                f"{s['scenario_name']} — "
+                f"{s['patients_count']} patients, {sim_age}m ago"
+            )
+        else:
+            last_sim = "No simulations run"
 
         blocks.append({
             "type": "section",
@@ -156,12 +173,27 @@ async def build_status_response() -> list[dict]:
     return blocks
 
 
+_TIMELINE_EMOJI: dict[str, str] = {
+    "alert": ":rotating_light:",
+    "task": ":clipboard:",
+    "ticket": ":ticket:",
+    "fulfillment": ":package:",
+    "return": ":leftwards_arrow_with_hook:",
+    "device": ":electric_plug:",
+    "interaction": ":telephone_receiver:",
+    "signal": ":chart_with_upwards_trend:",
+}
+
+_TIMELINE_MAX_ENTRIES = 30
+
+
 async def build_patient_response(patient_id: str) -> list[dict]:
     """Build Block Kit blocks for /ocean patient <id>.
 
-    Queries Hasura for patient signals, alerts, tasks, and interactions.
-    Returns summary card + chronological timeline. No PHI -- uses patient
-    hash and categorical fields only.
+    Queries the patient_timeline view for a consolidated timeline across
+    alerts, tasks, tickets, fulfillments, returns, devices, interactions,
+    and signals. Returns summary card + chronological timeline.
+    No PHI -- uses patient hash and categorical fields only.
     """
     blocks: list[dict] = [
         {
@@ -172,26 +204,21 @@ async def build_patient_response(patient_id: str) -> list[dict]:
 
     try:
         result = await _hasura_query(
-            """query GetPatient($pid: String!) {
+            """query GetPatientTimeline($pid: String!) {
                 patients(where: {patient_id: {_eq: $pid}}) {
-                    patient_id status
-                    signals(order_by: {created_at: desc}, limit: 10) {
-                        type value created_at
-                    }
-                    alerts(where: {status: {_eq: "open"}}, order_by: {created_at: desc}) {
-                        id severity status created_at
-                    }
-                    tasks(order_by: {created_at: desc}, limit: 10) {
-                        id status priority type
-                    }
-                    interactions(order_by: {created_at: desc}, limit: 1) {
-                        id type outcome created_at
-                    }
+                    patient_id enrollment_status
+                }
+                patient_timeline(
+                    where: {patient_id: {_eq: $pid}}
+                    order_by: {created_at: desc}
+                ) {
+                    event_type event_id status summary created_at
                 }
             }""",
             {"pid": patient_id},
         )
         patients = result.get("data", {}).get("patients", [])
+        timeline = result.get("data", {}).get("patient_timeline", [])
 
         if not patients:
             blocks.append({
@@ -202,60 +229,91 @@ async def build_patient_response(patient_id: str) -> list[dict]:
 
         patient = patients[0]
 
-        # Summary section
-        open_alerts = patient.get("alerts", [])
-        active_tasks = [
-            t for t in patient.get("tasks", [])
-            if t.get("status") in ("open", "claimed")
+        # Compute summary counts from timeline rows
+        open_alerts = sum(
+            1 for e in timeline
+            if e.get("event_type") == "alert" and e.get("status") == "open"
+        )
+        active_tasks = sum(
+            1 for e in timeline
+            if e.get("event_type") == "task"
+            and e.get("status") in ("open", "claimed")
+        )
+        open_tickets = sum(
+            1 for e in timeline
+            if e.get("event_type") == "ticket"
+            and e.get("status") in ("open", "in_progress", "waiting")
+        )
+        active_devices = sum(
+            1 for e in timeline
+            if e.get("event_type") == "device"
+            and e.get("status") == "associated"
+        )
+        pending_fulfillments = sum(
+            1 for e in timeline
+            if e.get("event_type") == "fulfillment"
+            and e.get("status") not in ("delivered", "cancelled")
+        )
+
+        # Last RMA
+        rma_entries = [
+            e for e in timeline if e.get("event_type") == "return"
         ]
-        last_interaction = patient.get("interactions", [])
+        last_rma = rma_entries[0].get("summary", "None") if rma_entries else "None"
+
+        # Last interaction
+        interaction_entries = [
+            e for e in timeline if e.get("event_type") == "interaction"
+        ]
+        last_interaction_text = ""
+        if interaction_entries:
+            li = interaction_entries[0]
+            last_interaction_text = (
+                f"*Last Interaction:* {li.get('summary', 'n/a')}"
+                f" at {li.get('created_at', '')}"
+            )
 
         summary_lines = [
-            f"*Status:* {patient.get('status', 'unknown')}",
-            f"*Open Alerts:* {len(open_alerts)}",
-            f"*Active Tasks:* {len(active_tasks)}",
+            f"*Status:* {patient.get('enrollment_status', 'unknown')}",
+            f"*Open Alerts:* {open_alerts}",
+            f"*Active Tasks:* {active_tasks}",
+            f"*Open Tickets:* {open_tickets}",
+            f"*Active Devices:* {active_devices}",
+            f"*Pending Fulfillments:* {pending_fulfillments}",
+            f"*Last RMA:* {last_rma}",
         ]
-        if last_interaction:
-            li = last_interaction[0]
-            li_type = li.get("type", "unknown")
-            li_outcome = li.get("outcome", "n/a")
-            li_time = li.get("created_at", "")
-            summary_lines.append(
-                f"*Last Interaction:* {li_type}"
-                f" ({li_outcome}) at {li_time}"
-            )
+        if last_interaction_text:
+            summary_lines.append(last_interaction_text)
 
         blocks.append({
             "type": "section",
             "text": {"type": "mrkdwn", "text": "\n".join(summary_lines)},
         })
 
-        # Timeline -- merge signals, alerts, tasks by timestamp
-        timeline_items = []
-        for sig in patient.get("signals", []):
-            ts = sig.get("created_at", "")
-            desc = f"Signal: {sig.get('type')} = {sig.get('value')}"
-            timeline_items.append((ts, desc))
-        for alert in open_alerts:
-            ts = alert.get("created_at", "")
-            sev = alert.get("severity")
-            desc = f"Alert: {sev} ({alert.get('status')})"
-            timeline_items.append((ts, desc))
-        for task in patient.get("tasks", []):
-            tid = task.get("id", "")
-            desc = f"Task: {task.get('type')} [{task.get('status')}]"
-            timeline_items.append((tid, desc))
+        # Timeline section with emoji prefixes
+        total_events = len(timeline)
+        display_entries = timeline[:_TIMELINE_MAX_ENTRIES]
 
-        timeline_items.sort(key=lambda x: x[0], reverse=True)
+        if display_entries:
+            timeline_lines = []
+            if total_events > _TIMELINE_MAX_ENTRIES:
+                timeline_lines.append(
+                    f"_Showing {_TIMELINE_MAX_ENTRIES} of {total_events}"
+                    " events. Use GraphQL for full history._"
+                )
+            for entry in display_entries:
+                etype = entry.get("event_type", "")
+                emoji = _TIMELINE_EMOJI.get(etype, ":grey_question:")
+                ts = entry.get("created_at", "")
+                summary = entry.get("summary", "")
+                timeline_lines.append(f"  {emoji} {ts}: {summary}")
 
-        if timeline_items:
-            timeline_text = "\n".join(
-                f"  {ts}: {desc}"
-                for ts, desc in timeline_items[:10]
-            )
             blocks.append({
                 "type": "section",
-                "text": {"type": "mrkdwn", "text": f"*Timeline*\n{timeline_text}"},
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*Timeline*\n" + "\n".join(timeline_lines),
+                },
             })
 
     except Exception as exc:
@@ -305,6 +363,102 @@ async def trigger_sim_response(scenario: str) -> list[dict]:
         ]
 
 
+CATEGORY_CHANNEL_MAP: dict[str, str] = {
+    "device_issue": "#ocean-devices",
+    "patient_activation": "#ocean-activation",
+    "clinical_support": "#ocean-clinical",
+    "engineering_it": "#ocean-engineering",
+}
+
+
+def build_ticket_modal(private_metadata: str = "", prefill_description: str = "") -> dict:
+    """Build the Slack modal view JSON for ticket creation.
+
+    Args:
+        private_metadata: JSON string with source_message_url etc.
+        prefill_description: Pre-filled description text (from message action).
+    """
+    description_element: dict = {
+        "type": "plain_text_input",
+        "action_id": "description_input",
+        "multiline": True,
+        "placeholder": {"type": "plain_text", "text": "Describe the issue..."},
+    }
+    if prefill_description:
+        description_element["initial_value"] = prefill_description
+
+    return {
+        "type": "modal",
+        "callback_id": "ticket_create_modal",
+        "title": {"type": "plain_text", "text": "Create Ticket"},
+        "submit": {"type": "plain_text", "text": "Create"},
+        "private_metadata": private_metadata,
+        "blocks": [
+            {
+                "type": "input",
+                "block_id": "category_block",
+                "element": {
+                    "type": "static_select",
+                    "action_id": "category_select",
+                    "placeholder": {"type": "plain_text", "text": "Select category"},
+                    "options": [
+                        {"text": {"type": "plain_text", "text": "Device Issue"}, "value": "device_issue"},
+                        {"text": {"type": "plain_text", "text": "Patient Activation"}, "value": "patient_activation"},
+                        {"text": {"type": "plain_text", "text": "Clinical Support"}, "value": "clinical_support"},
+                        {"text": {"type": "plain_text", "text": "Engineering / IT"}, "value": "engineering_it"},
+                    ],
+                },
+                "label": {"type": "plain_text", "text": "Category"},
+            },
+            {
+                "type": "input",
+                "block_id": "description_block",
+                "element": description_element,
+                "label": {"type": "plain_text", "text": "Description"},
+            },
+            {
+                "type": "input",
+                "block_id": "priority_block",
+                "element": {
+                    "type": "static_select",
+                    "action_id": "priority_select",
+                    "placeholder": {"type": "plain_text", "text": "Select priority"},
+                    "initial_option": {"text": {"type": "plain_text", "text": "Medium"}, "value": "medium"},
+                    "options": [
+                        {"text": {"type": "plain_text", "text": "Critical"}, "value": "critical"},
+                        {"text": {"type": "plain_text", "text": "High"}, "value": "high"},
+                        {"text": {"type": "plain_text", "text": "Medium"}, "value": "medium"},
+                        {"text": {"type": "plain_text", "text": "Low"}, "value": "low"},
+                    ],
+                },
+                "label": {"type": "plain_text", "text": "Priority"},
+            },
+            {
+                "type": "input",
+                "block_id": "patient_block",
+                "optional": True,
+                "element": {
+                    "type": "plain_text_input",
+                    "action_id": "patient_input",
+                    "placeholder": {"type": "plain_text", "text": "Patient ID (optional)"},
+                },
+                "label": {"type": "plain_text", "text": "Patient ID"},
+            },
+            {
+                "type": "input",
+                "block_id": "related_block",
+                "optional": True,
+                "element": {
+                    "type": "plain_text_input",
+                    "action_id": "related_input",
+                    "placeholder": {"type": "plain_text", "text": "e.g. DEV-00041"},
+                },
+                "label": {"type": "plain_text", "text": "Related Ticket"},
+            },
+        ],
+    }
+
+
 def build_help_response() -> list[dict]:
     """Build Block Kit blocks listing all /ocean subcommands."""
     return [
@@ -320,8 +474,9 @@ def build_help_response() -> list[dict]:
                     "*Available commands:*\n"
                     "  `/ocean status` -- Service health, task counts,"
                     " last sim, active alerts\n"
-                    "  `/ocean patient <id>` -- Patient summary card with timeline\n"
+                    "  `/ocean patient <id>` -- Patient summary card with consolidated timeline\n"
                     "  `/ocean sim <scenario>` -- Trigger a simulation run\n"
+                    "  `/ocean ticket` -- Create a new ticket (opens modal)\n"
                     "  `/ocean help` -- Show this help message"
                 ),
             },
@@ -334,11 +489,12 @@ def build_help_response() -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-async def handle_ocean_command(ack, body, respond) -> None:
+async def handle_ocean_command(ack, body, respond, client=None) -> None:
     """/ocean slash command router.
 
     Must ack() first (Slack 3-second timeout), then parse subcommand
-    and dispatch to the appropriate builder.
+    and dispatch to the appropriate builder. The `client` kwarg is
+    injected by Bolt and required for the `ticket` subcommand (modal).
     """
     await ack()
 
@@ -348,6 +504,16 @@ async def handle_ocean_command(ack, body, respond) -> None:
     arg = parts[1].strip() if len(parts) > 1 else ""
 
     log.info("ocean_command", subcommand=subcommand, arg=arg)
+
+    if subcommand == "ticket":
+        if client is None:
+            log.error("ticket_subcommand_requires_client")
+            return
+        await client.views_open(
+            trigger_id=body["trigger_id"],
+            view=build_ticket_modal(),
+        )
+        return
 
     if subcommand == "status":
         blocks = await build_status_response()

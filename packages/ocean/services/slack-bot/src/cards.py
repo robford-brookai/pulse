@@ -343,6 +343,369 @@ def lifecycle_update_blocks(updates: list[dict]) -> list[dict]:
     return blocks
 
 
+# ---------------------------------------------------------------------------
+# Ticket card builders (Phase 17)
+# ---------------------------------------------------------------------------
+
+STATUS_EMOJIS: dict[str, str] = {
+    "open": ":large_green_circle:",
+    "in_progress": ":large_yellow_circle:",
+    "waiting": ":large_orange_circle:",
+    "resolved": ":white_check_mark:",
+}
+
+PRIORITY_EMOJIS: dict[str, str] = {
+    "critical": ":red_circle:",
+    "high": ":large_orange_circle:",
+    "medium": ":large_yellow_circle:",
+    "low": ":white_circle:",
+}
+
+# Buttons per ticket status
+_TICKET_BUTTONS: dict[str, list[tuple[str, str, str | None]]] = {
+    # (action_id, label, style)
+    "open": [
+        ("ticket_claim", "Claim", "primary"),
+        ("ticket_resolve", "Resolve", "danger"),
+        ("ticket_wait", "Wait", None),
+    ],
+    "in_progress": [
+        ("ticket_resolve", "Resolve", "danger"),
+        ("ticket_wait", "Wait", None),
+    ],
+    "waiting": [
+        ("ticket_resume", "Resume", "primary"),
+        ("ticket_resolve", "Resolve", "danger"),
+    ],
+}
+
+
+def _ticket_action_buttons(
+    ticket_id: str, status: str, category: str | None = None
+) -> list[dict]:
+    """Build action button elements for a given ticket status.
+
+    When status is in_progress and category is device_issue, appends a
+    "Create RMA" button for Impilo return initiation.
+    """
+    buttons = _TICKET_BUTTONS.get(status, [])
+    elements = []
+    for action_id, label, style in buttons:
+        btn: dict = {
+            "type": "button",
+            "action_id": action_id,
+            "text": {"type": "plain_text", "text": label, "emoji": False},
+            "value": ticket_id,
+        }
+        if style:
+            btn["style"] = style
+        elements.append(btn)
+
+    if status == "in_progress" and category == "device_issue":
+        elements.append(
+            {
+                "type": "button",
+                "action_id": "ticket_create_rma",
+                "text": {"type": "plain_text", "text": "Create RMA", "emoji": False},
+                "style": "primary",
+                "value": ticket_id,
+            }
+        )
+
+    return elements
+
+
+def ticket_card(
+    ticket_id: str,
+    human_id: str,
+    category: str,
+    priority: str,
+    status: str,
+    description: str,
+    ai_summary: str,
+    patient_id: str | None = None,
+    creator_id: str | None = None,
+    rma_status: str | None = None,
+    rma_return_id: str | None = None,
+) -> list[dict]:
+    """Build a ticket card with status-dependent action buttons.
+
+    Block layout:
+      0: header  — status_emoji + human_id + STATUS (with [RMA] badge if rma_return_id)
+      1: section — 4-5 mrkdwn fields (category, priority, patient, creator, +RMA status)
+      2: divider
+      3: section — description
+      4: section — AI summary ("AI: ...")
+      5: divider
+      6: actions — buttons based on status (omitted for resolved)
+    """
+    status_emoji = STATUS_EMOJIS.get(status, "")
+    priority_emoji = PRIORITY_EMOJIS.get(priority, "")
+    header_text = f"{status_emoji} {human_id} [{status.upper()}]"
+    if rma_return_id:
+        header_text = f"[RMA] {header_text}"
+
+    fields = [
+        {"type": "mrkdwn", "text": f"*Category:*\n{category}"},
+        {"type": "mrkdwn", "text": f"*Priority:*\n{priority_emoji} {priority}"},
+        {"type": "mrkdwn", "text": f"*Patient:*\n`{patient_id or 'unknown'}`"},
+        {
+            "type": "mrkdwn",
+            "text": f"*Creator:*\n<@{creator_id}>" if creator_id else "*Creator:*\nunknown",
+        },
+    ]
+    if rma_status:
+        fields.append({"type": "mrkdwn", "text": f"*RMA:*\n{rma_status}"})
+
+    blocks: list[dict] = [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": header_text, "emoji": True},
+        },
+        {
+            "type": "section",
+            "fields": fields,
+        },
+        {"type": "divider"},
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": description},
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"*AI:* {ai_summary}"},
+        },
+        {"type": "divider"},
+    ]
+
+    elements = _ticket_action_buttons(ticket_id, status, category=category)
+    if elements:
+        blocks.append(
+            {
+                "type": "actions",
+                "block_id": f"ticket_actions_{ticket_id}",
+                "elements": elements,
+            }
+        )
+
+    return blocks
+
+
+def ticket_claimed_card(
+    ticket_id: str,
+    human_id: str,
+    actor_id: str,
+    rma_return_id: str | None = None,
+) -> list[dict]:
+    """Card shown after a ticket is claimed — IN PROGRESS state."""
+    header_text = f":large_yellow_circle: {human_id} [IN PROGRESS]"
+    if rma_return_id:
+        header_text = f"[RMA] {header_text}"
+    return [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": header_text,
+                "emoji": True,
+            },
+        },
+        {
+            "type": "context",
+            "elements": [
+                {"type": "mrkdwn", "text": f"Claimed by <@{actor_id}>"},
+            ],
+        },
+        {
+            "type": "actions",
+            "block_id": f"ticket_actions_{ticket_id}",
+            "elements": _ticket_action_buttons(ticket_id, "in_progress"),
+        },
+    ]
+
+
+def ticket_waiting_card(
+    ticket_id: str, human_id: str, waiting_reason: str
+) -> list[dict]:
+    """Card shown when a ticket enters waiting state."""
+    return [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": f":large_orange_circle: {human_id} [WAITING]",
+                "emoji": True,
+            },
+        },
+        {
+            "type": "context",
+            "elements": [
+                {"type": "mrkdwn", "text": f"Reason: {waiting_reason}"},
+            ],
+        },
+        {
+            "type": "actions",
+            "block_id": f"ticket_actions_{ticket_id}",
+            "elements": _ticket_action_buttons(ticket_id, "waiting"),
+        },
+    ]
+
+
+def ticket_resolved_card(
+    ticket_id: str, human_id: str, actor_id: str, duration_str: str
+) -> list[dict]:
+    """Card shown when a ticket is resolved — no action buttons."""
+    return [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": f":white_check_mark: {human_id} [RESOLVED]",
+                "emoji": True,
+            },
+        },
+        {
+            "type": "context",
+            "elements": [
+                {"type": "mrkdwn", "text": f"Resolved by <@{actor_id}> ({duration_str})"},
+            ],
+        },
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Delivery card builders (Phase 19)
+# ---------------------------------------------------------------------------
+
+
+def delivery_card(
+    order_id: str,
+    patient_id: str,
+    device_type: str,
+    days_since_consent: int,
+    shipping_option: str,
+    tracking_numbers: list[str],
+    active_alerts_count: int,
+    device_history_count: int,
+) -> list[dict]:
+    """Build a delivery notification card for proactive intake handoff.
+
+    Block layout (mirrors alert_card pattern):
+      0: header   - "Device Delivered - {device_type}"
+      1: section  - 4 mrkdwn fields (patient, days, shipping, device history)
+      2: divider
+      3: section  - active alerts count
+      4: divider
+      5: actions  - Claim (primary), Resolve
+    """
+    shipping_text = f"*Shipping:*\n{shipping_option}"
+    if tracking_numbers:
+        shipping_text += f" ({', '.join(tracking_numbers)})"
+
+    history_label = "Replacement" if device_history_count > 1 else "First device"
+
+    return [
+        # Block 0: header
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": f"Device Delivered - {device_type}",
+                "emoji": True,
+            },
+        },
+        # Block 1: detail fields
+        {
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": f"*Patient:*\n`{patient_id}`"},
+                {"type": "mrkdwn", "text": f"*Days Since Consent:*\n{days_since_consent} days"},
+                {"type": "mrkdwn", "text": shipping_text},
+                {
+                    "type": "mrkdwn",
+                    "text": f"*Device History:*\n{history_label} ({device_history_count} total)",
+                },
+            ],
+        },
+        # Block 2: divider
+        {"type": "divider"},
+        # Block 3: active alerts
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*Active Alerts:* {active_alerts_count}",
+            },
+        },
+        # Block 4: divider
+        {"type": "divider"},
+        # Block 5: actions
+        {
+            "type": "actions",
+            "block_id": f"delivery_actions_{order_id}",
+            "elements": [
+                {
+                    "type": "button",
+                    "action_id": "delivery_claim",
+                    "text": {"type": "plain_text", "text": "Claim", "emoji": False},
+                    "style": "primary",
+                    "value": order_id,
+                },
+                {
+                    "type": "button",
+                    "action_id": "delivery_resolve",
+                    "text": {"type": "plain_text", "text": "Resolve", "emoji": False},
+                    "value": order_id,
+                },
+            ],
+        },
+    ]
+
+
+def delivery_claimed_card(
+    order_id: str, patient_id: str, device_type: str, actor_id: str
+) -> list[dict]:
+    """Card shown after a delivery handoff is claimed."""
+    return [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": f"[CLAIMED] Device Delivered - {device_type}",
+                "emoji": True,
+            },
+        },
+        {
+            "type": "context",
+            "elements": [
+                {"type": "mrkdwn", "text": f"Claimed by <@{actor_id}> | Patient: `{patient_id}`"},
+            ],
+        },
+    ]
+
+
+def delivery_resolved_card(
+    order_id: str, patient_id: str, device_type: str, actor_id: str
+) -> list[dict]:
+    """Card shown after a delivery handoff is resolved."""
+    return [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": f"[COMPLETE] Device Delivered - {device_type}",
+                "emoji": True,
+            },
+        },
+        {
+            "type": "context",
+            "elements": [
+                {"type": "mrkdwn", "text": f"Handoff complete | Patient: `{patient_id}`"},
+            ],
+        },
+    ]
+
+
 def scenario_started_card(
     scenario_name: str,
     patients: list[str],

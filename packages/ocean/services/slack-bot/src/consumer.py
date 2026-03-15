@@ -24,14 +24,17 @@ from src.ai_events import publish_ai_event
 from src.ai_summary import generate_summary_with_context
 from src.cards import (
     alert_card,
+    delivery_card,
     outreach_draft_card,
     scenario_completed_card,
     scenario_started_card,
+    ticket_card,
+    ticket_resolved_card,
 )
 
 log = structlog.get_logger()
 
-TOPICS = ["ocean.tasks", "ocean.ai-ops", "ocean.interactions", "ocean.ops"]
+TOPICS = ["ocean.tasks", "ocean.ai-ops", "ocean.interactions", "ocean.ops", "ocean.tickets"]
 
 CONSUMER_CONFIG: dict = {
     "group.id": "slack-bot-worker",
@@ -368,6 +371,413 @@ async def handle_scenario_completed(
     log.info("scenario_completed_posted", scenario_name=scenario_name)
 
 
+# ---------------------------------------------------------------------------
+# Ticket event handlers (Phase 17)
+# ---------------------------------------------------------------------------
+
+
+async def handle_ticket_created(
+    event_data: dict,
+    *,
+    slack_client,
+    session_maker,
+    hasura_url: str,
+    publisher=None,
+    thread_manager=None,
+) -> None:
+    """Handle ticket.created: build card, post to channel, cross-post, store parent."""
+    payload = event_data.get("payload", {})
+    ticket_id = payload.get("ticket_id") or event_data.get("entity_id")
+    human_id = payload.get("human_id", "")
+    category = payload.get("category", "unknown")
+    priority = payload.get("priority", "medium")
+    patient_id = payload.get("patient_id", "unknown")
+    description = payload.get("description", "")
+    status = payload.get("status", "open")
+    channel = payload.get("channel", DEFAULT_CHANNEL)
+    crosspost_channels = payload.get("crosspost_channels", [])
+
+    hasura_secret = os.environ.get("HASURA_GRAPHQL_ADMIN_SECRET", "")
+
+    ai_summary, _cited = await generate_summary_with_context(
+        alert_type=category,
+        severity=priority.upper(),
+        patient_hash=patient_id,
+        timestamp=event_data.get("timestamp", ""),
+        hasura_url=hasura_url,
+        hasura_secret=hasura_secret,
+    )
+
+    blocks = ticket_card(
+        ticket_id=ticket_id,
+        human_id=human_id,
+        category=category,
+        priority=priority,
+        status=status,
+        description=description,
+        ai_summary=ai_summary,
+        patient_id=patient_id,
+    )
+
+    response = await slack_client.chat_postMessage(
+        channel=channel,
+        blocks=blocks,
+        text=f"[{priority.upper()}] {human_id} — {category}",
+    )
+
+    message_ts = (
+        response.get("ts", "") if isinstance(response, dict) else getattr(response, "ts", "")
+    )
+    if thread_manager and message_ts:
+        await thread_manager.store_ticket_parent(ticket_id, channel, message_ts)
+
+    # Cross-post to priority channels
+    for xpost_channel in crosspost_channels:
+        try:
+            await slack_client.chat_postMessage(
+                channel=xpost_channel,
+                blocks=blocks,
+                text=f"[{priority.upper()}] {human_id} — {category}",
+            )
+        except Exception:
+            log.warning(
+                "ticket_crosspost_failed",
+                ticket_id=ticket_id,
+                channel=xpost_channel,
+                exc_info=True,
+            )
+
+    log.info("ticket_card_posted", ticket_id=ticket_id, channel=channel, human_id=human_id)
+
+
+async def handle_ticket_updated(
+    event_data: dict,
+    *,
+    slack_client,
+    session_maker,
+    hasura_url: str,
+    publisher=None,
+    thread_manager=None,
+) -> None:
+    """Handle ticket.updated: update card in-place, queue thread update."""
+    payload = event_data.get("payload", {})
+    ticket_id = payload.get("ticket_id") or event_data.get("entity_id")
+    new_status = payload.get("status", "open")
+    priority = payload.get("priority", "medium")
+    waiting_reason = payload.get("waiting_reason")
+
+    if not thread_manager:
+        log.warning("ticket_updated_no_thread_manager", ticket_id=ticket_id)
+        return
+
+    channel = await thread_manager.get_ticket_channel(ticket_id)
+    message_ts = await thread_manager.get_ticket_message_ts(ticket_id)
+
+    if not channel or not message_ts:
+        log.warning("ticket_parent_not_found", ticket_id=ticket_id)
+        return
+
+    # Build updated card (minimal — we don't have all original fields)
+    blocks = ticket_card(
+        ticket_id=ticket_id,
+        human_id=ticket_id,  # fallback — human_id not in update event
+        category="",
+        priority=priority or "medium",
+        status=new_status,
+        description="",
+        ai_summary="",
+    )
+
+    await slack_client.chat_update(
+        channel=channel,
+        ts=message_ts,
+        blocks=blocks,
+        text=f"Ticket {ticket_id} updated to {new_status}",
+    )
+
+    await thread_manager.queue_ticket_update(
+        ticket_id,
+        {"type": "status_change", "new_status": new_status, "waiting_reason": waiting_reason},
+    )
+
+    log.info("ticket_updated_handled", ticket_id=ticket_id, status=new_status)
+
+
+async def handle_ticket_resolved(
+    event_data: dict,
+    *,
+    slack_client,
+    session_maker,
+    hasura_url: str,
+    publisher=None,
+    thread_manager=None,
+) -> None:
+    """Handle ticket.resolved: update card to resolved, post resolution summary thread."""
+    payload = event_data.get("payload", {})
+    ticket_id = payload.get("ticket_id") or event_data.get("entity_id")
+
+    if not thread_manager:
+        log.warning("ticket_resolved_no_thread_manager", ticket_id=ticket_id)
+        return
+
+    thread_ts = await thread_manager.get_ticket_thread_ts(ticket_id)
+    channel = await thread_manager.get_ticket_channel(ticket_id)
+    message_ts = await thread_manager.get_ticket_message_ts(ticket_id)
+
+    if not channel or not message_ts:
+        log.warning("ticket_parent_not_found_for_resolve", ticket_id=ticket_id)
+        return
+
+    resolved_blocks = ticket_resolved_card(
+        ticket_id=ticket_id,
+        human_id=ticket_id,
+        actor_id=payload.get("resolved_by", "system"),
+        duration_str=payload.get("duration", "unknown"),
+    )
+
+    await slack_client.chat_update(
+        channel=channel,
+        ts=message_ts,
+        blocks=resolved_blocks,
+        text=f"Ticket {ticket_id} resolved",
+    )
+
+    # Post resolution summary as thread reply
+    if thread_ts:
+        await slack_client.chat_postMessage(
+            channel=channel,
+            thread_ts=thread_ts,
+            text=f":white_check_mark: *Ticket Resolved*\nTicket {ticket_id} has been resolved.",
+            reply_broadcast=False,
+        )
+
+    log.info("ticket_resolved_handled", ticket_id=ticket_id)
+
+
+# ---------------------------------------------------------------------------
+# RMA event handlers (Phase 19)
+# ---------------------------------------------------------------------------
+
+
+async def handle_rma_created(
+    event_data: dict,
+    *,
+    slack_client,
+    session_maker,
+    hasura_url: str,
+    publisher=None,
+    thread_manager=None,
+) -> None:
+    """Handle ticket.rma.created: post thread reply with return_id, update card with [RMA] badge."""
+    payload = event_data.get("payload", {})
+    ticket_id = payload.get("ticket_id") or event_data.get("entity_id")
+    return_id = payload.get("return_id", "")
+    reason = payload.get("reason", "")
+
+    if not thread_manager:
+        log.warning("rma_created_no_thread_manager", ticket_id=ticket_id)
+        return
+
+    thread_ts = await thread_manager.get_ticket_thread_ts(ticket_id)
+    channel = await thread_manager.get_ticket_channel(ticket_id)
+
+    if channel and thread_ts:
+        await slack_client.chat_postMessage(
+            channel=channel,
+            thread_ts=thread_ts,
+            text=f"RMA created: {return_id} (reason: {reason})",
+            reply_broadcast=False,
+        )
+
+    # Update parent card with [RMA] badge
+    message_ts = await thread_manager.get_ticket_message_ts(ticket_id)
+    if channel and message_ts:
+        blocks = ticket_card(
+            ticket_id=ticket_id,
+            human_id=ticket_id,
+            category="device_issue",
+            priority="medium",
+            status="in_progress",
+            description="",
+            ai_summary="",
+            rma_return_id=return_id,
+            rma_status="initiated",
+        )
+        await slack_client.chat_update(
+            channel=channel,
+            ts=message_ts,
+            blocks=blocks,
+            text=f"RMA created for ticket {ticket_id}",
+        )
+
+    log.info("rma_created_handled", ticket_id=ticket_id, return_id=return_id)
+
+
+async def handle_rma_failed(
+    event_data: dict,
+    *,
+    slack_client,
+    session_maker,
+    hasura_url: str,
+    publisher=None,
+    thread_manager=None,
+) -> None:
+    """Handle ticket.rma.failed: post thread reply with error and Retry button."""
+    payload = event_data.get("payload", {})
+    ticket_id = payload.get("ticket_id") or event_data.get("entity_id")
+    error_msg = payload.get("error", "Unknown error")
+
+    if not thread_manager:
+        log.warning("rma_failed_no_thread_manager", ticket_id=ticket_id)
+        return
+
+    thread_ts = await thread_manager.get_ticket_thread_ts(ticket_id)
+    channel = await thread_manager.get_ticket_channel(ticket_id)
+
+    if channel and thread_ts:
+        blocks = [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*RMA creation failed:* {error_msg}",
+                },
+            },
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "action_id": "ticket_retry_rma",
+                        "text": {"type": "plain_text", "text": "Retry RMA", "emoji": False},
+                        "style": "primary",
+                        "value": ticket_id,
+                    },
+                ],
+            },
+        ]
+        await slack_client.chat_postMessage(
+            channel=channel,
+            thread_ts=thread_ts,
+            blocks=blocks,
+            text=f"RMA creation failed for ticket {ticket_id}",
+            reply_broadcast=False,
+        )
+
+    log.info("rma_failed_handled", ticket_id=ticket_id, error=error_msg)
+
+
+async def handle_rma_status(
+    event_data: dict,
+    *,
+    slack_client,
+    session_maker,
+    hasura_url: str,
+    publisher=None,
+    thread_manager=None,
+) -> None:
+    """Handle ticket.rma.status: post milestone thread reply, update card RMA status field."""
+    payload = event_data.get("payload", {})
+    ticket_id = payload.get("ticket_id") or event_data.get("entity_id")
+    return_id = payload.get("return_id", "")
+    status = payload.get("status", "")
+
+    if not thread_manager:
+        log.warning("rma_status_no_thread_manager", ticket_id=ticket_id)
+        return
+
+    thread_ts = await thread_manager.get_ticket_thread_ts(ticket_id)
+    channel = await thread_manager.get_ticket_channel(ticket_id)
+
+    if channel and thread_ts:
+        await slack_client.chat_postMessage(
+            channel=channel,
+            thread_ts=thread_ts,
+            text=f"RMA update: {status}",
+            reply_broadcast=False,
+        )
+
+    # Update parent card RMA status field
+    message_ts = await thread_manager.get_ticket_message_ts(ticket_id)
+    if channel and message_ts:
+        blocks = ticket_card(
+            ticket_id=ticket_id,
+            human_id=ticket_id,
+            category="device_issue",
+            priority="medium",
+            status="in_progress",
+            description="",
+            ai_summary="",
+            rma_return_id=return_id,
+            rma_status=status,
+        )
+        await slack_client.chat_update(
+            channel=channel,
+            ts=message_ts,
+            blocks=blocks,
+            text=f"RMA status update for ticket {ticket_id}: {status}",
+        )
+
+    log.info("rma_status_handled", ticket_id=ticket_id, status=status)
+
+
+# ---------------------------------------------------------------------------
+# Delivery event handlers (Phase 19)
+# ---------------------------------------------------------------------------
+
+
+async def handle_delivery_notify(
+    event_data: dict,
+    *,
+    slack_client,
+    session_maker,
+    hasura_url: str,
+    publisher=None,
+    thread_manager=None,
+) -> None:
+    """Handle delivery.notify: post delivery card to channel, store for claim tracking."""
+    payload = event_data.get("payload", {})
+    order_id = payload.get("order_id", "")
+    patient_id = payload.get("patient_id", "")
+    device_type = payload.get("device_type", "Unknown device")
+    days_since_consent = payload.get("days_since_consent", 0)
+    shipping_option = payload.get("shipping_option", "")
+    tracking_numbers = payload.get("tracking_numbers", [])
+    active_alerts_count = payload.get("active_alerts_count", 0)
+    device_history_count = payload.get("device_history_count", 0)
+    channel = payload.get("channel", "#ocean-activation")
+
+    blocks = delivery_card(
+        order_id=order_id,
+        patient_id=patient_id,
+        device_type=device_type,
+        days_since_consent=days_since_consent,
+        shipping_option=shipping_option,
+        tracking_numbers=tracking_numbers,
+        active_alerts_count=active_alerts_count,
+        device_history_count=device_history_count,
+    )
+
+    response = await slack_client.chat_postMessage(
+        channel=channel,
+        blocks=blocks,
+        text=f"Device Delivered - {device_type} for patient {patient_id}",
+    )
+
+    message_ts = (
+        response.get("ts", "") if isinstance(response, dict) else getattr(response, "ts", "")
+    )
+    if thread_manager and message_ts:
+        await thread_manager.store_parent_message(f"delivery:{order_id}", channel, message_ts)
+
+    log.info(
+        "delivery_card_posted",
+        order_id=order_id,
+        channel=channel,
+        device_type=device_type,
+    )
+
+
 EVENT_HANDLERS: dict = {
     "task.created": handle_task_created,
     "task.claimed": handle_task_claimed,
@@ -380,6 +790,13 @@ EVENT_HANDLERS: dict = {
     "call.completed": handle_call_event,
     "scenario.started": handle_scenario_started,
     "scenario.completed": handle_scenario_completed,
+    "ticket.created": handle_ticket_created,
+    "ticket.updated": handle_ticket_updated,
+    "ticket.resolved": handle_ticket_resolved,
+    "ticket.rma.created": handle_rma_created,
+    "ticket.rma.failed": handle_rma_failed,
+    "ticket.rma.status": handle_rma_status,
+    "delivery.notify": handle_delivery_notify,
 }
 
 

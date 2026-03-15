@@ -1,7 +1,7 @@
 """Graph projection handlers for call lifecycle — started and connected events."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import sqlalchemy as sa
 import structlog
@@ -20,7 +20,7 @@ async def handle_call_started(event_data: dict, session) -> None:
     task_id = payload.get("task_id") or ""
     patient_id = payload.get("patient_id", "")
     event_id = event_data.get("event_id", "")
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
 
     await session.execute(
         sa.text(
@@ -56,7 +56,7 @@ async def handle_call_connected(event_data: dict, session) -> None:
     task_id = payload.get("task_id") or ""
     patient_id = payload.get("patient_id", "")
     event_id = event_data.get("event_id", "")
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
 
     await session.execute(
         sa.text(

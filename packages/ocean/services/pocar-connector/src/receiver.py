@@ -6,7 +6,7 @@ import hmac
 import json
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import sqlalchemy as sa
 import structlog
@@ -74,7 +74,7 @@ async def receive_pocar_webhook(request: Request) -> dict:
                     "source_system": "pocar",
                     "entity_type": event.entity_type,
                     "entity_id": event.entity_id,
-                    "timestamp": datetime.now(tz=timezone.utc),
+                    "timestamp": datetime.now(tz=UTC),
                     "detail": json.dumps({"event_type": event.event_type}),
                 },
             )

@@ -1,7 +1,7 @@
 """Control plane handler for connector.heartbeat events."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import sqlalchemy as sa
 import structlog
@@ -15,7 +15,7 @@ async def handle_connector_heartbeat(event_data: dict, session, producer=None) -
     # Prefer explicit connector_id in payload; fall back to source_system
     connector_id = payload.get("connector_id") or event_data.get("source_system", "unknown")
     connector_name = payload.get("connector_name", connector_id)
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
 
     await session.execute(
         sa.text(

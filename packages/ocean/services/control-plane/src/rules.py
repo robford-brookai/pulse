@@ -90,3 +90,19 @@ def is_valid_transition(current: str, target: str) -> bool:
     """Return True if transitioning from current to target status is allowed."""
     allowed = VALID_TRANSITIONS.get(current, set())
     return target in allowed
+
+
+# ---------------------------------------------------------------------------
+# Delivery notification routing
+# ---------------------------------------------------------------------------
+
+DELIVERY_NOTIFICATION_CHANNEL = "#ocean-activation"
+
+
+def delivery_channel_for() -> str:
+    """Return the Slack channel for delivery handoff notifications.
+
+    Activation channel is the natural home for delivery handoffs since
+    they trigger patient onboarding.
+    """
+    return DELIVERY_NOTIFICATION_CHANNEL

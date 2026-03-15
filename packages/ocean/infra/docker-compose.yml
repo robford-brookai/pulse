@@ -210,6 +210,8 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ocean:changeme@postgres:5432/ocean}
       REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      IMPILO_API_URL: ${IMPILO_API_URL:-}
+      IMPILO_API_KEY: ${IMPILO_API_KEY:-}
     ports:
       - "8004:8000"
     depends_on:
@@ -291,11 +293,33 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ocean:changeme@postgres:5432/ocean}
       REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
       IMPILO_API_KEY: ${IMPILO_API_KEY:-dev_impilo_key}
+      SQS_QUEUE_URL: ${SQS_QUEUE_URL:-}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
     ports:
       - "8007:8000"
     depends_on:
       hasura:
         condition: service_healthy
+      redpanda-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  linear-connector:
+    build:
+      context: ..
+      dockerfile: services/linear-connector/Dockerfile
+    environment:
+      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      LINEAR_WEBHOOK_SECRET: ${LINEAR_WEBHOOK_SECRET:-dev_secret}
+    ports:
+      - "8008:8000"
+    depends_on:
       redpanda-init:
         condition: service_completed_successfully
     restart: unless-stopped

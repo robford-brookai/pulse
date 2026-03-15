@@ -16,6 +16,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.handlers.alerts import handle_alert_claimed, handle_alert_created, handle_alert_resolved
 from src.handlers.interactions import handle_call_connected, handle_call_started
+from src.handlers.logistics import (
+    handle_device_associated,
+    handle_device_disassociated,
+    handle_fulfillment_updated,
+    handle_return_updated,
+)
+from src.handlers.ops import handle_connector_heartbeat, handle_scenario_completed
 from src.handlers.outcomes import handle_call_completed, handle_call_missed
 from src.handlers.signals import (
     handle_signal_anomalous,
@@ -43,8 +50,10 @@ TOPICS = [
     "ocean.interactions",
     "ocean.outcomes",
     "ocean.tickets",
+    "ocean.logistics",
     "ocean.ai-ops",
     "ocean.audit",
+    "ocean.ops",
 ]
 
 # CRITICAL: separate consumer group from event-store-consumer
@@ -72,6 +81,12 @@ EVENT_HANDLERS: dict = {
     "ticket.created": handle_ticket_created,
     "ticket.updated": handle_ticket_updated,
     "ticket.resolved": handle_ticket_resolved,
+    "fulfillment.updated": handle_fulfillment_updated,
+    "return.updated": handle_return_updated,
+    "device.associated": handle_device_associated,
+    "device.disassociated": handle_device_disassociated,
+    "connector.heartbeat": handle_connector_heartbeat,
+    "scenario.completed": handle_scenario_completed,
 }
 
 

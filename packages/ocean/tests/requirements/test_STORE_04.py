@@ -12,7 +12,7 @@ import json
 import os
 import pathlib
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 import pytest_asyncio
@@ -88,7 +88,7 @@ async def test_offset_tracking_write_event_populates_both_tables(
         "source_system": "test",
         "correlation_id": "",
         "actor_id": "test",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "payload": {},
     }
     await writer_mod.write_event(json.dumps(event).encode(), topic="ocean.signals")

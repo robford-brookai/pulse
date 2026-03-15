@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import random
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import structlog
 
@@ -74,7 +74,7 @@ async def compete_for_claim(
             "event_id": event_id,
             "event_type": "task.claimed",
             "schema_version": "1.0.0",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "source_system": "agent-worker",
             "entity_type": "task",
             "entity_id": entity_id,

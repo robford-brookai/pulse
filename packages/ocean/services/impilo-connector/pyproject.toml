@@ -10,6 +10,7 @@ dependencies = [
     "confluent-kafka==2.13.2",
     "structlog==25.5.0",
     "ocean-events",
+    "aioboto3>=13.0.0",
 ]
 
 [build-system]

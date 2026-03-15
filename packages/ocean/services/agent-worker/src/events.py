@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import structlog
 
@@ -28,7 +28,7 @@ def build_agent_event(
         "event_id": str(uuid.uuid4()),
         "event_type": event_type,
         "schema_version": "1.0.0",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "source_system": "agent-worker",
         "entity_type": entity_type,
         "entity_id": entity_id,

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import structlog
@@ -33,7 +33,7 @@ async def publish_heartbeat(
             "event_id": str(uuid4()),
             "event_type": "connector.heartbeat",
             "schema_version": "1.0.0",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "source_system": connector_id,
             "entity_type": "connector",
             "entity_id": connector_id,

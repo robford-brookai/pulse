@@ -7,7 +7,7 @@ confirmed against a real ZCC account (Pitfall 1 mitigation from RESEARCH.md).
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import structlog
 
@@ -47,7 +47,7 @@ def normalize_zcc_event(raw: dict) -> dict | None:
     return {
         "event_id": str(uuid.uuid4()),
         "event_type": ocean_event_type,
-        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+        "timestamp": datetime.now(tz=UTC).isoformat(),
         "source_system": "zcc",
         "entity_type": "interaction",
         "entity_id": engagement_id,

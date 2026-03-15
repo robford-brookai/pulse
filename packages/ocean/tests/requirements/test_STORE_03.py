@@ -11,7 +11,7 @@ import json
 import os
 import pathlib
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 import pytest_asyncio
@@ -77,7 +77,7 @@ async def test_replay_idempotent(writer_mod, session_factory, clean_tables):
                 "source_system": "test",
                 "correlation_id": "",
                 "actor_id": "test",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "payload": {},
             }
             for i, eid in enumerate(event_ids)

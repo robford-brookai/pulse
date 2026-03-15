@@ -4,7 +4,7 @@ from __future__ import annotations
 import hashlib
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import structlog
 from ocean_events.base import BaseEvent, _PHI_FIELD_NAMES
@@ -19,6 +19,20 @@ EVENT_MAP: dict[str, tuple[str, str, str]] = {
     "order":       ("order.created",          "ocean.logistics",  "logistics"),
     "kit":         ("kit.updated",            "ocean.logistics",  "logistics"),
     "procurement": ("procurement.requested",  "ocean.logistics",  "logistics"),
+    "return":      ("return.updated",         "ocean.logistics",  "return"),
+}
+
+# Subtype-level overrides — checked before prefix-level EVENT_MAP.
+# Full type string -> (ocean_event_type, ocean_topic, entity_type)
+SUBTYPE_MAP: dict[str, tuple[str, str, str]] = {
+    "order.statusFull":          ("fulfillment.updated",    "ocean.logistics", "fulfillment"),
+    "return.statusFull":         ("return.updated",         "ocean.logistics", "return"),
+    "device.associationCreated": (
+        "device.associated", "ocean.logistics", "device_association",
+    ),
+    "device.associationRemoved": (
+        "device.disassociated", "ocean.logistics", "device_association",
+    ),
 }
 
 # For device events, only inactive/lost map to signal.missing.
@@ -127,16 +141,20 @@ def normalize_impilo_payload(raw: dict) -> tuple[BaseEvent, str]:
     event_type_str: str = raw["type"]
     prefix = event_type_str.split(".")[0]
 
-    if prefix not in EVENT_MAP:
+    # Check subtype-level overrides first (exact match on full type string)
+    is_subtype = event_type_str in SUBTYPE_MAP
+    if is_subtype:
+        ocean_event_type, topic, entity_type = SUBTYPE_MAP[event_type_str]
+    elif prefix in EVENT_MAP:
+        ocean_event_type, topic, entity_type = EVENT_MAP[prefix]
+    else:
         raise ValueError(
             f"Unknown Impilo event type prefix '{prefix}' from '{event_type_str}'. "
             f"Known prefixes: {sorted(EVENT_MAP.keys())}"
         )
 
-    ocean_event_type, topic, entity_type = EVENT_MAP[prefix]
-
-    # For device events, only inactive/lost map to signal.missing
-    if prefix == "device":
+    # For device events using prefix-level mapping, only inactive/lost map to signal.missing
+    if prefix == "device" and not is_subtype:
         subtype = event_type_str.split(".", 1)[1] if "." in event_type_str else ""
         status = raw.get("status", subtype)
         if status not in DEVICE_OFFLINE_STATUSES and subtype not in DEVICE_OFFLINE_STATUSES:
@@ -157,16 +175,50 @@ def normalize_impilo_payload(raw: dict) -> tuple[BaseEvent, str]:
     if created_at_str:
         ts = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
     else:
-        ts = datetime.now(tz=timezone.utc)
+        ts = datetime.now(tz=UTC)
 
     # Build clean payload based on event category
-    if prefix == "reading":
+    if ocean_event_type == "fulfillment.updated":
+        payload = {
+            "order_id": str(raw["id"]),
+            "patient_id": hashed_patient_id,
+            "status": raw.get("status", ""),
+            "shipping_option": raw.get("shippingOption", ""),
+            "tracking_numbers": raw.get("trackingNumbers", []),
+            "order_items": raw.get("orderItems", []),
+            "devices": raw.get("devices", []),
+        }
+    elif ocean_event_type == "return.updated":
+        payload = {
+            "return_id": str(raw["id"]),
+            "patient_id": hashed_patient_id,
+            "device_id": str(raw.get("device", {}).get("id", "")),
+            "order_id": str(raw.get("order", {}).get("id", "")),
+            "status": raw.get("status", ""),
+            "reason": raw.get("reason", ""),
+            "raw_payload": raw,
+        }
+    elif ocean_event_type == "device.associated":
+        payload = {
+            "patient_id": hashed_patient_id,
+            "device_id": str(raw.get("device", {}).get("id", "")),
+            "device_name": raw.get("device", {}).get("name", ""),
+            "order_id": str(raw.get("order", {}).get("id", "")) if raw.get("order") else None,
+        }
+    elif ocean_event_type == "device.disassociated":
+        payload = {
+            "patient_id": hashed_patient_id,
+            "device_id": str(raw.get("device", {}).get("id", "")),
+            "device_name": raw.get("device", {}).get("name", ""),
+        }
+    elif prefix == "reading":
         payload = {
             "signal_type": _extract_signal_type(event_type_str),
             "patient_id": hashed_patient_id,
             "value": raw.get("value") or raw.get("systolic"),
             "unit": raw.get("unit", ""),
             "source_reading_type": event_type_str,
+            "reading_type": event_type_str,
         }
     elif prefix == "patient":
         payload = {

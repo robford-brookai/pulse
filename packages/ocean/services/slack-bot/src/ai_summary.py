@@ -55,9 +55,9 @@ async def fetch_patient_context(
     Returns the data dict on success. On any exception, logs a warning and
     returns {} — degraded AI (no context) is always preferred over hard failure.
     """
-    from datetime import datetime, timezone, timedelta
+    from datetime import UTC, datetime, timedelta
 
-    since = (datetime.now(timezone.utc) - timedelta(hours=48)).isoformat()
+    since = (datetime.now(UTC) - timedelta(hours=48)).isoformat()
 
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:

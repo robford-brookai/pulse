@@ -60,6 +60,64 @@ def make_order_payload(order_id: int = 999) -> dict:
     }
 
 
+def make_order_status_full_payload(
+    order_id: int = 1001,
+    patient_id: int = 123,
+) -> dict:
+    return {
+        "type": "order.statusFull",
+        "id": order_id,
+        "patient": {"id": patient_id},
+        "status": "shipped",
+        "shippingOption": "standard",
+        "trackingNumbers": ["1Z999AA10123456784"],
+        "orderItems": [{"sku": "BP-100", "qty": 1}],
+        "devices": [{"id": 5001, "name": "BP Monitor"}],
+        "createdAt": "2026-03-06T10:00:00Z",
+    }
+
+
+def make_return_status_full_payload(
+    return_id: int = 2001,
+    patient_id: int = 123,
+) -> dict:
+    return {
+        "type": "return.statusFull",
+        "id": return_id,
+        "patient": {"id": patient_id},
+        "device": {"id": 789, "name": "BP Monitor"},
+        "order": {"id": 1001},
+        "status": "received",
+        "reason": "defective",
+        "createdAt": "2026-03-06T10:00:00Z",
+    }
+
+
+def make_device_association_created_payload(
+    patient_id: int = 123,
+) -> dict:
+    return {
+        "type": "device.associationCreated",
+        "id": 3001,
+        "patient": {"id": patient_id},
+        "device": {"id": 789, "name": "BP Monitor"},
+        "order": {"id": 1001},
+        "createdAt": "2026-03-06T10:00:00Z",
+    }
+
+
+def make_device_association_removed_payload(
+    patient_id: int = 123,
+) -> dict:
+    return {
+        "type": "device.associationRemoved",
+        "id": 3002,
+        "patient": {"id": patient_id},
+        "device": {"id": 789, "name": "BP Monitor"},
+        "createdAt": "2026-03-06T10:00:00Z",
+    }
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -130,6 +188,91 @@ class TestIdentityHashing:
         e1, _ = normalize_impilo_payload(make_reading_payload())
         e2, _ = normalize_impilo_payload(make_reading_payload())
         assert e1.event_id == e2.event_id
+
+
+class TestFulfillmentEvents:
+    """order.statusFull -> fulfillment.updated on ocean.logistics."""
+
+    def test_order_status_full_produces_fulfillment_updated(self) -> None:
+        raw = make_order_status_full_payload()
+        event, topic = normalize_impilo_payload(raw)
+        assert event.event_type == "fulfillment.updated"
+        assert event.entity_type == "fulfillment"
+        assert topic == "ocean.logistics"
+
+    def test_order_status_full_payload_fields(self) -> None:
+        raw = make_order_status_full_payload()
+        event, _ = normalize_impilo_payload(raw)
+        assert event.payload["order_id"] == "1001"
+        assert event.payload["status"] == "shipped"
+        assert event.payload["shipping_option"] == "standard"
+        assert event.payload["tracking_numbers"] == ["1Z999AA10123456784"]
+        assert event.payload["order_items"] == [{"sku": "BP-100", "qty": 1}]
+        assert event.payload["devices"] == [{"id": 5001, "name": "BP Monitor"}]
+        # patient_id should be hashed
+        expected_hash = hashlib.sha256("impilo:patient:123".encode()).hexdigest()
+        assert event.payload["patient_id"] == expected_hash
+
+
+class TestReturnEvents:
+    """return.statusFull -> return.updated on ocean.logistics."""
+
+    def test_return_status_full_produces_return_updated(self) -> None:
+        raw = make_return_status_full_payload()
+        event, topic = normalize_impilo_payload(raw)
+        assert event.event_type == "return.updated"
+        assert event.entity_type == "return"
+        assert topic == "ocean.logistics"
+
+    def test_return_status_full_payload_fields(self) -> None:
+        raw = make_return_status_full_payload()
+        event, _ = normalize_impilo_payload(raw)
+        assert event.payload["return_id"] == "2001"
+        assert event.payload["status"] == "received"
+        assert event.payload["reason"] == "defective"
+        assert event.payload["device_id"] == "789"
+        assert event.payload["order_id"] == "1001"
+        assert "raw_payload" in event.payload
+
+
+class TestDeviceAssociationEvents:
+    """device.associationCreated/Removed -> device.associated/disassociated."""
+
+    def test_device_association_created_produces_device_associated(self) -> None:
+        raw = make_device_association_created_payload()
+        event, topic = normalize_impilo_payload(raw)
+        assert event.event_type == "device.associated"
+        assert event.entity_type == "device_association"
+        assert topic == "ocean.logistics"
+
+    def test_device_association_created_payload_fields(self) -> None:
+        raw = make_device_association_created_payload()
+        event, _ = normalize_impilo_payload(raw)
+        assert event.payload["device_id"] == "789"
+        assert event.payload["device_name"] == "BP Monitor"
+        assert event.payload["order_id"] == "1001"
+
+    def test_device_association_removed_produces_device_disassociated(self) -> None:
+        raw = make_device_association_removed_payload()
+        event, topic = normalize_impilo_payload(raw)
+        assert event.event_type == "device.disassociated"
+        assert event.entity_type == "device_association"
+        assert topic == "ocean.logistics"
+
+    def test_device_association_removed_has_no_order_id(self) -> None:
+        raw = make_device_association_removed_payload()
+        event, _ = normalize_impilo_payload(raw)
+        assert event.payload["device_id"] == "789"
+        assert event.payload["device_name"] == "BP Monitor"
+        assert event.payload.get("order_id") is None
+
+
+class TestReadingPassthrough:
+    """reading.* events should include reading_type field."""
+
+    def test_reading_has_reading_type_field(self) -> None:
+        event, _ = normalize_impilo_payload(make_reading_payload("weight"))
+        assert event.payload["reading_type"] == "reading.weight"
 
 
 class TestEdgeCases:

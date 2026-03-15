@@ -4,11 +4,14 @@ from __future__ import annotations
 from typing import Literal
 
 SourceSystem = Literal[
-    "pocar", "zcc", "ocean", "linear", "github", "hubspot",
+    "pocar", "zcc", "ocean", "linear", "github", "hubspot", "impilo",
     "control-plane", "agent-worker", "call-simulator", "sim-driver",
 ]
 
-EntityType = Literal["patient", "alert", "task", "interaction", "outcome", "signal", "ticket"]
+EntityType = Literal[
+    "patient", "alert", "task", "interaction", "outcome", "signal", "ticket",
+    "fulfillment", "return", "device_association",
+]
 
 AlertSeverity = Literal["critical", "high", "medium", "low"]
 
@@ -65,6 +68,10 @@ EventType = Literal[
     "ticket.created",
     "ticket.updated",
     "ticket.resolved",
+    "fulfillment.updated",
+    "return.updated",
+    "device.associated",
+    "device.disassociated",
     "scenario.started",
     "scenario.completed",
 ]

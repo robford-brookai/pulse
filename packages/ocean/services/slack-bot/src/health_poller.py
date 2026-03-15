@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import text
@@ -38,7 +38,7 @@ async def poll_connector_health(
                 )
                 silent_connectors = result.fetchall()
 
-            now = datetime.now(tz=timezone.utc)
+            now = datetime.now(tz=UTC)
 
             for row in silent_connectors:
                 connector_id = row.connector_id
@@ -47,11 +47,11 @@ async def poll_connector_health(
                 last_alerted_at = row.last_alerted_at
 
                 if last_seen.tzinfo is None:
-                    last_seen = last_seen.replace(tzinfo=timezone.utc)
+                    last_seen = last_seen.replace(tzinfo=UTC)
 
                 should_alert = last_alerted_at is None or (
                     now - (
-                        last_alerted_at.replace(tzinfo=timezone.utc)
+                        last_alerted_at.replace(tzinfo=UTC)
                         if last_alerted_at.tzinfo is None
                         else last_alerted_at
                     )

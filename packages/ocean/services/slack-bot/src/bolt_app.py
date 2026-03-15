@@ -1,30 +1,36 @@
-"""Slack Bolt action handlers — Claim, Resolve, Outreach Approve/Reject."""
+"""Slack Bolt action handlers — Claim, Resolve, Outreach Approve/Reject, Ticket Create."""
 from __future__ import annotations
 
+import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 import sqlalchemy as sa
 import structlog
-from slack_bolt.async_app import AsyncApp
 from slack_bolt.adapter.fastapi.async_handler import AsyncSlackRequestHandler
+from slack_bolt.async_app import AsyncApp
 
 from src.ai_events import publish_ai_event
 from src.cards import (
     approval_confirmed_card,
     claimed_card,
+    delivery_claimed_card,
+    delivery_resolved_card,
     human_gate_confirmed_card,
     human_gate_overridden_card,
-    outreach_draft_card,
     rejection_confirmed_card,
     resolved_card,
+    ticket_claimed_card,
+    ticket_resolved_card,
 )
-from src.slash_commands import handle_ocean_command, set_slash_deps
+from src.slash_commands import CATEGORY_CHANNEL_MAP, build_ticket_modal, handle_ocean_command
 from src.zcc_dispatch import dispatch_zcc_outbound_call, get_zcc_oauth_token
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import async_sessionmaker
+
     from src.publisher import RedpandaPublisher
 
 log = structlog.get_logger()
@@ -33,17 +39,17 @@ log = structlog.get_logger()
 # Module-level injectable dependencies (set by main.py during lifespan)
 # ---------------------------------------------------------------------------
 
-_session_maker: "async_sessionmaker | None" = None
-_publisher: "RedpandaPublisher | None" = None
+_session_maker: async_sessionmaker | None = None
+_publisher: RedpandaPublisher | None = None
 _hasura_secret: str | None = None
 
 
-def set_session_maker(sm: "async_sessionmaker") -> None:
+def set_session_maker(sm: async_sessionmaker) -> None:
     global _session_maker
     _session_maker = sm
 
 
-def set_publisher(p: "RedpandaPublisher") -> None:
+def set_publisher(p: RedpandaPublisher) -> None:
     global _publisher
     _publisher = p
 
@@ -122,7 +128,7 @@ async def handle_task_claim(ack, body, client) -> None:
                     "event_type": "task.claimed",
                     "entity_id": task_id,
                     "entity_type": "task",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "payload": {"task_id": task_id, "actor_id": actor_id},
                 },
             )
@@ -150,7 +156,7 @@ async def handle_task_resolve(ack, body, client) -> None:
     actor_id: str = body["user"]["id"]
     channel_id: str = body["container"]["channel_id"]
     message_ts: str = body["container"]["message_ts"]
-    timestamp = datetime.now(timezone.utc).isoformat()
+    timestamp = datetime.now(UTC).isoformat()
 
     log.info("task_resolve_received", task_id=task_id, actor_id=actor_id)
 
@@ -436,3 +442,585 @@ async def handle_human_gate_override(ack, body, client) -> None:
         text=f"Human gate overridden by {actor_id}",
     )
     log.info("human_gate_overridden", draft_id=draft_id, actor_id=actor_id)
+
+
+# ---------------------------------------------------------------------------
+# Action handlers — ticket claim, resolve, wait, resume (Phase 17)
+# ---------------------------------------------------------------------------
+
+@bolt_app.action("ticket_claim")
+async def handle_ticket_claim(ack, body, client) -> None:
+    """Handle ticket_claim button — optimistic update + publish request event."""
+    await ack()
+
+    ticket_id: str = body["actions"][0]["value"]
+    actor_id: str = body["user"]["id"]
+    channel_id: str = body["container"]["channel_id"]
+    message_ts: str = body["container"]["message_ts"]
+
+    log.info("ticket_claim_received", ticket_id=ticket_id, actor_id=actor_id)
+
+    if _publisher is not None:
+        await _publisher.publish(
+            "ocean.tickets",
+            {
+                "event_type": "ticket.update.requested",
+                "entity_id": ticket_id,
+                "entity_type": "ticket",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "payload": {
+                    "ticket_id": ticket_id,
+                    "new_status": "in_progress",
+                    "actor_user_id": actor_id,
+                },
+            },
+        )
+
+    # Optimistic card update
+    await client.chat_update(
+        channel=channel_id,
+        ts=message_ts,
+        blocks=ticket_claimed_card(ticket_id, ticket_id, actor_id),
+        text=f"Ticket claimed by {actor_id}",
+    )
+    log.info("ticket_claimed", ticket_id=ticket_id, actor_id=actor_id)
+
+
+@bolt_app.action("ticket_resolve")
+async def handle_ticket_resolve(ack, body, client) -> None:
+    """Handle ticket_resolve button — optimistic update + publish request event."""
+    await ack()
+
+    ticket_id: str = body["actions"][0]["value"]
+    actor_id: str = body["user"]["id"]
+    channel_id: str = body["container"]["channel_id"]
+    message_ts: str = body["container"]["message_ts"]
+
+    log.info("ticket_resolve_received", ticket_id=ticket_id, actor_id=actor_id)
+
+    if _publisher is not None:
+        await _publisher.publish(
+            "ocean.tickets",
+            {
+                "event_type": "ticket.update.requested",
+                "entity_id": ticket_id,
+                "entity_type": "ticket",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "payload": {
+                    "ticket_id": ticket_id,
+                    "new_status": "resolved",
+                    "actor_user_id": actor_id,
+                },
+            },
+        )
+
+    await client.chat_update(
+        channel=channel_id,
+        ts=message_ts,
+        blocks=ticket_resolved_card(ticket_id, ticket_id, actor_id, ""),
+        text=f"Ticket resolved by {actor_id}",
+    )
+    log.info("ticket_resolved", ticket_id=ticket_id, actor_id=actor_id)
+
+
+@bolt_app.action("ticket_wait")
+async def handle_ticket_wait(ack, body, client) -> None:
+    """Handle ticket_wait button — open modal for waiting reason selection."""
+    await ack()
+
+    ticket_id: str = body["actions"][0]["value"]
+    trigger_id: str = body["trigger_id"]
+
+    log.info("ticket_wait_received", ticket_id=ticket_id)
+
+    await client.views_open(
+        trigger_id=trigger_id,
+        view={
+            "type": "modal",
+            "callback_id": "ticket_wait_modal",
+            "private_metadata": ticket_id,
+            "title": {"type": "plain_text", "text": "Set Waiting Reason"},
+            "submit": {"type": "plain_text", "text": "Submit"},
+            "blocks": [
+                {
+                    "type": "input",
+                    "block_id": "waiting_reason_block",
+                    "element": {
+                        "type": "static_select",
+                        "action_id": "waiting_reason_select",
+                        "placeholder": {"type": "plain_text", "text": "Select reason"},
+                        "options": [
+                            {
+                                "text": {"type": "plain_text", "text": "External Block"},
+                                "value": "external_block",
+                            },
+                            {
+                                "text": {"type": "plain_text", "text": "Timed Pause"},
+                                "value": "timed_pause",
+                            },
+                            {
+                                "text": {"type": "plain_text", "text": "Patient Response"},
+                                "value": "patient_response",
+                            },
+                        ],
+                    },
+                    "label": {"type": "plain_text", "text": "Waiting Reason"},
+                },
+            ],
+        },
+    )
+
+
+@bolt_app.view("ticket_wait_modal")
+async def handle_ticket_wait_modal(ack, body, client) -> None:
+    """Handle ticket_wait_modal submission — publish waiting event."""
+    await ack()
+
+    ticket_id: str = body["view"]["private_metadata"]
+    actor_id: str = body["user"]["id"]
+    values = body["view"]["state"]["values"]
+    selected = values["waiting_reason_block"]["waiting_reason_select"]
+    waiting_reason = selected["selected_option"]["value"]
+
+    log.info("ticket_wait_modal_submitted", ticket_id=ticket_id, reason=waiting_reason)
+
+    if _publisher is not None:
+        await _publisher.publish(
+            "ocean.tickets",
+            {
+                "event_type": "ticket.update.requested",
+                "entity_id": ticket_id,
+                "entity_type": "ticket",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "payload": {
+                    "ticket_id": ticket_id,
+                    "new_status": "waiting",
+                    "waiting_reason": waiting_reason,
+                    "actor_user_id": actor_id,
+                },
+            },
+        )
+
+
+@bolt_app.action("ticket_resume")
+async def handle_ticket_resume(ack, body, client) -> None:
+    """Handle ticket_resume button — resume from waiting state."""
+    await ack()
+
+    ticket_id: str = body["actions"][0]["value"]
+    actor_id: str = body["user"]["id"]
+    channel_id: str = body["container"]["channel_id"]
+    message_ts: str = body["container"]["message_ts"]
+
+    log.info("ticket_resume_received", ticket_id=ticket_id, actor_id=actor_id)
+
+    if _publisher is not None:
+        await _publisher.publish(
+            "ocean.tickets",
+            {
+                "event_type": "ticket.update.requested",
+                "entity_id": ticket_id,
+                "entity_type": "ticket",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "payload": {
+                    "ticket_id": ticket_id,
+                    "new_status": "in_progress",
+                    "actor_user_id": actor_id,
+                },
+            },
+        )
+
+    await client.chat_update(
+        channel=channel_id,
+        ts=message_ts,
+        blocks=ticket_claimed_card(ticket_id, ticket_id, actor_id),
+        text=f"Ticket resumed by {actor_id}",
+    )
+    log.info("ticket_resumed", ticket_id=ticket_id, actor_id=actor_id)
+
+
+# ---------------------------------------------------------------------------
+# Ticket creation modal submission + message shortcut (Phase 17 Plan 02)
+# ---------------------------------------------------------------------------
+
+OPS_CHANNEL = os.environ.get("OPS_SLACK_CHANNEL", "#care-alerts-ops")
+
+
+@bolt_app.view("ticket_create_modal")
+async def handle_ticket_create_modal(ack, body, client) -> None:
+    """Handle ticket_create_modal submission.
+
+    Publishes ticket.create.requested to ocean.tickets and sends ephemeral
+    routing confirmation. human_id is NOT included — control-plane assigns
+    it asynchronously after processing the event.
+    """
+    await ack()
+
+    view = body["view"]
+    user_id = body["user"]["id"]
+    values = view["state"]["values"]
+
+    category = values["category_block"]["category_select"]["selected_option"]["value"]
+    description = values["description_block"]["description_input"]["value"]
+    priority = values["priority_block"]["priority_select"]["selected_option"]["value"]
+    patient_id = (values["patient_block"]["patient_input"].get("value") or "")
+    related_ticket = (values["related_block"]["related_input"].get("value") or "")
+
+    # Parse private_metadata for source_message_url
+    try:
+        metadata = json.loads(view.get("private_metadata") or "{}")
+    except (json.JSONDecodeError, TypeError):
+        metadata = {}
+    source_message_url = metadata.get("source_message_url")
+
+    now = datetime.now(UTC)
+    event = {
+        "event_id": str(uuid4()),
+        "event_type": "ticket.create.requested",
+        "schema_version": "1.0.0",
+        "timestamp": now.isoformat(),
+        "source_system": "slack-bot",
+        "entity_type": "ticket",
+        "correlation_id": str(uuid4()),
+        "payload": {
+            "category": category,
+            "priority": priority,
+            "description": description,
+            "patient_id": patient_id,
+            "source_message_url": source_message_url,
+            "creator_slack_id": user_id,
+            "related_ticket_human_id": related_ticket,
+            "task_ids": [],
+            "alert_ids": [],
+        },
+    }
+
+    if _publisher is not None:
+        await _publisher.publish("ocean.tickets", event)
+
+    channel = CATEGORY_CHANNEL_MAP.get(category, "#ocean-devices")
+    await client.chat_postEphemeral(
+        channel=OPS_CHANNEL,
+        user=user_id,
+        text=f"Ticket request submitted, routing to {channel}...",
+    )
+    log.info("ticket_create_modal_submitted", category=category, user=user_id)
+
+
+async def handle_create_ocean_ticket_shortcut(ack, body, client) -> None:
+    """Handle 'Create Ocean Ticket' message shortcut / action.
+
+    Opens ticket modal with description pre-filled from message text
+    and source_message_url stored in private_metadata.
+    """
+    await ack()
+
+    message = body.get("message", {})
+    message_text = message.get("text", "")
+    channel_id = body.get("channel", {}).get("id", "")
+    message_ts = message.get("ts", "")
+
+    # Get permalink for the source message
+    source_message_url = None
+    if channel_id and message_ts:
+        try:
+            result = await client.chat_getPermalink(channel=channel_id, message_ts=message_ts)
+            source_message_url = result.get("permalink")
+        except Exception:
+            log.warning("permalink_fetch_failed", channel=channel_id, ts=message_ts)
+
+    metadata = json.dumps({
+        "source_message_url": source_message_url,
+    })
+
+    modal = build_ticket_modal(
+        private_metadata=metadata,
+        prefill_description=message_text,
+    )
+
+    await client.views_open(
+        trigger_id=body["trigger_id"],
+        view=modal,
+    )
+    log.info("ticket_shortcut_opened", channel=channel_id)
+
+
+# Register message shortcut and action
+bolt_app.shortcut("create_ocean_ticket")(handle_create_ocean_ticket_shortcut)
+bolt_app.action("create_ocean_ticket")(handle_create_ocean_ticket_shortcut)
+
+
+# ---------------------------------------------------------------------------
+# RMA action handlers (Phase 19)
+# ---------------------------------------------------------------------------
+
+
+async def _lookup_rma_context(ticket_id: str) -> dict:
+    """Look up patient, device, and order info for RMA modal from graph DB."""
+    result = {"ticket_id": ticket_id, "patient_id": "", "device_id": "", "order_id": ""}
+    if _session_maker is None:
+        return result
+
+    async with _session_maker() as session:
+        # Get patient_id from ticket
+        ticket_result = await session.execute(
+            sa.text("SELECT patient_id FROM tickets WHERE ticket_id = :ticket_id"),
+            {"ticket_id": ticket_id},
+        )
+        row = ticket_result.fetchone()
+        if row is None:
+            return result
+        patient_id = row.patient_id
+        result["patient_id"] = patient_id
+
+        # Get order_id from fulfillments
+        ful_result = await session.execute(
+            sa.text(
+                "SELECT order_id FROM fulfillments "
+                "WHERE patient_id = :patient_id "
+                "ORDER BY created_at DESC LIMIT 1"
+            ),
+            {"patient_id": patient_id},
+        )
+        result["order_id"] = ful_result.scalar_one_or_none() or ""
+
+        # Get device_id from device_associations
+        dev_result = await session.execute(
+            sa.text(
+                "SELECT device_id FROM device_associations "
+                "WHERE patient_id = :patient_id AND status = 'active' LIMIT 1"
+            ),
+            {"patient_id": patient_id},
+        )
+        result["device_id"] = dev_result.scalar_one_or_none() or ""
+
+    return result
+
+
+def _build_rma_modal(metadata: dict) -> dict:
+    """Build the RMA creation modal view."""
+    return {
+        "type": "modal",
+        "callback_id": "rma_create_modal",
+        "private_metadata": json.dumps(metadata),
+        "title": {"type": "plain_text", "text": "Create RMA"},
+        "submit": {"type": "plain_text", "text": "Submit"},
+        "blocks": [
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": (
+                            f"*Patient:* `{metadata.get('patient_id', '')}`  |  "
+                            f"*Device:* `{metadata.get('device_id', '')}`  |  "
+                            f"*Order:* `{metadata.get('order_id', '')}`"
+                        ),
+                    },
+                ],
+            },
+            {
+                "type": "input",
+                "block_id": "reason_block",
+                "element": {
+                    "type": "static_select",
+                    "action_id": "reason_select",
+                    "placeholder": {"type": "plain_text", "text": "Select reason"},
+                    "options": [
+                        {
+                            "text": {"type": "plain_text", "text": "Defective"},
+                            "value": "defective",
+                        },
+                        {
+                            "text": {"type": "plain_text", "text": "Wrong Device"},
+                            "value": "wrong_device",
+                        },
+                        {
+                            "text": {"type": "plain_text", "text": "Patient Request"},
+                            "value": "patient_request",
+                        },
+                        {
+                            "text": {"type": "plain_text", "text": "Other"},
+                            "value": "other",
+                        },
+                    ],
+                },
+                "label": {"type": "plain_text", "text": "Return Reason"},
+            },
+        ],
+    }
+
+
+@bolt_app.action("ticket_create_rma")
+async def handle_ticket_create_rma(ack, body, client) -> None:
+    """Handle Create RMA button — open modal with pre-populated patient/device/order data."""
+    await ack()
+
+    ticket_id: str = body["actions"][0]["value"]
+    trigger_id: str = body["trigger_id"]
+
+    log.info("ticket_create_rma_received", ticket_id=ticket_id)
+
+    metadata = await _lookup_rma_context(ticket_id)
+    modal = _build_rma_modal(metadata)
+
+    await client.views_open(trigger_id=trigger_id, view=modal)
+
+
+@bolt_app.view("rma_create_modal")
+async def handle_rma_create_modal(ack, body, client) -> None:
+    """Handle RMA modal submission — publish ticket.rma.requested event."""
+    await ack()
+
+    view = body["view"]
+    user_id = body["user"]["id"]
+    values = view["state"]["values"]
+    reason = values["reason_block"]["reason_select"]["selected_option"]["value"]
+
+    try:
+        metadata = json.loads(view.get("private_metadata") or "{}")
+    except (json.JSONDecodeError, TypeError):
+        metadata = {}
+
+    ticket_id = metadata.get("ticket_id", "")
+    patient_id = metadata.get("patient_id", "")
+    device_id = metadata.get("device_id", "")
+    order_id = metadata.get("order_id", "")
+
+    log.info("rma_modal_submitted", ticket_id=ticket_id, reason=reason)
+
+    if _publisher is not None:
+        now = datetime.now(UTC)
+        event = {
+            "event_id": str(uuid4()),
+            "event_type": "ticket.rma.requested",
+            "schema_version": "1.0.0",
+            "timestamp": now.isoformat(),
+            "source_system": "slack-bot",
+            "entity_id": ticket_id,
+            "entity_type": "ticket",
+            "correlation_id": str(uuid4()),
+            "payload": {
+                "ticket_id": ticket_id,
+                "patient_id": patient_id,
+                "device_id": device_id,
+                "order_id": order_id,
+                "reason": reason,
+            },
+        }
+        await _publisher.publish("ocean.tickets", event)
+
+    await client.chat_postEphemeral(
+        channel=OPS_CHANNEL,
+        user=user_id,
+        text=f"RMA request submitted for {ticket_id}",
+    )
+
+
+@bolt_app.action("ticket_retry_rma")
+async def handle_ticket_retry_rma(ack, body, client) -> None:
+    """Handle Retry RMA button — re-open RMA modal with same context."""
+    await ack()
+
+    ticket_id: str = body["actions"][0]["value"]
+    trigger_id: str = body["trigger_id"]
+
+    log.info("ticket_retry_rma_received", ticket_id=ticket_id)
+
+    metadata = await _lookup_rma_context(ticket_id)
+    modal = _build_rma_modal(metadata)
+
+    await client.views_open(trigger_id=trigger_id, view=modal)
+
+
+# ---------------------------------------------------------------------------
+# Delivery action handlers (Phase 19 Plan 02)
+# ---------------------------------------------------------------------------
+
+
+@bolt_app.action("delivery_claim")
+async def handle_delivery_claim(ack, body, client) -> None:
+    """Handle delivery_claim button — update card, post thread reply, publish event."""
+    await ack()
+
+    order_id: str = body["actions"][0]["value"]
+    actor_id: str = body["user"]["id"]
+    channel_id: str = body["container"]["channel_id"]
+    message_ts: str = body["container"]["message_ts"]
+
+    log.info("delivery_claim_received", order_id=order_id, actor_id=actor_id)
+
+    await client.chat_update(
+        channel=channel_id,
+        ts=message_ts,
+        blocks=delivery_claimed_card(order_id, order_id, "Device", actor_id),
+        text=f"Delivery claimed by {actor_id}",
+    )
+
+    await client.chat_postMessage(
+        channel=channel_id,
+        thread_ts=message_ts,
+        text=f"Claimed by <@{actor_id}> -- ready for patient onboarding call",
+        reply_broadcast=False,
+    )
+
+    if _publisher is not None:
+        await _publisher.publish(
+            "ocean.tickets",
+            {
+                "event_type": "delivery.claimed",
+                "entity_id": order_id,
+                "entity_type": "fulfillment",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "payload": {
+                    "order_id": order_id,
+                    "actor_id": actor_id,
+                },
+            },
+        )
+
+    log.info("delivery_claimed", order_id=order_id, actor_id=actor_id)
+
+
+@bolt_app.action("delivery_resolve")
+async def handle_delivery_resolve(ack, body, client) -> None:
+    """Handle delivery_resolve button — mark handoff complete."""
+    await ack()
+
+    order_id: str = body["actions"][0]["value"]
+    actor_id: str = body["user"]["id"]
+    channel_id: str = body["container"]["channel_id"]
+    message_ts: str = body["container"]["message_ts"]
+
+    log.info("delivery_resolve_received", order_id=order_id, actor_id=actor_id)
+
+    await client.chat_update(
+        channel=channel_id,
+        ts=message_ts,
+        blocks=delivery_resolved_card(order_id, order_id, "Device", actor_id),
+        text="Delivery handoff complete",
+    )
+
+    await client.chat_postMessage(
+        channel=channel_id,
+        thread_ts=message_ts,
+        text="Handoff complete",
+        reply_broadcast=False,
+    )
+
+    if _publisher is not None:
+        await _publisher.publish(
+            "ocean.tickets",
+            {
+                "event_type": "delivery.resolved",
+                "entity_id": order_id,
+                "entity_type": "fulfillment",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "payload": {
+                    "order_id": order_id,
+                    "actor_id": actor_id,
+                },
+            },
+        )
+
+    log.info("delivery_resolved", order_id=order_id, actor_id=actor_id)
