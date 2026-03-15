@@ -1,7 +1,7 @@
 """Graph projection handlers for ticket events."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import sqlalchemy as sa
 import structlog
@@ -17,7 +17,7 @@ async def handle_ticket_created(event_data: dict, session) -> None:
     """Project ticket.created -- INSERT with ON CONFLICT DO UPDATE."""
     payload = event_data.get("payload", {})
     ticket_id = event_data.get("entity_id", "")
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     ts = _parse_ts(event_data["timestamp"])
 
     await session.execute(
@@ -83,7 +83,7 @@ async def handle_ticket_updated(event_data: dict, session) -> None:
     """Project ticket.updated -- update status, priority, waiting_reason."""
     payload = event_data.get("payload", {})
     ticket_id = event_data.get("entity_id", "")
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
 
     await session.execute(
         sa.text(
@@ -133,7 +133,7 @@ async def handle_ticket_updated(event_data: dict, session) -> None:
 async def handle_ticket_resolved(event_data: dict, session) -> None:
     """Project ticket.resolved -- set status to resolved, clear waiting_reason."""
     ticket_id = event_data.get("entity_id", "")
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
 
     await session.execute(
         sa.text(

@@ -22,6 +22,7 @@ from src.handlers.logistics import (
     handle_fulfillment_updated,
     handle_return_updated,
 )
+from src.handlers.ops import handle_connector_heartbeat, handle_scenario_completed
 from src.handlers.outcomes import handle_call_completed, handle_call_missed
 from src.handlers.signals import (
     handle_signal_anomalous,
@@ -52,6 +53,7 @@ TOPICS = [
     "ocean.logistics",
     "ocean.ai-ops",
     "ocean.audit",
+    "ocean.ops",
 ]
 
 # CRITICAL: separate consumer group from event-store-consumer
@@ -83,6 +85,8 @@ EVENT_HANDLERS: dict = {
     "return.updated": handle_return_updated,
     "device.associated": handle_device_associated,
     "device.disassociated": handle_device_disassociated,
+    "connector.heartbeat": handle_connector_heartbeat,
+    "scenario.completed": handle_scenario_completed,
 }
 
 

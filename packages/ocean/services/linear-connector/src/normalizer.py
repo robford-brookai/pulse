@@ -1,7 +1,7 @@
 """Normalize Linear issue data to Ocean ticket event format."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 PRIORITY_MAP: dict[int, str] = {
@@ -45,7 +45,7 @@ def normalize_issue(issue_data: dict, action: str) -> dict | None:
     labels = issue_data.get("labels", [])
     category = _category_from_labels(labels)
 
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
 
     payload: dict = {
         "category": category,

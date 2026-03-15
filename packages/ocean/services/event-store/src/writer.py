@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import sqlalchemy as sa
 import structlog
@@ -81,7 +81,7 @@ async def write_event(event_bytes: bytes, topic: str = "unknown") -> None:
                     "source_system": event_data.get("source_system", "unknown"),
                     "entity_type": event_data.get("entity_type"),
                     "entity_id": event_data.get("entity_id"),
-                    "timestamp": datetime.now(tz=timezone.utc),
+                    "timestamp": datetime.now(tz=UTC),
                     "detail": json.dumps(
                         {
                             "event_type": event_data.get("event_type"),

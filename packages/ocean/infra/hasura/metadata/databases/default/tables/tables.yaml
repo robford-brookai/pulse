@@ -4,3 +4,9 @@
 - table:
     schema: public
     name: audit_log
+- table:
+    schema: public
+    name: connector_health
+- table:
+    schema: public
+    name: simulations

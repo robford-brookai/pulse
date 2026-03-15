@@ -6,7 +6,7 @@ publish canonical events here. Audit failure must not break user flow.
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import structlog
@@ -39,7 +39,7 @@ async def publish_ai_event(
         event = {
             "event_id": str(uuid4()),
             "event_type": event_type,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "source_system": "ocean",
             "entity_type": "task",
             "entity_id": task_id,

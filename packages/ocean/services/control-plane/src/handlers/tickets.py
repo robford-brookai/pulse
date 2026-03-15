@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 import sqlalchemy as sa
@@ -52,7 +52,7 @@ async def handle_ticket_created(event_data: dict, session, producer=None) -> Non
     timestamp_str = event_data.get("timestamp", "")
 
     ticket_id = str(uuid.uuid4())
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     ts = _parse_ts(timestamp_str) if timestamp_str else now
 
     # Generate human-readable ID from per-category sequence
@@ -157,7 +157,7 @@ async def handle_ticket_updated(event_data: dict, session, producer=None) -> Non
     waiting_reason = payload.get("waiting_reason")
     task_ids = payload.get("task_ids", [])
     alert_ids = payload.get("alert_ids", [])
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
 
     # Fetch current status
     result = await session.execute(
@@ -285,7 +285,7 @@ async def handle_rma_requested(event_data: dict, session, producer=None) -> None
     payload = event_data.get("payload", {})
     ticket_id = event_data.get("entity_id", "")
     reason = payload.get("reason", "")
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
 
     # Look up ticket to get patient_id and validate category
     result = await session.execute(
@@ -449,7 +449,7 @@ async def handle_return_status_update(event_data: dict, session, producer=None) 
     payload = event_data.get("payload", {})
     return_id = payload.get("return_id", "") or event_data.get("entity_id", "")
     status = payload.get("status", "")
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
 
     if status not in MILESTONE_STATUSES:
         log.debug("return_status_not_milestone", return_id=return_id, status=status)

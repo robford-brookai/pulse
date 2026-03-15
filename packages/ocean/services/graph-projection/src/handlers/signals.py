@@ -1,7 +1,7 @@
 """Graph projection handlers for signal events."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 import sqlalchemy as sa
 import structlog

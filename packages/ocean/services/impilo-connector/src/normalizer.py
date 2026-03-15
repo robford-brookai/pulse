@@ -4,7 +4,7 @@ from __future__ import annotations
 import hashlib
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import structlog
 from ocean_events.base import BaseEvent, _PHI_FIELD_NAMES
@@ -175,7 +175,7 @@ def normalize_impilo_payload(raw: dict) -> tuple[BaseEvent, str]:
     if created_at_str:
         ts = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
     else:
-        ts = datetime.now(tz=timezone.utc)
+        ts = datetime.now(tz=UTC)
 
     # Build clean payload based on event category
     if ocean_event_type == "fulfillment.updated":

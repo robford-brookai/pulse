@@ -6,7 +6,7 @@ task.created + task.assigned events to ocean.tasks topic.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import sqlalchemy as sa
 import structlog
@@ -27,7 +27,7 @@ async def handle_alert_created(event_data: dict, session, producer=None) -> None
     # Deterministic task_id derived from alert_id using uuid5
     task_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"task-{alert_id}"))
     priority = priority_for(alert_type)
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     ts = _parse_ts(timestamp_str) if timestamp_str else now
 
     await session.execute(

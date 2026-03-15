@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import random
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import structlog
@@ -30,7 +30,7 @@ def build_call_event(
         "event_id": str(uuid4()),
         "event_type": event_type,
         "schema_version": "1.0.0",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "source_system": "call-simulator",
         "entity_type": "interaction",
         "entity_id": entity_id,

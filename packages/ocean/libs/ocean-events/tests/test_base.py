@@ -5,7 +5,7 @@ import importlib
 import sys
 import textwrap
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -27,7 +27,7 @@ def make_valid_event(**overrides):
         event_id=uuid.uuid4(),
         event_type="alert.created",
         schema_version="1.0.0",
-        timestamp=datetime(2026, 3, 5, 0, 0, 0, tzinfo=timezone.utc),
+        timestamp=datetime(2026, 3, 5, 0, 0, 0, tzinfo=UTC),
         source_system="ocean",
         entity_type="alert",
         entity_id="alert-001",

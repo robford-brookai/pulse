@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import sqlalchemy as sa
 import structlog
@@ -29,7 +29,7 @@ async def handle_call_completed(event_data: dict, session) -> None:
     patient_id = payload.get("patient_id", "")
     event_id = event_data.get("event_id", "")
     disposition = payload.get("disposition", "")
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     outcome_id = _outcome_id(engagement_id, "call_completed")
 
     # Upsert interaction — set outcome='completed', completed_at=now
@@ -88,7 +88,7 @@ async def handle_call_missed(event_data: dict, session) -> None:
     task_id = payload.get("task_id") or ""
     patient_id = payload.get("patient_id", "")
     event_id = event_data.get("event_id", "")
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     outcome_id = _outcome_id(engagement_id, "call_missed")
 
     # Upsert interaction — set outcome='missed', completed_at=now

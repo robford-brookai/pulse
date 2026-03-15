@@ -217,7 +217,7 @@ async def test_default_partition_exists(conn):
 async def test_immutability_trigger_on_partitioned_table(conn):
     """INSERT then UPDATE must raise due to immutability trigger."""
     audit_id = uuid.uuid4()
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
 
     await conn.execute("""
         INSERT INTO audit_log (audit_id, action_type, actor_id, source_system, timestamp, recorded_at)
@@ -236,7 +236,7 @@ async def test_data_lands_in_correct_partition(conn):
     today = datetime.date.today()
     partition_name = f"audit_log_y{today.year}m{today.month:02d}"
     audit_id = uuid.uuid4()
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
 
     await conn.execute("""
         INSERT INTO audit_log (audit_id, action_type, actor_id, source_system, timestamp, recorded_at)
