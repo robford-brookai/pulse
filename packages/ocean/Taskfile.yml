@@ -64,6 +64,18 @@ tasks:
     cmds:
       - docker compose --env-file .env -f {{.COMPOSE_FILE}} --profile sim up -d
 
+  up:warehouse:
+    desc: Start full stack including Redpanda Connect warehouse sync (requires Snowflake credentials)
+    cmds:
+      - docker compose --env-file .env -f {{.COMPOSE_FILE}} --profile warehouse up -d
+
+  warehouse:smoke:
+    desc: Run sim smoke_test scenario and verify events appear in Snowflake within 60 seconds
+    cmds:
+      - uv run python scripts/warehouse_smoke.py
+    requires:
+      vars: [SNOWFLAKE_ACCOUNT, SNOWFLAKE_USER, SNOWFLAKE_PRIVATE_KEY_PATH]
+
   down:
     desc: Stop all services
     cmds:
