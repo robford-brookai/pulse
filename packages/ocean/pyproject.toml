@@ -31,6 +31,8 @@ dev = [
     "structlog>=25.5.0",
     "testcontainers[kafka,postgres]>=4.9.0",
     "uvicorn>=0.41.0",
+    "requests>=2.32.0",
+    "snowflake-connector-python>=3.12.0",
 ]
 
 [tool.pytest.ini_options]
