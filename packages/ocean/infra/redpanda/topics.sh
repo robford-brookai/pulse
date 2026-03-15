@@ -16,6 +16,7 @@ topics=(
   "ocean.audit"
   "ocean.ops"
   "ocean.logistics"
+  "ocean.warehouse-dlq"   # dead-letter for Redpanda Connect Snowflake failures
 )
 
 echo "Creating Ocean topics on broker: $REDPANDA_BROKERS"
