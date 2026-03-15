@@ -79,7 +79,7 @@ def _connect_snowflake() -> snowflake.connector.SnowflakeConnection:
     )
 
 
-def _poll_snowflake(event_id: str) -> int:
+def run_smoke(event_id: str) -> int:
     conn = _connect_snowflake()
     deadline = time.time() + TIMEOUT_SECONDS
     try:
@@ -122,7 +122,7 @@ def main() -> None:
     print(f"Waiting for event to flow: Redpanda -> warehouse-sync -> Snowflake...")
 
     try:
-        count = _poll_snowflake(event_id)
+        count = run_smoke(event_id)
         print(f"PASS: {count} event(s) found in OCEAN_RAW.EVENTS within {TIMEOUT_SECONDS}s")
         sys.exit(0)
     except TimeoutError as e:

@@ -2,7 +2,6 @@
 from pathlib import Path
 
 import yaml
-import pytest
 
 _ROOT = Path(__file__).parents[2]
 _CONNECT_YAML = _ROOT / "infra" / "redpanda" / "connect.yaml"
@@ -37,18 +36,17 @@ def test_consumer_group_set():
         f"Expected consumer_group 'warehouse-sync-connect', got '{cg}'"
 
 
-def test_offset_token_unique_across_topics():
-    """Offset token must include topic + partition to prevent cross-topic dedup collisions."""
+def test_path_unique_across_topics():
+    """Stage path must include topic + partition to prevent cross-topic file collisions."""
     config = _config()
-    snowflake_out = config["output"]["fallback"][0]["snowflake_streaming"]
-    offset_token = snowflake_out["offset_token"]
-    assert "@kafka_topic" in offset_token, "offset_token must include @kafka_topic"
-    assert "@kafka_partition" in offset_token, "offset_token must include @kafka_partition"
+    snowflake_out = config["output"]["fallback"][0]["snowflake_put"]
+    path = snowflake_out["path"]
+    assert "@kafka_topic" in path, "path must include @kafka_topic"
+    assert "@kafka_partition" in path, "path must include @kafka_partition"
 
 
-def test_schema_evolution_disabled():
-    """VARIANT table; no column addition wanted — schema_evolution must be false."""
+def test_snowpipe_configured():
+    """snowflake_put must trigger Snowpipe for auto-ingest into EVENTS table."""
     config = _config()
-    snowflake_out = config["output"]["fallback"][0]["snowflake_streaming"]
-    se = snowflake_out.get("schema_evolution", {})
-    assert se.get("enabled") is False, "schema_evolution.enabled must be false"
+    snowflake_out = config["output"]["fallback"][0]["snowflake_put"]
+    assert snowflake_out.get("snowpipe"), "snowpipe must be configured for auto-ingest"
