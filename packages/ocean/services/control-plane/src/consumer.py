@@ -44,6 +44,7 @@ EVENT_HANDLERS: dict = {
     "connector.heartbeat": handle_connector_heartbeat,
     "ticket.create.requested": handle_ticket_created,
     "ticket.created": handle_ticket_created,
+    "ticket.update.requested": handle_ticket_updated,
     "ticket.updated": handle_ticket_updated,
     "ticket.rma.requested": handle_rma_requested,
     "return.updated": handle_return_status_update,
