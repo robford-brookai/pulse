@@ -62,6 +62,24 @@ services:
         condition: service_healthy
     restart: "no"
 
+  redpanda-connect:
+    image: docker.redpanda.com/redpandadata/connect:v25.3.10
+    volumes:
+      - ./redpanda/connect.yaml:/connect.yaml:ro
+      - ./redpanda/snowflake_key.p8:/snowflake_key.p8:ro
+    environment:
+      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      SNOWFLAKE_ACCOUNT: ${SNOWFLAKE_ACCOUNT}
+      SNOWFLAKE_USER: ${SNOWFLAKE_USER:-OCEAN_SVC}
+      SNOWFLAKE_PRIVATE_KEY_PATH: /snowflake_key.p8
+    command: run /connect.yaml
+    depends_on:
+      redpanda-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    profiles:
+      - warehouse
+
   postgres:
     image: pgvector/pgvector:pg16
     environment:
