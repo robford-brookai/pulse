@@ -1,0 +1,45 @@
+# infra/redpanda/connect.yaml
+# Redpanda Connect pipeline: all ocean.* topics -> Snowflake OCEAN_RAW.EVENTS
+# See .planning/docs/tether-spec.md v1 for full contract.
+
+input:
+  kafka_franz:
+    seed_brokers:
+      - "${REDPANDA_BROKERS:-redpanda:29092}"
+    topics:
+      - "^ocean\\..*"          # regex: all ocean.* topics
+    consumer_group: "warehouse-sync-connect"
+    checkpoint_limit: 4096
+    batching:
+      count: 1000
+      period: "10s"
+
+pipeline:
+  processors:
+    - mapping: |
+        root = {
+          "data": this,
+          "_topic": @kafka_topic
+        }
+
+output:
+  fallback:
+    - snowflake_streaming:
+        account: "${SNOWFLAKE_ACCOUNT}"
+        user: "${SNOWFLAKE_USER}"
+        role: "OCEAN_WRITER"
+        database: "STREAMLINE"
+        schema: "OCEAN_RAW"
+        table: "EVENTS"
+        private_key_file: "${SNOWFLAKE_PRIVATE_KEY_PATH}"
+        channel_prefix: "ocean-connect"
+        offset_token: '${! @kafka_topic }-${! @kafka_partition }-${! "%016X".format(@kafka_offset) }'
+        schema_evolution:
+          enabled: false
+        batching:
+          count: 1000
+          period: "10s"
+    - kafka_franz:
+        seed_brokers:
+          - "${REDPANDA_BROKERS:-redpanda:29092}"
+        topic: "ocean.warehouse-dlq"
