@@ -62,23 +62,32 @@ services:
         condition: service_healthy
     restart: "no"
 
-  redpanda-connect:
-    image: docker.redpanda.com/redpandadata/connect:v25.3.10
-    volumes:
-      - ./redpanda/connect.yaml:/connect.yaml:ro
-      - ./redpanda/snowflake_key.p8:/snowflake_key.p8:ro
+  warehouse-sync:
+    build:
+      context: ..
+      dockerfile: services/warehouse-sync/Dockerfile
     environment:
       REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
       SNOWFLAKE_ACCOUNT: ${SNOWFLAKE_ACCOUNT}
       SNOWFLAKE_USER: ${SNOWFLAKE_USER:-OCEAN_SVC}
       SNOWFLAKE_PRIVATE_KEY_PATH: /snowflake_key.p8
-    command: run /connect.yaml
+    volumes:
+      - ./redpanda/snowflake_key.p8:/snowflake_key.p8:ro
+    ports:
+      - "8009:8008"
     depends_on:
+      redpanda:
+        condition: service_healthy
       redpanda-init:
         condition: service_completed_successfully
     restart: unless-stopped
     profiles:
       - warehouse
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8008/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   postgres:
     image: pgvector/pgvector:pg16

@@ -1,5 +1,6 @@
 # infra/redpanda/connect.yaml
 # Redpanda Connect pipeline: all ocean.* topics -> Snowflake OCEAN_RAW.EVENTS
+# Uses snowflake_put (open-source) — stages JSON files then triggers Snowpipe.
 # See .planning/docs/tether-spec.md v1 for full contract.
 
 input:
@@ -24,21 +25,25 @@ pipeline:
 
 output:
   fallback:
-    - snowflake_streaming:
+    - snowflake_put:
         account: "${SNOWFLAKE_ACCOUNT}"
         user: "${SNOWFLAKE_USER}"
+        private_key_file: "${SNOWFLAKE_PRIVATE_KEY_PATH}"
         role: "OCEAN_WRITER"
         database: "STREAMLINE"
+        warehouse: "OCEAN_WH"
         schema: "OCEAN_RAW"
-        table: "EVENTS"
-        private_key_file: "${SNOWFLAKE_PRIVATE_KEY_PATH}"
-        channel_prefix: "ocean-connect"
-        offset_token: '${! @kafka_topic }-${! @kafka_partition }-${! "%016X".format(@kafka_offset) }'
-        schema_evolution:
-          enabled: false
+        stage: "@OCEAN_STAGE"
+        path: "ocean/${! @kafka_topic }/${! @kafka_partition }"
+        upload_parallel_threads: 4
+        compression: NONE
+        snowpipe: "OCEAN_PIPE"
         batching:
           count: 1000
           period: "10s"
+          processors:
+            - archive:
+                format: json_array
     - kafka_franz:
         seed_brokers:
           - "${REDPANDA_BROKERS:-redpanda:29092}"
