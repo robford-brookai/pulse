@@ -16,6 +16,7 @@ import sqlalchemy as sa
 import structlog
 
 from src.escalation import insert_escalation_state, remove_escalation_state
+from src.handlers.outcomes import build_outcome_event
 from src.impilo_client import create_rma
 from src.rules import (
     is_valid_transition,
@@ -271,6 +272,17 @@ async def handle_ticket_updated(event_data: dict, session, producer=None) -> Non
                 },
             }
             await producer.publish("ocean.tickets", resolved_event)
+
+            # Dual-publish outcome.recorded to ocean.outcomes
+            outcome_event = build_outcome_event(
+                entity_type="ticket",
+                entity_id=ticket_id,
+                resolution_type="resolved",
+                resolved_by=payload.get("actor_id", "system"),
+                correlation_id=event_data.get("correlation_id", ""),
+                timestamp=now.isoformat(),
+            )
+            await producer.publish("ocean.outcomes", outcome_event)
 
 
 # ---------------------------------------------------------------------------

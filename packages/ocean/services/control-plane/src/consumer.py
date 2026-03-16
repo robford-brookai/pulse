@@ -17,6 +17,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from src.handlers.alerts import handle_alert_created
 from src.handlers.deliveries import handle_delivery_notification
 from src.handlers.heartbeats import handle_connector_heartbeat
+from src.handlers.outcomes import (
+    handle_alert_resolved,
+    handle_call_completed,
+    handle_call_missed,
+    handle_task_completed,
+)
 from src.handlers.tickets import (
     handle_return_status_update,
     handle_rma_requested,
@@ -31,6 +37,8 @@ TOPICS = [
     "ocean.ops",
     "ocean.tickets",
     "ocean.logistics",
+    "ocean.tasks",
+    "ocean.interactions",
 ]
 
 CONSUMER_CONFIG: dict = {
@@ -49,6 +57,10 @@ EVENT_HANDLERS: dict = {
     "ticket.rma.requested": handle_rma_requested,
     "return.updated": handle_return_status_update,
     "fulfillment.updated": handle_delivery_notification,
+    "alert.resolved": handle_alert_resolved,
+    "task.completed": handle_task_completed,
+    "call.completed": handle_call_completed,
+    "call.missed": handle_call_missed,
 }
 
 
