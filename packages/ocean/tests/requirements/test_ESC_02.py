@@ -31,26 +31,26 @@ async def test_check_and_escalate_publishes_task_escalated():
     importlib.reload(esc_mod)
     from src.escalation import check_and_escalate
 
-    now = datetime(2026, 3, 16, 12, 0, 0, tzinfo=UTC)
+    # Use a created_at far enough in the past that any real now() will exceed the threshold
+    created_at = datetime.now(tz=UTC) - timedelta(hours=2)
 
-    # Mock find_escalation_candidates to return one task candidate
     candidate_row = MagicMock()
     candidate_row._mapping = {
         "entity_type": "task",
         "entity_id": "task-100",
         "current_priority": "medium",
-        "created_at": now - timedelta(hours=1),
+        "created_at": created_at,
         "escalated_at": None,
         "escalation_count": 0,
     }
     candidate_row.current_priority = "medium"
     candidate_row.escalated_at = None
-    candidate_row.created_at = now - timedelta(hours=1)
+    candidate_row.created_at = created_at
 
     find_result = MagicMock()
     find_result.fetchall.return_value = [candidate_row]
 
-    # Mock status check — task is still "open" (unclaimed)
+    # Mock status check -- task is still "open" (unclaimed)
     status_result = MagicMock()
     status_result.scalar_one_or_none.return_value = "open"
 
@@ -84,20 +84,20 @@ async def test_check_and_escalate_publishes_ticket_escalated():
     importlib.reload(esc_mod)
     from src.escalation import check_and_escalate
 
-    now = datetime(2026, 3, 16, 12, 0, 0, tzinfo=UTC)
+    created_at = datetime.now(tz=UTC) - timedelta(hours=3)
 
     candidate_row = MagicMock()
     candidate_row._mapping = {
         "entity_type": "ticket",
         "entity_id": "ticket-200",
         "current_priority": "low",
-        "created_at": now - timedelta(hours=2),
+        "created_at": created_at,
         "escalated_at": None,
         "escalation_count": 0,
     }
     candidate_row.current_priority = "low"
     candidate_row.escalated_at = None
-    candidate_row.created_at = now - timedelta(hours=2)
+    candidate_row.created_at = created_at
 
     find_result = MagicMock()
     find_result.fetchall.return_value = [candidate_row]

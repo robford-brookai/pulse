@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 import sqlalchemy as sa
 import structlog
 
+from src.escalation import insert_escalation_state
 from src.rules import channel_for, priority_for
 
 log = structlog.get_logger()
@@ -51,6 +52,9 @@ async def handle_alert_created(event_data: dict, session, producer=None) -> None
             "event_id": event_data.get("event_id", ""),
         },
     )
+    # Track for escalation
+    await insert_escalation_state(session, "task", task_id, priority, ts)
+
     log.info("task_created", task_id=task_id, alert_id=alert_id, priority=priority, alert_type=alert_type)
     log.info(f"[TASK] Patient {patient_id}: task created ({alert_type}, priority={priority})")
 

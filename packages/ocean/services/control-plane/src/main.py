@@ -35,6 +35,15 @@ async def lifespan(app: FastAPI):
     log.info("starting_control_plane_consumer", brokers=bootstrap_servers)
     asyncio.create_task(consumer.run_consumer(session_maker, bootstrap_servers, publisher=publisher))
 
+    # Escalation: rehydrate missed items, then start background poller
+    from src.escalation import rehydrate_and_catch_up, run_escalation_poller
+
+    async with session_maker() as session, session.begin():
+        caught_up = await rehydrate_and_catch_up(session, publisher)
+        if caught_up:
+            log.info("escalation_catch_up_complete", escalated=caught_up)
+    asyncio.create_task(run_escalation_poller(session_maker, publisher))
+
     yield
 
     await engine.dispose()

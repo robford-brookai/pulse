@@ -15,6 +15,7 @@ import httpx
 import sqlalchemy as sa
 import structlog
 
+from src.escalation import insert_escalation_state, remove_escalation_state
 from src.impilo_client import create_rma
 from src.rules import (
     is_valid_transition,
@@ -112,6 +113,9 @@ async def handle_ticket_created(event_data: dict, session, producer=None) -> Non
             ),
             {"ticket_id": ticket_id, "alert_id": aid, "linked_at": now},
         )
+
+    # Track for escalation
+    await insert_escalation_state(session, "ticket", ticket_id, priority, ts)
 
     log.info("ticket_created", ticket_id=ticket_id, human_id=human_id)
 
@@ -225,6 +229,10 @@ async def handle_ticket_updated(event_data: dict, session, producer=None) -> Non
             ),
             {"ticket_id": ticket_id, "alert_id": aid, "linked_at": now},
         )
+
+    # Remove escalation tracking on resolution or in_progress (claimed)
+    if new_status in ("resolved", "in_progress"):
+        await remove_escalation_state(session, "ticket", ticket_id)
 
     log.info("ticket_updated", ticket_id=ticket_id, new_status=new_status)
 

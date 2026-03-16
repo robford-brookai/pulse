@@ -239,6 +239,7 @@ services:
       REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
       IMPILO_API_URL: ${IMPILO_API_URL:-}
       IMPILO_API_KEY: ${IMPILO_API_KEY:-}
+      ESCALATION_ENABLED: "${ESCALATION_ENABLED:-true}"
     ports:
       - "8004:8000"
     depends_on:

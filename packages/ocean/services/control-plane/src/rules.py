@@ -99,6 +99,18 @@ def is_valid_transition(current: str, target: str) -> bool:
 DELIVERY_NOTIFICATION_CHANNEL = "#ocean-activation"
 
 
+# ---------------------------------------------------------------------------
+# Escalation policy
+# ---------------------------------------------------------------------------
+
+PRIORITY_UPGRADE: dict[str, str] = {
+    "low": "medium",
+    "medium": "high",
+    "high": "critical",
+    # critical stays critical — posts UNCLAIMED CRITICAL warning instead
+}
+
+
 def delivery_channel_for() -> str:
     """Return the Slack channel for delivery handoff notifications.
 

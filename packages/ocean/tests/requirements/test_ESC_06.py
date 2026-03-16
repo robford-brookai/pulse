@@ -32,20 +32,20 @@ async def test_check_and_escalate_skips_terminal_status(status):
     importlib.reload(esc_mod)
     from src.escalation import check_and_escalate
 
-    now = datetime(2026, 3, 16, 12, 0, 0, tzinfo=UTC)
+    created_at = datetime.now(tz=UTC) - timedelta(hours=2)
 
     candidate_row = MagicMock()
     candidate_row._mapping = {
         "entity_type": "task",
         "entity_id": "task-999",
         "current_priority": "high",
-        "created_at": now - timedelta(hours=1),
+        "created_at": created_at,
         "escalated_at": None,
         "escalation_count": 0,
     }
     candidate_row.current_priority = "high"
     candidate_row.escalated_at = None
-    candidate_row.created_at = now - timedelta(hours=1)
+    candidate_row.created_at = created_at
 
     find_result = MagicMock()
     find_result.fetchall.return_value = [candidate_row]
@@ -76,20 +76,20 @@ async def test_check_and_escalate_processes_open_items():
     importlib.reload(esc_mod)
     from src.escalation import check_and_escalate
 
-    now = datetime(2026, 3, 16, 12, 0, 0, tzinfo=UTC)
+    created_at = datetime.now(tz=UTC) - timedelta(hours=3)
 
     candidate_row = MagicMock()
     candidate_row._mapping = {
         "entity_type": "task",
         "entity_id": "task-open",
         "current_priority": "low",
-        "created_at": now - timedelta(hours=2),
+        "created_at": created_at,
         "escalated_at": None,
         "escalation_count": 0,
     }
     candidate_row.current_priority = "low"
     candidate_row.escalated_at = None
-    candidate_row.created_at = now - timedelta(hours=2)
+    candidate_row.created_at = created_at
 
     find_result = MagicMock()
     find_result.fetchall.return_value = [candidate_row]
