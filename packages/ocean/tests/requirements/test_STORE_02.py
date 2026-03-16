@@ -12,7 +12,7 @@ import json
 import os
 import pathlib
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 import pytest_asyncio
@@ -73,7 +73,7 @@ def _make_event(index: int = 0) -> dict:
         "source_system": "test",
         "correlation_id": "",
         "actor_id": "test",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "payload": {},
     }
 

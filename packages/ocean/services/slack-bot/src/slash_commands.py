@@ -1,7 +1,7 @@
 """Slash command handlers for /ocean subcommands (status, patient, sim, ticket, help)."""
 from __future__ import annotations
 
-import json
+from datetime import UTC, datetime
 
 import httpx
 import structlog
@@ -62,13 +62,21 @@ async def build_status_response() -> list[dict]:
     try:
         # Service health from connector_health table
         health_result = await _hasura_query(
-            "query { connector_health { name status } }"
+            "query { connector_health(order_by: {connector_name: asc})"
+            " { connector_name last_seen } }"
         )
         services = health_result.get("data", {}).get("connector_health", [])
         if services:
-            health_lines = "\n".join(
-                f"  {s['name']}: {s['status']}" for s in services
-            )
+            now = datetime.now(tz=UTC)
+            health_lines = []
+            for s in services:
+                name = s["connector_name"]
+                last_seen = datetime.fromisoformat(s["last_seen"])
+                age_secs = (now - last_seen).total_seconds()
+                age_min = int(age_secs / 60)
+                status = "ok" if age_secs < 300 else "stale"
+                health_lines.append(f"  {name}: {status} ({age_min}m ago)")
+            health_lines = "\n".join(health_lines)
         else:
             health_lines = "  No services reporting"
 
@@ -110,18 +118,25 @@ async def build_status_response() -> list[dict]:
             "text": {"type": "mrkdwn", "text": task_text},
         })
 
-        # Last simulation timestamp
+        # Last simulation from projected simulations table
         sim_result = await _hasura_query(
             """query {
-                events(
-                    where: {event_type: {_eq: "scenario.completed"}}
-                    order_by: {timestamp: desc}
-                    limit: 1
-                ) { timestamp }
+                simulations(order_by: {completed_at: desc}, limit: 1) {
+                    scenario_name completed_at patients_count
+                }
             }"""
         )
-        sim_events = sim_result.get("data", {}).get("events", [])
-        last_sim = sim_events[0]["timestamp"] if sim_events else "No simulations run"
+        sims = sim_result.get("data", {}).get("simulations", [])
+        if sims:
+            s = sims[0]
+            sim_ts = datetime.fromisoformat(s["completed_at"])
+            sim_age = int((datetime.now(tz=UTC) - sim_ts).total_seconds() / 60)
+            last_sim = (
+                f"{s['scenario_name']} — "
+                f"{s['patients_count']} patients, {sim_age}m ago"
+            )
+        else:
+            last_sim = "No simulations run"
 
         blocks.append({
             "type": "section",

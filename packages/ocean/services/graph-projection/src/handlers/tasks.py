@@ -1,7 +1,7 @@
 """Graph projection handlers for task events."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import sqlalchemy as sa
 import structlog
@@ -17,7 +17,7 @@ async def handle_task_created(event_data: dict, session) -> None:
     """Project task.created — INSERT with ON CONFLICT DO UPDATE."""
     payload = event_data.get("payload", {})
     task_id = event_data.get("entity_id", "")
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     ts = _parse_ts(event_data["timestamp"])
 
     await session.execute(
@@ -50,7 +50,7 @@ async def handle_task_created(event_data: dict, session) -> None:
 async def handle_task_completed(event_data: dict, session) -> None:
     """Project task.completed — update status to 'completed'."""
     task_id = event_data.get("entity_id", "")
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     await session.execute(
         sa.text(
             "UPDATE tasks SET status='completed', updated_at=:updated_at, last_event_id=:event_id "
@@ -64,7 +64,7 @@ async def handle_task_completed(event_data: dict, session) -> None:
 async def handle_task_assigned(event_data: dict, session) -> None:
     """Project task.assigned — update assigned_to."""
     task_id = event_data.get("entity_id", "")
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     payload = event_data.get("payload", {})
     await session.execute(
         sa.text(
@@ -84,7 +84,7 @@ async def handle_task_assigned(event_data: dict, session) -> None:
 async def handle_task_claimed(event_data: dict, session) -> None:
     """Project task.claimed — update status to 'claimed' and set assigned_to from actor_id."""
     task_id = event_data.get("entity_id", "")
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     payload = event_data.get("payload", {})
     await session.execute(
         sa.text(

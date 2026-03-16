@@ -5,7 +5,7 @@ Handles fulfillment, return, and device association lifecycle events.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import sqlalchemy as sa
 import structlog
@@ -20,7 +20,7 @@ def _parse_ts(ts_str: str) -> datetime:
 async def handle_fulfillment_updated(event_data: dict, session) -> None:
     """Project fulfillment.updated -- upsert fulfillments row by order_id."""
     payload = event_data.get("payload", {})
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
 
     await session.execute(
         sa.text(
@@ -66,7 +66,7 @@ async def handle_fulfillment_updated(event_data: dict, session) -> None:
 async def handle_return_updated(event_data: dict, session) -> None:
     """Project return.updated -- upsert returns row by return_id."""
     payload = event_data.get("payload", {})
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
 
     await session.execute(
         sa.text(
@@ -108,7 +108,7 @@ async def handle_return_updated(event_data: dict, session) -> None:
 async def handle_device_associated(event_data: dict, session) -> None:
     """Project device.associated -- upsert device_associations with status='active'."""
     payload = event_data.get("payload", {})
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
 
     await session.execute(
         sa.text(
@@ -143,7 +143,7 @@ async def handle_device_associated(event_data: dict, session) -> None:
 async def handle_device_disassociated(event_data: dict, session) -> None:
     """Project device.disassociated -- set status='removed' and removed_at."""
     payload = event_data.get("payload", {})
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
 
     result = await session.execute(
         sa.text(

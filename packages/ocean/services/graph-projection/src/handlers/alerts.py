@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import sqlalchemy as sa
 import structlog
@@ -28,7 +28,7 @@ async def handle_alert_created(event_data: dict, session) -> None:
     patient_id = payload.get("patient_id", event_data.get("entity_id", ""))
     clinic_id = payload.get("clinic_id", "unknown")
     ts = _parse_ts(event_data["timestamp"])
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
 
     # STEP 1: Patient bootstrap — ensure FK constraint is satisfied
     await session.execute(
@@ -94,7 +94,7 @@ async def handle_alert_created(event_data: dict, session) -> None:
 
 async def handle_alert_claimed(event_data: dict, session) -> None:
     """Project alert.claimed — update status to 'claimed'."""
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     alert_id = event_data.get("entity_id", "")
     await session.execute(
         sa.text(
@@ -108,7 +108,7 @@ async def handle_alert_claimed(event_data: dict, session) -> None:
 
 async def handle_alert_resolved(event_data: dict, session) -> None:
     """Project alert.resolved — update status to 'resolved'."""
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     alert_id = event_data.get("entity_id", "")
     await session.execute(
         sa.text(

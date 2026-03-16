@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from datetime import timezone
+from datetime import UTC
 
 import structlog
 from ocean_events.base import BaseEvent
@@ -71,7 +71,7 @@ def normalize_pocar_payload(raw: dict) -> BaseEvent:
     # Ensure triggered_at is timezone-aware (UTC)
     triggered_at = validated.triggered_at
     if triggered_at.tzinfo is None:
-        triggered_at = triggered_at.replace(tzinfo=timezone.utc)
+        triggered_at = triggered_at.replace(tzinfo=UTC)
 
     return BaseEvent(
         event_id=event_id,

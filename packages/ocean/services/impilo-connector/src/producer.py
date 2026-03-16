@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import sqlalchemy as sa
 import structlog
@@ -51,7 +51,7 @@ class RedpandaPublisher:
                         "key": key,
                         "payload": value,
                         "error": error,
-                        "created_at": datetime.now(tz=timezone.utc),
+                        "created_at": datetime.now(tz=UTC),
                         "retry_count": 0,
                     },
                 )

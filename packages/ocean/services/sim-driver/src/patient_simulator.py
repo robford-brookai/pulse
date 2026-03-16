@@ -12,7 +12,7 @@ from __future__ import annotations
 import hashlib
 import sys
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 # Ensure ocean-events is importable when running outside installed packages
@@ -114,7 +114,7 @@ class PatientSimulator:
             event_id=event_id,
             event_type="signal.received",
             schema_version="1.0.0",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             source_system=source,
             entity_type="signal",
             entity_id=str(event_id),
@@ -145,7 +145,7 @@ class PatientSimulator:
             event_id=alert_id,
             event_type="alert.created",
             schema_version="1.0.0",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             source_system=source,
             entity_type="alert",
             entity_id=str(alert_id),

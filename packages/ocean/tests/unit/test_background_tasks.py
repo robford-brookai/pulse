@@ -15,7 +15,7 @@ from utils import setup_service
 
 
 @pytest.mark.asyncio
-async def test_event_store_startup_creates_consumer_task(monkeypatch):
+async def test_event_store_lifespan_creates_consumer_task(monkeypatch):
     """event-store lifespan creates a consumer asyncio task."""
     setup_service("event-store")
 
@@ -40,12 +40,11 @@ async def test_event_store_startup_creates_consumer_task(monkeypatch):
     monkeypatch.setattr(consumer, "run_consumer", fake_run_consumer)
     monkeypatch.setenv("REDPANDA_BROKERS", "localhost:9092")
 
-    from src.main import startup  # noqa: PLC0415
+    from src.main import app, lifespan  # noqa: PLC0415
 
-    startup_task = asyncio.create_task(startup())
-    await asyncio.sleep(0)
-    await asyncio.sleep(0)  # second yield lets inner consumer task start
-    startup_task.cancel()
+    async with lifespan(app):
+        await asyncio.sleep(0)  # yield to let consumer task start
+
     for t in created_tasks:
         t.cancel()
 

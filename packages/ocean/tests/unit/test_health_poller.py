@@ -5,7 +5,7 @@ Sourced from test/cat7_background_jobs.py.
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -30,7 +30,7 @@ def test_repeat_interval_is_1800_seconds():
 @pytest.mark.asyncio
 async def test_poll_posts_alert_for_silent_connector():
     """Connector silent > 300s and never alerted triggers Slack post."""
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     silent_row = MagicMock()
     silent_row.connector_id = "pocar-connector"
     silent_row.connector_name = "POCAR"
@@ -73,7 +73,7 @@ async def test_poll_posts_alert_for_silent_connector():
 @pytest.mark.asyncio
 async def test_poll_skips_recently_alerted_connector():
     """Connector alerted < 1800s ago is NOT re-alerted."""
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     row = MagicMock()
     row.connector_id = "pocar-connector"
     row.connector_name = "POCAR"
