@@ -175,14 +175,18 @@ def _load_consumer_module() -> ModuleType:
     The consumer imports from src.cards, src.ai_events, etc. We temporarily
     set sys.path so those relative imports resolve to slack-bot/src/.
     """
-    # Save and clear conflicting cached modules
+    # Save and clear ALL conflicting cached modules (including bare "src")
     saved = {}
     for key in list(sys.modules.keys()):
-        if key.startswith("src."):
+        if key == "src" or key.startswith("src."):
             saved[key] = sys.modules.pop(key)
 
     original_path = sys.path.copy()
-    sys.path.insert(0, str(SLACK_BOT_ROOT))
+    # Remove other service src dirs that may resolve "src.*" imports incorrectly
+    services_root = str(pathlib.Path(__file__).resolve().parents[2] / "services")
+    cleaned_path = [p for p in sys.path if not p.startswith(services_root)]
+    cleaned_path.insert(0, str(SLACK_BOT_ROOT))
+    sys.path = cleaned_path
 
     try:
         spec = importlib.util.spec_from_file_location(
@@ -196,7 +200,7 @@ def _load_consumer_module() -> ModuleType:
         sys.path = original_path
         # Restore previously cached modules
         for key in list(sys.modules.keys()):
-            if key.startswith("src."):
+            if key == "src" or key.startswith("src."):
                 del sys.modules[key]
         sys.modules.update(saved)
 
