@@ -5,13 +5,44 @@ Verifies find_escalation_candidates returns items where
 """
 from __future__ import annotations
 
+import importlib.util
+import os
+import pathlib
 import sys
 from datetime import UTC, datetime, timedelta
+from types import ModuleType
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-sys.path.insert(0, "services/control-plane")
+CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[2] / "services" / "control-plane"
+ESCALATION_PATH = CONTROL_PLANE_ROOT / "src" / "escalation.py"
+
+
+def _load_escalation_module() -> ModuleType:
+    """Load escalation.py via importlib to avoid sys.path pollution."""
+    saved = {}
+    for key in list(sys.modules.keys()):
+        if key.startswith("src."):
+            saved[key] = sys.modules.pop(key)
+
+    original_path = sys.path.copy()
+    sys.path.insert(0, str(CONTROL_PLANE_ROOT))
+
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "control_plane_escalation",
+            ESCALATION_PATH,
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+    finally:
+        sys.path = original_path
+        for key in list(sys.modules.keys()):
+            if key.startswith("src."):
+                del sys.modules[key]
+        sys.modules.update(saved)
 
 
 @pytest.fixture
@@ -26,11 +57,8 @@ def _patch_env(monkeypatch):
 @pytest.mark.usefixtures("_patch_env")
 async def test_find_candidates_returns_past_threshold_items():
     """Items past their priority threshold are returned as candidates."""
-    # Reimport after env patching
-    import importlib
-    import src.escalation as esc_mod
-    importlib.reload(esc_mod)
-    from src.escalation import find_escalation_candidates
+    mod = _load_escalation_module()
+    find_escalation_candidates = mod.find_escalation_candidates
 
     now = datetime(2026, 3, 16, 12, 0, 0, tzinfo=UTC)
     # A "high" priority item created 20 min ago (threshold=900s=15min) -> past
@@ -77,10 +105,8 @@ async def test_find_candidates_returns_past_threshold_items():
 @pytest.mark.usefixtures("_patch_env")
 async def test_find_candidates_uses_escalated_at_as_check_time():
     """Previously escalated items use escalated_at as the check time."""
-    import importlib
-    import src.escalation as esc_mod
-    importlib.reload(esc_mod)
-    from src.escalation import find_escalation_candidates
+    mod = _load_escalation_module()
+    find_escalation_candidates = mod.find_escalation_candidates
 
     now = datetime(2026, 3, 16, 12, 0, 0, tzinfo=UTC)
     # Item escalated 10 min ago, current priority is "high" (threshold=900s=15min) -> NOT past

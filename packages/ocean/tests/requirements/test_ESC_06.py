@@ -5,13 +5,44 @@ publish for items with status in ("claimed", "completed", "resolved", "canceled"
 """
 from __future__ import annotations
 
+import importlib.util
+import os
+import pathlib
 import sys
 from datetime import UTC, datetime, timedelta
+from types import ModuleType
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-sys.path.insert(0, "services/control-plane")
+CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[2] / "services" / "control-plane"
+ESCALATION_PATH = CONTROL_PLANE_ROOT / "src" / "escalation.py"
+
+
+def _load_escalation_module() -> ModuleType:
+    """Load escalation.py via importlib to avoid sys.path pollution."""
+    saved = {}
+    for key in list(sys.modules.keys()):
+        if key.startswith("src."):
+            saved[key] = sys.modules.pop(key)
+
+    original_path = sys.path.copy()
+    sys.path.insert(0, str(CONTROL_PLANE_ROOT))
+
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "control_plane_escalation",
+            ESCALATION_PATH,
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+    finally:
+        sys.path = original_path
+        for key in list(sys.modules.keys()):
+            if key.startswith("src."):
+                del sys.modules[key]
+        sys.modules.update(saved)
 
 
 @pytest.fixture
@@ -27,10 +58,8 @@ def _patch_env(monkeypatch):
 @pytest.mark.parametrize("status", ["claimed", "completed", "resolved", "canceled"])
 async def test_check_and_escalate_skips_terminal_status(status):
     """Items with terminal status are skipped and their escalation state is removed."""
-    import importlib
-    import src.escalation as esc_mod
-    importlib.reload(esc_mod)
-    from src.escalation import check_and_escalate
+    mod = _load_escalation_module()
+    check_and_escalate = mod.check_and_escalate
 
     created_at = datetime.now(tz=UTC) - timedelta(hours=2)
 
@@ -71,10 +100,8 @@ async def test_check_and_escalate_skips_terminal_status(status):
 @pytest.mark.usefixtures("_patch_env")
 async def test_check_and_escalate_processes_open_items():
     """Items with status 'open' ARE escalated (not skipped)."""
-    import importlib
-    import src.escalation as esc_mod
-    importlib.reload(esc_mod)
-    from src.escalation import check_and_escalate
+    mod = _load_escalation_module()
+    check_and_escalate = mod.check_and_escalate
 
     created_at = datetime.now(tz=UTC) - timedelta(hours=3)
 
