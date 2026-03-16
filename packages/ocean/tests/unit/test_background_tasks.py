@@ -54,6 +54,7 @@ async def test_event_store_lifespan_creates_consumer_task(monkeypatch):
 @pytest.mark.asyncio
 async def test_slack_bot_skips_consumers_without_token(monkeypatch):
     """When SLACK_BOT_TOKEN is empty, slack-bot yields without starting tasks."""
+    pytest.importorskip("fastmcp")
     setup_service("slack-bot")
 
     monkeypatch.setenv("SLACK_BOT_TOKEN", "")

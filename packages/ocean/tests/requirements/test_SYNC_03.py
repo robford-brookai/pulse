@@ -33,7 +33,7 @@ def test_rbac_roles_created():
 
 def test_writer_grants_present():
     ddl = _ddl()
-    assert "GRANT INSERT ON TABLE STREAMLINE.OCEAN_RAW.EVENTS TO ROLE OCEAN_WRITER" in ddl
+    assert "GRANT INSERT, SELECT ON TABLE STREAMLINE.OCEAN_RAW.EVENTS TO ROLE OCEAN_WRITER" in ddl
 
 
 def test_phi_schemas_not_granted_to_analyst():
