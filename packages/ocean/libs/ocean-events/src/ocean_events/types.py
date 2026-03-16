@@ -42,6 +42,19 @@ InteractionOutcome = Literal["completed", "missed", "pending"]
 
 ResolutionStatus = Literal["resolved", "escalated", "pending"]
 
+ResolutionType = Literal["resolved", "false_positive", "completed", "missed"]
+
+
+@dataclass(frozen=True)
+class OutcomeRecorded:
+    """Normalized outcome event payload for the ocean.outcomes stream."""
+
+    entity_type: str  # "task" | "ticket" | "alert" | "call"
+    entity_id: str
+    resolution_type: str  # "resolved" | "false_positive" | "completed" | "missed"
+    resolved_by: str
+    correlation_id: str
+
 # Composite alias for event type strings — dot-namespaced, past-tense
 EventType = Literal[
     "signal.received",
@@ -57,6 +70,8 @@ EventType = Literal[
     "task.claimed",
     "task.completed",
     "task.canceled",
+    "task.escalated",
+    "ticket.escalated",
     "call.started",
     "call.connected",
     "call.completed",
