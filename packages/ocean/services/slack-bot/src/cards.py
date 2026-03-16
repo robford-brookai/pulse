@@ -13,6 +13,7 @@ def alert_card(
     hasura_url: str,
     cited_signals: list[str] | None = None,
     status: str | None = None,
+    escalated: bool = False,
 ) -> list[dict]:
     """Build the initial alert card posted to care team channel.
 
@@ -31,7 +32,9 @@ def alert_card(
         cited_signals = []
 
     header_text = f"[{severity}] {alert_type.replace('_', ' ').title()}"
-    if status:
+    if escalated:
+        header_text = f"[ESCALATED] {header_text}"
+    elif status:
         header_text = f"[{status.upper()}] {header_text}"
     signals_text = f"_Context signals: {', '.join(cited_signals) if cited_signals else 'none'}_"
 
@@ -421,12 +424,13 @@ def ticket_card(
     category: str,
     priority: str,
     status: str,
-    description: str,
-    ai_summary: str,
+    description: str = "",
+    ai_summary: str = "",
     patient_id: str | None = None,
     creator_id: str | None = None,
     rma_status: str | None = None,
     rma_return_id: str | None = None,
+    escalated: bool = False,
 ) -> list[dict]:
     """Build a ticket card with status-dependent action buttons.
 
@@ -441,7 +445,10 @@ def ticket_card(
     """
     status_emoji = STATUS_EMOJIS.get(status, "")
     priority_emoji = PRIORITY_EMOJIS.get(priority, "")
-    header_text = f"{status_emoji} {human_id} [{status.upper()}]"
+    if escalated:
+        header_text = f"{priority_emoji} {human_id} [ESCALATED]"
+    else:
+        header_text = f"{status_emoji} {human_id} [{status.upper()}]"
     if rma_return_id:
         header_text = f"[RMA] {header_text}"
 
@@ -751,6 +758,63 @@ def scenario_completed_card(scenario_name: str, stats: dict) -> list[dict]:
             "text": {
                 "type": "mrkdwn",
                 "text": "\n".join(stat_lines) if stat_lines else "_No stats_",
+            },
+        },
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Escalation card builders (Phase 22)
+# ---------------------------------------------------------------------------
+
+
+def escalation_thread_reply(
+    entity_type: str,
+    old_priority: str,
+    new_priority: str,
+    minutes_unclaimed: int,
+    policy_name: str,
+) -> list[dict]:
+    """Build thread reply blocks for a priority escalation event.
+
+    Per UI-SPEC: single section with arrow_up emoji, priority change, and policy.
+    """
+    return [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": (
+                    f":arrow_up: *Priority Escalated*\n"
+                    f"Unclaimed for {minutes_unclaimed}m. "
+                    f"Priority upgraded: *{old_priority}* -> *{new_priority}*.\n"
+                    f"Policy: {policy_name}"
+                ),
+            },
+        },
+    ]
+
+
+def unclaimed_critical_reply(
+    entity_type: str,
+    entity_id: str,
+    minutes_unclaimed: int,
+    policy_name: str,
+) -> list[dict]:
+    """Build thread reply blocks for UNCLAIMED CRITICAL warning.
+
+    Per UI-SPEC: posts to #ocean-critical when a critical item remains unclaimed.
+    """
+    return [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": (
+                    f":rotating_light: *UNCLAIMED CRITICAL*\n"
+                    f"This {entity_type} has been critical and unclaimed for {minutes_unclaimed}m.\n"
+                    f"Escalation policy: {policy_name}"
+                ),
             },
         },
     ]

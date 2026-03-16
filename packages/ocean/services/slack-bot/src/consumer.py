@@ -25,11 +25,13 @@ from src.ai_summary import generate_summary_with_context
 from src.cards import (
     alert_card,
     delivery_card,
+    escalation_thread_reply,
     outreach_draft_card,
     scenario_completed_card,
     scenario_started_card,
     ticket_card,
     ticket_resolved_card,
+    unclaimed_critical_reply,
 )
 
 log = structlog.get_logger()
@@ -778,6 +780,174 @@ async def handle_delivery_notify(
     )
 
 
+# ---------------------------------------------------------------------------
+# Escalation event handlers (Phase 22)
+# ---------------------------------------------------------------------------
+
+
+async def handle_task_escalated(
+    event_data: dict,
+    *,
+    slack_client,
+    session_maker,
+    hasura_url: str,
+    publisher=None,
+    thread_manager=None,
+) -> None:
+    """Handle task.escalated: update alert card in place, post thread reply.
+
+    If new_priority is critical and old_priority is also critical (already at max),
+    post UNCLAIMED CRITICAL warning to #ocean-critical.
+    """
+    payload = event_data.get("payload", {})
+    task_id = event_data.get("entity_id", "")
+    old_priority = payload.get("old_priority", "")
+    new_priority = payload.get("new_priority", "")
+    minutes_unclaimed = payload.get("minutes_unclaimed", 0)
+    policy_name = payload.get("policy_name", "")
+
+    if not thread_manager:
+        log.warning("task_escalated_no_thread_manager", task_id=task_id)
+        return
+
+    channel = await thread_manager.get_channel(task_id)
+    message_ts = await thread_manager.get_message_ts(task_id)
+    thread_ts = await thread_manager.get_thread_ts(task_id)
+
+    # Update card in place with [ESCALATED] badge and new priority
+    if channel and message_ts:
+        blocks = alert_card(
+            task_id=task_id,
+            patient_hash="",
+            alert_type="",
+            severity=new_priority.upper(),
+            timestamp="",
+            ai_summary="",
+            hasura_url=hasura_url,
+            escalated=True,
+        )
+        await slack_client.chat_update(
+            channel=channel,
+            ts=message_ts,
+            blocks=blocks,
+            text=f"[ESCALATED] Task {task_id} priority: {new_priority}",
+        )
+
+    reply_ts = thread_ts or message_ts
+
+    # Post thread reply
+    if old_priority == "critical" and new_priority == "critical":
+        # UNCLAIMED CRITICAL warning -- post to #ocean-critical
+        blocks = unclaimed_critical_reply(
+            entity_type="task",
+            entity_id=task_id,
+            minutes_unclaimed=minutes_unclaimed,
+            policy_name=policy_name,
+        )
+        await slack_client.chat_postMessage(
+            channel="#ocean-critical",
+            thread_ts=reply_ts,
+            blocks=blocks,
+            text=f"UNCLAIMED CRITICAL: task {task_id}",
+            reply_broadcast=False,
+        )
+    elif channel and reply_ts:
+        blocks = escalation_thread_reply(
+            entity_type="task",
+            old_priority=old_priority,
+            new_priority=new_priority,
+            minutes_unclaimed=minutes_unclaimed,
+            policy_name=policy_name,
+        )
+        await slack_client.chat_postMessage(
+            channel=channel,
+            thread_ts=reply_ts,
+            blocks=blocks,
+            text=f"Priority escalated: {old_priority} -> {new_priority}",
+            reply_broadcast=False,
+        )
+
+    log.info("task_escalated_handled", task_id=task_id, new_priority=new_priority)
+
+
+async def handle_ticket_escalated(
+    event_data: dict,
+    *,
+    slack_client,
+    session_maker,
+    hasura_url: str,
+    publisher=None,
+    thread_manager=None,
+) -> None:
+    """Handle ticket.escalated: update ticket card in place, post thread reply."""
+    payload = event_data.get("payload", {})
+    ticket_id = event_data.get("entity_id", "")
+    old_priority = payload.get("old_priority", "")
+    new_priority = payload.get("new_priority", "")
+    minutes_unclaimed = payload.get("minutes_unclaimed", 0)
+    policy_name = payload.get("policy_name", "")
+
+    if not thread_manager:
+        log.warning("ticket_escalated_no_thread_manager", ticket_id=ticket_id)
+        return
+
+    channel = await thread_manager.get_ticket_channel(ticket_id)
+    message_ts = await thread_manager.get_ticket_message_ts(ticket_id)
+    thread_ts = await thread_manager.get_ticket_thread_ts(ticket_id)
+
+    # Update ticket card in place with [ESCALATED] badge
+    if channel and message_ts:
+        blocks = ticket_card(
+            ticket_id=ticket_id,
+            human_id="",
+            category="",
+            priority=new_priority,
+            status="escalated",
+            escalated=True,
+        )
+        await slack_client.chat_update(
+            channel=channel,
+            ts=message_ts,
+            blocks=blocks,
+            text=f"[ESCALATED] Ticket {ticket_id} priority: {new_priority}",
+        )
+
+    reply_ts = thread_ts or message_ts
+
+    # Post thread reply
+    if old_priority == "critical" and new_priority == "critical":
+        blocks = unclaimed_critical_reply(
+            entity_type="ticket",
+            entity_id=ticket_id,
+            minutes_unclaimed=minutes_unclaimed,
+            policy_name=policy_name,
+        )
+        await slack_client.chat_postMessage(
+            channel="#ocean-critical",
+            thread_ts=reply_ts,
+            blocks=blocks,
+            text=f"UNCLAIMED CRITICAL: ticket {ticket_id}",
+            reply_broadcast=False,
+        )
+    elif channel and reply_ts:
+        blocks = escalation_thread_reply(
+            entity_type="ticket",
+            old_priority=old_priority,
+            new_priority=new_priority,
+            minutes_unclaimed=minutes_unclaimed,
+            policy_name=policy_name,
+        )
+        await slack_client.chat_postMessage(
+            channel=channel,
+            thread_ts=reply_ts,
+            blocks=blocks,
+            text=f"Priority escalated: {old_priority} -> {new_priority}",
+            reply_broadcast=False,
+        )
+
+    log.info("ticket_escalated_handled", ticket_id=ticket_id, new_priority=new_priority)
+
+
 EVENT_HANDLERS: dict = {
     "task.created": handle_task_created,
     "task.claimed": handle_task_claimed,
@@ -797,6 +967,8 @@ EVENT_HANDLERS: dict = {
     "ticket.rma.failed": handle_rma_failed,
     "ticket.rma.status": handle_rma_status,
     "delivery.notify": handle_delivery_notify,
+    "task.escalated": handle_task_escalated,
+    "ticket.escalated": handle_ticket_escalated,
 }
 
 

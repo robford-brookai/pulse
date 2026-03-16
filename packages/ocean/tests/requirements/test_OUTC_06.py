@@ -9,9 +9,12 @@ Verifies:
 from __future__ import annotations
 
 import ast
+import importlib.util
 import pathlib
+import sys
 import uuid
-from unittest.mock import AsyncMock, MagicMock, call
+from types import ModuleType
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -26,6 +29,53 @@ def _expected_outcome_id(entity_id: str, resolution_type: str) -> str:
     return str(uuid.uuid5(_OUTCOME_NS, f"outcome-{entity_id}-{resolution_type}"))
 
 
+def _load_outcomes_handler() -> ModuleType:
+    """Load outcomes handler via importlib to avoid sys.path pollution."""
+    saved = {}
+    for key in list(sys.modules.keys()):
+        if key.startswith("src."):
+            saved[key] = sys.modules.pop(key)
+
+    original_path = sys.path.copy()
+    sys.path.insert(0, str(GRAPH_PROJ_ROOT))
+
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "graph_proj_outcomes",
+            HANDLER_PATH,
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+    finally:
+        sys.path = original_path
+        for key in list(sys.modules.keys()):
+            if key.startswith("src."):
+                del sys.modules[key]
+        sys.modules.update(saved)
+
+
+def _parse_event_handler_keys(path: pathlib.Path) -> list[str]:
+    """Parse EVENT_HANDLERS dict keys from source via AST."""
+    source = path.read_text()
+    tree = ast.parse(source)
+    handler_keys: list[str] = []
+    for node in ast.walk(tree):
+        dict_value = None
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id == "EVENT_HANDLERS":
+                    dict_value = node.value
+        elif isinstance(node, ast.AnnAssign):
+            if isinstance(node.target, ast.Name) and node.target.id == "EVENT_HANDLERS":
+                dict_value = node.value
+        if dict_value is not None and isinstance(dict_value, ast.Dict):
+            for key in dict_value.keys:
+                if isinstance(key, ast.Constant):
+                    handler_keys.append(key.value)
+    return handler_keys
+
+
 # ---------------------------------------------------------------------------
 # Source inspection tests
 # ---------------------------------------------------------------------------
@@ -35,27 +85,8 @@ class TestOutcomeRecordedSourceInspection:
     """OUTC-06: Verify graph-projection consumer registers outcome.recorded handler."""
 
     def test_consumer_has_outcome_recorded_handler(self):
-        source = CONSUMER_PATH.read_text()
-        tree = ast.parse(source)
-
-        # Find the EVENT_HANDLERS dict (may be Assign or AnnAssign)
-        handler_keys: list[str] = []
-        for node in ast.walk(tree):
-            dict_value = None
-            if isinstance(node, ast.Assign):
-                for target in node.targets:
-                    if isinstance(target, ast.Name) and target.id == "EVENT_HANDLERS":
-                        dict_value = node.value
-            elif isinstance(node, ast.AnnAssign):
-                if isinstance(node.target, ast.Name) and node.target.id == "EVENT_HANDLERS":
-                    dict_value = node.value
-
-            if dict_value is not None and isinstance(dict_value, ast.Dict):
-                for key in dict_value.keys:
-                    if isinstance(key, ast.Constant):
-                        handler_keys.append(key.value)
-
-        assert "outcome.recorded" in handler_keys, (
+        keys = _parse_event_handler_keys(CONSUMER_PATH)
+        assert "outcome.recorded" in keys, (
             "EVENT_HANDLERS must contain 'outcome.recorded' key"
         )
 
@@ -81,10 +112,7 @@ class TestHandleOutcomeRecorded:
     @pytest.mark.asyncio
     async def test_upserts_with_correct_outcome_type(self, mock_session):
         """outcome_type = '{entity_type}_{resolution_type}'."""
-        # Lazy import to avoid dep tree until handler exists
-        import sys
-        sys.path.insert(0, str(GRAPH_PROJ_ROOT))
-        from src.handlers.outcomes import handle_outcome_recorded
+        mod = _load_outcomes_handler()
 
         event_data = {
             "event_id": "evt-001",
@@ -98,9 +126,8 @@ class TestHandleOutcomeRecorded:
             },
         }
 
-        await handle_outcome_recorded(event_data, mock_session)
+        await mod.handle_outcome_recorded(event_data, mock_session)
 
-        # Verify session.execute was called
         assert mock_session.execute.call_count == 1
         call_args = mock_session.execute.call_args
         params = call_args[1] if call_args[1] else call_args[0][1]
@@ -109,9 +136,7 @@ class TestHandleOutcomeRecorded:
     @pytest.mark.asyncio
     async def test_upserts_with_correct_outcome_id(self, mock_session):
         """outcome_id is deterministic via uuid5."""
-        import sys
-        sys.path.insert(0, str(GRAPH_PROJ_ROOT))
-        from src.handlers.outcomes import handle_outcome_recorded
+        mod = _load_outcomes_handler()
 
         event_data = {
             "event_id": "evt-002",
@@ -125,7 +150,7 @@ class TestHandleOutcomeRecorded:
             },
         }
 
-        await handle_outcome_recorded(event_data, mock_session)
+        await mod.handle_outcome_recorded(event_data, mock_session)
 
         call_args = mock_session.execute.call_args
         params = call_args[1] if call_args[1] else call_args[0][1]
@@ -135,9 +160,7 @@ class TestHandleOutcomeRecorded:
     @pytest.mark.asyncio
     async def test_interaction_id_is_null(self, mock_session):
         """interaction_id is NULL for task/ticket/alert outcomes (migration 0014)."""
-        import sys
-        sys.path.insert(0, str(GRAPH_PROJ_ROOT))
-        from src.handlers.outcomes import handle_outcome_recorded
+        mod = _load_outcomes_handler()
 
         event_data = {
             "event_id": "evt-003",
@@ -151,7 +174,7 @@ class TestHandleOutcomeRecorded:
             },
         }
 
-        await handle_outcome_recorded(event_data, mock_session)
+        await mod.handle_outcome_recorded(event_data, mock_session)
 
         call_args = mock_session.execute.call_args
         sql_text = str(call_args[0][0].text)
@@ -160,9 +183,7 @@ class TestHandleOutcomeRecorded:
     @pytest.mark.asyncio
     async def test_resolution_status_equals_resolution_type(self, mock_session):
         """resolution_status should be the raw resolution_type value."""
-        import sys
-        sys.path.insert(0, str(GRAPH_PROJ_ROOT))
-        from src.handlers.outcomes import handle_outcome_recorded
+        mod = _load_outcomes_handler()
 
         event_data = {
             "event_id": "evt-004",
@@ -176,7 +197,7 @@ class TestHandleOutcomeRecorded:
             },
         }
 
-        await handle_outcome_recorded(event_data, mock_session)
+        await mod.handle_outcome_recorded(event_data, mock_session)
 
         call_args = mock_session.execute.call_args
         params = call_args[1] if call_args[1] else call_args[0][1]

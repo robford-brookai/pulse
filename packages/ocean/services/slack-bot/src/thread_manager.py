@@ -53,6 +53,26 @@ class ThreadManager:
             row = result.fetchone()
             return row.thread_ts if row else None
 
+    async def get_channel(self, task_id: str) -> str | None:
+        """Look up channel for a task_id from slack_messages."""
+        async with self._session_maker() as session:
+            result = await session.execute(
+                sa.text("SELECT channel FROM slack_messages WHERE task_id = :task_id"),
+                {"task_id": task_id},
+            )
+            row = result.fetchone()
+            return row.channel if row else None
+
+    async def get_message_ts(self, task_id: str) -> str | None:
+        """Look up message_ts for a task_id from slack_messages."""
+        async with self._session_maker() as session:
+            result = await session.execute(
+                sa.text("SELECT message_ts FROM slack_messages WHERE task_id = :task_id"),
+                {"task_id": task_id},
+            )
+            row = result.fetchone()
+            return row.message_ts if row else None
+
     async def queue_update(self, task_id: str, update: dict) -> None:
         """Append update to batch for task_id, start flush timer if needed."""
         if task_id not in self._batches:
