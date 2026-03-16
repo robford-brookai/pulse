@@ -22,7 +22,7 @@ def _load_escalation_module() -> ModuleType:
     """Load escalation.py via importlib to avoid sys.path pollution."""
     saved = {}
     for key in list(sys.modules.keys()):
-        if key.startswith("src."):
+        if key == "src" or key.startswith("src."):
             saved[key] = sys.modules.pop(key)
 
     original_path = sys.path.copy()
@@ -39,7 +39,7 @@ def _load_escalation_module() -> ModuleType:
     finally:
         sys.path = original_path
         for key in list(sys.modules.keys()):
-            if key.startswith("src."):
+            if key == "src" or key.startswith("src."):
                 del sys.modules[key]
         sys.modules.update(saved)
 
