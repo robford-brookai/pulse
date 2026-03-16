@@ -6,7 +6,6 @@ Verifies find_escalation_candidates returns items where
 from __future__ import annotations
 
 import importlib.util
-import os
 import pathlib
 import sys
 from datetime import UTC, datetime, timedelta

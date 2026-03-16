@@ -1,8 +1,6 @@
 """SYNC-03: Snowflake DDL provisions OCEAN_RAW/CORE/MARTS schemas with RBAC isolation."""
 from pathlib import Path
 
-import pytest
-
 _ROOT = Path(__file__).parents[2]
 _DDL = _ROOT / ".repos" / "streamline" / "snowflake" / "ddl" / "06_ocean_schemas.sql"
 

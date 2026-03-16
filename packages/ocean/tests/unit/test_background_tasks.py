@@ -5,9 +5,7 @@ Sourced from test/cat7_background_jobs.py.
 from __future__ import annotations
 
 import asyncio
-import sys
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -33,7 +31,7 @@ async def test_event_store_lifespan_creates_consumer_task(monkeypatch):
 
     run_consumer_called = []
 
-    async def fake_run_consumer(writer, brokers):
+    async def fake_run_consumer(_writer, brokers):
         run_consumer_called.append(brokers)
         await asyncio.sleep(999)
 

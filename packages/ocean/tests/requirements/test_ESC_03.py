@@ -6,12 +6,11 @@ calls check_and_escalate to process items that timed out during downtime.
 from __future__ import annotations
 
 import importlib.util
-import os
 import pathlib
 import sys
 from datetime import UTC, datetime
 from types import ModuleType
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
