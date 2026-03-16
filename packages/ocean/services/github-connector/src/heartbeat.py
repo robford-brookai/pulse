@@ -1,0 +1,48 @@
+"""Heartbeat background task for the GitHub connector."""
+from __future__ import annotations
+
+import asyncio
+import json
+from datetime import datetime, timezone
+from uuid import uuid4
+
+import structlog
+
+log = structlog.get_logger()
+
+HEARTBEAT_INTERVAL_SECS = 60
+
+
+async def publish_heartbeat(
+    publisher,
+    connector_id: str,
+    connector_name: str,
+) -> None:
+    """Infinite loop that publishes heartbeat events at a fixed interval."""
+    while True:
+        event = {
+            "event_id": str(uuid4()),
+            "event_type": "connector.heartbeat",
+            "schema_version": "1.0.0",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "source_system": connector_id,
+            "entity_type": "connector",
+            "entity_id": connector_id,
+            "correlation_id": str(uuid4()),
+            "actor_id": None,
+            "payload": {
+                "connector_id": connector_id,
+                "connector_name": connector_name,
+            },
+        }
+        try:
+            await publisher.publish(
+                topic="ocean.ops",
+                key=connector_id,
+                value=json.dumps(event).encode(),
+            )
+            log.debug("heartbeat_published", connector_id=connector_id)
+        except Exception:
+            log.exception("heartbeat_publish_failed", connector_id=connector_id)
+
+        await asyncio.sleep(HEARTBEAT_INTERVAL_SECS)

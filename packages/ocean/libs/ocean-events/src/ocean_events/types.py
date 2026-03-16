@@ -1,6 +1,7 @@
 """Event and entity type aliases for Ocean events."""
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Literal
 
 SourceSystem = Literal[
@@ -11,6 +12,7 @@ SourceSystem = Literal[
 EntityType = Literal[
     "patient", "alert", "task", "interaction", "outcome", "signal", "ticket",
     "fulfillment", "return", "device_association",
+    "pull_request", "commit", "contact",
 ]
 
 AlertSeverity = Literal["critical", "high", "medium", "low"]
@@ -74,4 +76,11 @@ EventType = Literal[
     "device.disassociated",
     "scenario.started",
     "scenario.completed",
+    "pr.opened",
+    "pr.merged",
+    "pr.closed",
+    "commit.pushed",
+    "contact.created",
+    "contact.updated",
+    "contact.deleted",
 ]
