@@ -74,7 +74,7 @@ services:
     volumes:
       - ./redpanda/snowflake_key.p8:/snowflake_key.p8:ro
     ports:
-      - "8009:8008"
+      - "8011:8008"
     depends_on:
       redpanda:
         condition: service_healthy
