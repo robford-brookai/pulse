@@ -23,7 +23,7 @@ from src.handlers.logistics import (
     handle_return_updated,
 )
 from src.handlers.ops import handle_connector_heartbeat, handle_scenario_completed
-from src.handlers.outcomes import handle_call_completed, handle_call_missed
+from src.handlers.outcomes import handle_call_completed, handle_call_missed, handle_outcome_recorded
 from src.handlers.signals import (
     handle_signal_anomalous,
     handle_signal_missing,
@@ -87,6 +87,7 @@ EVENT_HANDLERS: dict = {
     "device.disassociated": handle_device_disassociated,
     "connector.heartbeat": handle_connector_heartbeat,
     "scenario.completed": handle_scenario_completed,
+    "outcome.recorded": handle_outcome_recorded,
 }
 
 

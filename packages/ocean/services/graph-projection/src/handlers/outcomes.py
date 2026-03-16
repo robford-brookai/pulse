@@ -1,8 +1,8 @@
-"""Graph projection handlers for call lifecycle — completed and missed outcomes."""
+"""Graph projection handlers for call lifecycle and outcome.recorded events."""
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timezone
 
 import sqlalchemy as sa
 import structlog
@@ -134,3 +134,44 @@ async def handle_call_missed(event_data: dict, session) -> None:
         },
     )
     log.info("call_missed_projected", engagement_id=engagement_id)
+
+
+async def handle_outcome_recorded(event_data: dict, session) -> None:
+    """Project outcome.recorded — upsert outcomes table from normalized envelope.
+
+    Uses the same _outcome_id pattern for deterministic IDs. interaction_id
+    is NULL for task/ticket/alert outcomes (made nullable in migration 0014).
+    """
+    payload = event_data.get("payload", {})
+    entity_type = payload.get("entity_type", "")
+    entity_id = payload.get("entity_id", "")
+    resolution_type = payload.get("resolution_type", "")
+    event_id = event_data.get("event_id", "")
+    now = datetime.now(tz=UTC)
+    outcome_id = _outcome_id(entity_id, resolution_type)
+
+    await session.execute(
+        sa.text(
+            "INSERT INTO outcomes "
+            "    (outcome_id, interaction_id, patient_id, outcome_type, "
+            "     resolution_status, notes, recorded_at, last_event_id) "
+            "VALUES "
+            "    (:outcome_id, NULL, '', :outcome_type, "
+            "     :resolution_status, NULL, :recorded_at, :event_id) "
+            "ON CONFLICT (outcome_id) DO NOTHING"
+        ),
+        {
+            "outcome_id": outcome_id,
+            "outcome_type": f"{entity_type}_{resolution_type}",
+            "resolution_status": resolution_type,
+            "recorded_at": now,
+            "event_id": event_id,
+        },
+    )
+    log.info(
+        "outcome_recorded_projected",
+        entity_type=entity_type,
+        entity_id=entity_id,
+        resolution_type=resolution_type,
+        outcome_id=outcome_id,
+    )
