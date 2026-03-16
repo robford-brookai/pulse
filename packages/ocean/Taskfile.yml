@@ -73,10 +73,9 @@ tasks:
 
   warehouse:smoke:
     desc: Run sim smoke_test scenario and verify events appear in Snowflake within 60 seconds
+    dotenv: ['.env']
     cmds:
       - uv run python scripts/warehouse_smoke.py
-    requires:
-      vars: [SNOWFLAKE_ACCOUNT, SNOWFLAKE_USER, SNOWFLAKE_PRIVATE_KEY_PATH]
 
   down:
     desc: Stop all services
