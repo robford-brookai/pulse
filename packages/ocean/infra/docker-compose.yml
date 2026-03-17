@@ -273,6 +273,7 @@ services:
       ZCC_DEFAULT_QUEUE_ID: ${ZCC_DEFAULT_QUEUE_ID:-}
       MCP_API_KEY: ${MCP_API_KEY:-}
       PHI_STORE_URL: ${PHI_STORE_URL:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     ports:
       - "8005:8000"
     depends_on:
