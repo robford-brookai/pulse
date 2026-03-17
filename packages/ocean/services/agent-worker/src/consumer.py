@@ -5,6 +5,7 @@ dispatches to claim competition, then runs AI decision pipeline.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import random
 
@@ -106,12 +107,18 @@ async def run_consumer(
     """Run the agent-worker consumer loop."""
     conf = {**CONSUMER_CONFIG, "bootstrap.servers": bootstrap_servers}
     consumer = Consumer(conf)
+    # Yield before subscribe to let FastAPI health endpoint become responsive.
+    # AIOConsumer.subscribe() and initial poll() can block the event loop
+    # during broker negotiation.
+    await asyncio.sleep(0)
     await consumer.subscribe(TOPICS)
     log.info("agent_worker_consumer_started", topics=TOPICS, brokers=bootstrap_servers)
 
     try:
         while True:
             msg = await consumer.poll(timeout=1.0)
+            # Yield after each poll to prevent event loop starvation
+            await asyncio.sleep(0)
             if msg is None:
                 continue
 
