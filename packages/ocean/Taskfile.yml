@@ -110,6 +110,11 @@ tasks:
           docker compose --env-file .env -f {{.COMPOSE_FILE}}
           --profile sim
           {{if eq .WAREHOUSE "true"}}--profile warehouse{{end}}
+          down -v 2>/dev/null || true
+      - cmd: >-
+          docker compose --env-file .env -f {{.COMPOSE_FILE}}
+          --profile sim
+          {{if eq .WAREHOUSE "true"}}--profile warehouse{{end}}
           up -d --build
       - cmd: >-
           uv run python scripts/demo.py
