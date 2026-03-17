@@ -57,7 +57,8 @@ async def wait_for_health(services: dict[str, str], timeout: int = 120) -> None:
             print(f"All {len(services)} services healthy.")
             return
 
-        print(f"Waiting for services... ({len(healthy)}/{len(services)} healthy)")
+        pending = sorted(set(services.keys()) - healthy)
+        print(f"Waiting for services... ({len(healthy)}/{len(services)} healthy, pending: {', '.join(pending)})")
         await asyncio.sleep(2)
 
     unhealthy = sorted(set(services.keys()) - healthy)
@@ -181,8 +182,14 @@ async def main() -> None:
     print("Ocean Demo")
     print("-" * 40)
 
-    all_services = {**CORE_SERVICES, **SIM_SERVICES}
-    await wait_for_health(all_services)
+    # Core services must be healthy before proceeding
+    await wait_for_health(CORE_SERVICES)
+    # Sim services get a shorter timeout — agent-worker can be slow to start
+    try:
+        await wait_for_health(SIM_SERVICES, timeout=30)
+    except TimeoutError as e:
+        print(f"WARNING: {e}")
+        print("Continuing — some sim services may still be starting.")
 
     print(f"\nTriggering scenario: {args.scenario}")
     meta = await trigger_scenario(args.scenario)
