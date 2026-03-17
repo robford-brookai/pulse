@@ -1,7 +1,8 @@
 """agent-worker FastAPI app -- lifespan + /health endpoint.
 
-Loads personas from AGENTS.md, creates publisher, starts consumer
-as a background task.
+Loads personas from AGENTS.md, starts consumer as a background task.
+Publisher and consumer creation are deferred to the background task
+so the FastAPI /health endpoint becomes responsive immediately.
 """
 from __future__ import annotations
 
@@ -20,30 +21,38 @@ __version__ = "0.1.0"
 
 log = structlog.get_logger()
 
-_publisher: RedpandaPublisher | None = None
 _consumer_task: asyncio.Task | None = None
 _claimed_tasks: set[str] = set()
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    global _publisher, _consumer_task
+async def _start_worker(brokers: str, personas, compression: float) -> None:
+    """Initialize publisher and consumer in background.
 
-    brokers = os.environ.get("REDPANDA_BROKERS", "redpanda:29092")
-    agents_path = os.environ.get("AGENTS_MD_PATH", "/app/AGENTS.md")
-    compression = float(os.environ.get("COMPRESSION_RATIO", "960"))
-
-    _publisher = RedpandaPublisher(bootstrap_servers=brokers)
-    personas = load_personas(agents_path)
+    Runs after lifespan yields so /health is already responsive.
+    """
+    publisher = await asyncio.to_thread(RedpandaPublisher, bootstrap_servers=brokers)
     log.info(
         "agent_worker_started",
         brokers=brokers,
         personas=[p.id for p in personas],
         compression_ratio=compression,
     )
+    await run_consumer(personas, brokers, publisher, _claimed_tasks)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global _consumer_task
+
+    brokers = os.environ.get("REDPANDA_BROKERS", "redpanda:29092")
+    agents_path = os.environ.get("AGENTS_MD_PATH", "/app/AGENTS.md")
+    compression = float(os.environ.get("COMPRESSION_RATIO", "960"))
+
+    personas = load_personas(agents_path)
+
+    # Defer publisher + consumer to background task so /health responds immediately
     _consumer_task = asyncio.create_task(
-        run_consumer(personas, brokers, _publisher, _claimed_tasks)  # personas, bootstrap_servers, publisher, claimed_tasks
+        _start_worker(brokers, personas, compression)
     )
 
     yield
