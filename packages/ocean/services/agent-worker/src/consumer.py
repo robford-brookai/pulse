@@ -2,6 +2,10 @@
 
 Reads from ocean.tasks, filters for task.created from control-plane only,
 dispatches to claim competition, then runs AI decision pipeline.
+
+Uses synchronous confluent_kafka.Consumer with poll() offloaded to a thread
+via asyncio.to_thread() so the event loop is never blocked. This keeps the
+FastAPI /health endpoint responsive during broker negotiation and polling.
 """
 from __future__ import annotations
 
@@ -10,8 +14,7 @@ import json
 import random
 
 import structlog
-from confluent_kafka import KafkaError
-from confluent_kafka.aio import AIOConsumer as Consumer
+from confluent_kafka import Consumer, KafkaError
 
 from src.claim import compete_for_claim
 from src.decision import decide_with_fallback
@@ -104,21 +107,20 @@ async def run_consumer(
     publisher: RedpandaPublisher,
     claimed_tasks: set[str],
 ) -> None:
-    """Run the agent-worker consumer loop."""
+    """Run the agent-worker consumer loop.
+
+    Uses synchronous Consumer.poll() offloaded to a thread so the
+    asyncio event loop stays free for /health and other endpoints.
+    """
     conf = {**CONSUMER_CONFIG, "bootstrap.servers": bootstrap_servers}
     consumer = Consumer(conf)
-    # Yield before subscribe to let FastAPI health endpoint become responsive.
-    # AIOConsumer.subscribe() and initial poll() can block the event loop
-    # during broker negotiation.
-    await asyncio.sleep(0)
-    await consumer.subscribe(TOPICS)
+    consumer.subscribe(TOPICS)
     log.info("agent_worker_consumer_started", topics=TOPICS, brokers=bootstrap_servers)
 
     try:
         while True:
-            msg = await consumer.poll(timeout=1.0)
-            # Yield after each poll to prevent event loop starvation
-            await asyncio.sleep(0)
+            # Offload blocking poll to thread — keeps event loop responsive
+            msg = await asyncio.to_thread(consumer.poll, 1.0)
             if msg is None:
                 continue
 
@@ -131,7 +133,7 @@ async def run_consumer(
             try:
                 event_data = json.loads(msg.value())
                 await handle_message(event_data, personas, publisher, claimed_tasks)
-                await consumer.commit(message=msg)
+                consumer.commit(message=msg)
             except Exception:
                 log.exception(
                     "agent_worker_dispatch_failed",
@@ -139,5 +141,5 @@ async def run_consumer(
                     topic=msg.topic(),
                 )
     finally:
-        await consumer.close()
+        consumer.close()
         log.info("agent_worker_consumer_closed")
