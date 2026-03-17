@@ -27,6 +27,8 @@ ALL_TABLES = [
     "interactions",
     "outcomes",
     "patient_timeline",
+    "connector_health",
+    "simulations",
 ]
 
 # Array relationships: parent_table → child table via FK column
