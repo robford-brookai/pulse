@@ -20,7 +20,8 @@ RUN uv pip install --system --no-cache \
     "sqlalchemy==2.0.48" \
     asyncpg==0.31.0 \
     "confluent-kafka==2.13.2" \
-    "structlog==25.5.0"
+    "structlog==25.5.0" \
+    httpx
 
 # Copy source code
 COPY services/control-plane/src ./src
