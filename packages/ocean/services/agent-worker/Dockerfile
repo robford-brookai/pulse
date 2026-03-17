@@ -24,4 +24,4 @@ COPY services/agent-worker/src ./src
 # Copy AGENTS.md for persona loading
 COPY AGENTS.md /app/AGENTS.md
 
-CMD ["python", "-m", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8061", "--no-access-log"]
+CMD ["python", "-m", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
