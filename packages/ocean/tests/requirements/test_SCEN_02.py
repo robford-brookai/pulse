@@ -1,8 +1,8 @@
-"""SCEN-02: pilot_demo.yaml covers 9 flow combinations with 10 patients.
+"""SCEN-02: pilot_demo.yaml covers flow combinations with 50 patients.
 
-Requirement: The pilot_demo scenario has 10 patients spanning all 3 severity
+Requirement: The pilot_demo scenario has 50 patients spanning all 3 severity
 levels (CRITICAL, URGENT, HIGH) with both approve-path and escalate-path
-signal types, producing an estimated 75-95 events.
+signal types.
 """
 from __future__ import annotations
 
@@ -37,9 +37,9 @@ def _load_scenario() -> ScenarioConfig:
     return ScenarioConfig(**raw)
 
 
-def test_has_ten_patients():
+def test_has_fifty_patients():
     scenario = _load_scenario()
-    assert len(scenario.patients) == 10
+    assert len(scenario.patients) == 50
 
 
 def test_no_duplicate_patient_ids():
@@ -88,8 +88,8 @@ def test_escalate_path_signals_exist():
     assert escalate_found, "No escalate-path signals found"
 
 
-def test_event_estimate_in_range():
-    """Estimate total events: ~8-10 per anomalous signal (alert, task, claim, rec, decision, call events)."""
+def test_event_estimate_minimum():
+    """Each anomalous signal produces ~8-10 events through the pipeline."""
     scenario = _load_scenario()
     anomalous_count = sum(
         1
@@ -97,10 +97,5 @@ def test_event_estimate_in_range():
         for signal in patient.signals
         if signal.anomalous
     )
-    # Each anomalous signal produces ~8-10 events through the pipeline
-    low = anomalous_count * 7
-    high = anomalous_count * 10
-    assert 75 <= high, f"Too few anomalous signals ({anomalous_count}) for 75 event minimum"
-    assert low <= 95 or anomalous_count <= 13, (
-        f"Anomalous count {anomalous_count} may exceed 95 event estimate"
-    )
+    # 50 patients each with at least one anomalous signal
+    assert anomalous_count >= 50, f"Too few anomalous signals: {anomalous_count}"
