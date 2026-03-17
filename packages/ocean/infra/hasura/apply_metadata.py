@@ -74,7 +74,6 @@ def call_metadata(client: httpx.Client, payload: dict, label: str) -> bool:
 
 def main() -> int:
     tracked = 0
-    skipped = 0
     failed = 0
 
     with httpx.Client() as client:
