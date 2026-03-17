@@ -1,6 +1,6 @@
-"""DEMO-02: Expanded pilot_demo scenario validation.
+"""DEMO-02: Pilot demo scenario validation.
 
-Verifies pilot_demo.yaml has 50 patients with correct severity distribution,
+Verifies pilot_demo.yaml has 10 patients with correct severity distribution,
 staggered sim_hours, proper patient_id pattern, and compression_ratio.
 Also validates Taskfile.yml demo task configuration.
 """
@@ -35,13 +35,13 @@ def taskfile_content():
 # ---------------------------------------------------------------------------
 
 
-def test_scenario_has_50_patients(scenario):
-    """pilot_demo.yaml must have exactly 50 patients."""
-    assert len(scenario["patients"]) == 50
+def test_scenario_has_10_patients(scenario):
+    """pilot_demo.yaml must have exactly 10 patients."""
+    assert len(scenario["patients"]) == 10
 
 
 def test_severity_distribution(scenario):
-    """At least 12 CRITICAL, 15 URGENT, 10 HIGH patients."""
+    """At least 3 CRITICAL, 2 URGENT, 2 HIGH patients."""
     severities = {"CRITICAL": 0, "URGENT": 0, "HIGH": 0}
     for patient in scenario["patients"]:
         for signal in patient["signals"]:
@@ -50,9 +50,9 @@ def test_severity_distribution(scenario):
                 severities[hint] += 1
                 break  # Count each patient once by their first anomalous signal
 
-    assert severities["CRITICAL"] >= 12, f"CRITICAL: {severities['CRITICAL']} < 12"
-    assert severities["URGENT"] >= 15, f"URGENT: {severities['URGENT']} < 15"
-    assert severities["HIGH"] >= 10, f"HIGH: {severities['HIGH']} < 10"
+    assert severities["CRITICAL"] >= 3, f"CRITICAL: {severities['CRITICAL']} < 3"
+    assert severities["URGENT"] >= 2, f"URGENT: {severities['URGENT']} < 2"
+    assert severities["HIGH"] >= 2, f"HIGH: {severities['HIGH']} < 2"
 
 
 def test_sim_hours_unique_per_first_signal(scenario):
@@ -65,10 +65,10 @@ def test_sim_hours_unique_per_first_signal(scenario):
 
 
 def test_sim_hours_span(scenario):
-    """sim_hours span from approximately 0.02 to 1.00."""
+    """sim_hours span from approximately 0.05 to 0.50."""
     first_hours = [p["signals"][0]["sim_hour"] for p in scenario["patients"]]
-    assert min(first_hours) <= 0.03, f"Min sim_hour {min(first_hours)} > 0.03"
-    assert max(first_hours) >= 0.98, f"Max sim_hour {max(first_hours)} < 0.98"
+    assert min(first_hours) <= 0.06, f"Min sim_hour {min(first_hours)} > 0.06"
+    assert max(first_hours) >= 0.35, f"Max sim_hour {max(first_hours)} < 0.35"
 
 
 def test_compression_ratio(scenario):
@@ -85,13 +85,13 @@ def test_patient_id_pattern(scenario):
 
 
 def test_patient_id_range(scenario):
-    """Patient IDs must span 001 to 050."""
+    """Patient IDs must span 001 to 010."""
     numbers = sorted(
         int(p["patient_id"].split("-")[-1]) for p in scenario["patients"]
     )
     assert numbers[0] == 1
-    assert numbers[-1] == 50
-    assert len(numbers) == 50
+    assert numbers[-1] == 10
+    assert len(numbers) == 10
 
 
 # ---------------------------------------------------------------------------

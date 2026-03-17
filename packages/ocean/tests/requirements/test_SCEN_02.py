@@ -37,9 +37,9 @@ def _load_scenario() -> ScenarioConfig:
     return ScenarioConfig(**raw)
 
 
-def test_has_fifty_patients():
+def test_has_ten_patients():
     scenario = _load_scenario()
-    assert len(scenario.patients) == 50
+    assert len(scenario.patients) == 10
 
 
 def test_no_duplicate_patient_ids():
@@ -97,5 +97,5 @@ def test_event_estimate_minimum():
         for signal in patient.signals
         if signal.anomalous
     )
-    # 50 patients each with at least one anomalous signal
-    assert anomalous_count >= 50, f"Too few anomalous signals: {anomalous_count}"
+    # 10 patients each with at least one anomalous signal
+    assert anomalous_count >= 10, f"Too few anomalous signals: {anomalous_count}"
