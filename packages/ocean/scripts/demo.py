@@ -50,7 +50,7 @@ async def wait_for_health(services: dict[str, str], timeout: int = 120) -> None:
                     resp = await client.get(url)
                     if resp.status_code == 200:
                         healthy.add(name)
-                except (httpx.ConnectError, httpx.TimeoutException):
+                except (httpx.ConnectError, httpx.TimeoutException, httpx.ReadError):
                     pass
 
         if len(healthy) == len(services):
