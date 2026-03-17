@@ -5,10 +5,6 @@ Verifies health polling, scenario triggering, completion detection, and banner o
 """
 from __future__ import annotations
 
-import asyncio
-import inspect
-import io
-import os
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch

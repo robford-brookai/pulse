@@ -6,11 +6,9 @@ and the Hasura console URL.
 from __future__ import annotations
 
 import io
-import os
 import sys
 from contextlib import redirect_stdout
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
