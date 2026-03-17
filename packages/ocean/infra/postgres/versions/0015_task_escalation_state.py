@@ -3,8 +3,8 @@
 Also makes outcomes.interaction_id nullable to support task/ticket/alert
 outcomes that have no interaction.
 
-Revision ID: 0014
-Revises: 0013
+Revision ID: 0015
+Revises: 0014
 Create Date: 2026-03-16
 """
 from __future__ import annotations
@@ -12,8 +12,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0014"
-down_revision = "0013"
+revision = "0015"
+down_revision = "0014"
 branch_labels = None
 depends_on = None
 

@@ -1,4 +1,4 @@
-"""Source-inspection tests for migration 0014 (task_escalation_state).
+"""Source-inspection tests for migration 0015 (task_escalation_state).
 
 Verifies the migration creates the task_escalation_state table and
 makes interaction_id nullable.
@@ -6,7 +6,7 @@ makes interaction_id nullable.
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SOURCE = REPO_ROOT / "infra" / "postgres" / "versions" / "0014_task_escalation_state.py"
+SOURCE = REPO_ROOT / "infra" / "postgres" / "versions" / "0015_task_escalation_state.py"
 
 
 def _source() -> str:
@@ -20,19 +20,19 @@ def test_source_file_exists():
 def test_creates_task_escalation_state_table():
     src = _source()
     assert "task_escalation_state" in src, (
-        "Migration 0014 must create task_escalation_state table"
+        "Migration 0015 must create task_escalation_state table"
     )
 
 
 def test_contains_create_table():
     src = _source()
-    assert "CREATE TABLE" in src, "Migration 0014 must contain CREATE TABLE statement"
+    assert "CREATE TABLE" in src, "Migration 0015 must contain CREATE TABLE statement"
 
 
 def test_interaction_id_nullable():
     src = _source()
     assert "interaction_id" in src, (
-        "Migration 0014 must make interaction_id nullable"
+        "Migration 0015 must make interaction_id nullable"
     )
 
 
