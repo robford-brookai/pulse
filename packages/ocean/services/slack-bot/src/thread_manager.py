@@ -251,8 +251,19 @@ class ThreadManager:
             )
             row = result.fetchone()
             if not row:
-                log.warning("parent_message_not_found", task_id=task_id)
-                return
+                log.warning("parent_message_not_found_retrying", task_id=task_id)
+                await asyncio.sleep(2)
+                result = await session.execute(
+                    sa.text(
+                        "SELECT channel, message_ts FROM slack_messages"
+                        " WHERE task_id = :task_id"
+                    ),
+                    {"task_id": task_id},
+                )
+                row = result.fetchone()
+                if not row:
+                    log.error("parent_message_not_found_giving_up", task_id=task_id)
+                    return
 
             channel = row.channel
             message_ts = row.message_ts
