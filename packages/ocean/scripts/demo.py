@@ -24,9 +24,13 @@ CORE_SERVICES = {
 
 SIM_SERVICES = {
     "sim-driver": "http://localhost:8060/health",
-    "agent-worker": "http://localhost:8061/health",
     "call-simulator": "http://localhost:8062/health",
 }
+
+# agent-worker health endpoint blocks when confluent_kafka consumer
+# holds the event loop during broker connection. It doesn't need to be
+# healthy before triggering — it just needs to be running (docker handles that).
+# Excluded from health checks intentionally.
 
 SIM_DRIVER_URL = "http://localhost:8060"
 HASURA_CONSOLE_URL = "http://localhost:8090"
