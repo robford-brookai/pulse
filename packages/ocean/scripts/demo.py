@@ -136,8 +136,19 @@ def print_banner(scenario_meta: dict, warehouse: bool) -> None:
     print("  ---")
     print()
 
-    # AI summary status
-    if os.environ.get("ANTHROPIC_API_KEY"):
+    # AI summary status — check both env and .env file
+    has_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
+    if not has_key:
+        env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
+        try:
+            with open(env_path) as f:
+                for line in f:
+                    if line.strip().startswith("ANTHROPIC_API_KEY=") and len(line.strip().split("=", 1)[1]) > 5:
+                        has_key = True
+                        break
+        except FileNotFoundError:
+            pass
+    if has_key:
         print("  AI summaries: ENABLED (Haiku)")
     else:
         print("  AI summaries: UNAVAILABLE")
