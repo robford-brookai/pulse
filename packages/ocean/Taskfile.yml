@@ -94,6 +94,27 @@ tasks:
       - echo "Writing sim logs to logs/sim.log — tail -f logs/sim.log to follow"
       - docker compose --env-file .env -f {{.COMPOSE_FILE}} logs -f --tail=0 sim-driver control-plane agent-worker call-simulator event-store > logs/sim.log 2>&1
 
+  demo:
+    desc: "Run full Ocean demo: boot stack, run scenario, print summary"
+    vars:
+      WAREHOUSE: '{{.WAREHOUSE | default "false"}}'
+    env:
+      ESCALATION_ENABLED: "true"
+      ESCALATION_TIMEOUT_CRITICAL: "30"
+      ESCALATION_TIMEOUT_HIGH: "30"
+      ESCALATION_TIMEOUT_MEDIUM: "30"
+      ESCALATION_TIMEOUT_LOW: "30"
+      ESCALATION_POLL_INTERVAL: "10"
+    cmds:
+      - cmd: >-
+          docker compose --env-file .env -f {{.COMPOSE_FILE}}
+          --profile sim
+          {{if eq .WAREHOUSE "true"}}--profile warehouse{{end}}
+          up -d --build
+      - cmd: >-
+          uv run python scripts/demo.py
+          {{if eq .WAREHOUSE "true"}}--warehouse{{end}}
+
   sim:
     desc: "Run a simulation scenario (default: smoke_test). Usage: task sim SCENARIO=pilot_demo"
     vars:

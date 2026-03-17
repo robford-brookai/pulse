@@ -1,21 +1,21 @@
 name: pilot_demo
-description: "Pilot demo: 10 patients, 9 flow combinations (3 severities x 3 outcomes)"
+description: "Pilot demo: 50 patients across 3 severity tiers with staggered signals"
 compression_ratio: 960
 
 patients:
-  # --- CRITICAL severity: all approve via deterministic fallback (confidence 1.0) ---
+  # --- CRITICAL severity (15 patients: 001-003, 010-021) ---
 
   - patient_id: "sim-pt-demo-001"
     clinic_id: "clinic-demo"
     source: pocar
     signals:
-      - sim_hour: 0.05
+      - sim_hour: 0.02
         type: glucose
         value: 280
         unit: mg/dL
         anomalous: true
         severity_hint: CRITICAL
-      - sim_hour: 0.35
+      - sim_hour: 0.32
         type: weight
         value: 81
         unit: kg
@@ -25,7 +25,7 @@ patients:
     clinic_id: "clinic-demo"
     source: pocar
     signals:
-      - sim_hour: 0.08
+      - sim_hour: 0.04
         type: glucose
         value: 350
         unit: mg/dL
@@ -36,20 +36,167 @@ patients:
     clinic_id: "clinic-demo"
     source: impilo
     signals:
-      - sim_hour: 0.10
+      - sim_hour: 0.06
         type: spo2
         value: 84
         unit: "%"
         anomalous: true
         severity_hint: CRITICAL
 
-  # --- URGENT severity: glucose/spo2 approve (0.8), other escalate (0.5) ---
+  - patient_id: "sim-pt-demo-010"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.20
+        type: glucose
+        value: 400
+        unit: mg/dL
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.50
+        type: weight
+        value: 82
+        unit: kg
+        anomalous: false
+
+  - patient_id: "sim-pt-demo-011"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.22
+        type: spo2
+        value: 83
+        unit: "%"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-demo-012"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.24
+        type: glucose
+        value: 310
+        unit: mg/dL
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-demo-013"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.26
+        type: heart_rate
+        value: 145
+        unit: bpm
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-demo-014"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.28
+        type: weight
+        value: 105
+        unit: kg
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-demo-015"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.30
+        type: spo2
+        value: 85
+        unit: "%"
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.60
+        type: heart_rate
+        value: 72
+        unit: bpm
+        anomalous: false
+
+  - patient_id: "sim-pt-demo-016"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.32
+        type: glucose
+        value: 370
+        unit: mg/dL
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-demo-017"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.34
+        type: heart_rate
+        value: 155
+        unit: bpm
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-demo-018"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.36
+        type: glucose
+        value: 290
+        unit: mg/dL
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-demo-019"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.38
+        type: spo2
+        value: 82
+        unit: "%"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-demo-020"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.40
+        type: weight
+        value: 108
+        unit: kg
+        anomalous: true
+        severity_hint: CRITICAL
+      - sim_hour: 0.70
+        type: glucose
+        value: 95
+        unit: mg/dL
+        anomalous: false
+
+  - patient_id: "sim-pt-demo-021"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.42
+        type: heart_rate
+        value: 160
+        unit: bpm
+        anomalous: true
+        severity_hint: CRITICAL
+
+  # --- URGENT severity (20 patients: 004-007, 022-037) ---
 
   - patient_id: "sim-pt-demo-004"
     clinic_id: "clinic-demo"
     source: pocar
     signals:
-      - sim_hour: 0.15
+      - sim_hour: 0.08
         type: glucose
         value: 195
         unit: mg/dL
@@ -60,7 +207,7 @@ patients:
     clinic_id: "clinic-demo"
     source: impilo
     signals:
-      - sim_hour: 0.20
+      - sim_hour: 0.10
         type: spo2
         value: 90
         unit: "%"
@@ -76,7 +223,7 @@ patients:
     clinic_id: "clinic-demo"
     source: pocar
     signals:
-      - sim_hour: 0.25
+      - sim_hour: 0.12
         type: glucose
         value: 210
         unit: mg/dL
@@ -87,20 +234,211 @@ patients:
     clinic_id: "clinic-demo"
     source: impilo
     signals:
-      - sim_hour: 0.30
+      - sim_hour: 0.14
         type: heart_rate
         value: 125
         unit: bpm
         anomalous: true
         severity_hint: URGENT
 
-  # --- HIGH severity: all escalate (0.3) ---
+  - patient_id: "sim-pt-demo-022"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.44
+        type: glucose
+        value: 200
+        unit: mg/dL
+        anomalous: true
+        severity_hint: URGENT
+
+  - patient_id: "sim-pt-demo-023"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.46
+        type: spo2
+        value: 91
+        unit: "%"
+        anomalous: true
+        severity_hint: URGENT
+
+  - patient_id: "sim-pt-demo-024"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.48
+        type: heart_rate
+        value: 118
+        unit: bpm
+        anomalous: true
+        severity_hint: URGENT
+
+  - patient_id: "sim-pt-demo-025"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.50
+        type: weight
+        value: 90
+        unit: kg
+        anomalous: true
+        severity_hint: URGENT
+      - sim_hour: 0.80
+        type: spo2
+        value: 97
+        unit: "%"
+        anomalous: false
+
+  - patient_id: "sim-pt-demo-026"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.52
+        type: glucose
+        value: 185
+        unit: mg/dL
+        anomalous: true
+        severity_hint: URGENT
+
+  - patient_id: "sim-pt-demo-027"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.54
+        type: spo2
+        value: 89
+        unit: "%"
+        anomalous: true
+        severity_hint: URGENT
+
+  - patient_id: "sim-pt-demo-028"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.56
+        type: heart_rate
+        value: 120
+        unit: bpm
+        anomalous: true
+        severity_hint: URGENT
+
+  - patient_id: "sim-pt-demo-029"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.58
+        type: weight
+        value: 88
+        unit: kg
+        anomalous: true
+        severity_hint: URGENT
+
+  - patient_id: "sim-pt-demo-030"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.60
+        type: glucose
+        value: 205
+        unit: mg/dL
+        anomalous: true
+        severity_hint: URGENT
+      - sim_hour: 0.90
+        type: weight
+        value: 78
+        unit: kg
+        anomalous: false
+
+  - patient_id: "sim-pt-demo-031"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.62
+        type: spo2
+        value: 92
+        unit: "%"
+        anomalous: true
+        severity_hint: URGENT
+
+  - patient_id: "sim-pt-demo-032"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.64
+        type: heart_rate
+        value: 115
+        unit: bpm
+        anomalous: true
+        severity_hint: URGENT
+
+  - patient_id: "sim-pt-demo-033"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.66
+        type: glucose
+        value: 190
+        unit: mg/dL
+        anomalous: true
+        severity_hint: URGENT
+
+  - patient_id: "sim-pt-demo-034"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.68
+        type: spo2
+        value: 90
+        unit: "%"
+        anomalous: true
+        severity_hint: URGENT
+
+  - patient_id: "sim-pt-demo-035"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.70
+        type: heart_rate
+        value: 129
+        unit: bpm
+        anomalous: true
+        severity_hint: URGENT
+      - sim_hour: 1.00
+        type: spo2
+        value: 98
+        unit: "%"
+        anomalous: false
+
+  - patient_id: "sim-pt-demo-036"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.72
+        type: weight
+        value: 93
+        unit: kg
+        anomalous: true
+        severity_hint: URGENT
+
+  - patient_id: "sim-pt-demo-037"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.74
+        type: glucose
+        value: 220
+        unit: mg/dL
+        anomalous: true
+        severity_hint: URGENT
+
+  # --- HIGH severity (15 patients: 008-009, 038-050) ---
 
   - patient_id: "sim-pt-demo-008"
     clinic_id: "clinic-demo"
     source: pocar
     signals:
-      - sim_hour: 0.35
+      - sim_hour: 0.16
         type: weight
         value: 95
         unit: kg
@@ -111,27 +449,162 @@ patients:
     clinic_id: "clinic-demo"
     source: impilo
     signals:
-      - sim_hour: 0.40
+      - sim_hour: 0.18
         type: heart_rate
         value: 110
         unit: bpm
         anomalous: true
         severity_hint: HIGH
-      - sim_hour: 0.45
-        type: spo2
-        value: 96
-        unit: "%"
-        anomalous: false
 
-  # --- Additional CRITICAL coverage ---
-
-  - patient_id: "sim-pt-demo-010"
+  - patient_id: "sim-pt-demo-038"
     clinic_id: "clinic-demo"
     source: pocar
     signals:
-      - sim_hour: 0.50
+      - sim_hour: 0.76
         type: glucose
-        value: 400
+        value: 165
         unit: mg/dL
         anomalous: true
-        severity_hint: CRITICAL
+        severity_hint: HIGH
+
+  - patient_id: "sim-pt-demo-039"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.78
+        type: spo2
+        value: 93
+        unit: "%"
+        anomalous: true
+        severity_hint: HIGH
+
+  - patient_id: "sim-pt-demo-040"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.80
+        type: heart_rate
+        value: 105
+        unit: bpm
+        anomalous: true
+        severity_hint: HIGH
+      - sim_hour: 1.10
+        type: glucose
+        value: 100
+        unit: mg/dL
+        anomalous: false
+
+  - patient_id: "sim-pt-demo-041"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.82
+        type: weight
+        value: 80
+        unit: kg
+        anomalous: true
+        severity_hint: HIGH
+
+  - patient_id: "sim-pt-demo-042"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.84
+        type: glucose
+        value: 155
+        unit: mg/dL
+        anomalous: true
+        severity_hint: HIGH
+
+  - patient_id: "sim-pt-demo-043"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.86
+        type: spo2
+        value: 94
+        unit: "%"
+        anomalous: true
+        severity_hint: HIGH
+
+  - patient_id: "sim-pt-demo-044"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.88
+        type: heart_rate
+        value: 102
+        unit: bpm
+        anomalous: true
+        severity_hint: HIGH
+
+  - patient_id: "sim-pt-demo-045"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.90
+        type: weight
+        value: 78
+        unit: kg
+        anomalous: true
+        severity_hint: HIGH
+      - sim_hour: 1.20
+        type: heart_rate
+        value: 75
+        unit: bpm
+        anomalous: false
+
+  - patient_id: "sim-pt-demo-046"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.92
+        type: glucose
+        value: 160
+        unit: mg/dL
+        anomalous: true
+        severity_hint: HIGH
+
+  - patient_id: "sim-pt-demo-047"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.94
+        type: spo2
+        value: 95
+        unit: "%"
+        anomalous: true
+        severity_hint: HIGH
+
+  - patient_id: "sim-pt-demo-048"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 0.96
+        type: heart_rate
+        value: 108
+        unit: bpm
+        anomalous: true
+        severity_hint: HIGH
+
+  - patient_id: "sim-pt-demo-049"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - sim_hour: 0.98
+        type: weight
+        value: 84
+        unit: kg
+        anomalous: true
+        severity_hint: HIGH
+
+  - patient_id: "sim-pt-demo-050"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - sim_hour: 1.00
+        type: glucose
+        value: 170
+        unit: mg/dL
+        anomalous: true
+        severity_hint: HIGH
