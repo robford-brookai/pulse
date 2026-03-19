@@ -64,6 +64,8 @@ EventType = Literal[
     "alert.triaged",
     "alert.escalated",
     "alert.resolved",
+    "alert.snoozed",
+    "alert.unsnoozed",
     "alert.dismissed",
     "task.created",
     "task.assigned",

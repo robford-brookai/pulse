@@ -21,9 +21,43 @@ async def handle_alert_created(event_data: dict, session, producer=None) -> None
     """Handle alert.created events: evaluate rules, write task to DB, publish event."""
     payload = event_data.get("payload", {})
     alert_id = event_data.get("entity_id", "")
+
+    # ── Snooze guard: skip task creation if alert is actively snoozed ──
+    snooze_row = await session.execute(
+        sa.text(
+            "SELECT snooze_until FROM alert_snoozes "
+            "WHERE alert_id = :alert_id AND active = true AND snooze_until > now()"
+        ),
+        {"alert_id": alert_id},
+    )
+    active_snooze = snooze_row.fetchone()
+    if active_snooze is not None:
+        log.info(
+            "alert_snoozed",
+            alert_id=alert_id,
+            snooze_until=str(active_snooze.snooze_until),
+        )
+        return
+
     patient_id = payload.get("patient_id", "")
     alert_type = payload.get("alert_type", "unknown")
     timestamp_str = event_data.get("timestamp", "")
+
+    # ── False-positive rate computation ──
+    fp_result = await session.execute(
+        sa.text(
+            "SELECT COUNT(*) FILTER (WHERE status = 'false_positive') AS fp_count, "
+            "COUNT(*) AS total "
+            "FROM tasks WHERE task_type = :alert_type "
+            "AND status IN ('resolved', 'false_positive')"
+        ),
+        {"alert_type": alert_type},
+    )
+    fp_row = fp_result.fetchone()
+    fp_count = fp_row.fp_count if fp_row else 0
+    fp_total = fp_row.total if fp_row else 0
+    fp_rate = fp_count / fp_total if fp_total > 0 else None
+    log.info("fp_rate_computed", alert_type=alert_type, fp_rate=fp_rate)
 
     # Deterministic task_id derived from alert_id using uuid5
     task_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"task-{alert_id}"))
@@ -77,6 +111,7 @@ async def handle_alert_created(event_data: dict, session, producer=None) -> None
                 "severity": payload.get("severity", ""),
                 "signal_type": payload.get("signal_type", ""),
                 "channel": channel_for(alert_type),
+                "fp_rate": fp_rate,
             },
         }
         await producer.publish("ocean.tasks", task_event)

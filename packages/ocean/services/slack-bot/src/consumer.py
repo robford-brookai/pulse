@@ -81,6 +81,7 @@ async def handle_task_created(
     severity = payload.get("priority", "routine").upper()
     timestamp = event_data.get("timestamp", "")
     alert_id = payload.get("alert_id", "")
+    fp_rate = payload.get("fp_rate")
 
     # Priority-based channel routing (Phase 15)
     channel = CHANNEL_MAP.get(severity, DEFAULT_CHANNEL)
@@ -105,6 +106,7 @@ async def handle_task_created(
         ai_summary,
         hasura_url,
         cited_signals=cited_signals,
+        fp_rate=fp_rate,
     )
 
     response = await slack_client.chat_postMessage(

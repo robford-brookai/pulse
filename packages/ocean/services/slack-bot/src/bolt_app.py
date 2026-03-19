@@ -22,6 +22,8 @@ from src.cards import (
     human_gate_overridden_card,
     rejection_confirmed_card,
     resolved_card,
+    snoozed_card,
+    snooze_duration_card,
     ticket_claimed_card,
     ticket_resolved_card,
 )
@@ -195,6 +197,108 @@ async def handle_task_resolve(ack, body, client) -> None:
         text=f"Task resolved by {actor_id}",
     )
     log.info("task_resolved", task_id=task_id, actor_id=actor_id)
+
+
+# ---------------------------------------------------------------------------
+# Action handlers — alert snooze (Phase 23 / ALRT-01)
+# ---------------------------------------------------------------------------
+
+# Duration labels keyed by minutes for confirmation card
+_SNOOZE_LABELS: dict[int, str] = {
+    15: "15 minutes",
+    60: "1 hour",
+    240: "4 hours",
+    480: "8 hours",
+    1440: "24 hours",
+}
+
+
+@bolt_app.action("task_snooze")
+async def handle_task_snooze(ack, body, client) -> None:
+    """Handle Snooze button press — show ephemeral duration picker."""
+    await ack()
+
+    task_id: str = body["actions"][0]["value"]
+    actor_id: str = body["user"]["id"]
+    channel_id: str = body["container"]["channel_id"]
+
+    log.info("task_snooze_received", task_id=task_id, actor_id=actor_id)
+
+    await client.chat_postEphemeral(
+        channel=channel_id,
+        user=actor_id,
+        blocks=snooze_duration_card(task_id),
+        text="Select snooze duration",
+    )
+
+
+@bolt_app.action("snooze_confirm")
+async def handle_snooze_confirm(ack, body, client) -> None:
+    """Handle snooze duration selection — persist snooze, publish event, update card."""
+    await ack()
+
+    selected = body["actions"][0]["selected_option"]["value"]
+    task_id, minutes_str = selected.rsplit(":", 1)
+    minutes = int(minutes_str)
+    actor_id: str = body["user"]["id"]
+    channel_id: str = body["container"]["channel_id"]
+    message_ts: str = body["container"]["message_ts"]
+
+    log.info("snooze_confirm_received", task_id=task_id, minutes=minutes, actor_id=actor_id)
+
+    # Persist snooze to DB
+    alert_id: str | None = None
+    if _session_maker is not None:
+        async with _session_maker() as session:
+            # Look up alert_id from task
+            result = await session.execute(
+                sa.text("SELECT alert_id FROM tasks WHERE task_id = :task_id"),
+                {"task_id": task_id},
+            )
+            row = result.fetchone()
+            alert_id = row.alert_id if row else task_id
+
+            await session.execute(
+                sa.text(
+                    "INSERT INTO alert_snoozes (alert_id, snoozed_by, snooze_until, reason) "
+                    "VALUES (:alert_id, :snoozed_by, now() + make_interval(mins => :minutes), 'user_snooze') "
+                    "ON CONFLICT (alert_id) WHERE (active) DO UPDATE SET "
+                    "  snoozed_by = EXCLUDED.snoozed_by, "
+                    "  snoozed_at = now(), "
+                    "  snooze_until = EXCLUDED.snooze_until"
+                ),
+                {"alert_id": alert_id, "snoozed_by": actor_id, "minutes": minutes},
+            )
+            await session.commit()
+
+    duration_label = _SNOOZE_LABELS.get(minutes, f"{minutes} minutes")
+
+    # Publish alert.snoozed event
+    if _publisher is not None:
+        await _publisher.publish(
+            "ocean.tasks",
+            {
+                "event_type": "alert.snoozed",
+                "entity_id": alert_id or task_id,
+                "entity_type": "alert",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "payload": {
+                    "task_id": task_id,
+                    "alert_id": alert_id or task_id,
+                    "snoozed_by": actor_id,
+                    "duration_minutes": minutes,
+                },
+            },
+        )
+
+    # Update original message with snoozed confirmation card
+    await client.chat_update(
+        channel=channel_id,
+        ts=message_ts,
+        blocks=snoozed_card(task_id, duration_label, actor_id),
+        text=f"Alert snoozed for {duration_label}",
+    )
+    log.info("alert_snoozed", task_id=task_id, alert_id=alert_id, duration=duration_label)
 
 
 # ---------------------------------------------------------------------------

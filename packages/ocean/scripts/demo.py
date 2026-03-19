@@ -101,6 +101,22 @@ async def wait_for_completion(timeout: int = 180) -> None:
     raise TimeoutError(f"Scenario not complete after {timeout}s")
 
 
+async def sync_embeddings_all() -> None:
+    """POST to stacte-bridge /sync for each entity type."""
+    entity_types = ["alerts", "tasks", "interactions", "outcomes"]
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        for entity_type in entity_types:
+            try:
+                resp = await client.post(
+                    "http://stacte-bridge:8000/sync",
+                    params={"entity_type": entity_type},
+                )
+                resp.raise_for_status()
+                print(f"  ✓ Synced {entity_type} embeddings")
+            except Exception as e:
+                print(f"  ⚠ Embedding sync failed for {entity_type}: {e}")
+
+
 def print_banner(scenario_meta: dict, warehouse: bool) -> None:
     """Print summary banner with exploration pointers."""
     scenario = scenario_meta.get("scenario", "unknown")
@@ -208,6 +224,9 @@ async def main() -> None:
           f"~{meta.get('estimated_duration_seconds', '?')}s estimated")
 
     await wait_for_completion()
+
+    print("\n🔍 Syncing embeddings...")
+    await sync_embeddings_all()
 
     print_banner(meta, warehouse=args.warehouse)
 

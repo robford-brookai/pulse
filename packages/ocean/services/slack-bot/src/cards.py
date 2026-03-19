@@ -14,6 +14,7 @@ def alert_card(
     cited_signals: list[str] | None = None,
     status: str | None = None,
     escalated: bool = False,
+    fp_rate: float | None = None,
 ) -> list[dict]:
     """Build the initial alert card posted to care team channel.
 
@@ -38,7 +39,7 @@ def alert_card(
         header_text = f"[{status.upper()}] {header_text}"
     signals_text = f"_Context signals: {', '.join(cited_signals) if cited_signals else 'none'}_"
 
-    return [
+    blocks = [
         # Block 0: header
         {
             "type": "header",
@@ -74,7 +75,25 @@ def alert_card(
         },
         # Block 5: divider
         {"type": "divider"},
-        # Block 6: actions
+    ]
+
+    # Optional: FP rate warning block (inserted before actions when rate is high)
+    if fp_rate is not None and fp_rate >= 0.3:
+        blocks.append(
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": f"⚠️ High false-positive rate ({fp_rate:.0%}) for {alert_type}",
+                    }
+                ],
+            }
+        )
+
+    # Actions block
+    blocks.append(
+        # Block 6 (or 7 if FP warning present): actions
         {
             "type": "actions",
             "block_id": f"task_actions_{task_id}",
@@ -95,12 +114,83 @@ def alert_card(
                 },
                 {
                     "type": "button",
+                    "action_id": "task_snooze",
+                    "text": {"type": "plain_text", "text": "Snooze", "emoji": False},
+                    "value": task_id,
+                },
+                {
+                    "type": "button",
                     "action_id": "task_view_context",
                     "text": {"type": "plain_text", "text": "View Context", "emoji": False},
                     "url": hasura_url,
                     "value": task_id,
                 },
             ],
+        },
+    )
+
+    return blocks
+
+
+def snooze_duration_card(task_id: str) -> list[dict]:
+    """Build a Block Kit card with preset snooze duration options.
+
+    Shown as an ephemeral message after the user clicks Snooze.
+    The static_select action_id is ``snooze_confirm`` with each option
+    value encoding ``{task_id}:{minutes}``.
+    """
+    options = [
+        ("15 minutes", 15),
+        ("1 hour", 60),
+        ("4 hours", 240),
+        ("8 hours", 480),
+        ("24 hours", 1440),
+    ]
+    return [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "*How long should this alert be snoozed?*",
+            },
+            "accessory": {
+                "type": "static_select",
+                "action_id": "snooze_confirm",
+                "placeholder": {"type": "plain_text", "text": "Select duration"},
+                "options": [
+                    {
+                        "text": {"type": "plain_text", "text": label},
+                        "value": f"{task_id}:{minutes}",
+                    }
+                    for label, minutes in options
+                ],
+            },
+        },
+    ]
+
+
+def snoozed_card(task_id: str, duration: str, snoozed_by: str) -> list[dict]:
+    """Build a confirmation card after an alert has been snoozed.
+
+    Shows who snoozed, for how long, and a note that the alert won't
+    re-trigger until expiry.
+    """
+    return [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": "[SNOOZED] Alert", "emoji": True},
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": (
+                    f"*Snoozed by:* <@{snoozed_by}>\n"
+                    f"*Duration:* {duration}\n"
+                    f"_This alert won't re-trigger until the snooze expires. "
+                    f"The next occurrence after expiry routes normally._"
+                ),
+            },
         },
     ]
 

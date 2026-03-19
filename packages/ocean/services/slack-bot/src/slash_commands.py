@@ -459,6 +459,65 @@ def build_ticket_modal(private_metadata: str = "", prefill_description: str = ""
     }
 
 
+async def build_search_response(query: str) -> list[dict]:
+    """Build Block Kit blocks for /ocean search <query>.
+
+    Calls stacte-bridge's /search endpoint and formats top-k results
+    as Block Kit section blocks showing entity info and similarity score.
+    """
+    blocks: list[dict] = [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": f"Search: {query}"},
+        },
+    ]
+
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                "http://stacte-bridge:8000/search",
+                params={"q": query, "entity_type": "alerts", "top_k": 10},
+                timeout=10.0,
+            )
+            resp.raise_for_status()
+            results = resp.json()
+
+        if not results:
+            blocks.append({
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": "No results found."},
+            })
+            return blocks
+
+        for i, result in enumerate(results, 1):
+            entity_id = result.get("entity_id", "unknown")
+            distance = result.get("distance", 0.0)
+            score = 1.0 - distance if distance <= 1.0 else distance
+            entity_type = result.get("entity_type", "alert")
+            blocks.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": (
+                        f"*{i}.* `{entity_id}`\n"
+                        f"  Type: {entity_type}  |  Score: {score:.3f}"
+                    ),
+                },
+            })
+
+    except Exception as exc:
+        log.error("slash_search_error", error=str(exc), query=query)
+        blocks.append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"Error searching: {exc}",
+            },
+        })
+
+    return blocks
+
+
 def build_help_response() -> list[dict]:
     """Build Block Kit blocks listing all /ocean subcommands."""
     return [
@@ -476,6 +535,7 @@ def build_help_response() -> list[dict]:
                     " last sim, active alerts\n"
                     "  `/ocean patient <id>` -- Patient summary card with consolidated timeline\n"
                     "  `/ocean sim <scenario>` -- Trigger a simulation run\n"
+                    "  `/ocean search <query>` -- Semantic search across alerts\n"
                     "  `/ocean ticket` -- Create a new ticket (opens modal)\n"
                     "  `/ocean help` -- Show this help message"
                 ),
@@ -537,6 +597,16 @@ async def handle_ocean_command(ack, body, respond, client=None) -> None:
             ]
         else:
             blocks = await trigger_sim_response(arg)
+    elif subcommand == "search":
+        if not arg:
+            blocks = [
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": "Usage: `/ocean search <query>`"},
+                },
+            ]
+        else:
+            blocks = await build_search_response(arg)
     else:
         # help or unknown subcommand
         blocks = build_help_response()
