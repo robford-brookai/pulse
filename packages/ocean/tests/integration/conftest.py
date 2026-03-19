@@ -39,6 +39,15 @@ _ZCC_CONN = str(_ROOT / "services" / "zcc-connector")
 if _ZCC_CONN not in sys.path:
     sys.path.insert(2, _ZCC_CONN)
 
+_MONGO_CONN = str(_ROOT / "services" / "mongodb-connector")
+if _MONGO_CONN not in sys.path:
+    sys.path.insert(3, _MONGO_CONN)
+
+# ocean-broker lives in the M007 worktree until merged
+_OCEAN_BROKER = str(_ROOT / ".gsd" / "worktrees" / "M007" / "libs" / "ocean-broker" / "src")
+if _OCEAN_BROKER not in sys.path:
+    sys.path.insert(4, _OCEAN_BROKER)
+
 
 # ---------------------------------------------------------------------------
 # Docker availability guard
@@ -284,3 +293,70 @@ async def poll_row_count(
             return count
         await asyncio.sleep(0.2)
     return count
+
+
+# ---------------------------------------------------------------------------
+# MongoDB container (replica set enabled for Change Streams)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def mongodb_container():
+    """Start a MongoDB replica-set container for CDC integration tests.
+
+    Change Streams require a replica set.  We start ``mongod --replSet rs0``,
+    then exec ``rs.initiate()`` *inside* the container (so the member host
+    matches the internal listener on port 27017), and wait for PRIMARY.
+    """
+    from testcontainers.core.container import DockerContainer
+    from testcontainers.core.waiting_utils import wait_for_logs
+
+    container = (
+        DockerContainer("mongo:7")
+        .with_exposed_ports(27017)
+        .with_command("mongod --replSet rs0 --bind_ip_all --noauth")
+    )
+    container.start()
+    wait_for_logs(container, "Waiting for connections")
+
+    try:
+        # Initiate replica set from INSIDE the container so the member
+        # address (localhost:27017) matches the internal listener.
+        exit_code, output = container.exec(
+            'mongosh --eval \'rs.initiate({_id:"rs0", members:[{_id:0, host:"localhost:27017"}]})\''
+        )
+        if exit_code != 0:
+            raise RuntimeError(f"rs.initiate failed: {output}")
+
+        # Poll until PRIMARY (up to 30s) — from outside via pymongo
+        import pymongo
+
+        host = container.get_container_host_ip()
+        port = container.get_exposed_port(27017)
+        conn_url = f"mongodb://{host}:{port}/?directConnection=true"
+        client = pymongo.MongoClient(conn_url, directConnection=True, serverSelectionTimeoutMS=10000)
+
+        deadline = time.time() + 30
+        while time.time() < deadline:
+            try:
+                status = client.admin.command("replSetGetStatus")
+                if status["members"][0].get("stateStr") == "PRIMARY":
+                    break
+            except Exception:
+                pass
+            time.sleep(0.5)
+        else:
+            raise RuntimeError("MongoDB replica set did not reach PRIMARY within 30s")
+
+        client.close()
+        yield container
+    finally:
+        container.stop()
+
+
+@pytest.fixture(scope="session")
+def mongodb_uri(mongodb_container):
+    """Return the MongoDB connection string with directConnection for tests."""
+    host = mongodb_container.get_container_host_ip()
+    port = mongodb_container.get_exposed_port(27017)
+    return f"mongodb://{host}:{port}/?directConnection=true"
