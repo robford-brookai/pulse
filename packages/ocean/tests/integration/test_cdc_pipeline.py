@@ -3,6 +3,7 @@
 Proves:
   1. MongoDB insert → ``patient.feature.changed`` event on ``ocean.patient-state``
   2. Resume token persists across watcher restart (no replay of old events)
+  3. All 9 collections produce events via WatcherManager (multi-collection)
 
 Requires Docker (MongoDB 7, Redpanda, Postgres via testcontainers).
 """
@@ -166,6 +167,71 @@ async def _make_watcher(
     )
 
     return watcher, shutdown_event, engine, session_factory, mongo_client
+
+
+async def _make_manager(
+    mongodb_uri: str,
+    bootstrap_servers: str,
+    db_url: str,
+    engine=None,
+    topic: str = "ocean.patient-state-multi",
+):
+    """Create a WatcherManager for all 9 collections.
+
+    Uses the same ``sys.modules["src"]`` save/swap/restore pattern as
+    ``_make_watcher``.  Returns (manager, shutdown_event, engine, mongo_client).
+    """
+    import os
+    import pathlib
+    import sys
+
+    import motor.motor_asyncio
+
+    _SVC_ROOT = pathlib.Path(__file__).resolve().parents[2] / "services" / "mongodb-connector"
+
+    os.environ["REDPANDA_BROKERS"] = bootstrap_servers
+
+    # Save and evict any existing 'src' and 'src.*' modules
+    saved = {}
+    for key in list(sys.modules):
+        if key == "src" or key.startswith("src."):
+            saved[key] = sys.modules.pop(key)
+
+    svc_str = str(_SVC_ROOT)
+    sys.path.insert(0, svc_str)
+    try:
+        from src.publisher import EventPublisher
+        from src.resume_token import ResumeTokenStore
+        from src.transformer import TRANSFORMER_REGISTRY
+        from src.watcher_manager import WatcherManager
+    finally:
+        sys.path.remove(svc_str)
+        for key in list(sys.modules):
+            if key == "src" or key.startswith("src."):
+                sys.modules.pop(key, None)
+        sys.modules.update(saved)
+
+    mongo_client = motor.motor_asyncio.AsyncIOMotorClient(mongodb_uri)
+    db = mongo_client["testdb"]
+
+    if engine is None:
+        engine = create_async_engine(db_url, echo=False)
+    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    publisher = EventPublisher()
+    token_store = ResumeTokenStore()
+    shutdown_event = asyncio.Event()
+
+    manager = WatcherManager(
+        db=db,
+        publisher=publisher,
+        token_store=token_store,
+        db_session_factory=session_factory,
+        transformer_registry=TRANSFORMER_REGISTRY,
+        topic=topic,
+    )
+
+    return manager, shutdown_event, engine, mongo_client
 
 
 # ---------------------------------------------------------------------------
@@ -376,4 +442,95 @@ class TestCDCPipeline:
             except asyncio.CancelledError:
                 pass
             mongo3.close()
+            await engine.dispose()
+
+    async def test_multi_collection_produces_events(
+        self,
+        mongodb_container,
+        mongodb_uri,
+        redpanda_container,
+        bootstrap_servers,
+        postgres_container,
+    ):
+        """Insert one doc per collection via WatcherManager → 9 events, all PHI-free."""
+        _MULTI_TOPIC = "ocean.patient-state-multi"
+
+        pg_url = postgres_container.get_connection_url()
+        async_pg_url = pg_url.replace("postgresql://", "postgresql+asyncpg://").replace(
+            "postgresql+psycopg2://", "postgresql+asyncpg://"
+        )
+
+        # Create resume-token table
+        engine = create_async_engine(async_pg_url, echo=False)
+        async with engine.begin() as conn:
+            await conn.execute(sa.text(_RESUME_TOKEN_DDL))
+
+        # Build manager for all 9 collections
+        manager, shutdown_event, engine, mongo_client = await _make_manager(
+            mongodb_uri, bootstrap_servers, async_pg_url, engine=engine,
+            topic=_MULTI_TOPIC,
+        )
+
+        await manager.start(shutdown_event)
+
+        try:
+            # Let all 9 change streams establish
+            await asyncio.sleep(3)
+
+            db = mongo_client["testdb"]
+
+            # Representative documents — one per collection with correct patient_id field
+            docs = {
+                "alerts": {"patientId": "p-alerts", "status": "ACTIVE", "type": "glucose", "vitalType": "glucose"},
+                "chatRooms": {"type": "expert", "subscribers": [{"personaID": "p-chatrooms"}], "unreadMessageCount": 3},
+                "activity": {"persona_id": "p-activity", "lastReadingAt": "2026-01-01T00:00:00Z"},
+                "provider_protocols": {"persona_id": "p-protocols", "adherenceRate": 0.95},
+                "patient_care_plans": {"persona_id": "p-careplans", "problem_list": [{"updated_at": "2026-01-01"}]},
+                "patient_note": {"persona_id": "p-notes", "pendingEmrNotes": 2, "is_interaction": True, "provider": "dr-x", "interaction": True},
+                "monitoring_time_raw": {"persona_id": "p-monitoring", "lastPocarOpenedAt": "2026-01-01T00:00:00Z"},
+                "persona": {"personaID": "p-persona", "providerDetails": {"program": "RPM"}},
+                "persona.dashboard_details": {"persona_id": "p-dashboard", "billableMinutesMtd": 25},
+            }
+
+            for coll_name, doc in docs.items():
+                await db[coll_name].insert_one(doc)
+
+            # Consume all events with a generous timeout for 9 change streams
+            loop = asyncio.get_running_loop()
+            events = await loop.run_in_executor(
+                None, _consume_all, bootstrap_servers, _MULTI_TOPIC, "multi", 25.0,
+            )
+
+            # ---- Assertions ----
+            assert len(events) >= 9, (
+                f"Expected at least 9 events, got {len(events)}. "
+                f"Collections seen: {sorted({e['payload']['collection'] for e in events})}"
+            )
+
+            # Every expected collection name appears
+            collections_seen = {e["payload"]["collection"] for e in events}
+            expected_collections = set(docs.keys())
+            missing = expected_collections - collections_seen
+            assert not missing, f"Missing collection(s) in events: {sorted(missing)}. Seen: {sorted(collections_seen)}"
+
+            # Envelope checks on every event
+            for evt in events:
+                assert evt["event_type"] == "patient.feature.changed", f"Wrong event_type: {evt['event_type']}"
+                assert evt["source_system"] == "mongodb-connector", f"Wrong source_system: {evt['source_system']}"
+
+            # PHI guard: no PHI field names in any event's features
+            from ocean_events.base import _PHI_FIELD_NAMES
+
+            for evt in events:
+                payload = evt["payload"]
+                feature_keys = set(payload.get("features", {}).keys())
+                phi_overlap = feature_keys & _PHI_FIELD_NAMES
+                assert phi_overlap == set(), (
+                    f"PHI fields leaked in {payload['collection']} event: {phi_overlap}"
+                )
+
+        finally:
+            shutdown_event.set()
+            await manager.stop()
+            mongo_client.close()
             await engine.dispose()
