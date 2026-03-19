@@ -1,0 +1,93 @@
+# Build and Push Workflow for mongodb-connector (Ocean)
+#
+# Builds the mongodb-connector Docker image and pushes it to AWS ECR
+# through DuploCloud.
+#
+# Prerequisites:
+#   - DuploCloud tenant configured with AWS ECR access
+#   - DUPLO_TOKEN secret configured in GitHub repository settings
+#   - DUPLO_HOST variable configured (your DuploCloud portal URL)
+#   - ECR repository: mongodb-connector (created in DuploCloud devops tenant)
+#
+name: "[Ocean] MongoDB Connector — Build + Push Image"
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: The DuploCloud tenant/environment to build for
+        required: true
+        type: choice
+        options:
+          - dev01-brook
+
+  workflow_call:
+    inputs:
+      environment:
+        description: The DuploCloud tenant/environment to build for
+        required: true
+        type: string
+    outputs:
+      image_uri:
+        description: URI of the built image
+        value: ${{ jobs.build_image.outputs.image_uri }}
+    secrets:
+      DUPLO_TOKEN:
+        description: The token to use for DuploCloud API calls
+        required: true
+
+env:
+  DUPLO_HOST: ${{ vars.DUPLO_HOST }}
+  DUPLO_TOKEN: ${{ secrets.DUPLO_TOKEN }}
+
+jobs:
+  build_image:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    outputs:
+      image_uri: ${{ steps.build.outputs.uri }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: DuploCloud CI Setup
+        uses: Brookai/actions@77d7183f70a8026ee50c91f60108496dba297079
+        env:
+          DUPLO_TENANT: devops
+
+      - name: Build and Push Docker Image to ECR
+        id: build
+        uses: Brookai/actions/build-image@77d7183f70a8026ee50c91f60108496dba297079
+        with:
+          repo: mongodb-connector
+          dockerfile: services/mongodb-connector/Dockerfile
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: |
+            dev-v${{ github.run_number }}
+            dev-latest
+            sha-${{ github.sha }}
+
+      - name: Create Build Summary
+        run: |
+          echo "# Docker Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Service** | \`mongodb-connector\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | \`${{ inputs.environment }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Dockerfile** | \`services/mongodb-connector/Dockerfile\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          IMAGE_URI="${{ steps.build.outputs.uri }}"
+
+          if [[ -n "$IMAGE_URI" ]]; then
+            echo "## Built Image URI" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            echo "$IMAGE_URI" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi
