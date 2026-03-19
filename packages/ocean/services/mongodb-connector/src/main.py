@@ -13,8 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from src.publisher import EventPublisher
 from src.resume_token import ResumeTokenStore
-from src.transformer import AlertsTransformer
-from src.watcher import CollectionWatcher
+from src.transformer import TRANSFORMER_REGISTRY
+from src.watcher_manager import WatcherManager
 
 logger = structlog.get_logger(__name__)
 
@@ -25,12 +25,21 @@ async def lifespan(app: FastAPI):
     mongodb_uri = os.environ.get("MONGODB_URI", "mongodb://localhost:27017")
     mongodb_database = os.environ.get("MONGODB_DATABASE", "brook")
     database_url = os.environ.get("DATABASE_URL", "postgresql+asyncpg://localhost/ocean")
-    watch_collection = os.environ.get("WATCH_COLLECTION", "alerts")
+
+    _ALL_COLLECTIONS = ",".join(TRANSFORMER_REGISTRY.keys())
+    watch_collections_raw = os.environ.get("WATCH_COLLECTIONS", _ALL_COLLECTIONS)
+    collections_list = [c.strip() for c in watch_collections_raw.split(",") if c.strip()]
+
+    # Validate against registry — fail fast on typos.
+    unknown = set(collections_list) - set(TRANSFORMER_REGISTRY.keys())
+    if unknown:
+        raise ValueError(
+            f"WATCH_COLLECTIONS contains unknown collection(s): {sorted(unknown)}"
+        )
 
     # ---- Motor (MongoDB) ----
     mongo_client = motor.motor_asyncio.AsyncIOMotorClient(mongodb_uri)
     db = mongo_client[mongodb_database]
-    collection = db[watch_collection]
 
     # ---- SQLAlchemy (Postgres) ----
     engine = create_async_engine(database_url, echo=False)
@@ -39,21 +48,20 @@ async def lifespan(app: FastAPI):
     # ---- components ----
     publisher = EventPublisher()
     token_store = ResumeTokenStore()
-    transformer = AlertsTransformer()
     shutdown_event = asyncio.Event()
 
-    watcher = CollectionWatcher(
-        collection=collection,
-        transformer=transformer,
+    manager = WatcherManager(
+        db=db,
         publisher=publisher,
         token_store=token_store,
         db_session_factory=session_factory,
-        collection_name=watch_collection,
+        transformer_registry=TRANSFORMER_REGISTRY,
+        collections=collections_list,
     )
 
-    # ---- start watcher as background task ----
-    watcher_task = asyncio.create_task(watcher.watch(shutdown_event))
-    logger.info("mongodb_connector_started", collection=watch_collection)
+    # ---- start all watchers ----
+    await manager.start(shutdown_event)
+    logger.info("mongodb_connector_started", collections=collections_list)
 
     # ---- SIGTERM handler ----
     loop = asyncio.get_running_loop()
@@ -63,11 +71,7 @@ async def lifespan(app: FastAPI):
 
     # ---- graceful shutdown ----
     shutdown_event.set()
-    watcher_task.cancel()
-    try:
-        await watcher_task
-    except asyncio.CancelledError:
-        pass
+    await manager.stop()
     publisher.close()
     mongo_client.close()
     await engine.dispose()
