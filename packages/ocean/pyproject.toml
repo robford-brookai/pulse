@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "ocean-events",
+    "ocean-broker",
     "pyyaml>=6.0.3",
     "ruff>=0.15.5",
     "ty>=0.0.21",
@@ -14,10 +15,12 @@ dependencies = [
 [tool.uv.workspace]
 members = [
     "libs/ocean-events",
+    "libs/ocean-broker",
 ]
 
 [tool.uv.sources]
 ocean-events = { workspace = true, editable = true }
+ocean-broker = { workspace = true, editable = true }
 
 [dependency-groups]
 dev = [

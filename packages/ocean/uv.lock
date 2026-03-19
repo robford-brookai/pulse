@@ -5,6 +5,7 @@ requires-python = ">=3.13"
 [manifest]
 members = [
     "ocean",
+    "ocean-broker",
     "ocean-events",
 ]
 
@@ -77,6 +78,20 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/ba/7a/15e37d45e7f7c94facc1e9148c0e455e8f33c08f0b8a0b1deb2c5171771b/asyncpg-0.31.0-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:8df714dba348efcc162d2adf02d213e5fab1bd9f557e1305633e851a61814a7a", size = 3429426, upload-time = "2025-11-24T23:26:41.032Z" },
     { url = "https://files.pythonhosted.org/packages/13/d5/71437c5f6ae5f307828710efbe62163974e71237d5d46ebd2869ea052d10/asyncpg-0.31.0-cp314-cp314t-win32.whl", hash = "sha256:1b41f1afb1033f2b44f3234993b15096ddc9cd71b21a42dbd87fc6a57b43d65d", size = 614495, upload-time = "2025-11-24T23:26:42.659Z" },
     { url = "https://files.pythonhosted.org/packages/3c/d7/8fb3044eaef08a310acfe23dae9a8e2e07d305edc29a53497e52bc76eca7/asyncpg-0.31.0-cp314-cp314t-win_amd64.whl", hash = "sha256:bd4107bb7cdd0e9e65fae66a62afd3a249663b844fa34d479f6d5b3bef9c04c3", size = 706062, upload-time = "2025-11-24T23:26:44.086Z" },
+]
+
+[[package]]
+name = "aws-msk-iam-sasl-signer-python"
+version = "1.0.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "boto3" },
+    { name = "botocore" },
+    { name = "click" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/38/8b/9af0a7def4ba357afadc89c06019d3735944cb3d6065a455f41580ba7fd6/aws_msk_iam_sasl_signer_python-1.0.2.tar.gz", hash = "sha256:3432d88a7c6db4887ceb1130ebaed0113bfda48b79ea811537add5f1d25fa13f", size = 24034, upload-time = "2025-03-05T20:49:48.582Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/06/43/f3ffd79fc4941b8d610530d81e1f600cfa1b8651affc25cb929fd0f2f2c9/aws_msk_iam_sasl_signer_python-1.0.2-py2.py3-none-any.whl", hash = "sha256:310eb2db9ca0ff55ed06a24212739b87533e7f1cf6f34e43aabbd97a3b21290e", size = 13279, upload-time = "2025-03-05T20:49:46.611Z" },
 ]
 
 [[package]]
@@ -436,6 +451,7 @@ name = "ocean"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "ocean-broker" },
     { name = "ocean-events" },
     { name = "pyyaml" },
     { name = "ruff" },
@@ -461,6 +477,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "ocean-broker", editable = "libs/ocean-broker" },
     { name = "ocean-events", editable = "libs/ocean-events" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "ruff", specifier = ">=0.15.5" },
@@ -482,6 +499,23 @@ dev = [
     { name = "structlog", specifier = ">=25.5.0" },
     { name = "testcontainers", extras = ["kafka", "postgres"], specifier = ">=4.9.0" },
     { name = "uvicorn", specifier = ">=0.41.0" },
+]
+
+[[package]]
+name = "ocean-broker"
+version = "0.1.0"
+source = { editable = "libs/ocean-broker" }
+dependencies = [
+    { name = "aws-msk-iam-sasl-signer-python" },
+    { name = "confluent-kafka" },
+    { name = "structlog" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aws-msk-iam-sasl-signer-python", specifier = ">=1.0.0" },
+    { name = "confluent-kafka", specifier = ">=2.13.0" },
+    { name = "structlog", specifier = ">=25.5.0" },
 ]
 
 [[package]]

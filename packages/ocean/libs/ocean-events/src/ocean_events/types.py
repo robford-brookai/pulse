@@ -7,12 +7,14 @@ from typing import Literal
 SourceSystem = Literal[
     "pocar", "zcc", "ocean", "linear", "github", "hubspot", "impilo",
     "control-plane", "agent-worker", "call-simulator", "sim-driver",
+    "mongodb-connector",
 ]
 
 EntityType = Literal[
     "patient", "alert", "task", "interaction", "outcome", "signal", "ticket",
     "fulfillment", "return", "device_association",
     "pull_request", "commit", "contact",
+    "patient_feature",
 ]
 
 AlertSeverity = Literal["critical", "high", "medium", "low"]
@@ -103,4 +105,5 @@ EventType = Literal[
     "contact.created",
     "contact.updated",
     "contact.deleted",
+    "patient.feature.changed",
 ]
