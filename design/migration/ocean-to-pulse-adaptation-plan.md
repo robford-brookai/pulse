@@ -1,20 +1,20 @@
 # ADR: Absorbing OCEAN into the PULSE Ledger Foundation
 
-**Status:** Proposed — pending repo reconciliation (§9) and Tal sign-off
+**Status:** Proposed — repo reconciliation complete (§9, 2026-08-01); pending resolution of the V3 backbone question (§9.1) and Tal sign-off
 **Date:** 2026-07-31 (rev 2 — absorption framing)
 **Deciders:** Ford (author), Tal (sign-off).
 **Scope:** How the OCEAN pattern and codebase (event backbone + Operational Data Graph, "events are facts, tasks are derived") are absorbed into PULSE (Patient Unified Ledger of State and Events). PULSE is OCEAN's only application — doctrine has shifted wholly to declarative, so OCEAN is not amended for one domain, it is superseded and its code migrates into the PULSE repo as the distribution subsystem. One project, one repo, one doctrine.
-**Inputs:** `rpc-object-model-assessment.md` v0.7 (pinned vocabulary §1, invariants I1–I9, spine §4.3), `DNA-SPEC-DECLARED-STATE-PRM`, prior OCEAN/PULSE reconciliation (design-rationale thread, 2026-07-31). The OCEAN repo itself was not readable at authoring time — see §9 for the verification checklist that closes that gap.
+**Inputs:** `rpc-object-model-assessment.md` v0.7 (pinned vocabulary §1, invariants I1–I9, spine §4.3), `DNA-SPEC-DECLARED-STATE-PRM`, prior OCEAN/PULSE reconciliation (design-rationale thread, 2026-07-31). The OCEAN repo was not readable at authoring time; §9 records the reconciliation performed against it on 2026-08-01, and §9.1 the four assumptions that failed.
 
 ---
 
 ## 0. TL;DR
 
-OCEAN has exactly one application, and it is PULSE. That fact retires the original framing — OCEAN as platform doctrine that PULSE amends with a patient-state carve-out — because there is no platform left to carve out from. The thinking has shifted wholly to declarative (not inferred), so OCEAN's derive-in-the-graph doctrine is superseded, not amended, and the OCEAN codebase migrates into the PULSE repo as the distribution subsystem once that repo exists (S0.1). What survives is a three-way decomposition of the pattern: **keep** the backbone code as-is in its distribution role (EventBridge relay, archive, replay, fan-out) — it becomes a PULSE workspace package, **repurpose** the Operational Data Graph (ODG) as a read-only projection layer rebuilt from the ledger rather than a derivation layer built from the feed, and **forbid** two OCEAN idioms outright — producers emitting state-bearing events directly onto the bus, and any consumer treating the bus or its archive as the record.
+OCEAN has exactly one application, and it is PULSE. That fact retires the original framing — OCEAN as platform doctrine that PULSE amends with a patient-state carve-out — because there is no platform left to carve out from. The thinking has shifted wholly to declarative (not inferred), so OCEAN's derive-in-the-graph doctrine is superseded, not amended, and the OCEAN codebase migrates into the PULSE repo as the distribution subsystem once that repo exists (S0.1). What survives is a three-way decomposition of the pattern: **keep** the backbone code as-is in its distribution role (relay, archive, replay, fan-out) — it becomes a PULSE workspace package [the backbone is Kafka/MSK, not EventBridge; see §9.1 V3], **repurpose** the Operational Data Graph (ODG) as a read-only projection layer rebuilt from the ledger rather than a derivation layer built from the feed, and **forbid** two OCEAN idioms outright — producers emitting state-bearing events directly onto the bus, and any consumer treating the bus or its archive as the record.
 
 The single sentence that governs everything: **the ledger is the record, the backbone is the feed.** Commands enter the ledger through one writer with transition legality checked against the versioned catalog, current state co-commits with the event, and the outbox publishes an OCEAN-conformant envelope onto the backbone after commit. External systems of record (Customer.io per D9, Zendesk for Case) keep adjudicating their own state — the ledger records their transitions as attributed events and never blocks them. OCEAN's task-derivation motto survives untouched: tasks were always supposed to be derived, and now they derive from declared state instead of reconstructed state.
 
-The plan lands in four phases aligned to the existing S0–S4 delivery sequence, adds a repo-absorption step to Phase 0/1 (history-preserving import of the ocean repo into the PULSE monorepo, then archive the source), produces one doctrinal artifact (the supersession notice, drafted in §7), and carries ten repo-verification items (§9) because the repo was unreadable from this session. Absorption also resolves the compliance placement problem for free: the code leaves the personal `robford-brookai` account by import rather than org transfer. Recommended next action: reconcile §9 against the repo tree, then fold this ADR's §4 contract into `DNA-SPEC-DECLARED-STATE-PRM` alongside the object-model section.
+The plan lands in four phases aligned to the existing S0–S4 delivery sequence, adds a repo-absorption step to Phase 0/1 (history-preserving import of the ocean repo into the PULSE monorepo, then archive the source), produces one doctrinal artifact (the supersession notice, drafted in §7), and carried eleven repo-verification items (§9) because the repo was unreadable when it was written — since reconciled, with four failures recorded in §9.1. Absorption also resolves the compliance placement problem for free: the code leaves the personal `robford-brookai` account by import rather than org transfer. Recommended next action: settle the V3 backbone question (Kafka retained versus EventBridge migration, §9.1) — it is the one open item that changes the plan's shape — then fold this ADR's §4 contract into `DNA-SPEC-DECLARED-STATE-PRM` alongside the object-model section.
 
 ---
 
@@ -112,7 +112,7 @@ Every element of the OCEAN pattern gets exactly one disposition. This table is t
 
 | OCEAN element | Disposition | Rationale |
 |---|---|---|
-| EventBridge bus, rules, fan-out | **Keep** | Distribution role unchanged. The backbone was never the problem |
+| Event bus, rules, fan-out | **Keep** | Distribution role unchanged. The backbone was never the problem. **§9.1 V3:** the bus is Kafka/MSK, not EventBridge — whether "keep" means retaining Kafka or migrating to EventBridge is unresolved and changes this row from a no-op to a work phase |
 | Event archive + replay tooling | **Keep, re-scoped** | Convenience replay for projection rebuilds only. Authoritative rebuilds read the ledger (§4.6) |
 | Envelope schema and naming conventions | **Keep, extended** | PULSE events ride the same envelope with a mandatory extension block (§4.2). Existing consumers parse them unchanged |
 | Consumer registration / subscription patterns | **Keep** | Twenty projector, Customer.io sync, Snowflake ingestion all subscribe as ordinary OCEAN consumers |
@@ -274,29 +274,50 @@ An earlier revision drafted a carve-out amendment. Withdrawn — with PULSE as t
 
 ## 9. Repo verification checklist — assumptions made blind
 
-The OCEAN repo (`robford-brookai/ocean`) is private and was not readable from this session. Every repo-specific claim above is an inference from the pinned doctrine and prior threads. Verify these ten before Phase 0:
+**Reconciled 2026-08-01** against `robford-brookai/ocean` at `7bc9d2c` (remote `main`, clone `~/Repos/ocean` — see §9.2 on clone provenance). The eleven assumptions below were made blind; seven hold, four do not. The four failures are not cosmetic — V3 and V7 change the shape of the work, and §9.1 states what they invalidate.
 
-| # | Assumption | Verifies against | If wrong |
-|---|---|---|---|
-| V1 | Repo contains the architecture paper (the amendment target) and it is the doctrine of record | README / docs tree | Amendment lands wherever doctrine actually lives |
-| V2 | An envelope schema or event naming convention exists to extend | schemas/ or producer code | §4.2 becomes the v1 convention rather than an extension |
-| V3 | EventBridge bus + archive are provisioned as infrastructure-as-code in this repo | IaC directory | Phase 1 outbox targets whatever provisions the bus |
-| V4 | An ODG implementation exists (tables, graph store, or models) versus paper-only | repo tree | If paper-only, "repurpose" collapses to "projections are the first ODG" — simpler |
-| V5 | Producer libraries or emit helpers exist that PULSE-subject producers currently use | libs/ | Producer policy enforced by convention + CI schema check instead of library change |
-| V6 | An enumerable inventory of current producers touching patient state exists or is derivable | repo consumers/producers | Phase 2 starts with a discovery spike |
-| V7 | No current-state tables are built directly off the bus (the event-store hazard is latent, not live) | consumer code | Any live instance becomes a named Phase 3 migration with a retirement date |
-| V8 | Archive replay tooling exists and is idempotency-safe for the §4.6 convenience path | tooling | Convenience replay deferred, ledger rebuild is the only path initially |
-| V9 | Envelope `detail-type` naming can carry catalog-generated types without breaking existing rules | EventBridge rules | Introduce a parallel detail-type family, migrate rules in Phase 3 |
-| V10 | Repo lives in the personal `robford-brookai` account (like brook-status-reporter, ringer, tide-forecast) and exits via absorption, not org transfer | GitHub org | If already in brookai org, absorption proceeds identically — only the archive step changes owner |
-| V11 | The ocean tree is importable as a single workspace package (self-contained, no path assumptions that fight the monorepo layout) | repo tree | `git-filter-repo` restructure on import instead of plain subtree add |
-
+| # | Assumption | Verifies against | If wrong | **Verdict (2026-08-01)** |
+|---|---|---|---|---|
+| V1 | Repo contains the architecture paper (the amendment target) and it is the doctrine of record | README / docs tree | Amendment lands wherever doctrine actually lives | **Holds.** `docs/ocean_section_0`–`_9` plus `ocean_technical_reference.md` are in-repo and are the doctrine of record. |
+| V2 | An envelope schema or event naming convention exists to extend | schemas/ or producer code | §4.2 becomes the v1 convention rather than an extension | **Holds.** `libs/ocean-events` (`base.py`, `types.py`, `entities.py`) carries the envelope; topics follow an `ocean.<domain>` convention. Extensible as written. |
+| V3 | EventBridge bus + archive are provisioned as infrastructure-as-code in this repo | IaC directory | Phase 1 outbox targets whatever provisions the bus | **FAILS.** No EventBridge in any service, lib, or infra file — zero code references. The backbone is Kafka: `infra/redpanda/` locally, `infra/terraform/modules/msk-ocean/` (AWS MSK) for AWS. EventBridge appears only in 2 docs and 34 side-cloned files. See §9.1. |
+| V4 | An ODG implementation exists (tables, graph store, or models) versus paper-only | repo tree | If paper-only, "repurpose" collapses to "projections are the first ODG" — simpler | **Holds.** The ODG is implemented, not paper-only: `services/graph-projection` with seven handler modules over the graph tables in `infra/postgres/versions/0003_graph_tables.py`. "Repurpose" is real migration work. |
+| V5 | Producer libraries or emit helpers exist that PULSE-subject producers currently use | libs/ | Producer policy enforced by convention + CI schema check instead of library change | **FAILS.** No shared emit library. `libs/ocean-broker` exports only `build_producer_config` / `build_consumer_config`; each service carries its own duplicated `publish()` (`services/*/src/producer.py`). Producer policy must be enforced by convention plus a CI schema check, per the if-wrong branch. |
+| V6 | An enumerable inventory of current producers touching patient state exists or is derivable | repo consumers/producers | Phase 2 starts with a discovery spike | **Holds.** Enumerable today: 11 `ocean.*` topics in `infra/redpanda/topics.sh` and ~13 connector and producer services. No discovery spike needed. |
+| V7 | No current-state tables are built directly off the bus (the event-store hazard is latent, not live) | consumer code | Any live instance becomes a named Phase 3 migration with a retirement date | **FAILS, and it is live, not latent.** `services/graph-projection/src/consumer.py` subscribes to all topics and upserts entity state; `handlers/alerts.py` writes `INSERT INTO patients (patient_id, clinic_id, enrollment_status, …)`. There is also an `ocean.patient-state` topic. Patient enrollment status is derived from the feed in production code — the exact anti-pattern this ADR exists to retire. See §9.1. |
+| V8 | Archive replay tooling exists and is idempotency-safe for the §4.6 convenience path | tooling | Convenience replay deferred, ledger rebuild is the only path initially | **Fails, mildly.** No replay tooling exists — no CLI, script, or Taskfile target. The precondition does hold: `services/event-store/src/writer.py` is idempotent on `event_id` (`ON CONFLICT DO NOTHING`). Convenience replay is deferred; ledger rebuild is the only path initially. |
+| V9 | Envelope `detail-type` naming can carry catalog-generated types without breaking existing rules | EventBridge rules | Introduce a parallel detail-type family, migrate rules in Phase 3 | **Moot as written.** `detail-type` is an EventBridge concept and there are no EventBridge rules to break. Restate against Kafka: catalog-generated types travel as `event_type` within the `ocean.*` topic namespace. |
+| V10 | Repo lives in the personal `robford-brookai` account (like brook-status-reporter, ringer, tide-forecast) and exits via absorption, not org transfer | GitHub org | If already in brookai org, absorption proceeds identically — only the archive step changes owner | **Holds.** Remote is `github.com/robford-brookai/ocean`, personal account. Exit is by absorption; archive step unchanged. |
+| V11 | The ocean tree is importable as a single workspace package (self-contained, no path assumptions that fight the monorepo layout) | repo tree | `git-filter-repo` restructure on import instead of plain subtree add | **FAILS.** Of 1169 tracked files only 397 are code. The rest are `.repos/` side-clones (309, including a 305-file `streamline` clone), `.planning/` (289) and `.gsd/` (132) agent state. A plain subtree add would import all of it, and side-clones directly violate `docs/contracts/`. Requires the `git-filter-repo` path. See §9.1. |
 Absorption removes `ocean` from the org-transfer remediation batch entirely: the code enters the org by import into the born-conformant PULSE repo, and the source archives in place. The remaining personal-account repos (brook-status-reporter, ringer, tide-forecast) still take the transfer + retrofit path.
+
+### 9.1 What the failures invalidate
+
+**V3 — the backbone is Kafka, and "keep the backbone as-is" is not a no-op.** §0 and §4.1 both describe the surviving distribution role as "EventBridge relay, archive, replay, fan-out", and §4.1 keeps "EventBridge bus, rules, fan-out" on the grounds that "the backbone was never the problem". There is no EventBridge in OCEAN. The backbone is Kafka — Redpanda locally, AWS MSK via `infra/terraform/modules/msk-ocean/` — and the ADR's thirteen EventBridge references conflate two different things: what OCEAN *has* (Kafka) and what PULSE *plans* (EventBridge as the relay target, §1.3). Those are reconcilable in either direction, but not for free:
+
+- **Keep Kafka** as the feed and PULSE's outbox targets MSK. The §4.1 "keep" row becomes literally true, and §1.3's EventBridge constraint needs revisiting with Tal.
+- **Migrate to EventBridge** and the "keep" row is wrong — it is a backbone replacement, with every consumer in `services/` rewritten. That is a phase of work this ADR does not currently budget.
+
+§4.2's envelope contract, §4.5's delivery semantics, and §4.6's replay paths all need restating against whichever is chosen. This is the one open question that should block Tal's sign-off.
+
+**V7 — the anti-pattern is live and it is on patient state.** The ADR treats derive-in-the-graph as doctrine to be retired going forward. It is running in production today: `graph-projection` consumes every topic and writes `patients.enrollment_status`, and an `ocean.patient-state` topic already exists. Per this table's own if-wrong rule, that is a named Phase 3 migration with a retirement date, not a doctrinal correction. It also sharpens §1.2 — the "live production symptoms" listed there now have a specific mechanism and a file path, which makes the evidence brief for Tal considerably stronger.
+
+**V11 — the import must be filtered, not plain.** 66% of the tracked tree is not code: `.repos/` side-clones (309 files, including a 305-file `streamline` clone), `.planning/` (289) and `.gsd/` (132). A plain `git subtree add` per §6.1 would carry all of it into the PULSE monorepo, and committed side-clones are precisely what `docs/contracts/publishes.md` forbids. §6.1 must specify `git-filter-repo` with an explicit path allowlist — `services/`, `libs/`, `infra/`, `tests/`, `scripts/`, `docs/`, and the root project files — and history preservation applies to those paths only.
+
+**V5 and V8 are cheap.** Both land on their stated if-wrong branches with no replanning: producer policy moves to convention plus a CI schema check, and convenience replay is deferred to ledger rebuild.
+
+### 9.2 Clone provenance
+
+Two local checkouts of `robford-brookai/ocean` exist and they are not equivalent. `~/Repos/ocean` matches remote `main` at `7bc9d2c` and is authoritative — this reconciliation was performed against it, and it is what Orca's `ocean` project is registered against. `~/Repos/brookai/ocean` last fetched 2026-03-19 and carries two unpushed commits (`25f7974`, `a7f3007`) adopting the Brookai repo-template — `330 files changed, 961 insertions, 40135 deletions` — plus ~131 uncommitted changes, 129 of them deletions. That work is **abandoned** (Ford, 2026-08-01): OCEAN is superseded and archived, so restructuring it onto the platform archetype has no destination. The import must come from `~/Repos/ocean`.
 
 ---
 
 ## 10. Action items
 
-1. [ ] Reconcile §9 against the repo — paste `git ls-files` plus the paper/README into this thread, one revision pass follows
+1. [x] Reconcile §9 against the repo — done 2026-08-01 at `7bc9d2c`; seven of eleven hold, four fail (§9.1)
+1. [ ] **Settle the V3 backbone question** — OCEAN runs Kafka/MSK, not EventBridge. Decide keep-Kafka versus migrate-to-EventBridge, then restate §0, §1.3, §4.1, §4.2, §4.5 and §4.6 against it. Blocks item 2
+1. [ ] Rewrite §6.1's import as `git-filter-repo` with a path allowlist — a plain subtree add would import 309 side-cloned files (§9.1, V11)
+1. [ ] Register the live patient-state derivation in `graph-projection` as a named Phase 3 migration with a retirement date (§9.1, V7)
 2. [ ] Tal: sign off Option C topology and the absorption decision (§2) — the record-versus-feed line and "one repo, one doctrine" are the two load-bearing sentences
 3. [ ] Extend the DNA-695 (S0.1) work order with the §6.1 absorption steps — scaffold, subtree import to `packages/ocean`, conform-in-place commit, archive source with the §7 supersession notice as its final commit
 4. [ ] Add SoR registry fields and envelope surface to the S0.2 catalog work order — no new project name, OCEAN is now a package name only
