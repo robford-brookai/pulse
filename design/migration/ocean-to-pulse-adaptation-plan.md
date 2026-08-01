@@ -1,6 +1,6 @@
 # ADR: Absorbing OCEAN into the PULSE Ledger Foundation
 
-**Status:** Proposed — repo reconciliation complete (§9, 2026-08-01); pending resolution of the V3 backbone question (§9.1) and Tal sign-off
+**Status:** Proposed — repo reconciliation complete (§9, 2026-08-01); V3 backbone resolved 2026-08-01 (migrate to EventBridge, §9.1); pending Tal sign-off
 **Date:** 2026-07-31 (rev 2 — absorption framing)
 **Deciders:** Ford (author), Tal (sign-off).
 **Scope:** How the OCEAN pattern and codebase (event backbone + Operational Data Graph, "events are facts, tasks are derived") are absorbed into PULSE (Patient Unified Ledger of State and Events). PULSE is OCEAN's only application — doctrine has shifted wholly to declarative, so OCEAN is not amended for one domain, it is superseded and its code migrates into the PULSE repo as the distribution subsystem. One project, one repo, one doctrine.
@@ -10,7 +10,7 @@
 
 ## 0. TL;DR
 
-OCEAN has exactly one application, and it is PULSE. That fact retires the original framing — OCEAN as platform doctrine that PULSE amends with a patient-state carve-out — because there is no platform left to carve out from. The thinking has shifted wholly to declarative (not inferred), so OCEAN's derive-in-the-graph doctrine is superseded, not amended, and the OCEAN codebase migrates into the PULSE repo as the distribution subsystem once that repo exists (S0.1). What survives is a three-way decomposition of the pattern: **keep** the backbone code as-is in its distribution role (relay, archive, replay, fan-out) — it becomes a PULSE workspace package [the backbone is Kafka/MSK, not EventBridge; see §9.1 V3], **repurpose** the Operational Data Graph (ODG) as a read-only projection layer rebuilt from the ledger rather than a derivation layer built from the feed, and **forbid** two OCEAN idioms outright — producers emitting state-bearing events directly onto the bus, and any consumer treating the bus or its archive as the record.
+OCEAN has exactly one application, and it is PULSE. That fact retires the original framing — OCEAN as platform doctrine that PULSE amends with a patient-state carve-out — because there is no platform left to carve out from. The thinking has shifted wholly to declarative (not inferred), so OCEAN's derive-in-the-graph doctrine is superseded, not amended, and the OCEAN codebase migrates into the PULSE repo as the distribution subsystem once that repo exists (S0.1). What survives is a three-way decomposition of the pattern: **replace** the backbone transport — OCEAN runs Kafka/MSK today, and it migrates to EventBridge so that one bus serves both the absorbed services and the PULSE outbox (§9.1 V3) — with the relay, archive and fan-out role itself unchanged; the package becomes a PULSE workspace package, **repurpose** the Operational Data Graph (ODG) as a read-only projection layer rebuilt from the ledger rather than a derivation layer built from the feed, and **forbid** two OCEAN idioms outright — producers emitting state-bearing events directly onto the bus, and any consumer treating the bus or its archive as the record.
 
 The single sentence that governs everything: **the ledger is the record, the backbone is the feed.** Commands enter the ledger through one writer with transition legality checked against the versioned catalog, current state co-commits with the event, and the outbox publishes an OCEAN-conformant envelope onto the backbone after commit. External systems of record (Customer.io per D9, Zendesk for Case) keep adjudicating their own state — the ledger records their transitions as attributed events and never blocks them. OCEAN's task-derivation motto survives untouched: tasks were always supposed to be derived, and now they derive from declared state instead of reconstructed state.
 
@@ -112,8 +112,8 @@ Every element of the OCEAN pattern gets exactly one disposition. This table is t
 
 | OCEAN element | Disposition | Rationale |
 |---|---|---|
-| Event bus, rules, fan-out | **Keep** | Distribution role unchanged. The backbone was never the problem. **§9.1 V3:** the bus is Kafka/MSK, not EventBridge — whether "keep" means retaining Kafka or migrating to EventBridge is unresolved and changes this row from a no-op to a work phase |
-| Event archive + replay tooling | **Keep, re-scoped** | Convenience replay for projection rebuilds only. Authoritative rebuilds read the ledger (§4.6) |
+| Event bus, rules, fan-out | **Replace (transport), keep (role)** | The distribution *role* was never the problem; the *transport* is not what this ADR assumed. OCEAN runs Kafka — Redpanda locally, MSK Serverless on AWS — and migrates to EventBridge + SQS per the V3 decision (§9.1). Consumers become one rule → one SQS queue each, preserving competing-consumer semantics |
+| Event archive + replay tooling | **Build, re-scoped** | Not "keep" — OCEAN has none (§9.1 V8: no replay CLI, script or target). EventBridge archive supplies it. Convenience replay for projection rebuilds only; authoritative rebuilds read the ledger (§4.6) |
 | Envelope schema and naming conventions | **Keep, extended** | PULSE events ride the same envelope with a mandatory extension block (§4.2). Existing consumers parse them unchanged |
 | Consumer registration / subscription patterns | **Keep** | Twenty projector, Customer.io sync, Snowflake ingestion all subscribe as ordinary OCEAN consumers |
 | "Tasks are derived" | **Keep, unchanged** | The half of the motto that was always right. Tasks, work queues, and next-actions derive from declared state instead of reconstructed state — the derivation gets a better input, not a different doctrine |
@@ -172,9 +172,9 @@ Sanctioned command sources per the existing register: the Twenty kanban webhook 
 
 ### 4.5 Delivery semantics
 
-- Ledger → outbox → EventBridge is transactional-outbox: no committed transition is ever unpublished, no uncommitted transition ever publishes. Relay lag is monitored with an alert threshold (target well under the fastest downstream cadence — Twenty projection is the tightest consumer, per the D8 heal-back seconds budget).
+- Ledger → outbox → EventBridge → (SQS queue per consumer) is transactional-outbox: no committed transition is ever unpublished, no uncommitted transition ever publishes. Relay lag is monitored with an alert threshold (target well under the fastest downstream cadence — Twenty projection is the tightest consumer, per the D8 heal-back seconds budget).
 - Consumers are idempotent on `(subject_id, ledger_seq)` and tolerate reorder. Projections apply monotonically — a stale event for a subject already past that sequence is dropped, not applied.
-- Backbone remains at-least-once. Exactly-once is achieved at the projection, not on the wire — the standard boring answer.
+- Backbone remains at-least-once. Exactly-once is achieved at the projection, not on the wire — the standard boring answer. SQS standard queues do not preserve order either, which is why the reorder tolerance above is load-bearing rather than defensive.
 
 ### 4.6 Two replay paths, one rule
 
@@ -236,7 +236,7 @@ Solid arrows are writes and commands, dashed are feed consumption, the double ar
 
 | Phase | Aligns to | Work | Exit criterion |
 |---|---|---|---|
-| **0 — Absorption + contracts** | S0.1 repo scaffold (DNA-695) + S0.2 catalog machinery | PULSE repo scaffolded by rob-repo (birth ritual — never rerun on ocean). OCEAN code imported history-preserving (`git subtree add` or `git-filter-repo`, §6.1) as workspace package `packages/ocean`. Source repo archived read-only with a pointer here. OCEAN paper superseded (§7 notice as its final commit). Envelope extension schema emitted as a generated catalog surface. SoR registry fields added to catalog format | Package builds inside PULSE CI. Source repo archived. CI validates envelope ↔ catalog drift |
+| **0 — Absorption + contracts + backbone migration** | S0.1 repo scaffold (DNA-695) + S0.2 catalog machinery | PULSE repo scaffolded by rob-repo (birth ritual — never rerun on ocean). OCEAN code imported history-preserving (`git subtree add` or `git-filter-repo`, §6.1) as workspace package `packages/ocean`. Source repo archived read-only with a pointer here. OCEAN paper superseded (§7 notice as its final commit). Envelope extension schema emitted as a generated catalog surface. SoR registry fields added to catalog format | Package builds inside PULSE CI. Source repo archived. CI validates envelope ↔ catalog drift |
 | **1 — Record** | S1.1 ledger schema | Ledger + outbox implemented per existing work order, emitting OCEAN-conformant envelopes onto the bus provisioned by `packages/ocean` IaC. Single-writer enforced at infrastructure (one service principal holds write) | A synthetic Referral transition round-trips: command → ledger → backbone → Snowflake landing, `ledger_seq` intact |
 | **2 — Ingress** | S2 | Producer inventory: every existing OCEAN producer classified by the §4.4 test (repo verification item V6). State-asserting producers converted to ingress adapters. Customer.io consent ingress (D9) and Twenty drag webhook (D8) land here | Zero direct emits of catalog-state events, checked in CI against producer schemas |
 | **3 — Projections** | S3 | Twenty, Customer.io, and Snowflake consumers cut to ledger-fed events. Projection fields marked read-only. Reconciliation sweeps live (warehouse referee) with corrections declared, actor = reconciliation | Reconciliation clean over one full cycle. Projections rebuild from ledger in a drill |
@@ -293,12 +293,17 @@ Absorption removes `ocean` from the org-transfer remediation batch entirely: the
 
 ### 9.1 What the failures invalidate
 
-**V3 — the backbone is Kafka, and "keep the backbone as-is" is not a no-op.** §0 and §4.1 both describe the surviving distribution role as "EventBridge relay, archive, replay, fan-out", and §4.1 keeps "EventBridge bus, rules, fan-out" on the grounds that "the backbone was never the problem". There is no EventBridge in OCEAN. The backbone is Kafka — Redpanda locally, AWS MSK via `infra/terraform/modules/msk-ocean/` — and the ADR's thirteen EventBridge references conflate two different things: what OCEAN *has* (Kafka) and what PULSE *plans* (EventBridge as the relay target, §1.3). Those are reconcilable in either direction, but not for free:
+**V3 — RESOLVED 2026-08-01: migrate to EventBridge.** OCEAN runs Kafka — Redpanda locally, MSK Serverless on AWS via `infra/terraform/modules/msk-ocean/` — and there is no EventBridge in any service, lib or infra file. The ADR's thirteen EventBridge references conflated what OCEAN *has* with what PULSE *plans*.
 
-- **Keep Kafka** as the feed and PULSE's outbox targets MSK. The §4.1 "keep" row becomes literally true, and §1.3's EventBridge constraint needs revisiting with Tal.
-- **Migrate to EventBridge** and the "keep" row is wrong — it is a backbone replacement, with every consumer in `services/` rewritten. That is a phase of work this ADR does not currently budget.
+Decision (Ford): retire Kafka entirely and move all 15 bus-touching OCEAN services to EventBridge, rather than run two buses or keep MSK. Taken knowing it rewrites working non-PULSE services and adds scope this ADR did not budget. What decided it:
 
-§4.2's envelope contract, §4.5's delivery semantics, and §4.6's replay paths all need restating against whichever is chosen. This is the one open question that should block Tal's sign-off.
+- **Cost.** MSK Serverless bills $0.75/cluster-hour — about $547/month before a single event — against EventBridge's $1.00 per million. Break-even sits near 580M events/month, orders of magnitude above PRM volumes.
+- **Capabilities already assumed.** §1.4's per-target DLQ with backoff retry and §4.6's archive replay are EventBridge-native and absent from OCEAN's Kafka setup. Keeping Kafka meant building all three.
+- **Replay was not the decider.** It is roughly neutral: a Kafka replay consumer is 1–2 days against a fresh consumer group, and targeted single-consumer replay is in fact cleaner on Kafka. §4.6 only needs short-horizon convenience replay, and a 6-year durable record already exists in the append-only `audit_log` (`infra/postgres/RETENTION.md`).
+
+Implementation shape, decided with it: import into `packages/ocean` first and refactor there; EventBridge → SQS → the existing poll loops, since the 8 consumers are long-running EKS processes rather than functions; LocalStack replacing the three Redpanda containers in local dev. §§0, 4.1, 4.5 and 4.6 are restated accordingly; §4.2's envelope and §4.5's ordering rule needed no change, having always been written for an unordered at-least-once bus.
+
+Delivery is the OpenSpec change `ocean-eventbridge-migration`, run through WORKFLOW.md v2. Note the lane split: the terraform apply, the MSK teardown and the source-repo archive are all `destructive_ops` — Open Engine queue, G_APPROVAL, never an Orca worktree.
 
 **V7 — the anti-pattern is live and it is on patient state.** The ADR treats derive-in-the-graph as doctrine to be retired going forward. It is running in production today: `graph-projection` consumes every topic and writes `patients.enrollment_status`, and an `ocean.patient-state` topic already exists. Per this table's own if-wrong rule, that is a named Phase 3 migration with a retirement date, not a doctrinal correction. It also sharpens §1.2 — the "live production symptoms" listed there now have a specific mechanism and a file path, which makes the evidence brief for Tal considerably stronger.
 
@@ -315,7 +320,7 @@ Two local checkouts of `robford-brookai/ocean` exist and they are not equivalent
 ## 10. Action items
 
 1. [x] Reconcile §9 against the repo — done 2026-08-01 at `7bc9d2c`; seven of eleven hold, four fail (§9.1)
-1. [ ] **Settle the V3 backbone question** — OCEAN runs Kafka/MSK, not EventBridge. Decide keep-Kafka versus migrate-to-EventBridge, then restate §0, §1.3, §4.1, §4.2, §4.5 and §4.6 against it. Blocks item 2
+1. [x] **V3 backbone settled** 2026-08-01 — migrate everything to EventBridge (§9.1). §§0, 4.1, 4.5 restated; §4.2 and §4.6 already correct. Delivered as OpenSpec change `ocean-eventbridge-migration`
 1. [ ] Rewrite §6.1's import as `git-filter-repo` with a path allowlist — a plain subtree add would import 309 side-cloned files (§9.1, V11)
 1. [ ] Register the live patient-state derivation in `graph-projection` as a named Phase 3 migration with a retirement date (§9.1, V7)
 2. [ ] Tal: sign off Option C topology and the absorption decision (§2) — the record-versus-feed line and "one repo, one doctrine" are the two load-bearing sentences
