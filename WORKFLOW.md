@@ -1,222 +1,263 @@
-# Workflow
+# WORKFLOW — repo-ade ADE Stack v2
 
-Order of operations for the ADE stack: OpenSpec (planning), OpenLore (drift and memory), Orca
-(execution), Taskfile, and the thin-glue scripts.
+**Status:** v2.0.1 — supersedes v1 WORKFLOW.md | **Owner:** Ford
+**Scope:** The goal workflow for repo-ade-born repos (PULSE first), in three renderings: executable YAML (the source of truth), prose walkthrough, and diagram. The YAML block is parsed by thin glue (the `workflow:*` Taskfile targets) and read directly by agents via `orient()`. **Editing the YAML changes dispatch behavior. The prose and diagram are projections of the YAML and regenerate from it — never edit them independently.** Same doctrine as the state catalog: one generative artifact, multiple emitted surfaces, CI fails on drift.
 
-Run `task` for the command list, grouped by area in the order below.
-
----
-
-## 1. What generation already did
-
-`bootstrap.sh` ran during generation, so this repo is already initialised. It renamed the
-package, wrote `.openlore/config.json` (`openlore init`), built the call graph
-(`openlore analyze`), installed dependencies and pre-commit hooks, committed, and pushed. CI was
-watched to green before the script exited.
-
-Confirm the inherited state before starting work:
-
-```bash
-task install     # no-op if bootstrap already synced
-task check       # lint, typecheck, tests, docs build — exactly what CI runs
-```
-
-Do **not** run `openlore drift --install-hook`. Drift is already wired through the
-`openlore-drift` entry in `.pre-commit-config.yaml`; that flag writes `.git/hooks/pre-commit`
-directly and takes the file over from the pre-commit framework.
+> **Not yet implemented.** Three targets this document depends on do not exist in `Taskfile.yml`
+> yet: `workflow:lint`, `workflow:*` (the YAML parser, `scripts/workflow.py`), and `linear:sync`.
+> The steps that call them cannot run until they are built. Everything else is live today:
+> `task dispatch CHANGE=<id>`, `task collect CHANGE=<id>`, `task verify CHANGE=<id>`, and
+> `task spec:archive CHANGE=<id>`.
 
 ---
 
-## 2. `openspec/specs/` starts empty, and that is correct
+## 0. TL;DR
 
-A fresh repo has `openspec/specs/` holding only a `.gitkeep` — git cannot carry an empty
-directory through a template clone. Nothing is wrong and nothing is blocked:
+One OpenSpec change = one Linear parent issue = one directory of dispatched work orders. One task = one Linear sub-issue = one work-order file = one Orca worktree = one commit. The repo is the record, Linear is the projection — sub-issues mirror work-order files so Orca's native Linear integration can claim them, but the file is canonical and the sync is one-directional. The queue lives in the **DNA team** with standard Linear statuses; the Open Engine queue (team CCC, Agent-prefixed statuses) is a separate protocol that serves as the runner for the two out-of-lane routes. Dispatch is wave-gated with a serial lane, execution routes by model tier with an escalation ladder instead of fan-out, and four gates (hardening, MECE, drift, approval) block specific transitions. An agent anywhere in the cycle computes its next step from the `steps[].next` graph plus the `agent_protocol` state-resolution order — no ambiguity, no tribal knowledge.
 
-```bash
-task lore:drift        # [ok] No changes detected. Specs are up to date.
+## 1. Grain map
+
+| Grain | Linear | Repo | Orca | Git |
+|---|---|---|---|---|
+| Program | Team **DNA** / project **PULSE / Declared-State Funnel** | — | — | — |
+| Change | Parent issue (DNA) | `openspec/changes/<id>/` + `work_orders/<id>/` | — | Feature branches per task, merged per wave |
+| Task | **Sub-issue of the parent** (DNA) | `work_orders/<id>/<task>.md` | One worktree | One commit |
+| Attempt | Sub-issue comment (receipt) | HANDOFF.md Receipt block | Fresh worktree per escalation | — |
+
+Sub-issues are the Orca claim surface: its Linear integration creates a worktree from the sub-issue, whose description *is* the dispatched work-order body. Direction of truth: the `linear:sync` target writes files → sub-issues, never back. A sub-issue edited by hand in Linear is drift and gets overwritten at next sync — spec changes go through the file.
+
+Out-of-lane work (operational discovery, destructive ops) is executed by the Open Engine queue in team **CCC** under the `open-agent-engine` skill and its receipt-token protocol. The two teams keep disjoint status vocabularies by construction — DNA is standard Todo / In Progress / In Review, CCC is Agent Todo / Agent Working / Agent Review — so neither claim surface can see or misread the other. Cross-team dependencies are expressed as Linear issue relations (the OCN-4 ← DNA-695 block is the existing precedent).
+
+## 2. The workflow, executable
+
+```yaml
+ade_workflow:
+  version: 2.0.1
+  source_of_truth: WORKFLOW.md            # this file, this block
+  renderings: [prose_section_3, diagram_section_4]   # regenerate, never hand-edit
+  parser: scripts/workflow.py             # thin glue (unbuilt); workflow:lint validates schema
+
+  linear:
+    team: DNA                              # statuses: Triage, Backlog, Todo, In Progress,
+                                           # Blocked, In Review, Done, Canceled, Duplicate
+    project: "PULSE / Declared-State Funnel"
+    status_ownership:                      # one writer per band
+      unstarted: sync                      # Todo (and healing Triage -> Todo)
+      started: agents_and_orca             # In Progress, Blocked, In Review
+      terminal: human_via_merge_archive    # Done, Canceled
+
+  state_resolution:                        # how an agent determines "where are we"
+    order:                                 # first match wins
+      - "openspec/changes/<id>/ absent"                          : step=propose
+      - "tasks.md missing model/deps annotations or MECE unchecked": step=validate
+      - "work_orders/<id>/ absent or stale vs tasks.md"           : step=dispatch
+      - "linear sub-issues out of sync with work_orders/"         : step=sync_linear
+      - "any sub-issue status in [Todo, In Progress, Blocked]"    : step=execute
+      - "handoffs/<id>/SUMMARY.md absent"                         : step=collect
+      - "SUMMARY.md newer than specs/ last edit"                  : step=doc_update
+      - "task verify not green for <id>"                          : step=verify
+      - "worktrees for <id> still exist"                          : step=merge
+      - "openspec/changes/<id>/ still present"                    : step=archive
+      - default                                                    : step=propose (next change)
+    # Blocked parks the change at execute — reads as "wave not done." Unblock is a
+    # human comment plus a drag back to In Progress. Escalation never fires on
+    # status; it fires only on verification failure.
+
+  gates:
+    G_HARDENING:
+      checks: [H1_telemetry, H2_daemon_localhost, H3_version_pin, H4_permission_defaults]
+      receipt: linear_issue_link
+      rerun_on: orca_version_change
+      blocks: [execute]
+    G_MECE:
+      checks: [every_requirement_has_scenario, tasks_atomic_2h, task_scenario_bijection_covered,
+               no_scope_overlap, deps_explicit, model_declared_or_default,
+               deps_reference_existing_tasks, serial_flags_justified]
+      blocks: [dispatch]
+    G_DRIFT:
+      checks: [openlore_drift_clean, no_unreviewed_design_drift_flags]
+      blocks: [archive]
+    G_APPROVAL:
+      applies_to: tasks_tagged_destructive_or_prod_touching
+      requires: human_comment_on_linear_subissue
+      blocks: [execute]
+
+  lanes:
+    repo_change:
+      description: default lane — everything below
+    operational_discovery:
+      trigger: task reads production data (BF-0b class)
+      route: single controlled Claude Code session, scoped runtime creds,
+             outside Orca until G_HARDENING; receipts on the Linear sub-issue
+      runner: open_engine_queue            # team CCC, open-agent-engine skill,
+                                           # receipts per its AGENT token protocol
+      excluded_steps: [execute_in_orca]
+    destructive_ops:
+      trigger: no reviewable diff exists (force-push, repo archive, prod load)
+      route: operator runbook, agent-prepared scripts, G_APPROVAL mandatory
+      runner: open_engine_queue            # same runner; approval gates map to
+                                           # AGENT HUMAN HOLD on the CCC issue
+      excluded_steps: [dispatch, execute, merge]
+
+  routing:
+    tiers: [sonnet, opus, fable]
+    default: {model: sonnet, max_tier: opus, attempts_per_tier: 2}
+    rubric: verifier_strength_not_task_prestige       # see dispatch-template §3
+    fan_out: exploratory_only                          # never for spec-determined tasks
+    serial_lane_always: [catalog_generated_surfaces, workspace_roots, AGENTS.md, openspec_main_specs]
+
+  steps:
+    - id: propose
+      actor: human + agent(fable)
+      run: '/opsx:propose "<change title>"'
+      produces: [proposal.md, design.md, specs/<capability>/spec.md, tasks.md]
+      next: validate
+
+    - id: validate
+      actor: human + agent(fable, review-assist)
+      run: openspec validate <id>
+      gate: G_MECE
+      next: {pass: sync_linear, fail: propose}   # revise docs, re-validate
+
+    - id: sync_linear
+      actor: tool
+      run: task linear:sync CHANGE=<id>
+      behavior: create parent issue if absent (team and project per linear block,
+                passed explicitly on every mutation — never inferred from API-key
+                context); create/update one sub-issue per task, description =
+                dispatched work-order body;
+                status writes — pass stateId explicitly on create (resolve DNA
+                "Todo" once per sync run, never rely on team default or triage
+                intake); heal Triage -> Todo on update; never write any
+                started or completed status (In Progress onward is
+                agent/Orca-owned per status_ownership);
+                files canonical, one-directional
+      next: dispatch
+
+    - id: dispatch
+      actor: tool + router
+      run: task dispatch CHANGE=<id>
+      behavior: emit work_orders/<id>/<task>.md per dispatch-template v1;
+                release only wave-eligible tasks (deps merged);
+                serial-lane tasks release alone
+      next: execute
+
+    - id: execute
+      actor: agent(per work-order model field)
+      per: task
+      gate: [G_HARDENING, G_APPROVAL if tagged]
+      run: |
+        orca worktree create <task>          # or claim sub-issue via Orca Linear panel
+        agent reads AGENTS.md, calls orient(), reads spec_refs,
+        tests first, implements, task lint && task test,
+        writes HANDOFF.md (Receipt + Spec deltas), one commit, push
+      linear_status: In Progress -> In Review
+      next: {verification_pass: collect_when_wave_done,
+             verification_fail: escalate,
+             design_drift: halt_and_flag}     # per decision table
+
+    - id: escalate
+      actor: router
+      behavior: after attempts_per_tier failures, redispatch identical order +
+                escalation-context section at next tier in a FRESH worktree;
+                receipt every attempt on sub-issue and HANDOFF
+      next: {tier_available: execute, at_max_tier: validate}   # ceiling failure = spec defect
+
+    - id: collect
+      actor: tool
+      run: task collect CHANGE=<id>
+      produces: [handoffs/<id>/*, SUMMARY.md with tier economics]
+      next: doc_update
+
+    - id: doc_update
+      actor: agent(fable, fresh worktree)
+      behavior: apply ONLY plan-relevant deltas to openspec/changes/<id>/specs/;
+                run openspec validate; design-drift flags route to human, never auto-applied
+      next: verify
+
+    - id: verify
+      actor: tool
+      run: task verify CHANGE=<id>          # lint, test, drift, spec validation
+      next: {pass: merge, fail: dispatch}     # fix via redispatched tasks, not hand edits
+
+    - id: merge
+      actor: human
+      surface: orca_diff_review_ui
+      behavior: annotate hunks, merge winners to main, delete spent worktrees (H7);
+                linear sub-issues -> Done
+      next: archive
+
+    - id: archive
+      actor: tool
+      gate: G_DRIFT
+      run: task spec:archive CHANGE=<id>
+      behavior: deltas merge to openspec/specs/, change folder cleaned,
+                parent issue -> Done with receipts
+      next: refresh
+
+    - id: refresh
+      actor: tool
+      behavior: orient() now includes archived specs; next change starts clean
+      next: propose
+
+  edit_protocol:
+    - workflow changes are changes: edit this YAML via its own OpenSpec change (meta-change),
+      or for single-step tweaks a direct PR touching only WORKFLOW.md
+    - task workflow:lint validates schema, step-id references, gate references,
+      and that every status string in state_resolution and linear_status exists
+      in the linear.team status set
+    - prose and diagram regenerate from YAML; CI fails on rendering drift
+    - step ids are stable identifiers — add/remove steps freely, never repurpose an id
 ```
 
-Drift passes against an empty specs directory. (A *missing* one is a hard failure, which is why
-the `.gitkeep` is tracked — but that is the template's problem, already solved.)
+## 3. Prose walkthrough (projection of §2)
 
-`openlore analyze` will note *"Spec index skipped … contains no spec.md files — run 'openlore
-generate'"*. Ignore it here. That is openlore suggesting the brownfield path, and this repo has
-no code to derive specs from yet — `src/` is a placeholder.
+A change begins at **propose**: OpenSpec scaffolds the change folder, Fable-tier assistance shapes proposal, design, specs, and tasks. **Validate** runs the tool check plus the extended MECE gate — scenarios cover tasks, tasks are atomic, dependencies explicit, every task carries or defaults its model and parallel flags. Failure loops to propose, and nothing dispatches until G_MECE holds.
 
-**Specs arrive when your first change is archived.** `/opsx:propose` writes delta specs under
-`openspec/changes/<name>/specs/`, and `task spec:archive` merges them into `openspec/specs/`,
-which then becomes the baseline the next change starts from. Sections 3 and 7. Specs describe
-the intent you planned, never an inference drawn from placeholder code.
+**Sync-linear** projects the plan into Linear: one parent issue for the change and one sub-issue per task, all in the DNA team under the PULSE / Declared-State Funnel project, with team and project passed explicitly on every mutation. Sub-issue descriptions are the work-order bodies. Status writes follow the one-writer-per-band rule: sync resolves DNA's Todo state ID once per run and passes it on every create so triage intake can never intercept a new sub-issue, heals only the Triage→Todo edge on updates, and never touches anything from In Progress onward — that band belongs to agents and Orca, and the terminal band belongs to humans at merge and archive. The repo is the record and the sync is one-directional — Linear is where humans watch, comment, and approve, not where specs live. **Dispatch** then emits the work-order files per the dispatch template, releasing tasks in waves as dependencies merge, with serial-lane tasks (generated surfaces, workspace roots) running alone.
 
-Useful once real code exists:
+**Execute** is one agent per task per worktree, claimed through Orca's Linear panel or the CLI, gated on hardening (and on an approval comment for anything tagged destructive or prod-touching — those actually leave this lane entirely, per the lanes block). The agent orients, writes tests first, implements, verifies, writes a HANDOFF with its receipt, and commits once. Verification failure feeds **escalate**: two attempts per tier, fresh worktree per rung, and failure at the ceiling returns the task to validate as a spec defect rather than a bigger-model problem. Design drift halts the worktree and flags for human review. A sub-issue dragged to Blocked parks the change at execute — state resolution reads Blocked as "wave not done," the unblock path is a human comment plus a drag back to In Progress, and escalation never fires on status, only on verification failure.
 
-```bash
-task lore:analyze      # rebuild the call graph after a significant refactor
-```
+The two out-of-lane routes have a named runner: the Open Engine queue in team CCC, executed under the open-agent-engine skill with its AGENT receipt tokens. Operational discovery (anything reading production data) runs as a single controlled Claude Code session with scoped credentials, receipts on the issue. Destructive ops (anything with no reviewable diff — force-pushes, repo archives, production loads) run as operator runbooks with agent-prepared scripts, where G_APPROVAL maps onto the skill's AGENT HUMAN HOLD gate. The CCC team keeps its Agent-prefixed statuses and the DNA team keeps standard ones, so the two claim surfaces are mutually invisible by construction, and cross-team dependencies ride ordinary Linear issue relations.
 
-### Adopting an existing codebase
+When the wave completes, **collect** gathers handoffs and the tier-economics summary, **doc-update** folds spec-relevant deltas back into the change specs in a fresh Fable worktree, and **verify** runs the full quality gate — failures route back through dispatch as new or reopened tasks, never as hand edits to worktree output. **Merge** is the human moment: Orca's diff review, hunk annotation, winners to main, spent worktrees deleted. **Archive** (gated on clean drift) folds delta specs into the baseline and closes the parent issue with receipts, and **refresh** means the next change's `orient()` already knows everything this one shipped.
 
-Different situation, off the default path: you are pointing this scaffold at a project that
-already has substantial code and no specs. Then deriving a baseline is the point.
-
-```bash
-openlore generate      # derive living specs from the analysis (needs an LLM provider key)
-```
-
-Do not run this on a freshly generated repo. It would describe the scaffold's own placeholder
-and gate suite, write that into `openspec/specs/`, and hand it to every future agent through
-`orient()` as though it were your design.
-
----
-
-## 3. Plan a change
-
-Each feature, fix, or refactor is one OpenSpec change.
-
-```bash
-/opsx:propose "Add JWT authentication"
-```
-
-That writes `openspec/changes/add-jwt-auth/` containing `proposal.md`, `design.md`,
-`specs/<capability>/spec.md`, and `tasks.md`. Edit them until they describe the change
-accurately — this is the artifact every downstream agent reads.
-
-```bash
-task spec:validate CHANGE=add-jwt-auth
-```
-
-Then check the plan by hand. Validation catches format, not sense:
-
-- every requirement has at least one Given/When/Then scenario
-- tasks are atomic — one commit each, roughly two hours or less
-- every task maps to at least one scenario
-- no two tasks overlap (mutually exclusive)
-- every scenario is covered by some task (collectively exhaustive)
-- blocking dependencies are stated in the task description
-
-If any of these fails, revise and re-validate. Do not dispatch a plan that has not passed.
-
----
-
-## 4. Parse the plan into work orders
-
-```bash
-task dispatch CHANGE=add-jwt-auth
-```
-
-`scripts/dispatch_tasks.py` parses `tasks.md` and writes one self-contained work order per task
-to `work_orders/add-jwt-auth/task-001.md`, `task-002.md`, and so on. Each carries the objective,
-the milestone, a pointer to the change's specs, and the HANDOFF.md requirement.
-
-Targets take go-task **variable** syntax. Passing the change as a `--change <name>` flag instead
-exits 2 with `unknown flag`.
-
-The command prints a ready Orca invocation per work order:
-
-```bash
-orca worktree create --name task-001 --repo path:$PWD \
-  --agent claude --prompt "$(cat work_orders/add-jwt-auth/task-001.md)" --setup run --json
-```
-
-Requires `orca serve` or the Orca app running. Work orders are independent by construction, so
-run as many worktrees concurrently as the plan allows.
-
-Each agent then follows `AGENTS.md`: read the contract, call `orient()` via the OpenLore MCP
-server, read the spec and its task, write the failing test first, implement, run `task check`,
-write `HANDOFF.md`, and make exactly one commit.
-
----
-
-## 5. Collect handoffs
-
-```bash
-task collect CHANGE=add-jwt-auth
-```
-
-Gathers every worktree's `HANDOFF.md` into `handoffs/add-jwt-auth/` and writes a `SUMMARY.md`
-for the doc-updater. Worktrees without a handoff are skipped — that is a valid outcome, meaning
-the agent had nothing spec-relevant to report.
-
----
-
-## 6. Apply spec updates
-
-Implementation agents never edit specs. A fresh session does, reading only the handoffs:
-
-```note
-Read handoffs/add-jwt-auth/SUMMARY.md and each handoff it references. Apply ONLY
-plan-relevant updates to openspec/changes/add-jwt-auth/specs/. Ignore implementation
-details. If a handoff contains "## Design Drift", flag it for human review and do not
-apply it. Run `openspec validate add-jwt-auth` when done.
-```
-
-`task sync-docs CHANGE=add-jwt-auth` runs the drift and validation checks around that step and
-prints the same reminder.
-
----
-
-## 7. Verify, merge, archive
-
-```bash
-task verify CHANGE=add-jwt-auth   # check + drift + spec validation
-```
-
-Merge through Orca's diff review — compare worktree diffs, annotate, take the winning changes,
-delete spent worktrees. Then:
-
-```bash
-task spec:archive CHANGE=add-jwt-auth
-```
-
-Archive is gated on `spec:validate`, `lore:drift`, and `test`, so it refuses to run on a change
-that is not clean. It merges the delta specs into `openspec/specs/`, which becomes the baseline
-the next change starts from — and which `orient()` will surface to the next round of agents.
-
----
-
-## 8. Keep the scaffold current
-
-This repo was generated from a template that keeps changing:
-
-```bash
-task template:diff    # what changed upstream since generation
-task template:sync    # apply it to infrastructure paths only
-```
-
-`template:sync` rewrites the template's package name to this repo's before applying, and never
-touches `README.md`, `CLAUDE.md`, `AGENTS.md`, `pyproject.toml`, `src/`, `docs/` or `openspec/`.
-Run `task check` afterwards.
-
----
-
-## The loop
+## 4. Diagram (projection of §2)
 
 ```mermaid
-GENERATED (bootstrap already ran: init, analyze, sync, hooks, commit, CI green)
-    │                                    openspec/specs/ is empty — expected
-    ▼
-PER CHANGE
-  propose → validate → MECE check → dispatch → Orca worktrees → collect
-     ▲                                                             │
-     │                        doc-updater ←───────────────────────┘  (handoffs only)
-     │                              │
-     │                      verify → merge → archive
-     │                                          │
-     └──────────────────────────────────────────┘
-        archive merges the change's delta specs into openspec/specs/,
-        which becomes the baseline the next change starts from
+flowchart TB
+  P[propose<br/>fable] --> V{validate<br/>G_MECE}
+  V -- fail --> P
+  V -- pass --> SL[sync_linear<br/>team DNA · parent + sub-issues<br/>status writes: unstarted band only]
+  SL --> D[dispatch<br/>router · waves · serial lane]
+  D --> E[execute<br/>1 task = 1 worktree = 1 commit<br/>gate: G_HARDENING<br/>Blocked parks here]
+  E -- verification fail --> ESC{escalate<br/>fresh worktree,<br/>next tier}
+  ESC -- tier available --> E
+  ESC -- at max_tier --> V
+  E -- design drift --> HALT[halt · human review]
+  HALT --> V
+  E -- wave done --> C[collect<br/>handoffs + tier economics]
+  C --> DU[doc_update<br/>fable · spec deltas only]
+  DU --> VER{verify<br/>lint · test · drift · spec}
+  VER -- fail --> D
+  VER -- pass --> M[merge<br/>human · Orca diff UI<br/>delete worktrees]
+  M --> A[archive<br/>gate: G_DRIFT<br/>deltas → main specs]
+  A --> R[refresh<br/>orient includes new baseline]
+  R --> P
+  subgraph LANES[out-of-lane routes — runner: Open Engine queue, team CCC]
+    OD[operational discovery<br/>controlled session, no Orca]
+    DO[destructive ops<br/>runbook + G_APPROVAL<br/>= AGENT HUMAN HOLD]
+  end
+  D -. prod-touching task .-> OD
+  D -. no reviewable diff .-> DO
 ```
 
----
+## 5. What changed from v1
 
-## Decision points
+Sub-issue grain added (Linear parent/sub mapping to change/task, one-directional sync, Orca claims sub-issues). Model routing and the escalation ladder embedded in dispatch and execute. Gates made explicit objects with named blocking edges (hardening, MECE-extended, drift, approval). Lanes formalized so prod-touching and destructive work route out of Orca by rule instead of by memory. State-resolution order added so an agent landing mid-change computes its step deterministically. Edit protocol added: this YAML is the workflow, renderings regenerate, step ids are stable.
 
-| If… | Then |
-| --- | --- |
-| The plan fails the MECE check | Revise specs and tasks, re-validate. Do not dispatch. |
-| An agent hits a spec contradiction | It writes `## Design Drift` to HANDOFF.md and stops. A human resolves the spec before re-dispatching. |
-| A worktree produced no HANDOFF.md | Fine if nothing spec-relevant changed. If behaviour changed undocumented, write the handoff yourself from the diff. |
-| `openlore drift` reports drift | Check the handoffs cover it. If not, update specs manually. Do not archive with unresolved drift. |
-| A task landed without tests | Do not merge. Send the agent back — tests first, then implementation. |
-| `task check` passes but CI fails | The workflow ran something `check` does not. Add it to `check`; local and CI must not drift. |
-| `openlore analyze` says the spec index was skipped | Expected until your first change is archived. Only act on it when adopting an existing codebase — section 2. |
+## Change log
+
+**v2.0.1 (2026-08-01):** Team separation and status hardening. (1) Queue pinned to team **DNA**, project **PULSE / Declared-State Funnel** — the Open Engine queue keeps team CCC with its Agent-prefixed statuses, and the two protocols are now disjoint by construction (new `linear` block, grain map updated). (2) `runner: open_engine_queue` annotated on both out-of-lane routes, with G_APPROVAL mapped to the skill's AGENT HUMAN HOLD gate. (3) `Blocked` added to the state-resolution execute check — a Blocked sub-issue parks the change at execute; unblock is a comment plus a drag back to In Progress; escalation fires on verification failure only, never on status. (4) Status-write contract made explicit in `sync_linear`: stateId passed explicitly on create (resolved once per sync run, never team default), Triage→Todo healed on update, started/terminal bands never written by sync — codified as `status_ownership` (sync owns unstarted, agents/Orca own started, humans own terminal). (5) `workflow:lint` extended to verify every referenced status string exists in the pinned team's status set. Verified against DNA's live status set 2026-08-01: Triage, Backlog, Todo, In Progress, Blocked, In Review, Done, Canceled, Duplicate.
+
+**v2.0 (2026-08-01):** Rewrite as source-of-truth YAML with prose and diagram as projections. Supersedes v1 WORKFLOW.md.
