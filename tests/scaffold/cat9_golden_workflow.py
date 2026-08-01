@@ -188,8 +188,8 @@ def _rename_package(repo: Path, old: str, new: str) -> None:
 def test_template_sync_survives_the_package_rename(tmp_path: Path) -> None:
     """An upstream change touching the package name must land under the LOCAL package name.
 
-    A raw text diff cannot know `repo_ade` is a variable: before template_sync.sh rewrote the
-    patch, this scenario conflicted and, resolved toward upstream, wrote `src/repo_ade/...` into
+    A raw text diff cannot know `pkg_pulse` is a variable: before template_sync.sh rewrote the
+    patch, this scenario conflicted and, resolved toward upstream, wrote `src/pkg_pulse/...` into
     a repo whose package is named something else. That is the one thing copier gets for free by
     re-rendering from recorded answers.
     """

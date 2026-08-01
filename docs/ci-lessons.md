@@ -121,7 +121,7 @@ fix applied there reaches nobody else.
   fresh-clone gate covers the surrounding behaviour.
 
 - **2026-07-31 — Find-and-replace skipped an extension.** Symptom: a generated repo's
-  `cat7_gates_hooks.sh` still referenced `src/repo_ade`. Root cause: `bootstrap.sh`'s rename
+  `cat7_gates_hooks.sh` still referenced `src/pkg_pulse`. Root cause: `bootstrap.sh`'s rename
   covered `.py/.yml/.yaml/.toml/.md/.json` but not `.sh`. Rules baked in: `.sh` added to the
   include list, and the gate derives the package directory from `src/` rather than hardcoding
   it. The general lesson is that any new file type in the template needs checking against that

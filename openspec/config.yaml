@@ -1,7 +1,7 @@
 schema: spec-driven
 
 context: |
-  Tech stack: Python, uv, ruff, mypy, pytest
+  Tech stack: Python (pkg_pulse), uv, ruff, mypy, pytest
   Task runner: Taskfile (go-task)
   Docs: MkDocs
   Agent env: Orca ADE with isolated git worktrees

@@ -1,4 +1,4 @@
-from repo_ade.foo import foo
+from pkg_pulse.foo import foo
 
 
 def test_foo():

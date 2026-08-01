@@ -1,1 +1,1 @@
-::: repo_ade.foo
+::: pkg_pulse.foo

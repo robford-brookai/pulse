@@ -10,7 +10,7 @@ version: "3"
 #   - area 10 runs in a GENERATED repo, periodically, to pull template fixes back down.
 
 vars:
-  APP: repo_ade
+  APP: pkg_pulse
   SRC: src
   TESTS: tests
   CHANGE: ""

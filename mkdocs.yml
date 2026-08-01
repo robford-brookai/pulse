@@ -15,7 +15,7 @@ plugins:
   - mkdocstrings:
       handlers:
         python:
-          paths: ["src/repo_ade"]
+          paths: ["src/pkg_pulse"]
 theme:
   name: material
   feature:

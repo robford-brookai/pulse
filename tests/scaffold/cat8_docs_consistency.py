@@ -99,7 +99,7 @@ def test_readme_json_snippets_parse(i: int) -> None:
 @template_only
 def test_readme_taskfile_snippet_matches_the_real_taskfile() -> None:
     """The snippet is the real Taskfile parameterised on the package name, nothing else."""
-    expected = TASKFILE_TEXT.replace("APP: repo_ade", "APP: <your_package_name>")
+    expected = TASKFILE_TEXT.replace("APP: pkg_pulse", "APP: <your_package_name>")
     assert fenced(README, "yaml")[0] == expected, "README Taskfile snippet has drifted from Taskfile.yml"
 
 

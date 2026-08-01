@@ -62,7 +62,7 @@ fi
 
 # --- package rename awareness -------------------------------------------------------------
 #
-# bootstrap.sh renames the package on generation, so upstream says `repo_ade` where this repo
+# bootstrap.sh renames the package on generation, so upstream says `pkg_pulse` where this repo
 # says its own slug. A raw text diff has no idea that identifier is a variable: every hunk that
 # touches it conflicts, and resolving toward upstream leaks the template's package name into a
 # repo where that path does not exist. Rewriting the patch first makes those hunks apply by
