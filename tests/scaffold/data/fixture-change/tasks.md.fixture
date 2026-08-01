@@ -1,0 +1,14 @@
+# Tasks
+
+## Milestone 1: Token validation
+
+- [ ] Add JWT signature verification
+  Verify tokens against the configured public key.
+  Reject tokens whose `alg` header is `none`.
+- [ ] Reject expired tokens
+  Compare `exp` against the request clock, allowing 60s of skew.
+
+## Milestone 2: Session wiring
+
+- [x] Thread the validated claims onto the request context
+- [ ] Emit an audit event on every rejection

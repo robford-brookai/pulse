@@ -1,0 +1,29 @@
+# Work Order: Add JWT signature verification
+
+**Change**: fixture-change
+**Milestone**: Milestone 1: Token validation
+**Task ID**: task-001
+
+## Objective
+
+Add JWT signature verification
+
+## Context
+
+  Verify tokens against the configured public key.
+  Reject tokens whose `alg` header is `none`.
+
+## Requirements
+
+1. Read the spec file: `openspec/changes/fixture-change/specs/` for requirements and scenarios.
+2. Write tests first (red-green-refactor).
+3. Implement the minimum to satisfy the spec scenario.
+4. Run `task lint && task test` before finishing.
+5. Write `HANDOFF.md` in the worktree root with any spec-relevant updates.
+
+## Agent Instructions
+
+- Call `orient("Add JWT signature verification")` via OpenLore MCP if available.
+- Do NOT edit files in `openspec/`.
+- One commit per task.
+- If the spec is wrong, write to HANDOFF.md and stop.

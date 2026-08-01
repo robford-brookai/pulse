@@ -1,0 +1,20 @@
+schema: spec-driven
+
+context: |
+  Tech stack: Python, uv, ruff, mypy, pytest
+  Task runner: Taskfile (go-task)
+  Docs: MkDocs
+  Agent env: Orca ADE with isolated git worktrees
+  We maintain backwards compatibility for all public APIs
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+  specs:
+    - Use Given/When/Then format for scenarios
+    - Every requirement must have at least one testable scenario
+  design:
+    - Include data model and API surface for non-trivial changes
+  tasks:
+    - Break tasks into max 2-hour chunks
+    - Each task must produce at least one test

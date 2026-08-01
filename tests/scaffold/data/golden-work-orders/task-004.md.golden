@@ -1,0 +1,24 @@
+# Work Order: Emit an audit event on every rejection
+
+**Change**: fixture-change
+**Milestone**: Milestone 2: Session wiring
+**Task ID**: task-004
+
+## Objective
+
+Emit an audit event on every rejection
+
+## Requirements
+
+1. Read the spec file: `openspec/changes/fixture-change/specs/` for requirements and scenarios.
+2. Write tests first (red-green-refactor).
+3. Implement the minimum to satisfy the spec scenario.
+4. Run `task lint && task test` before finishing.
+5. Write `HANDOFF.md` in the worktree root with any spec-relevant updates.
+
+## Agent Instructions
+
+- Call `orient("Emit an audit event on every rejection")` via OpenLore MCP if available.
+- Do NOT edit files in `openspec/`.
+- One commit per task.
+- If the spec is wrong, write to HANDOFF.md and stop.

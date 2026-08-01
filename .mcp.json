@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "openlore": {
+      "command": "openlore",
+      "args": [
+        "mcp"
+      ]
+    }
+  }
+}

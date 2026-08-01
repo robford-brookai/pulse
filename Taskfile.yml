@@ -1,0 +1,207 @@
+version: "3"
+
+# Tasks are grouped by functional area, areas ordered by when you reach them, and alphanumeric
+# within each area. `task -l` sorts alphabetically and would scatter that grouping, so the
+# default task lists with --sort none to preserve it.
+#
+# Two lifecycles share this file, because a generated repo inherits it verbatim:
+#   - area 1 runs in the TEMPLATE only, and is where a project begins;
+#   - areas 2-9 run in whichever repo you are sitting in;
+#   - area 10 runs in a GENERATED repo, periodically, to pull template fixes back down.
+
+vars:
+  APP: repo_ade
+  SRC: src
+  TESTS: tests
+  CHANGE: ""
+  VISIBILITY: --private
+
+tasks:
+  default:
+    desc: List tasks grouped by area (alphabetical listing is `task -l`)
+    silent: true
+    cmds:
+      - task --list-all --sort none
+
+  # --- 1. Create (template only) ---
+
+  new-repo:
+    desc: Create a new repo from this template (NAME, PKG, DESC; created beside this repo)
+    # new-repo.sh runs `gh repo create --clone`, which clones into the current directory. Run
+    # from the repo root it would nest the new project inside the template, so the task runs one
+    # level up and calls the script by absolute path.
+    # Usage: task new-repo NAME=my-project PKG=my_project DESC="A cool new project"
+    # Run it from inside this repo; the task moves to the parent itself.
+    dir: '{{.ROOT_DIR}}/..'
+    requires:
+      vars: [NAME, PKG, DESC]
+    cmds:
+      - |
+        if [ -f "{{.ROOT_DIR}}/.ade-template-version" ]; then
+          echo "This repo was generated from the ADE template — new-repo belongs in the template itself." >&2
+          exit 1
+        fi
+        bash "{{.ROOT_DIR}}/new-repo.sh" "{{.NAME}}" "{{.PKG}}" "{{.DESC}}" {{.VISIBILITY}}
+
+  # --- 2. Environment ---
+
+  install:
+    desc: Setup venv and install dependencies
+    cmds:
+      - uv sync
+
+  mcp:check:
+    desc: MCP diagnostics — duplicate scopes, dead servers (see docs/mcp-servers.md)
+    silent: true
+    cmds:
+      - |
+        OUT=$(claude mcp list 2>&1); echo "$OUT"
+        if echo "$OUT" | grep -q "defined in multiple scopes"; then
+          echo "FAIL: MCP server duplicated across scopes — consolidate; per-endpoint OAuth tokens conflict"; exit 1
+        fi
+        if echo "$OUT" | grep -q "Failed to connect"; then
+          echo "FAIL: an MCP server failed to connect — fix or remove it"; exit 1
+        fi
+        echo "MCP OK"
+
+  # --- 3. Develop ---
+
+  fmt:
+    desc: Auto-format and apply fixable lint rules
+    cmds:
+      - uv run ruff format {{.SRC}} {{.TESTS}}
+      - uv run ruff check --fix {{.SRC}} {{.TESTS}}
+
+  lint:
+    desc: Check formatting and lint rules (read-only)
+    cmds:
+      - uv run ruff format {{.SRC}} {{.TESTS}} --check
+      - uv run ruff check {{.SRC}} {{.TESTS}}
+
+  typecheck:
+    desc: Type check with mypy
+    cmds:
+      - uv run mypy {{.SRC}}
+
+  # --- 4. Test ---
+
+  test:
+    desc: Run tests with coverage
+    cmds:
+      - uv run pytest {{.TESTS}} --cov={{.SRC}}/{{.APP}} --cov-report=term-missing
+
+  test:all:
+    desc: Run tests including the slow scaffold gates
+    cmds:
+      - uv run pytest {{.TESTS}} -m "slow or not slow" --cov={{.SRC}}/{{.APP}} --cov-report=term-missing
+
+  # --- 5. Gate ---
+
+  # `check` is the contract between a developer's machine and CI:
+  # .github/workflows/main.yml invokes exactly this target. Keep it CI-safe — openspec and
+  # openlore are npm globals that runners do not install, so they belong in `verify`, not here.
+  check:
+    desc: All CI gates — lint, typecheck, tests, docs build (what main.yml runs)
+    cmds:
+      - task: lint
+      - task: typecheck
+      - task: test
+      - task: docs:build
+
+  pre-commit:
+    desc: Run all pre-commit hooks
+    cmds:
+      - uv run pre-commit run --all-files
+
+  verify:
+    desc: Full local gate — check plus drift and spec validation (needs CHANGE)
+    cmds:
+      - task: check
+      - task: lore:drift
+      - task: spec:validate
+
+  # --- 6. Docs ---
+
+  docs:
+    desc: Serve MkDocs locally
+    cmds:
+      - uv run mkdocs serve
+
+  docs:build:
+    desc: Build the docs strictly (what CI runs)
+    cmds:
+      - uv run mkdocs build -s
+
+  # --- 7. Spec lifecycle (OpenSpec) ---
+  # Alphabetical, per the listing convention. Workflow order is init, validate, status, archive.
+
+  spec:archive:
+    desc: Archive a completed OpenSpec change (merges deltas to main specs)
+    deps: [spec:validate, lore:drift, test]
+    cmds:
+      - openspec archive {{.CHANGE}}
+
+  spec:init:
+    desc: Initialize OpenSpec in this project
+    cmds:
+      - openspec init --tools claude
+
+  spec:status:
+    desc: Show OpenSpec change status
+    cmds:
+      - openspec status --change {{.CHANGE}}
+
+  spec:validate:
+    desc: Validate the current OpenSpec change
+    cmds:
+      - openspec validate {{.CHANGE}}
+
+  # --- 8. Drift and memory (OpenLore) ---
+
+  lore:analyze:
+    desc: Build call graph and structural digest
+    cmds:
+      - openlore analyze
+
+  lore:drift:
+    desc: Detect spec/code drift
+    cmds:
+      - openlore drift
+
+  lore:mcp:
+    desc: Start OpenLore MCP server (for agent orient() calls)
+    cmds:
+      - openlore mcp
+
+  # --- 9. Work distribution (thin glue) ---
+  # Alphabetical, per the listing convention. The pipeline runs dispatch, collect, sync-docs.
+
+  collect:
+    desc: Collect HANDOFF.md files from Orca worktrees (needs CHANGE)
+    cmds:
+      - uv run python scripts/collect_handoffs.py --change {{.CHANGE}}
+
+  dispatch:
+    desc: Parse OpenSpec tasks.md and emit work-order files (needs CHANGE)
+    cmds:
+      - uv run python scripts/dispatch_tasks.py --change {{.CHANGE}}
+
+  sync-docs:
+    desc: Run drift checks and print doc-updater instructions (needs CHANGE)
+    cmds:
+      - openlore drift
+      - openspec validate {{.CHANGE}}
+      - echo "Review handoffs/ for plan-relevant updates"
+      - 'echo "Apply via: edit openspec/changes/{{.CHANGE}}/specs/ then openspec validate {{.CHANGE}}"'
+
+  # --- 10. Template updates (generated repos) ---
+
+  template:diff:
+    desc: Show ADE template changes since this repo was generated
+    cmds:
+      - bash scripts/template_sync.sh diff
+
+  template:sync:
+    desc: Apply ADE template changes to infrastructure paths (never README/CLAUDE/src)
+    cmds:
+      - bash scripts/template_sync.sh apply

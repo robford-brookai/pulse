@@ -1,0 +1,28 @@
+# Work Order: Reject expired tokens
+
+**Change**: fixture-change
+**Milestone**: Milestone 1: Token validation
+**Task ID**: task-002
+
+## Objective
+
+Reject expired tokens
+
+## Context
+
+  Compare `exp` against the request clock, allowing 60s of skew.
+
+## Requirements
+
+1. Read the spec file: `openspec/changes/fixture-change/specs/` for requirements and scenarios.
+2. Write tests first (red-green-refactor).
+3. Implement the minimum to satisfy the spec scenario.
+4. Run `task lint && task test` before finishing.
+5. Write `HANDOFF.md` in the worktree root with any spec-relevant updates.
+
+## Agent Instructions
+
+- Call `orient("Reject expired tokens")` via OpenLore MCP if available.
+- Do NOT edit files in `openspec/`.
+- One commit per task.
+- If the spec is wrong, write to HANDOFF.md and stop.

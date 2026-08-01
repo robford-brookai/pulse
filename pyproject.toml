@@ -1,0 +1,129 @@
+[project]
+name = "repo-ade"
+version = "0.0.1"
+description = "Repository agent development environment scaffold"
+authors = [{ name = "Rob Ford", email = "rob.ford@brook.ai" }]
+readme = "README.md"
+keywords = ['python']
+requires-python = ">=3.10,<4.0"
+classifiers = [
+    "Intended Audience :: Developers",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.urls]
+Homepage = "https://robford-brookai.github.io/repo-ade/"
+Repository = "https://github.com/robford-brookai/repo-ade"
+Documentation = "https://robford-brookai.github.io/repo-ade/"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-cov>=6.0.0",
+    "pre-commit>=4.5.1",
+    "tox-uv>=1.33.4",
+    "deptry>=0.25.1",
+    "mypy>=1.19.1",
+
+    "ruff>=0.15.7",
+    # Used directly by the tests/scaffold gates. pyyaml is otherwise only a
+    # transitive mkdocs dependency; tomllib is stdlib from 3.11 and CI tests 3.10.
+    "pyyaml>=6.0",
+    "tomli>=2.0; python_version < '3.11'",
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.7.6",
+    "mkdocstrings[python]>=1.0.3",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/repo_ade"]
+
+[tool.mypy]
+files = ["src"]
+disallow_untyped_defs = true
+disallow_any_unimported = true
+no_implicit_optional = true
+check_untyped_defs = true
+warn_return_any = true
+warn_unused_ignores = true
+show_error_codes = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Scaffold gates 7 and 9 spin up a git sandbox and a fresh-clone `uv sync`.
+# They are excluded from the default run; `task test:all` includes them.
+markers = ["slow: sandbox and fresh-clone gates, excluded from the default run"]
+addopts = '-m "not slow"'
+# The scaffold gates are named cat1_structure.py .. cat9_golden_workflow.py so the filename
+# states which gate it is. Without this they match no default pattern and are silently skipped
+# by `task test` and CI, while still passing when run by explicit path.
+python_files = ["test_*.py", "cat[0-9]_*.py"]
+
+[tool.coverage.report]
+# Applies wherever coverage runs (`task test`, tox), not just in CI. The floor is currently
+# trivially met — src/ is a two-statement placeholder — and becomes a real gate as the package
+# grows. tests/scaffold/ measures the scaffold, not src/, so it does not inflate this number.
+fail_under = 80
+show_missing = true
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+fix = true
+
+[tool.ruff.lint]
+select = [
+    # flake8-2020
+    "YTT",
+    # flake8-bandit
+    "S",
+    # flake8-bugbear
+    "B",
+    # flake8-builtins
+    "A",
+    # flake8-comprehensions
+    "C4",
+    # flake8-debugger
+    "T10",
+    # flake8-simplify
+    "SIM",
+    # isort
+    "I",
+    # mccabe
+    "C90",
+    # pycodestyle
+    "E", "W",
+    # pyflakes
+    "F",
+    # pygrep-hooks
+    "PGH",
+    # pyupgrade
+    "UP",
+    # ruff
+    "RUF",
+    # tryceratops
+    "TRY",
+]
+ignore = [
+    # LineTooLong
+    "E501",
+    # DoNotAssignLambda
+    "E731",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
+
+[tool.ruff.format]
+preview = true
