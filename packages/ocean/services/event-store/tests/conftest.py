@@ -32,7 +32,7 @@ def mock_session_maker():
 
 @pytest_asyncio.fixture
 async def client(monkeypatch):
-    monkeypatch.setenv("REDPANDA_BROKERS", "localhost:9092")
+    monkeypatch.setenv("SQS_QUEUE_URL", "http://localhost:4566/000000000000/ocean-event-store")
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
 
     async def _noop_consumer(*args, **kwargs):
