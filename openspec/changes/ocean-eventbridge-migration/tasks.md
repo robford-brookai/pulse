@@ -89,7 +89,7 @@ can be dispatched. `task dispatch` must not emit work orders for them.
       `[model: sonnet | deps: 1.3 | lane: repo_change | wave: 1]`
       `serial: catalog_generated_surfaces` — a generated contract both producers and rules derive
       from; concurrent edits would let the two surfaces drift.
-- [ ] 2.2 [DNA-737] Replace `libs/ocean-broker`'s Kafka config builders with `EventBridgePublisher`:
+- [x] 2.2 [DNA-737] Replace `libs/ocean-broker`'s Kafka config builders with `EventBridgePublisher`:
       `publish(detail_type, event, key)` resolving addressing from 2.1, envelope carried whole in
       `detail`, `key` carried as an envelope field, and the Postgres `failed_webhooks` fallback on
       publish failure. Test: envelope round-trips field-for-field; `event_type` is not promoted to
