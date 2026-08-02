@@ -220,3 +220,4 @@ handoffs/
 
 # HANDOFF.md (per-worktree, not committed; templates/HANDOFF.md stays tracked)
 /HANDOFF.md
+.orca

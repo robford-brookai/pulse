@@ -28,3 +28,9 @@ repos:
         entry: openlore drift --fail-on warning
         language: system
         pass_filenames: false
+        # Drift is code-vs-spec, so only run when code or specs are staged. `drift` also reports
+        # every new markdown file as `uncovered` — with --fail-on warning that makes a docs-only
+        # commit impossible, which is how the design set under design/ was blocked. Scoping when
+        # the hook fires keeps the gate at full strength where it means something; downgrading to
+        # --fail-on error would have weakened it everywhere instead.
+        files: ^(src/.*\.py|openspec/.*)$
