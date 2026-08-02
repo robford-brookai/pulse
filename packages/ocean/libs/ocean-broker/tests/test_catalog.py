@@ -11,8 +11,6 @@ against the same table the patterns are emitted from.
 from __future__ import annotations
 
 import json
-import re
-from pathlib import Path
 
 import pytest
 from ocean_broker.catalog import (
@@ -46,10 +44,6 @@ DESIGN_D1_DOMAINS = {
     "logistics",
 }
 
-#: `packages/ocean`, from `packages/ocean/libs/ocean-broker/tests/` — the same root
-#: `catalog._PACKAGE_ROOT` resolves to, reached from this file's own depth.
-_REPO_OCEAN = Path(__file__).resolve().parents[3]
-
 
 class TestSourceTable:
     """The table itself: eleven live domains, warehouse-dlq retired."""
@@ -64,16 +58,6 @@ class TestSourceTable:
     def test_warehouse_dlq_is_retired_and_absent(self):
         assert "warehouse-dlq" not in LIVE_DOMAINS
         assert "warehouse-dlq" in RETIRED_DOMAINS
-
-    def test_table_matches_the_topics_provisioned_for_the_local_stack(self):
-        """topics.sh is the pre-migration topic list; the table must cover it exactly.
-
-        Guards the window before 6.5 replaces topics.sh with catalog-driven creation.
-        """
-        script = (_REPO_OCEAN / "infra" / "redpanda" / "topics.sh").read_text()
-        provisioned = set(re.findall(r'^\s*"ocean\.([a-z-]+)"', script, re.MULTILINE))
-
-        assert provisioned == set(LIVE_DOMAINS) | set(RETIRED_DOMAINS)
 
 
 class TestTopicTranslation:

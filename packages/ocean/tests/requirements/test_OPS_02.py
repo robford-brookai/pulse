@@ -15,7 +15,7 @@ _ROOT = pathlib.Path(__file__).parents[2]
 _COMPOSE_PATH = _ROOT / "infra" / "docker-compose.yml"
 
 # Infrastructure services (no healthcheck requirement in this test -- they have their own)
-_INFRA_SERVICES = {"postgres", "redpanda", "redpanda-console", "redpanda-init", "migrate", "hasura", "hasura-init"}
+_INFRA_SERVICES = {"postgres", "localstack", "localstack-init", "migrate", "hasura", "hasura-init"}
 
 # Application services that MUST have healthchecks
 _APP_SERVICES = {
@@ -70,7 +70,7 @@ class TestDockerComposeStack:
     def test_infrastructure_services_present(self, compose_config: dict):
         """Core infrastructure services must be defined."""
         services = set(compose_config["services"].keys())
-        for svc in ("postgres", "redpanda", "migrate"):
+        for svc in ("postgres", "localstack", "migrate"):
             assert svc in services, f"Infrastructure service {svc} missing"
 
     def test_optional_sim_driver_has_profile(self, compose_config: dict):
