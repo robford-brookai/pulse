@@ -4,6 +4,7 @@ Source-inspection + unit tests for services/slack-bot/src/slash_commands.py.
 Verifies: build_search_response exists, search subcommand routed in handler,
 stacte-bridge URL referenced, and Block Kit output correct with mocked httpx.
 """
+
 from __future__ import annotations
 
 import importlib
@@ -81,9 +82,7 @@ def _import_slash_commands():
     for k in keys_to_remove:
         del sys.modules[k]
 
-    spec = importlib.util.spec_from_file_location(
-        "src.slash_commands", SLASH_COMMANDS_PATH
-    )
+    spec = importlib.util.spec_from_file_location("src.slash_commands", SLASH_COMMANDS_PATH)
     mod = importlib.util.module_from_spec(spec)
     sys.modules["src.slash_commands"] = mod
     spec.loader.exec_module(mod)

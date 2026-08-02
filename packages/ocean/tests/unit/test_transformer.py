@@ -1,19 +1,21 @@
 """Unit tests for BaseTransformer protocol and all collection transformers."""
+
 from __future__ import annotations
 
-import sys
 import pathlib
+import sys
 
 # The transformer module lives under services/mongodb-connector/src,
 # so we add its parent to sys.path.
 _SRC = pathlib.Path(__file__).resolve().parents[2] / "services" / "mongodb-connector" / "src"
 sys.path.insert(0, str(_SRC))
 
-import pytest  # noqa: E402
 
-from transformer import (  # noqa: E402
-    AlertsTransformer,
+from ocean_events.base import _PHI_FIELD_NAMES
+from transformer import (
+    TRANSFORMER_REGISTRY,
     ActivityTransformer,
+    AlertsTransformer,
     BaseTransformer,
     ChatRoomsTransformer,
     DashboardDetailsTransformer,
@@ -22,14 +24,12 @@ from transformer import (  # noqa: E402
     PatientNoteTransformer,
     PersonaTransformer,
     ProviderProtocolsTransformer,
-    TRANSFORMER_REGISTRY,
 )
-from ocean_events.base import _PHI_FIELD_NAMES  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 def _make_change_doc(
     operation_type: str = "insert",
@@ -72,6 +72,7 @@ def _assert_phi_guard(result: dict) -> None:
 # ---------------------------------------------------------------------------
 # AlertsTransformer Tests
 # ---------------------------------------------------------------------------
+
 
 class TestAlertsTransformer:
     """AlertsTransformer unit tests."""
@@ -157,6 +158,7 @@ class TestAlertsTransformer:
 # ChatRoomsTransformer Tests
 # ---------------------------------------------------------------------------
 
+
 class TestChatRoomsTransformer:
     """ChatRoomsTransformer unit tests."""
 
@@ -240,6 +242,7 @@ class TestChatRoomsTransformer:
 # ActivityTransformer Tests
 # ---------------------------------------------------------------------------
 
+
 class TestActivityTransformer:
     """ActivityTransformer unit tests."""
 
@@ -300,6 +303,7 @@ class TestActivityTransformer:
 # ---------------------------------------------------------------------------
 # ProviderProtocolsTransformer Tests
 # ---------------------------------------------------------------------------
+
 
 class TestProviderProtocolsTransformer:
     """ProviderProtocolsTransformer unit tests."""
@@ -363,6 +367,7 @@ class TestProviderProtocolsTransformer:
 # PatientCarePlansTransformer Tests
 # ---------------------------------------------------------------------------
 
+
 class TestPatientCarePlansTransformer:
     """PatientCarePlansTransformer unit tests."""
 
@@ -412,7 +417,9 @@ class TestPatientCarePlansTransformer:
         assert self.transformer.transform(change_doc) is None
 
     def test_missing_patient_id_returns_none(self) -> None:
-        change_doc = _make_change_doc("insert", full_document={"problem_list": {"items": []}}, collection="patient_care_plans")
+        change_doc = _make_change_doc(
+            "insert", full_document={"problem_list": {"items": []}}, collection="patient_care_plans"
+        )
         assert self.transformer.transform(change_doc) is None
 
     def test_partial_features(self) -> None:
@@ -468,6 +475,7 @@ class TestPatientCarePlansTransformer:
 # ---------------------------------------------------------------------------
 # PatientNoteTransformer Tests
 # ---------------------------------------------------------------------------
+
 
 class TestPatientNoteTransformer:
     """PatientNoteTransformer unit tests."""
@@ -542,6 +550,7 @@ class TestPatientNoteTransformer:
 # MonitoringTimeRawTransformer Tests
 # ---------------------------------------------------------------------------
 
+
 class TestMonitoringTimeRawTransformer:
     """MonitoringTimeRawTransformer unit tests."""
 
@@ -570,7 +579,9 @@ class TestMonitoringTimeRawTransformer:
         assert self.transformer.transform(change_doc) is None
 
     def test_missing_patient_id_returns_none(self) -> None:
-        change_doc = _make_change_doc("insert", full_document={"lastPocarOpenedAt": "x"}, collection="monitoring_time_raw")
+        change_doc = _make_change_doc(
+            "insert", full_document={"lastPocarOpenedAt": "x"}, collection="monitoring_time_raw"
+        )
         assert self.transformer.transform(change_doc) is None
 
     def test_partial_features(self) -> None:
@@ -621,6 +632,7 @@ class TestMonitoringTimeRawTransformer:
 # ---------------------------------------------------------------------------
 # PersonaTransformer Tests
 # ---------------------------------------------------------------------------
+
 
 class TestPersonaTransformer:
     """PersonaTransformer unit tests."""
@@ -704,6 +716,7 @@ class TestPersonaTransformer:
 # DashboardDetailsTransformer Tests
 # ---------------------------------------------------------------------------
 
+
 class TestDashboardDetailsTransformer:
     """DashboardDetailsTransformer unit tests."""
 
@@ -734,11 +747,15 @@ class TestDashboardDetailsTransformer:
         assert self.transformer.transform(change_doc) is None
 
     def test_missing_patient_id_returns_none(self) -> None:
-        change_doc = _make_change_doc("insert", full_document={"billableMinutesMtd": 10}, collection="persona.dashboard_details")
+        change_doc = _make_change_doc(
+            "insert", full_document={"billableMinutesMtd": 10}, collection="persona.dashboard_details"
+        )
         assert self.transformer.transform(change_doc) is None
 
     def test_partial_features(self) -> None:
-        change_doc = _make_change_doc("insert", full_document={"persona_id": "p1"}, collection="persona.dashboard_details")
+        change_doc = _make_change_doc(
+            "insert", full_document={"persona_id": "p1"}, collection="persona.dashboard_details"
+        )
         result = self.transformer.transform(change_doc)
         assert result is not None
         assert result["features"]["billable_minutes_mtd"] is None
@@ -747,14 +764,14 @@ class TestDashboardDetailsTransformer:
     def test_threshold_tiers(self) -> None:
         """Test threshold computation for various billable minute values."""
         cases = [
-            (0, 20),    # 0 → 20 minutes to threshold
-            (10, 10),   # 10 → 10 minutes to next (20)
-            (20, 20),   # 20 → 20 minutes to next (40)
-            (35, 5),    # 35 → 5 minutes to next (40)
-            (40, 20),   # 40 → 20 minutes to next (60)
-            (55, 5),    # 55 → 5 minutes to next (60)
-            (60, 0),    # 60 → past all thresholds
-            (100, 0),   # 100 → past all thresholds
+            (0, 20),  # 0 → 20 minutes to threshold
+            (10, 10),  # 10 → 10 minutes to next (20)
+            (20, 20),  # 20 → 20 minutes to next (40)
+            (35, 5),  # 35 → 5 minutes to next (40)
+            (40, 20),  # 40 → 20 minutes to next (60)
+            (55, 5),  # 55 → 5 minutes to next (60)
+            (60, 0),  # 60 → past all thresholds
+            (100, 0),  # 100 → past all thresholds
         ]
         for billable, expected in cases:
             doc = {"persona_id": "p1", "billableMinutesMtd": billable}
@@ -794,6 +811,7 @@ class TestDashboardDetailsTransformer:
 # ---------------------------------------------------------------------------
 # TRANSFORMER_REGISTRY Tests
 # ---------------------------------------------------------------------------
+
 
 class TestTransformerRegistry:
     """Tests for the TRANSFORMER_REGISTRY module-level dict."""

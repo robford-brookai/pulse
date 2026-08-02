@@ -4,6 +4,7 @@ Loads personas from AGENTS.md, starts consumer as a background task.
 Publisher and consumer creation are deferred to the background task
 so the FastAPI /health endpoint becomes responsive immediately.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -51,9 +52,7 @@ async def lifespan(app: FastAPI):
     personas = load_personas(agents_path)
 
     # Defer publisher + consumer to background task so /health responds immediately
-    _consumer_task = asyncio.create_task(
-        _start_worker(brokers, personas, compression)
-    )
+    _consumer_task = asyncio.create_task(_start_worker(brokers, personas, compression))
 
     yield
 

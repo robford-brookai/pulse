@@ -3,6 +3,7 @@
 Verifies insert_escalation_state writes a row, and rehydrate_and_catch_up
 calls check_and_escalate to process items that timed out during downtime.
 """
+
 from __future__ import annotations
 
 import importlib.util

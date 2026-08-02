@@ -1,20 +1,21 @@
 """Unit tests for control-plane alert and heartbeat handlers."""
+
 from __future__ import annotations
 
-import sys
 import os
+import sys
 import uuid
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock
 
 # Allow importing src package from service root
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 def _make_alert_event(alert_type: str = "glucose", alert_id: str = "alert-abc-123") -> dict:
     return {
@@ -50,6 +51,7 @@ def _make_heartbeat_event(connector_id: str = "glucose-connector") -> dict:
 # ---------------------------------------------------------------------------
 # Alert handler tests
 # ---------------------------------------------------------------------------
+
 
 class TestHandleAlertCreated:
     @pytest.mark.asyncio
@@ -210,6 +212,7 @@ class TestHandleAlertCreated:
 # ---------------------------------------------------------------------------
 # Heartbeat handler tests
 # ---------------------------------------------------------------------------
+
 
 class TestHandleConnectorHeartbeat:
     @pytest.mark.asyncio

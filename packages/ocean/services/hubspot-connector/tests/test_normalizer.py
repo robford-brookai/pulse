@@ -1,4 +1,5 @@
 """Tests for HubSpot event normalization and PHI safety."""
+
 from __future__ import annotations
 
 
@@ -33,11 +34,13 @@ class TestSubscriptionTypeMapping:
     def test_contact_property_change(self):
         from src.normalizer import normalize_event
 
-        event = normalize_event(_make_raw(
-            sub_type="contact.propertyChange",
-            propertyName="lifecyclestage",
-            propertyValue="customer",
-        ))
+        event = normalize_event(
+            _make_raw(
+                sub_type="contact.propertyChange",
+                propertyName="lifecyclestage",
+                propertyValue="customer",
+            )
+        )
         assert event is not None
         assert event["event_type"] == "contact.updated"
         assert event["payload"]["property_name"] == "lifecyclestage"
@@ -53,11 +56,13 @@ class TestPHIRedaction:
     def test_phi_field_redacted(self):
         from src.normalizer import normalize_event
 
-        event = normalize_event(_make_raw(
-            sub_type="contact.propertyChange",
-            propertyName="email",
-            propertyValue="patient@example.com",
-        ))
+        event = normalize_event(
+            _make_raw(
+                sub_type="contact.propertyChange",
+                propertyName="email",
+                propertyValue="patient@example.com",
+            )
+        )
         assert event is not None
         assert event["payload"]["property_value"] == "[REDACTED]"
         assert event["payload"]["property_name"] == "email"
@@ -65,33 +70,39 @@ class TestPHIRedaction:
     def test_camelcase_phi_redacted(self):
         from src.normalizer import normalize_event
 
-        event = normalize_event(_make_raw(
-            sub_type="contact.propertyChange",
-            propertyName="firstName",
-            propertyValue="Jane",
-        ))
+        event = normalize_event(
+            _make_raw(
+                sub_type="contact.propertyChange",
+                propertyName="firstName",
+                propertyValue="Jane",
+            )
+        )
         assert event is not None
         assert event["payload"]["property_value"] == "[REDACTED]"
 
     def test_unknown_field_filtered(self):
         from src.normalizer import normalize_event
 
-        event = normalize_event(_make_raw(
-            sub_type="contact.propertyChange",
-            propertyName="custom_field_xyz",
-            propertyValue="some value",
-        ))
+        event = normalize_event(
+            _make_raw(
+                sub_type="contact.propertyChange",
+                propertyName="custom_field_xyz",
+                propertyValue="some value",
+            )
+        )
         assert event is not None
         assert event["payload"]["property_value"] == "[FILTERED]"
 
     def test_safe_field_passes(self):
         from src.normalizer import normalize_event
 
-        event = normalize_event(_make_raw(
-            sub_type="contact.propertyChange",
-            propertyName="hs_lead_status",
-            propertyValue="OPEN",
-        ))
+        event = normalize_event(
+            _make_raw(
+                sub_type="contact.propertyChange",
+                propertyName="hs_lead_status",
+                propertyValue="OPEN",
+            )
+        )
         assert event is not None
         assert event["payload"]["property_value"] == "OPEN"
 

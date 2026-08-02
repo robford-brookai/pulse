@@ -1,10 +1,12 @@
 """Test fixtures for pocar-connector — mock publisher and session maker."""
+
 from __future__ import annotations
+
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from unittest.mock import AsyncMock, MagicMock
 
 
 @pytest.fixture
@@ -40,6 +42,7 @@ async def client(mock_publisher, mock_session_maker, monkeypatch):
     """AsyncClient with lifespan bypassed — publisher and session_maker injected directly."""
     monkeypatch.setenv("POCAR_WEBHOOK_SECRET", "test_secret")
     from src.main import app
+
     # Inject mocks before any request — bypasses real lifespan startup
     app.state.publisher = mock_publisher
     app.state.session_maker = mock_session_maker

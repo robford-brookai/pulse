@@ -4,15 +4,14 @@ Requirement: The alert card AI summary block (block index 3) must use "*AI:*"
 as its label — not a robot emoji or "AI Summary" text. The outreach draft card
 section must use "AI: Outreach Draft" as its header.
 """
-from __future__ import annotations
 
-import pytest
+from __future__ import annotations
 
 from utils import setup_service
 
 setup_service("slack-bot")
 
-from src.cards import alert_card, outreach_draft_card  # noqa: E402
+from src.cards import alert_card, outreach_draft_card
 
 
 def test_alert_card_block_3_uses_ai_colon_label():
@@ -80,10 +79,9 @@ def test_outreach_draft_card_uses_ai_outreach_draft_label():
     )
 
     section_blocks = [b for b in blocks if b.get("type") == "section"]
-    assert any(
-        "AI: Outreach Draft" in b.get("text", {}).get("text", "")
-        for b in section_blocks
-    ), "No section block with 'AI: Outreach Draft' text found"
+    assert any("AI: Outreach Draft" in b.get("text", {}).get("text", "") for b in section_blocks), (
+        "No section block with 'AI: Outreach Draft' text found"
+    )
 
 
 def test_outreach_draft_card_has_approve_and_reject_actions():

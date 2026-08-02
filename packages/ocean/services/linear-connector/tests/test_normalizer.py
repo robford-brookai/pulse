@@ -1,4 +1,5 @@
 """Tests for Linear issue -> Ocean ticket event normalization."""
+
 from __future__ import annotations
 
 import pytest

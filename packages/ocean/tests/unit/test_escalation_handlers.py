@@ -3,6 +3,7 @@
 Verifies services/slack-bot/src/consumer.py contains the escalation
 handler functions and EVENT_HANDLERS registrations.
 """
+
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -29,21 +30,15 @@ def test_handle_ticket_escalated_signature():
 
 def test_task_escalated_in_event_handlers():
     src = _source()
-    assert '"task.escalated"' in src, (
-        "consumer.py EVENT_HANDLERS must contain task.escalated"
-    )
+    assert '"task.escalated"' in src, "consumer.py EVENT_HANDLERS must contain task.escalated"
 
 
 def test_ticket_escalated_in_event_handlers():
     src = _source()
-    assert '"ticket.escalated"' in src, (
-        "consumer.py EVENT_HANDLERS must contain ticket.escalated"
-    )
+    assert '"ticket.escalated"' in src, "consumer.py EVENT_HANDLERS must contain ticket.escalated"
 
 
 def test_ocean_critical_channel_routing():
     """Escalation handlers route UNCLAIMED CRITICAL to #ocean-critical."""
     src = _source()
-    assert "ocean-critical" in src, (
-        "consumer.py must route unclaimed critical items to ocean-critical channel"
-    )
+    assert "ocean-critical" in src, "consumer.py must route unclaimed critical items to ocean-critical channel"

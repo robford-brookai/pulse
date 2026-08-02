@@ -1,10 +1,8 @@
 """Tests for Slack Block Kit card builders."""
+
 from __future__ import annotations
 
-import pytest
-
 from src.cards import alert_card, claimed_card, outreach_draft_card, resolved_card
-
 
 TASK_ID = "task-abc-123"
 PATIENT_HASH = "sha256:deadbeef"
@@ -157,11 +155,7 @@ class TestClaimedCard:
     def test_body_includes_actor_id(self):
         actor_id = "user-xyz"
         blocks = claimed_card(task_id=TASK_ID, actor_id=actor_id)
-        all_text = " ".join(
-            b.get("text", {}).get("text", "")
-            for b in blocks
-            if b.get("type") == "section"
-        )
+        all_text = " ".join(b.get("text", {}).get("text", "") for b in blocks if b.get("type") == "section")
         assert actor_id in all_text
 
 
@@ -179,9 +173,5 @@ class TestResolvedCard:
     def test_body_includes_actor_id(self):
         actor_id = "user-abc"
         blocks = resolved_card(task_id=TASK_ID, actor_id=actor_id)
-        all_text = " ".join(
-            b.get("text", {}).get("text", "")
-            for b in blocks
-            if b.get("type") == "section"
-        )
+        all_text = " ".join(b.get("text", {}).get("text", "") for b in blocks if b.get("type") == "section")
         assert actor_id in all_text

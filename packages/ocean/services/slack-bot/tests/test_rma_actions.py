@@ -1,4 +1,5 @@
 """Tests for RMA Bolt action handlers (create RMA, modal submission, retry)."""
+
 from __future__ import annotations
 
 import json
@@ -48,9 +49,7 @@ class TestTicketCreateRmaAction:
         ticket_row = MagicMock()
         ticket_row.fetchone = MagicMock(return_value=patient_row)
 
-        mock_session.execute = AsyncMock(
-            side_effect=[ticket_row, order_row, device_row]
-        )
+        mock_session.execute = AsyncMock(side_effect=[ticket_row, order_row, device_row])
         mock_session.commit = AsyncMock()
         self.mock_session = mock_session
 
@@ -169,9 +168,7 @@ class TestRetryRma:
         ticket_row = MagicMock()
         ticket_row.fetchone = MagicMock(return_value=patient_row)
 
-        mock_session.execute = AsyncMock(
-            side_effect=[ticket_row, order_row, device_row]
-        )
+        mock_session.execute = AsyncMock(side_effect=[ticket_row, order_row, device_row])
         mock_session.commit = AsyncMock()
 
         yield

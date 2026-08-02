@@ -5,18 +5,18 @@ the Interaction record written to the operational graph must include the
 task_id from the event payload, establishing the FK relationship that links
 call data back to the originating care coordination task.
 """
+
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
-
 from utils import setup_service
 
 setup_service("graph-projection")
 
-from src.handlers.interactions import handle_call_started, handle_call_connected  # noqa: E402
-from src.handlers.outcomes import handle_call_completed  # noqa: E402
+from src.handlers.interactions import handle_call_connected, handle_call_started
+from src.handlers.outcomes import handle_call_completed
 
 
 def _call_event(event_type: str, task_id: str = "task-xyz-001", entity_id: str = "eng-001") -> dict:
@@ -53,9 +53,7 @@ async def test_call_started_sets_task_id_fk():
     await handle_call_started(_call_event("call.started", task_id="task-corr-001"), session)
 
     params = _get_params(session)
-    assert params.get("task_id") == "task-corr-001", (
-        f"Expected task_id='task-corr-001', got: {params.get('task_id')}"
-    )
+    assert params.get("task_id") == "task-corr-001", f"Expected task_id='task-corr-001', got: {params.get('task_id')}"
 
 
 @pytest.mark.asyncio

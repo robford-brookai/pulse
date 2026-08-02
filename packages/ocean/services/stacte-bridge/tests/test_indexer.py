@@ -1,4 +1,5 @@
 """Tests for indexer — sync_embeddings and semantic_search."""
+
 from __future__ import annotations
 
 import pathlib
@@ -13,10 +14,10 @@ if str(_SVC) not in sys.path:
 
 from src.indexer import semantic_search, sync_embeddings
 
-
 # ---------------------------------------------------------------------------
 # Mock helpers (same pattern as test_graph_search.py)
 # ---------------------------------------------------------------------------
+
 
 def _make_row(**kwargs):
     """Build a mock SQLAlchemy row with _mapping."""
@@ -36,6 +37,7 @@ def _make_result(*rows):
 # ---------------------------------------------------------------------------
 # sync_embeddings tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_sync_embeddings_indexes_rows():
@@ -64,10 +66,13 @@ async def test_sync_embeddings_indexes_rows():
         count = await sync_embeddings(session, entity_type="alerts", limit=100)
 
     assert count == 2
-    mock_embed.assert_awaited_once_with("alerts", [
-        {"alert_id": "a-1", "alert_type": "glucose_high", "embedding": None},
-        {"alert_id": "a-2", "alert_type": "spo2_low", "embedding": None},
-    ])
+    mock_embed.assert_awaited_once_with(
+        "alerts",
+        [
+            {"alert_id": "a-1", "alert_type": "glucose_high", "embedding": None},
+            {"alert_id": "a-2", "alert_type": "spo2_low", "embedding": None},
+        ],
+    )
     # 1 SELECT + 2 UPDATEs = 3 execute calls
     assert call_count[0] == 3
     session.commit.assert_awaited_once()
@@ -99,6 +104,7 @@ async def test_sync_embeddings_unknown_entity_type():
 # ---------------------------------------------------------------------------
 # semantic_search tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_semantic_search_returns_results():

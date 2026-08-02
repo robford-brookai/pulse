@@ -1,4 +1,5 @@
 """Tests for ai_summary and ai_events modules — Phase 4 AI assist."""
+
 from __future__ import annotations
 
 import hashlib
@@ -6,10 +7,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # fetch_patient_context
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_fetch_patient_context_returns_empty_on_failure():
@@ -25,6 +26,7 @@ async def test_fetch_patient_context_returns_empty_on_failure():
         mock_httpx.ConnectError = httpx.ConnectError
 
         from src.ai_summary import fetch_patient_context
+
         result = await fetch_patient_context(
             patient_id="patient-123",
             hasura_url="http://localhost:8080",
@@ -37,6 +39,7 @@ async def test_fetch_patient_context_returns_empty_on_failure():
 # ---------------------------------------------------------------------------
 # generate_summary_with_context — with signals
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_generate_summary_with_context_cites_signals():
@@ -64,6 +67,7 @@ async def test_generate_summary_with_context_cites_signals():
 
         with patch("src.ai_summary._client", mock_anthropic_client):
             from src.ai_summary import generate_summary_with_context
+
             summary, cited_signals = await generate_summary_with_context(
                 alert_type="glucose_high",
                 severity="URGENT",
@@ -96,6 +100,7 @@ async def test_generate_summary_with_context_no_signals():
 
         with patch("src.ai_summary._client", mock_anthropic_client):
             from src.ai_summary import generate_summary_with_context
+
             summary, cited_signals = await generate_summary_with_context(
                 alert_type="routine_check",
                 severity="LOW",
@@ -112,6 +117,7 @@ async def test_generate_summary_with_context_no_signals():
 # ---------------------------------------------------------------------------
 # publish_ai_event — structure
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_publish_ai_event_structure():

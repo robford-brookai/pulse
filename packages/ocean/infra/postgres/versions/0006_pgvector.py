@@ -7,6 +7,7 @@ Revision ID: 0006
 Revises: 0005
 Create Date: 2026-03-06
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
@@ -24,9 +25,7 @@ def upgrade() -> None:
 
     # Add embedding columns (voyage-3 = 1024 dims)
     for table in ("alerts", "tasks", "interactions", "outcomes"):
-        op.execute(
-            sa.text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS embedding vector(1024)")
-        )
+        op.execute(sa.text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS embedding vector(1024)"))
 
     # IVFFlat indexes for cosine similarity search
     # lists=100 is appropriate for ~10K entities; adjust for larger datasets
@@ -83,10 +82,7 @@ def upgrade() -> None:
         )
     )
     op.execute(
-        sa.text(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_patient_graph_summary_pk "
-            "ON patient_graph_summary (patient_id)"
-        )
+        sa.text("CREATE UNIQUE INDEX IF NOT EXISTS idx_patient_graph_summary_pk ON patient_graph_summary (patient_id)")
     )
 
 
@@ -98,8 +94,6 @@ def downgrade() -> None:
     op.execute(sa.text("DROP INDEX IF EXISTS idx_alerts_embed"))
 
     for table in ("alerts", "tasks", "interactions", "outcomes"):
-        op.execute(
-            sa.text(f"ALTER TABLE {table} DROP COLUMN IF EXISTS embedding")
-        )
+        op.execute(sa.text(f"ALTER TABLE {table} DROP COLUMN IF EXISTS embedding"))
 
     op.execute(sa.text("DROP EXTENSION IF EXISTS vector"))

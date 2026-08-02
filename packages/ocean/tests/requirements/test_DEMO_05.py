@@ -3,6 +3,7 @@
 Verifies banner output shows ENABLED when ANTHROPIC_API_KEY is set
 (via env var or .env file) and warns when missing from both.
 """
+
 from __future__ import annotations
 
 import io
@@ -63,7 +64,6 @@ def test_banner_ai_unavailable_without_key(demo_module):
 def test_banner_ai_hint_when_missing(demo_module):
     """Without key, banner includes setup hint."""
     env_without_key = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
-    with patch.dict(os.environ, env_without_key, clear=True):
-        with patch("builtins.open", side_effect=FileNotFoundError):
-            output = _capture_banner(demo_module)
+    with patch.dict(os.environ, env_without_key, clear=True), patch("builtins.open", side_effect=FileNotFoundError):
+        output = _capture_banner(demo_module)
     assert "ANTHROPIC_API_KEY" in output

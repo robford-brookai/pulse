@@ -3,22 +3,16 @@
 Requirement: ocean-events library exports OutcomeRecorded with normalized fields
 and EventType includes task.escalated, ticket.escalated.
 """
+
 from __future__ import annotations
 
 import ast
-import inspect
 import pathlib
 import uuid
 
-
 TYPES_PATH = pathlib.Path(__file__).resolve().parents[2] / "libs" / "ocean-events" / "src" / "ocean_events" / "types.py"
 OUTCOMES_HANDLER_PATH = (
-    pathlib.Path(__file__).resolve().parents[2]
-    / "services"
-    / "control-plane"
-    / "src"
-    / "handlers"
-    / "outcomes.py"
+    pathlib.Path(__file__).resolve().parents[2] / "services" / "control-plane" / "src" / "handlers" / "outcomes.py"
 )
 
 

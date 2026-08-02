@@ -1,4 +1,5 @@
 """Tests for ticket card Block Kit builders."""
+
 from __future__ import annotations
 
 from src.cards import (
@@ -23,8 +24,15 @@ class TestTicketCardOpen:
 
     def test_header_contains_human_id(self):
         blocks = ticket_card(
-            TICKET_ID, HUMAN_ID, CATEGORY, PRIORITY, "open",
-            DESCRIPTION, AI_SUMMARY, patient_id=PATIENT_ID, creator_id=CREATOR_ID,
+            TICKET_ID,
+            HUMAN_ID,
+            CATEGORY,
+            PRIORITY,
+            "open",
+            DESCRIPTION,
+            AI_SUMMARY,
+            patient_id=PATIENT_ID,
+            creator_id=CREATOR_ID,
         )
         header = blocks[0]
         assert header["type"] == "header"
@@ -32,16 +40,28 @@ class TestTicketCardOpen:
 
     def test_header_contains_green_circle_for_open(self):
         blocks = ticket_card(
-            TICKET_ID, HUMAN_ID, CATEGORY, PRIORITY, "open",
-            DESCRIPTION, AI_SUMMARY,
+            TICKET_ID,
+            HUMAN_ID,
+            CATEGORY,
+            PRIORITY,
+            "open",
+            DESCRIPTION,
+            AI_SUMMARY,
         )
         header_text = blocks[0]["text"]["text"]
         assert ":large_green_circle:" in header_text
 
     def test_fields_section_has_4_fields(self):
         blocks = ticket_card(
-            TICKET_ID, HUMAN_ID, CATEGORY, PRIORITY, "open",
-            DESCRIPTION, AI_SUMMARY, patient_id=PATIENT_ID, creator_id=CREATOR_ID,
+            TICKET_ID,
+            HUMAN_ID,
+            CATEGORY,
+            PRIORITY,
+            "open",
+            DESCRIPTION,
+            AI_SUMMARY,
+            patient_id=PATIENT_ID,
+            creator_id=CREATOR_ID,
         )
         section = blocks[1]
         assert section["type"] == "section"
@@ -49,8 +69,15 @@ class TestTicketCardOpen:
 
     def test_fields_contain_category_and_priority(self):
         blocks = ticket_card(
-            TICKET_ID, HUMAN_ID, CATEGORY, PRIORITY, "open",
-            DESCRIPTION, AI_SUMMARY, patient_id=PATIENT_ID, creator_id=CREATOR_ID,
+            TICKET_ID,
+            HUMAN_ID,
+            CATEGORY,
+            PRIORITY,
+            "open",
+            DESCRIPTION,
+            AI_SUMMARY,
+            patient_id=PATIENT_ID,
+            creator_id=CREATOR_ID,
         )
         fields_text = " ".join(f["text"] for f in blocks[1]["fields"])
         assert "device_issue" in fields_text
@@ -58,8 +85,13 @@ class TestTicketCardOpen:
 
     def test_description_block(self):
         blocks = ticket_card(
-            TICKET_ID, HUMAN_ID, CATEGORY, PRIORITY, "open",
-            DESCRIPTION, AI_SUMMARY,
+            TICKET_ID,
+            HUMAN_ID,
+            CATEGORY,
+            PRIORITY,
+            "open",
+            DESCRIPTION,
+            AI_SUMMARY,
         )
         # After fields section and divider, description section
         desc_block = blocks[3]
@@ -68,8 +100,13 @@ class TestTicketCardOpen:
 
     def test_ai_summary_block(self):
         blocks = ticket_card(
-            TICKET_ID, HUMAN_ID, CATEGORY, PRIORITY, "open",
-            DESCRIPTION, AI_SUMMARY,
+            TICKET_ID,
+            HUMAN_ID,
+            CATEGORY,
+            PRIORITY,
+            "open",
+            DESCRIPTION,
+            AI_SUMMARY,
         )
         ai_block = blocks[4]
         assert ai_block["type"] == "section"
@@ -78,8 +115,13 @@ class TestTicketCardOpen:
 
     def test_open_has_3_action_buttons(self):
         blocks = ticket_card(
-            TICKET_ID, HUMAN_ID, CATEGORY, PRIORITY, "open",
-            DESCRIPTION, AI_SUMMARY,
+            TICKET_ID,
+            HUMAN_ID,
+            CATEGORY,
+            PRIORITY,
+            "open",
+            DESCRIPTION,
+            AI_SUMMARY,
         )
         actions = [b for b in blocks if b["type"] == "actions"]
         assert len(actions) == 1
@@ -87,8 +129,13 @@ class TestTicketCardOpen:
 
     def test_open_action_ids(self):
         blocks = ticket_card(
-            TICKET_ID, HUMAN_ID, CATEGORY, PRIORITY, "open",
-            DESCRIPTION, AI_SUMMARY,
+            TICKET_ID,
+            HUMAN_ID,
+            CATEGORY,
+            PRIORITY,
+            "open",
+            DESCRIPTION,
+            AI_SUMMARY,
         )
         actions = [b for b in blocks if b["type"] == "actions"][0]
         action_ids = [el["action_id"] for el in actions["elements"]]
@@ -98,8 +145,13 @@ class TestTicketCardOpen:
 
     def test_button_values_are_ticket_id(self):
         blocks = ticket_card(
-            TICKET_ID, HUMAN_ID, CATEGORY, PRIORITY, "open",
-            DESCRIPTION, AI_SUMMARY,
+            TICKET_ID,
+            HUMAN_ID,
+            CATEGORY,
+            PRIORITY,
+            "open",
+            DESCRIPTION,
+            AI_SUMMARY,
         )
         actions = [b for b in blocks if b["type"] == "actions"][0]
         for el in actions["elements"]:
@@ -111,16 +163,26 @@ class TestTicketCardInProgress:
 
     def test_header_contains_yellow_circle(self):
         blocks = ticket_card(
-            TICKET_ID, HUMAN_ID, CATEGORY, PRIORITY, "in_progress",
-            DESCRIPTION, AI_SUMMARY,
+            TICKET_ID,
+            HUMAN_ID,
+            CATEGORY,
+            PRIORITY,
+            "in_progress",
+            DESCRIPTION,
+            AI_SUMMARY,
         )
         header_text = blocks[0]["text"]["text"]
         assert ":large_yellow_circle:" in header_text
 
     def test_in_progress_has_3_buttons_for_device_issue(self):
         blocks = ticket_card(
-            TICKET_ID, HUMAN_ID, CATEGORY, PRIORITY, "in_progress",
-            DESCRIPTION, AI_SUMMARY,
+            TICKET_ID,
+            HUMAN_ID,
+            CATEGORY,
+            PRIORITY,
+            "in_progress",
+            DESCRIPTION,
+            AI_SUMMARY,
         )
         actions = [b for b in blocks if b["type"] == "actions"][0]
         # 2 base buttons + Create RMA for device_issue
@@ -128,8 +190,13 @@ class TestTicketCardInProgress:
 
     def test_in_progress_action_ids(self):
         blocks = ticket_card(
-            TICKET_ID, HUMAN_ID, CATEGORY, PRIORITY, "in_progress",
-            DESCRIPTION, AI_SUMMARY,
+            TICKET_ID,
+            HUMAN_ID,
+            CATEGORY,
+            PRIORITY,
+            "in_progress",
+            DESCRIPTION,
+            AI_SUMMARY,
         )
         actions = [b for b in blocks if b["type"] == "actions"][0]
         action_ids = [el["action_id"] for el in actions["elements"]]
@@ -148,9 +215,7 @@ class TestTicketClaimedCard:
     def test_claimed_by_text(self):
         blocks = ticket_claimed_card(TICKET_ID, HUMAN_ID, "U99999")
         context = [b for b in blocks if b["type"] == "context"][0]
-        context_text = " ".join(
-            el.get("text", "") for el in context["elements"] if isinstance(el, dict)
-        )
+        context_text = " ".join(el.get("text", "") for el in context["elements"] if isinstance(el, dict))
         assert "<@U99999>" in context_text
 
     def test_has_resolve_and_wait_buttons(self):
@@ -172,9 +237,7 @@ class TestTicketWaitingCard:
     def test_waiting_reason_displayed(self):
         blocks = ticket_waiting_card(TICKET_ID, HUMAN_ID, "external_block")
         context = [b for b in blocks if b["type"] == "context"][0]
-        context_text = " ".join(
-            el.get("text", "") for el in context["elements"] if isinstance(el, dict)
-        )
+        context_text = " ".join(el.get("text", "") for el in context["elements"] if isinstance(el, dict))
         assert "external_block" in context_text
 
     def test_has_resume_and_resolve_buttons(self):
@@ -196,9 +259,7 @@ class TestTicketResolvedCard:
     def test_resolved_by_text_with_duration(self):
         blocks = ticket_resolved_card(TICKET_ID, HUMAN_ID, "U99999", "2h 15m")
         context = [b for b in blocks if b["type"] == "context"][0]
-        context_text = " ".join(
-            el.get("text", "") for el in context["elements"] if isinstance(el, dict)
-        )
+        context_text = " ".join(el.get("text", "") for el in context["elements"] if isinstance(el, dict))
         assert "U99999" in context_text
         assert "2h 15m" in context_text
 

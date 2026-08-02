@@ -7,6 +7,7 @@ propagation to partitions (PG16 auto-inheritance).
 Requires Docker (testcontainers Postgres).
 Uses asyncpg directly (no SQLAlchemy overhead, no greenlet dependency).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -92,9 +93,7 @@ def _run_migration(dsn: dict) -> None:
 
             # 3. Run the 0007 upgrade logic
             await conn.execute("ALTER TABLE audit_log RENAME TO audit_log_legacy;")
-            await conn.execute(
-                "DROP TRIGGER IF EXISTS audit_log_no_update_delete ON audit_log_legacy;"
-            )
+            await conn.execute("DROP TRIGGER IF EXISTS audit_log_no_update_delete ON audit_log_legacy;")
 
             await conn.execute("""
                 CREATE TABLE audit_log (
@@ -124,17 +123,14 @@ def _run_migration(dsn: dict) -> None:
                 start = f"{year}-{month:02d}-01"
                 end = f"{next_year}-{next_month:02d}-01"
                 await conn.execute(
-                    f"CREATE TABLE {name} PARTITION OF audit_log "
-                    f"FOR VALUES FROM ('{start}') TO ('{end}');"
+                    f"CREATE TABLE {name} PARTITION OF audit_log FOR VALUES FROM ('{start}') TO ('{end}');"
                 )
 
             await conn.execute("CREATE TABLE audit_log_default PARTITION OF audit_log DEFAULT;")
 
             await conn.execute("CREATE INDEX ix_audit_log_timestamp ON audit_log (timestamp);")
             await conn.execute("CREATE INDEX ix_audit_log_actor ON audit_log (actor_id);")
-            await conn.execute(
-                "CREATE INDEX ix_audit_log_entity ON audit_log (entity_type, entity_id);"
-            )
+            await conn.execute("CREATE INDEX ix_audit_log_entity ON audit_log (entity_type, entity_id);")
             await conn.execute("CREATE INDEX ix_audit_log_event_id ON audit_log (event_id);")
 
             await conn.execute("""
@@ -181,9 +177,7 @@ async def conn(pg_dsn):
 @pytest.mark.asyncio
 async def test_audit_log_partitioned(conn):
     """audit_log must be a partitioned table (relkind='p' in pg_class)."""
-    row = await conn.fetchrow(
-        "SELECT relkind FROM pg_class WHERE relname = 'audit_log'"
-    )
+    row = await conn.fetchrow("SELECT relkind FROM pg_class WHERE relname = 'audit_log'")
     assert row is not None, "audit_log not found in pg_class"
     relkind = row["relkind"]
     # asyncpg returns pg "char" type as bytes
@@ -207,9 +201,7 @@ async def test_at_least_12_monthly_partitions(conn):
 @pytest.mark.asyncio
 async def test_default_partition_exists(conn):
     """A DEFAULT partition named audit_log_default must exist."""
-    row = await conn.fetchrow(
-        "SELECT relname FROM pg_class WHERE relname = 'audit_log_default'"
-    )
+    row = await conn.fetchrow("SELECT relname FROM pg_class WHERE relname = 'audit_log_default'")
     assert row is not None, "audit_log_default partition not found"
 
 
@@ -219,15 +211,22 @@ async def test_immutability_trigger_on_partitioned_table(conn):
     audit_id = uuid.uuid4()
     now = datetime.datetime.now(datetime.UTC)
 
-    await conn.execute("""
+    await conn.execute(
+        """
         INSERT INTO audit_log (audit_id, action_type, actor_id, source_system, timestamp, recorded_at)
         VALUES ($1, 'test.insert', 'test-actor', 'test-system', $2, $2)
-    """, audit_id, now)
+    """,
+        audit_id,
+        now,
+    )
 
     with pytest.raises(asyncpg.RaiseError, match="append-only"):
-        await conn.execute("""
+        await conn.execute(
+            """
             UPDATE audit_log SET action_type = 'tampered' WHERE audit_id = $1
-        """, audit_id)
+        """,
+            audit_id,
+        )
 
 
 @pytest.mark.asyncio
@@ -238,10 +237,14 @@ async def test_data_lands_in_correct_partition(conn):
     audit_id = uuid.uuid4()
     now = datetime.datetime.now(datetime.UTC)
 
-    await conn.execute("""
+    await conn.execute(
+        """
         INSERT INTO audit_log (audit_id, action_type, actor_id, source_system, timestamp, recorded_at)
         VALUES ($1, 'test.partition', 'test-actor', 'test-system', $2, $2)
-    """, audit_id, now)
+    """,
+        audit_id,
+        now,
+    )
 
     # Query the specific partition directly
     row = await conn.fetchrow(

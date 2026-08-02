@@ -1,4 +1,5 @@
 """warehouse-sync — pipes Redpanda events to Snowflake OCEAN_RAW.EVENTS."""
+
 from __future__ import annotations
 
 import asyncio

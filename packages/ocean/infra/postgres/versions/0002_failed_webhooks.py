@@ -4,6 +4,7 @@ Revision ID: 0002
 Revises: 0001
 Create Date: 2026-03-06
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
@@ -21,7 +22,7 @@ def upgrade() -> None:
     op.create_table(
         "failed_webhooks",
         sa.Column("id", sa.Text(), primary_key=True, server_default=sa.text("gen_random_uuid()::text")),
-        sa.Column("key", sa.Text(), nullable=False),          # POCAR alert_id
+        sa.Column("key", sa.Text(), nullable=False),  # POCAR alert_id
         sa.Column("payload", sa.LargeBinary(), nullable=False),  # raw webhook body (bytea)
         sa.Column("error", sa.Text(), nullable=False),
         sa.Column(

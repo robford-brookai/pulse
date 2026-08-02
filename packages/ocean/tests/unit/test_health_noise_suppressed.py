@@ -1,4 +1,5 @@
 """Source-inspection tests: sim-profile Dockerfiles suppress access logs."""
+
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

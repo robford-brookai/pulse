@@ -1,20 +1,21 @@
 """Unit tests for control-plane ticket handlers."""
+
 from __future__ import annotations
 
-import sys
 import os
+import sys
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 # Allow importing src package from service root
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_ticket_created_event(
     category: str = "device_issue",
@@ -85,6 +86,7 @@ def _mock_sequence_result(seq_val: int = 1):
 # ---------------------------------------------------------------------------
 # handle_ticket_created tests
 # ---------------------------------------------------------------------------
+
 
 class TestHandleTicketCreated:
     @pytest.mark.asyncio
@@ -189,6 +191,7 @@ class TestHandleTicketCreated:
 # handle_ticket_updated tests
 # ---------------------------------------------------------------------------
 
+
 class TestHandleTicketUpdated:
     @pytest.mark.asyncio
     async def test_valid_transition_updates_and_publishes(self):
@@ -289,9 +292,7 @@ class TestHandleTicketUpdated:
         status_result.scalar_one_or_none.return_value = "open"
         session.execute = AsyncMock(return_value=status_result)
         producer = AsyncMock()
-        event = _make_ticket_updated_event(
-            new_status="in_progress", task_ids=["task-new"]
-        )
+        event = _make_ticket_updated_event(new_status="in_progress", task_ids=["task-new"])
 
         await handle_ticket_updated(event, session, producer=producer)
 

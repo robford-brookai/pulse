@@ -2,13 +2,13 @@
 
 Sourced from test/cat7_background_jobs.py.
 """
+
 from __future__ import annotations
 
 import asyncio
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from utils import setup_service
 
 
@@ -17,7 +17,8 @@ async def test_event_store_lifespan_creates_consumer_task(monkeypatch):
     """event-store lifespan creates a consumer asyncio task."""
     setup_service("event-store")
 
-    from src import consumer  # noqa: PLC0415
+    from src import consumer
+
     created_tasks = []
 
     original_create_task = asyncio.create_task
@@ -38,7 +39,7 @@ async def test_event_store_lifespan_creates_consumer_task(monkeypatch):
     monkeypatch.setattr(consumer, "run_consumer", fake_run_consumer)
     monkeypatch.setenv("REDPANDA_BROKERS", "localhost:9092")
 
-    from src.main import app, lifespan  # noqa: PLC0415
+    from src.main import app, lifespan
 
     async with lifespan(app):
         await asyncio.sleep(0)  # yield to let consumer task start
@@ -58,8 +59,10 @@ async def test_slack_bot_skips_consumers_without_token(monkeypatch):
     monkeypatch.setenv("SLACK_BOT_TOKEN", "")
     monkeypatch.setenv("DATABASE_URL", "")
 
-    import importlib  # noqa: PLC0415
-    import src.main as slack_main  # noqa: PLC0415
+    import importlib
+
+    import src.main as slack_main
+
     importlib.reload(slack_main)
 
     tasks_created = []

@@ -1,4 +1,5 @@
 """BaseEvent with PHI guard for all Ocean events."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -6,42 +7,40 @@ from uuid import UUID
 
 from pydantic import BaseModel, model_validator
 
-_PHI_FIELD_NAMES: frozenset[str] = frozenset(
-    {
-        "patient_name",
-        "first_name",
-        "last_name",
-        "full_name",
-        "date_of_birth",
-        "dob",
-        "birth_date",
-        "mrn",
-        "medical_record_number",
-        "ssn",
-        "social_security_number",
-        "address",
-        "street_address",
-        "zip_code",
-        "postal_code",
-        "phone",
-        "phone_number",
-        "cell_phone",
-        "home_phone",
-        "email",
-        "email_address",
-        "diagnosis",
-        "diagnosis_code",
-        "icd_code",
-        "medication",
-        "prescription",
-        "clinical_note",
-        "chart_note",
-        "glucose_value",
-        "blood_pressure",
-        "weight_kg",
-        "bmi",
-    }
-)
+_PHI_FIELD_NAMES: frozenset[str] = frozenset({
+    "patient_name",
+    "first_name",
+    "last_name",
+    "full_name",
+    "date_of_birth",
+    "dob",
+    "birth_date",
+    "mrn",
+    "medical_record_number",
+    "ssn",
+    "social_security_number",
+    "address",
+    "street_address",
+    "zip_code",
+    "postal_code",
+    "phone",
+    "phone_number",
+    "cell_phone",
+    "home_phone",
+    "email",
+    "email_address",
+    "diagnosis",
+    "diagnosis_code",
+    "icd_code",
+    "medication",
+    "prescription",
+    "clinical_note",
+    "chart_note",
+    "glucose_value",
+    "blood_pressure",
+    "weight_kg",
+    "bmi",
+})
 
 
 class BaseEvent(BaseModel):
@@ -82,8 +81,7 @@ class BaseEvent(BaseModel):
         phi_keys = _PHI_FIELD_NAMES.intersection(self.payload.keys())
         if phi_keys:
             raise ValueError(
-                f"Event payload contains PHI key(s): {sorted(phi_keys)}. "
-                f"PHI must not be included in event payloads."
+                f"Event payload contains PHI key(s): {sorted(phi_keys)}. PHI must not be included in event payloads."
             )
         return self
 

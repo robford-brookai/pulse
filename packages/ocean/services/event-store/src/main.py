@@ -1,4 +1,5 @@
 """event-store FastAPI app — /health endpoint and consumer background task."""
+
 from __future__ import annotations
 
 import asyncio

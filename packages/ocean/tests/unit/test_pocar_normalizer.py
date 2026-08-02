@@ -3,6 +3,7 @@
 Sourced from test/cat6_business_logic.py — unique tests not covered by
 tests/requirements/.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -10,13 +11,12 @@ import hmac
 
 import pytest
 from fastapi import HTTPException
-
 from utils import setup_service
 
 setup_service("pocar-connector")
 
-from src.normalizer import normalize_pocar_payload  # noqa: E402
-from src.receiver import _validate_signature  # noqa: E402
+from src.normalizer import normalize_pocar_payload
+from src.receiver import _validate_signature
 
 
 def test_pocar_normalizer_produces_ocean_event():

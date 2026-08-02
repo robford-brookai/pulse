@@ -3,6 +3,7 @@
 Consumes outreach approval events and produces call.started, call.connected,
 call.completed, and call.missed events on ocean.interactions.
 """
+
 from __future__ import annotations
 
 import asyncio

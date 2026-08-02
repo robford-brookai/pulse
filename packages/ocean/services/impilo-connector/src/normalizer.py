@@ -1,37 +1,41 @@
 """Impilo payload normalizer — converts raw Impilo webhook dict to canonical Ocean events."""
+
 from __future__ import annotations
 
 import hashlib
-import re
 import uuid
 from datetime import UTC, datetime
 
 import structlog
-from ocean_events.base import BaseEvent, _PHI_FIELD_NAMES
+from ocean_events.base import _PHI_FIELD_NAMES, BaseEvent
 
 log = structlog.get_logger()
 
 # Impilo event type prefix -> (ocean_event_type, ocean_topic, entity_type)
 EVENT_MAP: dict[str, tuple[str, str, str]] = {
-    "reading":     ("signal.received",       "ocean.signals",    "signal"),
-    "patient":     ("patient.enrolled",       "ocean.signals",    "patient"),
-    "device":      ("signal.missing",         "ocean.signals",    "signal"),
-    "order":       ("order.created",          "ocean.logistics",  "logistics"),
-    "kit":         ("kit.updated",            "ocean.logistics",  "logistics"),
-    "procurement": ("procurement.requested",  "ocean.logistics",  "logistics"),
-    "return":      ("return.updated",         "ocean.logistics",  "return"),
+    "reading": ("signal.received", "ocean.signals", "signal"),
+    "patient": ("patient.enrolled", "ocean.signals", "patient"),
+    "device": ("signal.missing", "ocean.signals", "signal"),
+    "order": ("order.created", "ocean.logistics", "logistics"),
+    "kit": ("kit.updated", "ocean.logistics", "logistics"),
+    "procurement": ("procurement.requested", "ocean.logistics", "logistics"),
+    "return": ("return.updated", "ocean.logistics", "return"),
 }
 
 # Subtype-level overrides — checked before prefix-level EVENT_MAP.
 # Full type string -> (ocean_event_type, ocean_topic, entity_type)
 SUBTYPE_MAP: dict[str, tuple[str, str, str]] = {
-    "order.statusFull":          ("fulfillment.updated",    "ocean.logistics", "fulfillment"),
-    "return.statusFull":         ("return.updated",         "ocean.logistics", "return"),
+    "order.statusFull": ("fulfillment.updated", "ocean.logistics", "fulfillment"),
+    "return.statusFull": ("return.updated", "ocean.logistics", "return"),
     "device.associationCreated": (
-        "device.associated", "ocean.logistics", "device_association",
+        "device.associated",
+        "ocean.logistics",
+        "device_association",
     ),
     "device.associationRemoved": (
-        "device.disassociated", "ocean.logistics", "device_association",
+        "device.disassociated",
+        "ocean.logistics",
+        "device_association",
     ),
 }
 
@@ -41,13 +45,26 @@ DEVICE_OFFLINE_STATUSES = {"inactive", "lost"}
 # Impilo sends PHI in camelCase (firstName, lastName, etc.).
 # Extend the shared denylist with camelCase variants for raw input checking.
 _CAMEL_CASE_PHI: frozenset[str] = frozenset({
-    "firstName", "lastName", "fullName", "dateOfBirth",
-    "medicalRecordNumber", "socialSecurityNumber",
-    "streetAddress", "zipCode", "postalCode",
-    "phoneNumber", "cellPhone", "homePhone",
-    "emailAddress", "diagnosisCode", "icdCode",
-    "clinicalNote", "chartNote", "glucoseValue",
-    "bloodPressure", "weightKg",
+    "firstName",
+    "lastName",
+    "fullName",
+    "dateOfBirth",
+    "medicalRecordNumber",
+    "socialSecurityNumber",
+    "streetAddress",
+    "zipCode",
+    "postalCode",
+    "phoneNumber",
+    "cellPhone",
+    "homePhone",
+    "emailAddress",
+    "diagnosisCode",
+    "icdCode",
+    "clinicalNote",
+    "chartNote",
+    "glucoseValue",
+    "bloodPressure",
+    "weightKg",
 })
 
 _ALL_PHI_KEYS: frozenset[str] = _PHI_FIELD_NAMES | _CAMEL_CASE_PHI
@@ -58,10 +75,7 @@ def _check_no_phi_keys(d: dict) -> None:
     matched: set[str] = set()
     _collect_phi_keys(d, matched)
     if matched:
-        raise ValueError(
-            f"PHI field(s) detected in payload: {sorted(matched)!r}. "
-            "PHI must not enter published events."
-        )
+        raise ValueError(f"PHI field(s) detected in payload: {sorted(matched)!r}. PHI must not enter published events.")
 
 
 def _collect_phi_keys(d: dict, matched: set[str]) -> None:

@@ -1,4 +1,5 @@
 """BaseTransformer protocol and collection-specific transformers for MongoDB CDC events."""
+
 from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
@@ -56,9 +57,7 @@ class AlertsTransformer:
             "features": {
                 "alert_status": full_doc.get("status"),
                 "alert_type": full_doc.get("type"),
-                "cleared_at": (
-                    str(full_doc["clearedAt"]) if full_doc.get("clearedAt") else None
-                ),
+                "cleared_at": (str(full_doc["clearedAt"]) if full_doc.get("clearedAt") else None),
                 "vital_type": full_doc.get("vitalType"),
             },
         }
@@ -67,6 +66,7 @@ class AlertsTransformer:
 # ---------------------------------------------------------------------------
 # Helper utilities
 # ---------------------------------------------------------------------------
+
 
 def _stringify(value: Any) -> str | None:
     """Convert a value to string if non-None, else return None."""
@@ -108,6 +108,7 @@ def _extract_common(
 # ---------------------------------------------------------------------------
 # ChatRoomsTransformer
 # ---------------------------------------------------------------------------
+
 
 class ChatRoomsTransformer:
     """Transform ``chatRooms`` collection change events.
@@ -154,9 +155,7 @@ class ChatRoomsTransformer:
             "operation_type": operation_type,
             "features": {
                 "unread_message_count": full_doc.get("unread_message_count"),
-                "latest_message_timestamp": _stringify(
-                    full_doc.get("latest_message_timestamp")
-                ),
+                "latest_message_timestamp": _stringify(full_doc.get("latest_message_timestamp")),
             },
         }
 
@@ -164,6 +163,7 @@ class ChatRoomsTransformer:
 # ---------------------------------------------------------------------------
 # ActivityTransformer
 # ---------------------------------------------------------------------------
+
 
 class ActivityTransformer:
     """Transform ``activity`` collection change events."""
@@ -175,9 +175,7 @@ class ActivityTransformer:
         operation_type, full_doc, patient_id = result
 
         # Try camelCase then snake_case for lastReadingAt
-        last_reading_at = full_doc.get("lastReadingAt") or full_doc.get(
-            "last_reading_at"
-        )
+        last_reading_at = full_doc.get("lastReadingAt") or full_doc.get("last_reading_at")
 
         return {
             "collection": "activity",
@@ -193,6 +191,7 @@ class ActivityTransformer:
 # ---------------------------------------------------------------------------
 # ProviderProtocolsTransformer
 # ---------------------------------------------------------------------------
+
 
 class ProviderProtocolsTransformer:
     """Transform ``provider_protocols`` collection change events."""
@@ -277,12 +276,8 @@ class PatientCarePlansTransformer:
             "features": {
                 "care_plan_count": care_plan_count,
                 "care_plan_last_updated": _stringify(latest_ts),
-                "ccm_chart_reviewed_at": _stringify(
-                    full_doc.get("ccmChartReviewedAt")
-                ),
-                "follow_up_due_today_or_overdue": full_doc.get(
-                    "followUpDueTodayOrOverdue"
-                ),
+                "ccm_chart_reviewed_at": _stringify(full_doc.get("ccmChartReviewedAt")),
+                "follow_up_due_today_or_overdue": full_doc.get("followUpDueTodayOrOverdue"),
             },
         }
 
@@ -296,6 +291,7 @@ def _pick_latest(*values: Any) -> str | None:
 # ---------------------------------------------------------------------------
 # PatientNoteTransformer
 # ---------------------------------------------------------------------------
+
 
 class PatientNoteTransformer:
     """Transform ``patient_note`` collection change events.
@@ -321,9 +317,7 @@ class PatientNoteTransformer:
             "operation_type": operation_type,
             "features": {
                 "pending_emr_notes": full_doc.get("pendingEmrNotes"),
-                "last_nurse_interaction_at": _stringify(
-                    full_doc.get("last_nurse_interaction_at")
-                ),
+                "last_nurse_interaction_at": _stringify(full_doc.get("last_nurse_interaction_at")),
                 "last_contact_at": _stringify(full_doc.get("last_contact_at")),
             },
         }
@@ -382,6 +376,7 @@ class MonitoringTimeRawTransformer:
 # PersonaTransformer
 # ---------------------------------------------------------------------------
 
+
 class PersonaTransformer:
     """Transform ``persona`` collection change events.
 
@@ -397,14 +392,10 @@ class PersonaTransformer:
         operation_type, full_doc, patient_id = result
 
         # Derive program_id from provider_details or providerDetails
-        provider_details = full_doc.get("provider_details") or full_doc.get(
-            "providerDetails"
-        )
+        provider_details = full_doc.get("provider_details") or full_doc.get("providerDetails")
         program_id: str | None = None
         if isinstance(provider_details, dict):
-            program_id = provider_details.get("program_id") or provider_details.get(
-                "programId"
-            )
+            program_id = provider_details.get("program_id") or provider_details.get("programId")
         elif isinstance(provider_details, list):
             # Take first program identifier found
             for pd in provider_details:
@@ -439,9 +430,7 @@ class DashboardDetailsTransformer:
     """
 
     def transform(self, change_doc: dict) -> dict | None:
-        result = _extract_common(
-            change_doc, "persona.dashboard_details", "persona_id"
-        )
+        result = _extract_common(change_doc, "persona.dashboard_details", "persona_id")
         if result is None:
             return None
         operation_type, full_doc, patient_id = result

@@ -3,6 +3,7 @@
 All AI actions (summary generated, draft created, draft approved, draft rejected)
 publish canonical events here. Audit failure must not break user flow.
 """
+
 from __future__ import annotations
 
 import hashlib

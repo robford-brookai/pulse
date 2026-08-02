@@ -1,4 +1,5 @@
 """Source-inspection tests: verify ticket event types are wired in EVENT_HANDLERS."""
+
 from __future__ import annotations
 
 

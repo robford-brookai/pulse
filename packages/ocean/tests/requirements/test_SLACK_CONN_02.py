@@ -51,10 +51,7 @@ class TestConsumerGroupIsolation:
     def test_group_id_is_slack_bot_worker(self):
         source = (_ROOT / "services" / "slack-bot" / "src" / "consumer.py").read_text()
         assert '"slack-bot-worker"' in source
-        assert (
-            '"agent-worker"' not in source
-            or "agent-worker" in source.split("slack-bot-worker")[0] is False
-        )
+        assert '"agent-worker"' not in source or "agent-worker" in source.split("slack-bot-worker")[0] is False
 
 
 class TestEventHandlerRegistry:
@@ -133,9 +130,7 @@ class TestLifecycleHandlers:
             ("handle_scenario_completed", "scenario.completed"),
         ],
     )
-    async def test_scenario_handler_posts_card_directly(
-        self, consumer_mod, handler_name, event_type
-    ):
+    async def test_scenario_handler_posts_card_directly(self, consumer_mod, handler_name, event_type):
         """Scenario handlers post cards directly to channel, not via thread_manager."""
         mock_slack = AsyncMock()
         mock_slack.chat_postMessage = AsyncMock(return_value={"ok": True})

@@ -7,6 +7,7 @@ Uses synchronous confluent_kafka.Consumer with poll() offloaded to a thread
 via asyncio.to_thread() so the event loop is never blocked. This keeps the
 FastAPI /health endpoint responsive during broker negotiation and polling.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -68,10 +69,7 @@ async def handle_message(
 
     # AI decision pipeline (falls back to deterministic rules)
     action, confidence = await decide_with_fallback(alert_context)
-    log.info(
-        f"[AI] Patient {alert_context['patient_id']}: {action}"
-        f" (confidence={confidence:.2f}) by {persona.id}"
-    )
+    log.info(f"[AI] Patient {alert_context['patient_id']}: {action} (confidence={confidence:.2f}) by {persona.id}")
 
     # Publish recommendation
     await publish_ai_recommendation(publisher, event_data, action, confidence, persona)

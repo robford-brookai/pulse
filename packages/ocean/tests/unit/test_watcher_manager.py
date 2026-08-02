@@ -1,4 +1,5 @@
 """Unit tests for WatcherManager — concurrent watcher orchestration."""
+
 from __future__ import annotations
 
 import asyncio
@@ -31,12 +32,12 @@ for _mod_name in (
     if _mod_name not in sys.modules:
         sys.modules[_mod_name] = MagicMock()
 
-from src.watcher_manager import WatcherManager  # noqa: E402
-
+from src.watcher_manager import WatcherManager
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 def _make_fake_registry(names: list[str] | None = None) -> dict:
     """Return a transformer registry of MagicMock objects."""
@@ -54,7 +55,7 @@ def _make_manager(
     if registry is None:
         registry = _make_fake_registry()
     return WatcherManager(
-        db=MagicMock(),           # motor database mock
+        db=MagicMock(),  # motor database mock
         publisher=MagicMock(),
         token_store=MagicMock(),
         db_session_factory=MagicMock(),

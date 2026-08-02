@@ -3,15 +3,15 @@
 Requirement: handle_alert_resolved publishes outcome.recorded to ocean.outcomes
 with entity_type="alert" and resolution_type="resolved".
 """
+
 from __future__ import annotations
 
 import pytest
-
 from utils import setup_service
 
 setup_service("control-plane")
 
-from src.handlers.outcomes import handle_alert_resolved  # noqa: E402
+from src.handlers.outcomes import handle_alert_resolved
 
 
 @pytest.mark.asyncio

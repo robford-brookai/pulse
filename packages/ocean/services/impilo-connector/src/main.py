@@ -1,4 +1,5 @@
 """impilo-connector FastAPI app -- lifespan, health, and webhook router."""
+
 from __future__ import annotations
 
 import asyncio
@@ -20,9 +21,7 @@ log = structlog.get_logger()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    database_url = os.environ.get(
-        "DATABASE_URL", "postgresql+asyncpg://ocean:changeme@postgres:5432/ocean"
-    )
+    database_url = os.environ.get("DATABASE_URL", "postgresql+asyncpg://ocean:changeme@postgres:5432/ocean")
     engine = create_async_engine(database_url, echo=False)
     session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     app.state.session_maker = session_maker
@@ -35,9 +34,7 @@ async def lifespan(app: FastAPI):
     app.state.publisher = publisher
     log.info("impilo_connector_started", brokers=bootstrap_servers)
 
-    heartbeat_task = asyncio.create_task(
-        publish_heartbeat(publisher, "impilo-connector", "Impilo RPM")
-    )
+    heartbeat_task = asyncio.create_task(publish_heartbeat(publisher, "impilo-connector", "Impilo RPM"))
 
     sqs_queue_url = os.environ.get("SQS_QUEUE_URL")
     sqs_task = None

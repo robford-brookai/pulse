@@ -3,6 +3,7 @@
 Defines the three-layer config hierarchy: ScenarioConfig > PatientConfig > SignalConfig.
 Loaded from YAML scenario files and validated at parse time.
 """
+
 from __future__ import annotations
 
 from typing import Literal

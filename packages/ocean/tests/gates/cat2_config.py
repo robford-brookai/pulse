@@ -3,6 +3,7 @@
 Usage: cd /path/to/ocean && python test/cat2_config.py
 Loads .env if present; validates all env vars required by OCEAN services.
 """
+
 from __future__ import annotations
 
 import os
@@ -32,7 +33,7 @@ def check(name: str, condition: bool, hint: str = "") -> None:
 
 
 # --- Core infrastructure (required by most services) ---
-check("DATABASE_URL",     bool(os.getenv("DATABASE_URL")),     "postgresql+asyncpg://... required")
+check("DATABASE_URL", bool(os.getenv("DATABASE_URL")), "postgresql+asyncpg://... required")
 check("REDPANDA_BROKERS", bool(os.getenv("REDPANDA_BROKERS")), "host:port required")
 
 # DATABASE_URL shape: must start with postgresql
@@ -40,7 +41,7 @@ db_url = os.getenv("DATABASE_URL", "")
 check("DATABASE_URL format", db_url.startswith("postgresql"), "must start with 'postgresql'")
 
 # --- Slack-bot required vars ---
-check("SLACK_BOT_TOKEN",    bool(os.getenv("SLACK_BOT_TOKEN")),    "xoxb-... token required")
+check("SLACK_BOT_TOKEN", bool(os.getenv("SLACK_BOT_TOKEN")), "xoxb-... token required")
 check("SLACK_SIGNING_SECRET", bool(os.getenv("SLACK_SIGNING_SECRET")), "signing secret required")
 
 slack_token = os.getenv("SLACK_BOT_TOKEN", "")
@@ -56,15 +57,15 @@ ops_channel = os.getenv("OPS_SLACK_CHANNEL", "")
 check("OPS_SLACK_CHANNEL format", ops_channel.startswith("#"), "must start with '#'")
 
 # --- ZCC dispatch vars (slack-bot outreach) ---
-check("ZCC_ACCOUNT_ID",      bool(os.getenv("ZCC_ACCOUNT_ID")),      "Zoom account ID required")
-check("ZCC_CLIENT_ID",       bool(os.getenv("ZCC_CLIENT_ID")),       "Zoom OAuth client ID required")
-check("ZCC_CLIENT_SECRET",   bool(os.getenv("ZCC_CLIENT_SECRET")),   "Zoom OAuth client secret required")
+check("ZCC_ACCOUNT_ID", bool(os.getenv("ZCC_ACCOUNT_ID")), "Zoom account ID required")
+check("ZCC_CLIENT_ID", bool(os.getenv("ZCC_CLIENT_ID")), "Zoom OAuth client ID required")
+check("ZCC_CLIENT_SECRET", bool(os.getenv("ZCC_CLIENT_SECRET")), "Zoom OAuth client secret required")
 check("ZCC_DEFAULT_QUEUE_ID", bool(os.getenv("ZCC_DEFAULT_QUEUE_ID")), "Zoom queue ID required")
-check("PHI_STORE_URL",       bool(os.getenv("PHI_STORE_URL")),       "PHI store URL required for outreach")
+check("PHI_STORE_URL", bool(os.getenv("PHI_STORE_URL")), "PHI store URL required for outreach")
 
 # --- Webhook secrets (HMAC auth) ---
 check("POCAR_WEBHOOK_SECRET", bool(os.getenv("POCAR_WEBHOOK_SECRET")), "HMAC secret for POCAR webhooks")
-check("ZCC_WEBHOOK_SECRET",   bool(os.getenv("ZCC_WEBHOOK_SECRET")),   "HMAC secret for ZCC webhooks")
+check("ZCC_WEBHOOK_SECRET", bool(os.getenv("ZCC_WEBHOOK_SECRET")), "HMAC secret for ZCC webhooks")
 
 pocar_secret = os.getenv("POCAR_WEBHOOK_SECRET", "")
 check("POCAR_WEBHOOK_SECRET length", len(pocar_secret) >= 8, "must be at least 8 chars")
@@ -76,7 +77,7 @@ check("ZCC_WEBHOOK_SECRET length", len(zcc_secret) >= 8, "must be at least 8 cha
 check("VOYAGE_API_KEY", bool(os.getenv("VOYAGE_API_KEY")), "VoyageAI API key required for embeddings")
 
 # --- sim-driver ---
-check("ANTHROPIC_API_KEY",   bool(os.getenv("ANTHROPIC_API_KEY")),   "Claude API key required for sim agents")
+check("ANTHROPIC_API_KEY", bool(os.getenv("ANTHROPIC_API_KEY")), "Claude API key required for sim agents")
 anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
 check("ANTHROPIC_API_KEY format", anthropic_key.startswith("sk-ant-"), "must start with 'sk-ant-'")
 

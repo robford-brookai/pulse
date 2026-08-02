@@ -3,28 +3,22 @@
 Each test mocks the AsyncEngine / connection so we verify lock SQL
 and state transitions without touching a real database.
 """
+
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
-import structlog
-from structlog.testing import capture_logs
+import pathlib
 
 # Add the module under test to sys.path (same pattern as test_resume_token).
 import sys
-import pathlib
+from unittest.mock import AsyncMock, MagicMock
 
-_SRC = (
-    pathlib.Path(__file__).resolve().parents[2]
-    / "services"
-    / "mongodb-connector"
-    / "src"
-)
+import pytest
+from structlog.testing import capture_logs
+
+_SRC = pathlib.Path(__file__).resolve().parents[2] / "services" / "mongodb-connector" / "src"
 sys.path.insert(0, str(_SRC))
 
-from leader import LeaderElector, LOCK_ID  # noqa: E402
-
+from leader import LOCK_ID, LeaderElector
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -1,10 +1,11 @@
 """Unit tests for delivery.notify consumer handler and delivery action handlers."""
+
 from __future__ import annotations
 
 import os
 import sys
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 

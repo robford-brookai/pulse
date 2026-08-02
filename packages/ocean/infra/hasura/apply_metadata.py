@@ -3,6 +3,7 @@
 Run by the hasura-init Docker Compose service after Hasura is healthy and
 migrations have completed. Idempotent — safely re-run on every startup.
 """
+
 from __future__ import annotations
 
 import os

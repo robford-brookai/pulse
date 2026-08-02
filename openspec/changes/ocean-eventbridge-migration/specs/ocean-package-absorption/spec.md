@@ -82,19 +82,50 @@ committed. Excluding `.env` from the allowlist is therefore necessary but not su
 - **WHEN** the import is attempted
 - **THEN** the import is blocked until rotation is confirmed
 
-### Requirement: Imported package conforms to the monorepo toolchain
+### Requirement: Imported package is linted by the monorepo toolchain
 
-The imported package SHALL adopt the monorepo's lint, typecheck, and test configuration in a
-follow-up commit separate from the import commit, so that the import diff stays reviewable as a
-pure move.
+The imported package SHALL be covered by the monorepo's formatter and linter in a commit separate
+from the import, so that the import diff stays reviewable as a pure move.
 
-#### Scenario: Package builds inside monorepo CI
+Lint is separated from typecheck and test deliberately. Ocean's tests need Postgres and Kafka —
+18 of its test modules fail collection without them — and its libraries have unresolved import
+errors. Those are real work, not configuration, and folding them into one "conformance" step
+invites narrowing the gate until it passes rather than doing the work.
 
-- **WHEN** `task check` runs after the conformance commit
-- **THEN** it passes with `packages/ocean` included
+#### Scenario: Formatter and linter cover the package
+
+- **WHEN** `task lint` runs after the conformance commit
+- **THEN** it checks every Python file under `packages/ocean` and passes
 
 #### Scenario: Import and conformance are separate commits
 
 - **WHEN** the import lands
 - **THEN** the import commit changes no file content, and configuration changes appear only in the
   follow-up commit
+
+#### Scenario: Bulk reformatting does not destroy provenance
+
+- **GIVEN** adopting the monorepo's formatter reformats the imported tree wholesale
+- **WHEN** that reformat lands
+- **THEN** it is its own commit, listed in `.git-blame-ignore-revs`, so `git blame` still reaches
+  the history the import existed to preserve
+
+### Requirement: A gate must not claim coverage it does not have
+
+Every quality target SHALL apply to exactly the paths its configuration names. A variable that
+lists a path while the command hardcodes another is a false claim about what CI verifies, and is
+worse than an honestly narrow gate because it reads as covered.
+
+Where a target cannot yet cover the imported package, that exclusion SHALL be visible in the
+configuration itself, not only in a handoff.
+
+#### Scenario: Declared scope matches executed scope
+
+- **WHEN** a quality target runs
+- **THEN** the paths it executes against are the paths its variables declare
+
+#### Scenario: An uncovered package is named as uncovered
+
+- **GIVEN** `packages/ocean` is not yet typechecked or tested
+- **WHEN** someone reads `Taskfile.yml`
+- **THEN** the exclusion and its reason are stated there

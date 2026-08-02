@@ -1,4 +1,5 @@
 """Slash command handlers for /ocean subcommands (status, patient, sim, ticket, help)."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -62,8 +63,7 @@ async def build_status_response() -> list[dict]:
     try:
         # Service health from connector_health table
         health_result = await _hasura_query(
-            "query { connector_health(order_by: {connector_name: asc})"
-            " { connector_name last_seen } }"
+            "query { connector_health(order_by: {connector_name: asc}) { connector_name last_seen } }"
         )
         services = health_result.get("data", {}).get("connector_health", [])
         if services:
@@ -103,16 +103,9 @@ async def build_status_response() -> list[dict]:
         agg = "aggregate"
         open_count = data.get("open", {}).get(agg, {}).get("count", 0)
         claimed_count = data.get("claimed", {}).get(agg, {}).get("count", 0)
-        completed_count = (
-            data.get("completed", {}).get(agg, {}).get("count", 0)
-        )
+        completed_count = data.get("completed", {}).get(agg, {}).get("count", 0)
 
-        task_text = (
-            f"*Task Counts*\n"
-            f"  Open: {open_count}  |  "
-            f"Claimed: {claimed_count}  |  "
-            f"Completed: {completed_count}"
-        )
+        task_text = f"*Task Counts*\n  Open: {open_count}  |  Claimed: {claimed_count}  |  Completed: {completed_count}"
         blocks.append({
             "type": "section",
             "text": {"type": "mrkdwn", "text": task_text},
@@ -131,10 +124,7 @@ async def build_status_response() -> list[dict]:
             s = sims[0]
             sim_ts = datetime.fromisoformat(s["completed_at"])
             sim_age = int((datetime.now(tz=UTC) - sim_ts).total_seconds() / 60)
-            last_sim = (
-                f"{s['scenario_name']} — "
-                f"{s['patients_count']} patients, {sim_age}m ago"
-            )
+            last_sim = f"{s['scenario_name']} — {s['patients_count']} patients, {sim_age}m ago"
         else:
             last_sim = "No simulations run"
 
@@ -151,12 +141,7 @@ async def build_status_response() -> list[dict]:
                 }
             }"""
         )
-        alert_count = (
-            alert_result.get("data", {})
-            .get("alerts_aggregate", {})
-            .get("aggregate", {})
-            .get("count", 0)
-        )
+        alert_count = alert_result.get("data", {}).get("alerts_aggregate", {}).get("aggregate", {}).get("count", 0)
 
         blocks.append({
             "type": "section",
@@ -230,48 +215,32 @@ async def build_patient_response(patient_id: str) -> list[dict]:
         patient = patients[0]
 
         # Compute summary counts from timeline rows
-        open_alerts = sum(
-            1 for e in timeline
-            if e.get("event_type") == "alert" and e.get("status") == "open"
-        )
+        open_alerts = sum(1 for e in timeline if e.get("event_type") == "alert" and e.get("status") == "open")
         active_tasks = sum(
-            1 for e in timeline
-            if e.get("event_type") == "task"
-            and e.get("status") in ("open", "claimed")
+            1 for e in timeline if e.get("event_type") == "task" and e.get("status") in ("open", "claimed")
         )
         open_tickets = sum(
-            1 for e in timeline
-            if e.get("event_type") == "ticket"
-            and e.get("status") in ("open", "in_progress", "waiting")
+            1
+            for e in timeline
+            if e.get("event_type") == "ticket" and e.get("status") in ("open", "in_progress", "waiting")
         )
-        active_devices = sum(
-            1 for e in timeline
-            if e.get("event_type") == "device"
-            and e.get("status") == "associated"
-        )
+        active_devices = sum(1 for e in timeline if e.get("event_type") == "device" and e.get("status") == "associated")
         pending_fulfillments = sum(
-            1 for e in timeline
-            if e.get("event_type") == "fulfillment"
-            and e.get("status") not in ("delivered", "cancelled")
+            1
+            for e in timeline
+            if e.get("event_type") == "fulfillment" and e.get("status") not in ("delivered", "cancelled")
         )
 
         # Last RMA
-        rma_entries = [
-            e for e in timeline if e.get("event_type") == "return"
-        ]
+        rma_entries = [e for e in timeline if e.get("event_type") == "return"]
         last_rma = rma_entries[0].get("summary", "None") if rma_entries else "None"
 
         # Last interaction
-        interaction_entries = [
-            e for e in timeline if e.get("event_type") == "interaction"
-        ]
+        interaction_entries = [e for e in timeline if e.get("event_type") == "interaction"]
         last_interaction_text = ""
         if interaction_entries:
             li = interaction_entries[0]
-            last_interaction_text = (
-                f"*Last Interaction:* {li.get('summary', 'n/a')}"
-                f" at {li.get('created_at', '')}"
-            )
+            last_interaction_text = f"*Last Interaction:* {li.get('summary', 'n/a')} at {li.get('created_at', '')}"
 
         summary_lines = [
             f"*Status:* {patient.get('enrollment_status', 'unknown')}",
@@ -298,8 +267,7 @@ async def build_patient_response(patient_id: str) -> list[dict]:
             timeline_lines = []
             if total_events > _TIMELINE_MAX_ENTRIES:
                 timeline_lines.append(
-                    f"_Showing {_TIMELINE_MAX_ENTRIES} of {total_events}"
-                    " events. Use GraphQL for full history._"
+                    f"_Showing {_TIMELINE_MAX_ENTRIES} of {total_events} events. Use GraphQL for full history._"
                 )
             for entry in display_entries:
                 etype = entry.get("event_type", "")
@@ -312,7 +280,7 @@ async def build_patient_response(patient_id: str) -> list[dict]:
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f"*Timeline*\n" + "\n".join(timeline_lines),
+                    "text": "*Timeline*\n" + "\n".join(timeline_lines),
                 },
             })
 
@@ -343,10 +311,7 @@ async def trigger_sim_response(scenario: str) -> list[dict]:
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": (
-                        f"Simulation triggered: *{scenario}*\n"
-                        "Check #care-alerts-ops for progress."
-                    ),
+                    "text": (f"Simulation triggered: *{scenario}*\nCheck #care-alerts-ops for progress."),
                 },
             },
         ]
@@ -498,10 +463,7 @@ async def build_search_response(query: str) -> list[dict]:
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": (
-                        f"*{i}.* `{entity_id}`\n"
-                        f"  Type: {entity_type}  |  Score: {score:.3f}"
-                    ),
+                    "text": (f"*{i}.* `{entity_id}`\n  Type: {entity_type}  |  Score: {score:.3f}"),
                 },
             })
 

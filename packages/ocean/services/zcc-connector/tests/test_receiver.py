@@ -1,14 +1,12 @@
 """Tests for ZCC webhook receiver — Zoom HMAC-SHA256 validation, url_validation, event routing."""
+
 from __future__ import annotations
 
-import hashlib
-import hmac
 import json
 
 import pytest
 
 from tests.conftest import make_zoom_signature
-
 
 TIMESTAMP = "1614000000"
 SECRET = "test_secret"

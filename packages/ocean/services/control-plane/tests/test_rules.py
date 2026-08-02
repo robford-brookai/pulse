@@ -1,19 +1,18 @@
 """Unit tests for control-plane routing rules."""
+
 from __future__ import annotations
 
-import sys
 import os
+import sys
 
 # Allow importing src package from service root
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-import pytest
 
 from src.rules import (
     FALLBACK_CHANNEL,
     FALLBACK_PRIORITY,
     FALLBACK_TICKET_CHANNEL,
-    VALID_TRANSITIONS,
     channel_for,
     is_valid_transition,
     priority_for,

@@ -1,4 +1,5 @@
 """Normalize HubSpot webhook payloads to Ocean event format."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone

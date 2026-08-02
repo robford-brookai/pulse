@@ -1,4 +1,5 @@
 """DBT-08: Incremental models use 4-hour lookback window for late-arriving events."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -13,5 +14,6 @@ def test_core_models_have_incremental_lookback():
     for f in core_files:
         content = f.read_text()
         assert "is_incremental()" in content, f"{f.name} missing is_incremental() block"
-        assert "DATEADD(hour, -4," in content or "dateadd(hour, -4," in content.lower(), \
+        assert "DATEADD(hour, -4," in content or "dateadd(hour, -4," in content.lower(), (
             f"{f.name} missing 4-hour lookback window"
+        )

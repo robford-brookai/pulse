@@ -8,6 +8,7 @@ Revision ID: 0017
 Revises: 0016
 Create Date: 2026-03-18
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa

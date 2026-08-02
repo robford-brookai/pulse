@@ -1,4 +1,5 @@
 """Redpanda publisher for slack-bot outbound events (task.claimed, task.completed)."""
+
 from __future__ import annotations
 
 import asyncio

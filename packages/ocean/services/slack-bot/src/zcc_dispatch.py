@@ -7,6 +7,7 @@ MEDIUM confidence: ZCC Call Control endpoint inferred from
 contact_center.call_control_make_call_executed webhook; verify endpoint
 availability against account tier before production deploy.
 """
+
 from __future__ import annotations
 
 import time

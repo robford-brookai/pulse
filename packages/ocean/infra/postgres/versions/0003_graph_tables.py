@@ -4,6 +4,7 @@ Revision ID: 0003
 Revises: 0002
 Create Date: 2026-03-06
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
@@ -44,9 +45,7 @@ def upgrade() -> None:
         sa.Column("received_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("anomalous", sa.Boolean(), nullable=False, server_default="false"),
         sa.Column("last_event_id", sa.Text(), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["patient_id"], ["patients.patient_id"], name="fk_signals_patient_id"
-        ),
+        sa.ForeignKeyConstraint(["patient_id"], ["patients.patient_id"], name="fk_signals_patient_id"),
     )
     op.create_index("ix_signals_patient_id", "signals", ["patient_id"])
     op.create_index("ix_signals_received_at", "signals", ["received_at"])
@@ -70,9 +69,7 @@ def upgrade() -> None:
         ),
         sa.Column("correlation_id", sa.Text(), nullable=False),
         sa.Column("last_event_id", sa.Text(), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["patient_id"], ["patients.patient_id"], name="fk_alerts_patient_id"
-        ),
+        sa.ForeignKeyConstraint(["patient_id"], ["patients.patient_id"], name="fk_alerts_patient_id"),
     )
     op.create_index("ix_alerts_patient_id", "alerts", ["patient_id"])
     op.create_index("ix_alerts_created_at", "alerts", ["created_at"])
@@ -96,12 +93,8 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
         ),
         sa.Column("last_event_id", sa.Text(), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["alert_id"], ["alerts.alert_id"], name="fk_tasks_alert_id"
-        ),
-        sa.ForeignKeyConstraint(
-            ["patient_id"], ["patients.patient_id"], name="fk_tasks_patient_id"
-        ),
+        sa.ForeignKeyConstraint(["alert_id"], ["alerts.alert_id"], name="fk_tasks_alert_id"),
+        sa.ForeignKeyConstraint(["patient_id"], ["patients.patient_id"], name="fk_tasks_patient_id"),
     )
     op.create_index("ix_tasks_patient_id", "tasks", ["patient_id"])
     op.create_index("ix_tasks_alert_id", "tasks", ["alert_id"])
@@ -118,12 +111,8 @@ def upgrade() -> None:
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("last_event_id", sa.Text(), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["task_id"], ["tasks.task_id"], name="fk_interactions_task_id"
-        ),
-        sa.ForeignKeyConstraint(
-            ["patient_id"], ["patients.patient_id"], name="fk_interactions_patient_id"
-        ),
+        sa.ForeignKeyConstraint(["task_id"], ["tasks.task_id"], name="fk_interactions_task_id"),
+        sa.ForeignKeyConstraint(["patient_id"], ["patients.patient_id"], name="fk_interactions_patient_id"),
     )
     op.create_index("ix_interactions_task_id", "interactions", ["task_id"])
     op.create_index("ix_interactions_patient_id", "interactions", ["patient_id"])
@@ -144,9 +133,7 @@ def upgrade() -> None:
             ["interactions.interaction_id"],
             name="fk_outcomes_interaction_id",
         ),
-        sa.ForeignKeyConstraint(
-            ["patient_id"], ["patients.patient_id"], name="fk_outcomes_patient_id"
-        ),
+        sa.ForeignKeyConstraint(["patient_id"], ["patients.patient_id"], name="fk_outcomes_patient_id"),
     )
     op.create_index("ix_outcomes_interaction_id", "outcomes", ["interaction_id"])
     op.create_index("ix_outcomes_patient_id", "outcomes", ["patient_id"])

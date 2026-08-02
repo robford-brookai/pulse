@@ -4,6 +4,7 @@ Verifies the escalation priority upgrade map exists and contains
 the correct low->medium->high->critical mappings. Uses importlib.util
 to load rules.py directly (no heavy service dependencies).
 """
+
 import re
 from pathlib import Path
 
@@ -39,6 +40,4 @@ def test_priority_upgrade_dict_values():
     assert re.search(r'"medium"\s*:\s*"high"', src), "medium must map to high"
     assert re.search(r'"high"\s*:\s*"critical"', src), "high must map to critical"
     # critical is intentionally absent (stays critical -- posts UNCLAIMED CRITICAL instead)
-    assert not re.search(r'"critical"\s*:\s*"', src), (
-        "critical must NOT have an upgrade target in PRIORITY_UPGRADE"
-    )
+    assert not re.search(r'"critical"\s*:\s*"', src), "critical must NOT have an upgrade target in PRIORITY_UPGRADE"

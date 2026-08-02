@@ -10,17 +10,17 @@ each AI action:
 Each event must include the canonical envelope fields: event_id, event_type,
 timestamp, source_system, entity_type, entity_id, payload.
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
 import pytest
-
 from utils import setup_service
 
 setup_service("slack-bot")
 
-from src.ai_events import publish_ai_event  # noqa: E402
+from src.ai_events import publish_ai_event
 
 _ALL_EVENT_TYPES = [
     "ai.summary.generated",

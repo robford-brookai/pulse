@@ -1,4 +1,5 @@
 """Normalize Linear issue data to Ocean ticket event format."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime

@@ -1,4 +1,5 @@
 """HS-01: HubSpot connector validates v3 signatures with replay protection."""
+
 from pathlib import Path
 
 _ROOT = Path(__file__).parents[2]
@@ -37,8 +38,9 @@ def test_replay_protection_max_age():
 
 def test_rejects_old_timestamps():
     src = _src()
-    assert "Request timestamp too old" in src or "timestamp" in src.lower(), \
+    assert "Request timestamp too old" in src or "timestamp" in src.lower(), (
         "Must reject requests with expired timestamps"
+    )
 
 
 def test_raises_401_on_invalid():
