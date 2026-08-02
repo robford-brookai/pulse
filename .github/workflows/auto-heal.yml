@@ -165,10 +165,10 @@ jobs:
     if: ${{ needs.diagnose.outputs.healthy == 'true' && github.event.workflow_run.conclusion == 'failure' }}
     steps:
       - name: Re-run failed workflow
-         uses: peter-evans/re-run-workflow@0000000000000000000000000000000000000000 # v2.0
-         with:
-           run_id: ${{ github.event.workflow_run.id }}
-           token: ${{ secrets.GITHUB_TOKEN }}
+          uses: peter-evans/re-run-workflow@0000000000000000000000000000000000000000 # v2.0
+          with:
+            run_id: ${{ github.event.workflow_run.id }}
+            token: ${{ secrets.GITHUB_TOKEN }}
 
   notify:
     needs: diagnose
@@ -176,12 +176,12 @@ jobs:
     if: ${{ needs.diagnose.outputs.healthy != 'true' && github.event.workflow_run.conclusion == 'failure' }}
     steps:
       - name: Open issue for human attention
-         uses: actions/github-script@0000000000000000000000000000000000000000 # v7.0
-         with:
-           script: |
-             github.issues.create({
-               owner: context.repo.owner,
-               repo: context.repo.repo,
-               title: `CI auto-heal diagnostic failed for run ${context.payload.workflow_run.id}`,
-               body: `Auto-heal diagnostic failed for workflow run: ${context.payload.workflow_run.html_url}\n\nPlease inspect and resolve.`
-             })
+        uses: actions/github-script@0000000000000000000000000000000000000000 # v7.0
+        with:
+          script: |
+            github.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `CI auto-heal diagnostic failed for run ${context.payload.workflow_run.id}`,
+              body: `Auto-heal diagnostic failed for workflow run: ${context.payload.workflow_run.html_url}\n\nPlease inspect and resolve.`
+            })
