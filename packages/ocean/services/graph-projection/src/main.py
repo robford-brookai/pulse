@@ -15,15 +15,25 @@ from src import consumer
 log = structlog.get_logger()
 
 
+def _log_consumer_exit(task: asyncio.Task) -> None:
+    """Surface a consumer that died. Without this the exception is swallowed."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        log.error("consumer_exited", error=str(exc), exc_info=exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     database_url = os.environ.get("DATABASE_URL", "postgresql+asyncpg://ocean:changeme@postgres:5432/ocean")
     engine = create_async_engine(database_url, echo=False)
     session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
-    bootstrap_servers = os.environ.get("REDPANDA_BROKERS", "redpanda:29092")
-    log.info("starting_graph_consumer", brokers=bootstrap_servers)
-    asyncio.create_task(consumer.run_consumer(session_maker, bootstrap_servers))
+    queue_url = os.environ["SQS_QUEUE_URL"]
+    log.info("starting_graph_consumer", queue_url=queue_url)
+    task = asyncio.create_task(consumer.run_consumer(session_maker, queue_url))
+    task.add_done_callback(_log_consumer_exit)
 
     yield
 
