@@ -1,0 +1,499 @@
+services:
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v25.3.10
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp
+      - "1"
+      - --memory
+      - 512M
+      - --reserve-memory
+      - 0M
+      - --node-id
+      - "0"
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9092
+      - --advertise-kafka-addr
+      - PLAINTEXT://redpanda:29092,OUTSIDE://localhost:9092
+      - --schema-registry-addr
+      - 0.0.0.0:8081
+      - --pandaproxy-addr
+      - 0.0.0.0:8082
+      - --advertise-pandaproxy-addr
+      - localhost:8082
+    ports:
+      - "9092:9092"
+      - "8081:8081"
+      - "8082:8082"
+      - "29092:29092"
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "info"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:latest
+    entrypoint: /bin/sh
+    command: -c "echo \"$$CONSOLE_CONFIG_FILE\" > /tmp/config.yml; /app/console --config.filepath /tmp/config.yml"
+    environment:
+      CONSOLE_CONFIG_FILE: |
+        kafka:
+          brokers: ["redpanda:29092"]
+    ports:
+      - "8085:8080"
+    depends_on:
+      redpanda:
+        condition: service_healthy
+
+  redpanda-init:
+    image: docker.redpanda.com/redpandadata/redpanda:v25.3.10
+    entrypoint: /bin/bash
+    command: -c "/topics.sh"
+    environment:
+      REDPANDA_BROKERS: redpanda:29092
+    volumes:
+      - ./redpanda/topics.sh:/topics.sh:ro
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    restart: "no"
+
+  warehouse-sync:
+    build:
+      context: ..
+      dockerfile: services/warehouse-sync/Dockerfile
+    environment:
+      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      SNOWFLAKE_ACCOUNT: ${SNOWFLAKE_ACCOUNT}
+      SNOWFLAKE_USER: ${SNOWFLAKE_USER:-OCEAN_SVC}
+      SNOWFLAKE_PRIVATE_KEY_PATH: /snowflake_key.p8
+    volumes:
+      - ./redpanda/snowflake_key.p8:/snowflake_key.p8:ro
+    ports:
+      - "8011:8008"
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      redpanda-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    profiles:
+      - warehouse
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8008/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ocean
+      POSTGRES_USER: ocean
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ocean"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  migrate:
+    image: python:3.13-slim
+    working_dir: /migrations
+    command: >
+      bash -c "
+        pip install alembic psycopg2-binary --quiet &&
+        alembic upgrade head
+      "
+    environment:
+      DATABASE_URL: postgresql://ocean:${POSTGRES_PASSWORD:-changeme}@postgres:5432/ocean
+    volumes:
+      - ./postgres:/migrations:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  hasura:
+    image: hasura/graphql-engine:v2.48.12
+    environment:
+      HASURA_GRAPHQL_DATABASE_URL: postgres://ocean:${POSTGRES_PASSWORD:-changeme}@postgres:5432/ocean
+      HASURA_GRAPHQL_ENABLE_CONSOLE: "true"
+      HASURA_GRAPHQL_DEV_MODE: "true"
+      HASURA_GRAPHQL_ADMIN_SECRET: ${HASURA_GRAPHQL_ADMIN_SECRET:-changeme_admin_secret}
+      HASURA_GRAPHQL_ENABLED_LOG_TYPES: startup,http-log,webhook-log,websocket-log,query-log
+    ports:
+      - "8090:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  event-store:
+    build:
+      context: ..
+      dockerfile: services/event-store/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ocean:changeme@postgres:5432/ocean}
+      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+    ports:
+      - "8001:8000"
+    depends_on:
+      hasura:
+        condition: service_healthy
+      redpanda-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  hasura-init:
+    image: python:3.13-slim
+    command: >
+      bash -c "
+        pip install httpx --quiet &&
+        python /scripts/apply_metadata.py
+      "
+    environment:
+      HASURA_URL: http://hasura:8080
+      HASURA_GRAPHQL_ADMIN_SECRET: ${HASURA_GRAPHQL_ADMIN_SECRET:-changeme_admin_secret}
+    volumes:
+      - ./hasura:/scripts:ro
+    depends_on:
+      hasura:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
+  pocar-connector:
+    build:
+      context: ..
+      dockerfile: services/pocar-connector/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ocean:changeme@postgres:5432/ocean}
+      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      POCAR_WEBHOOK_SECRET: ${POCAR_WEBHOOK_SECRET:-dev_secret}
+    ports:
+      - "8002:8000"
+    depends_on:
+      hasura:
+        condition: service_healthy
+      redpanda-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  graph-projection:
+    build:
+      context: ..
+      dockerfile: services/graph-projection/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ocean:changeme@postgres:5432/ocean}
+      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+    ports:
+      - "8003:8000"
+    depends_on:
+      hasura-init:
+        condition: service_completed_successfully
+      redpanda-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  control-plane:
+    build:
+      context: ..
+      dockerfile: services/control-plane/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ocean:changeme@postgres:5432/ocean}
+      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      IMPILO_API_URL: ${IMPILO_API_URL:-}
+      IMPILO_API_KEY: ${IMPILO_API_KEY:-}
+      ESCALATION_ENABLED: "${ESCALATION_ENABLED:-true}"
+      ESCALATION_TIMEOUT_CRITICAL: "${ESCALATION_TIMEOUT_CRITICAL:-300}"
+      ESCALATION_TIMEOUT_HIGH: "${ESCALATION_TIMEOUT_HIGH:-600}"
+      ESCALATION_TIMEOUT_MEDIUM: "${ESCALATION_TIMEOUT_MEDIUM:-900}"
+      ESCALATION_TIMEOUT_LOW: "${ESCALATION_TIMEOUT_LOW:-1800}"
+      ESCALATION_POLL_INTERVAL: "${ESCALATION_POLL_INTERVAL:-60}"
+    ports:
+      - "8004:8000"
+    depends_on:
+      hasura-init:
+        condition: service_completed_successfully
+      redpanda-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  slack-bot:
+    build:
+      context: ..
+      dockerfile: services/slack-bot/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ocean:changeme@postgres:5432/ocean}
+      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-}
+      OPS_SLACK_CHANNEL: ${OPS_SLACK_CHANNEL:-#care-alerts-ops}
+      HASURA_URL: http://hasura:8080
+      HASURA_GRAPHQL_ADMIN_SECRET: ${HASURA_GRAPHQL_ADMIN_SECRET:-changeme_admin_secret}
+      ZCC_ACCOUNT_ID: ${ZCC_ACCOUNT_ID:-}
+      ZCC_CLIENT_ID: ${ZCC_CLIENT_ID:-}
+      ZCC_CLIENT_SECRET: ${ZCC_CLIENT_SECRET:-}
+      ZCC_DEFAULT_QUEUE_ID: ${ZCC_DEFAULT_QUEUE_ID:-}
+      MCP_API_KEY: ${MCP_API_KEY:-}
+      PHI_STORE_URL: ${PHI_STORE_URL:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports:
+      - "8005:8000"
+    depends_on:
+      control-plane:
+        condition: service_healthy
+      redpanda-init:
+        condition: service_completed_successfully
+      hasura-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  zcc-connector:
+    build:
+      context: ..
+      dockerfile: services/zcc-connector/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ocean:changeme@postgres:5432/ocean}
+      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      ZCC_WEBHOOK_SECRET: ${ZCC_WEBHOOK_SECRET:-dev_secret}
+    ports:
+      - "8006:8000"
+    depends_on:
+      hasura-init:
+        condition: service_completed_successfully
+      redpanda-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  impilo-connector:
+    build:
+      context: ..
+      dockerfile: services/impilo-connector/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ocean:changeme@postgres:5432/ocean}
+      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      IMPILO_API_KEY: ${IMPILO_API_KEY:-dev_impilo_key}
+      SQS_QUEUE_URL: ${SQS_QUEUE_URL:-}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+    ports:
+      - "8007:8000"
+    depends_on:
+      hasura:
+        condition: service_healthy
+      redpanda-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  linear-connector:
+    build:
+      context: ..
+      dockerfile: services/linear-connector/Dockerfile
+    environment:
+      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      LINEAR_WEBHOOK_SECRET: ${LINEAR_WEBHOOK_SECRET:-dev_secret}
+    ports:
+      - "8008:8000"
+    depends_on:
+      redpanda-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  github-connector:
+    build:
+      context: ..
+      dockerfile: services/github-connector/Dockerfile
+    environment:
+      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-dev_secret}
+    ports:
+      - "8009:8000"
+    depends_on:
+      redpanda-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  hubspot-connector:
+    build:
+      context: ..
+      dockerfile: services/hubspot-connector/Dockerfile
+    environment:
+      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      HUBSPOT_CLIENT_SECRET: ${HUBSPOT_CLIENT_SECRET:-dev_secret}
+    ports:
+      - "8010:8000"
+    depends_on:
+      redpanda-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  sim-driver:
+    profiles: [sim]
+    build:
+      context: ..
+      dockerfile: services/sim-driver/Dockerfile
+    environment:
+      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN_SIM:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports:
+      - "8060:8000"
+    depends_on:
+      redpanda-init:
+        condition: service_completed_successfully
+      slack-bot:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  agent-worker:
+    profiles: [sim]
+    build:
+      context: ..
+      dockerfile: services/agent-worker/Dockerfile
+    environment:
+      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      HASURA_URL: http://hasura:8080
+      HASURA_ADMIN_SECRET: ${HASURA_GRAPHQL_ADMIN_SECRET:-changeme_admin_secret}
+      COMPRESSION_RATIO: ${COMPRESSION_RATIO:-960}
+      AGENTS_MD_PATH: /app/AGENTS.md
+    ports:
+      - "8061:8000"
+    depends_on:
+      redpanda-init:
+        condition: service_completed_successfully
+      control-plane:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  call-simulator:
+    profiles: [sim]
+    build:
+      context: ..
+      dockerfile: services/call-simulator/Dockerfile
+    environment:
+      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+    ports:
+      - "8062:8000"
+    depends_on:
+      redpanda-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  stacte-bridge:
+    build:
+      context: ..
+      dockerfile: services/stacte-bridge/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ocean:changeme@postgres:5432/ocean}
+      VOYAGE_API_KEY: ${VOYAGE_API_KEY:-}
+    ports:
+      - "8070:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  postgres_data:

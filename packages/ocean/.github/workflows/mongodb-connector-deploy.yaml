@@ -1,0 +1,107 @@
+# Deploy Workflow for mongodb-connector (Ocean)
+#
+# Deploys a pre-built Docker image to EKS via DuploCloud's update-image API.
+#
+# Prerequisites:
+#   - DUPLO_TOKEN secret and DUPLO_HOST variable configured
+#   - DuploCloud service named "mongodb-connector" exists in the target tenant
+#   - Image already pushed to ECR (via build workflow or manual push)
+#
+name: "[Ocean] MongoDB Connector — Deploy"
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: The environment to deploy to
+        type: choice
+        options:
+          - dev01-brook
+        required: true
+        default: dev01-brook
+      image_tag:
+        description: ECR image tag to deploy
+        type: string
+        required: true
+      image_uri:
+        description: Optional full ECR image URI override
+        type: string
+        required: false
+
+  workflow_call:
+    inputs:
+      environment:
+        description: The environment to deploy to
+        required: true
+        type: string
+      image_tag:
+        description: ECR image tag to deploy
+        required: false
+        type: string
+      image_uri:
+        description: Optional full ECR image URI override
+        required: false
+        type: string
+    secrets:
+      DUPLO_TOKEN:
+        description: The DuploCloud API token
+        required: true
+
+jobs:
+  deploy:
+    name: Deploy Service
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+
+    env:
+      DUPLO_TOKEN: ${{ secrets.DUPLO_TOKEN }}
+      DUPLO_HOST: ${{ vars.DUPLO_HOST }}
+      DUPLO_TENANT: ${{ inputs.environment }}
+      AWS_REGION: us-east-1
+
+    steps:
+      - name: DuploCloud CI Setup
+        uses: Brookai/actions@77d7183f70a8026ee50c91f60108496dba297079
+
+      - name: Resolve image URI
+        id: resolve_image
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REPO_NAME="mongodb-connector"
+          if [[ -n "${{ inputs.image_tag }}" ]]; then
+            ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+            aws ecr describe-images --repository-name "${REPO_NAME}" --image-ids "imageTag=${{ inputs.image_tag }}" >/dev/null
+            RESOLVED_IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${REPO_NAME}:${{ inputs.image_tag }}"
+          elif [[ -n "${{ inputs.image_uri }}" ]]; then
+            RESOLVED_IMAGE_URI="${{ inputs.image_uri }}"
+          else
+            echo "::error::Provide image_tag or image_uri."
+            exit 1
+          fi
+
+          echo "image_uri=${RESOLVED_IMAGE_URI}" >> "$GITHUB_OUTPUT"
+
+      - name: Update Service Image
+        uses: Brookai/actions/update-image@77d7183f70a8026ee50c91f60108496dba297079
+        with:
+          type: service
+          name: mongodb-connector
+          image: ${{ steps.resolve_image.outputs.image_uri }}
+
+      - name: Create Deployment Summary
+        if: always()
+        run: |
+          echo "# Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Service** | \`mongodb-connector\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | \`${{ inputs.environment }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Image** | \`${{ steps.resolve_image.outputs.image_uri }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Status** | \`deploy complete\` |" >> $GITHUB_STEP_SUMMARY

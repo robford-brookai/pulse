@@ -1,0 +1,93 @@
+name: edge_cases
+description: "Edge cases: false positives, missed-call retries, concurrent claims, escalation chains"
+compression_ratio: 720
+
+patients:
+  # --- False positives: non-anomalous signals only (no alert pipeline) ---
+  - patient_id: "sim-pt-edge-fp1"
+    clinic_id: "clinic-edge"
+    source: pocar
+    signals:
+      - sim_hour: 0.05
+        type: glucose
+        value: 110
+        unit: mg/dL
+        anomalous: false
+
+  - patient_id: "sim-pt-edge-fp2"
+    clinic_id: "clinic-edge"
+    source: impilo
+    signals:
+      - sim_hour: 0.05
+        type: spo2
+        value: 98
+        unit: "%"
+        anomalous: false
+
+  # --- Missed-call retry: CRITICAL triggers approve path, persona retry mechanism ---
+  - patient_id: "sim-pt-edge-retry"
+    clinic_id: "clinic-edge"
+    source: pocar
+    signals:
+      - sim_hour: 0.10
+        type: glucose
+        value: 310
+        unit: mg/dL
+        anomalous: true
+        severity_hint: CRITICAL
+
+  # --- Concurrent claims: 3 patients at identical sim_hour for claim competition ---
+  - patient_id: "sim-pt-edge-concurrent1"
+    clinic_id: "clinic-edge"
+    source: pocar
+    signals:
+      - sim_hour: 0.1
+        type: glucose
+        value: 290
+        unit: mg/dL
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-edge-concurrent2"
+    clinic_id: "clinic-edge"
+    source: impilo
+    signals:
+      - sim_hour: 0.1
+        type: spo2
+        value: 85
+        unit: "%"
+        anomalous: true
+        severity_hint: CRITICAL
+
+  - patient_id: "sim-pt-edge-concurrent3"
+    clinic_id: "clinic-edge"
+    source: pocar
+    signals:
+      - sim_hour: 0.1
+        type: glucose
+        value: 200
+        unit: mg/dL
+        anomalous: true
+        severity_hint: URGENT
+
+  # --- Escalation chains: non-glucose/spo2 types that trigger escalate decisions ---
+  - patient_id: "sim-pt-edge-esc1"
+    clinic_id: "clinic-edge"
+    source: impilo
+    signals:
+      - sim_hour: 0.15
+        type: heart_rate
+        value: 135
+        unit: bpm
+        anomalous: true
+        severity_hint: URGENT
+
+  - patient_id: "sim-pt-edge-esc2"
+    clinic_id: "clinic-edge"
+    source: pocar
+    signals:
+      - sim_hour: 0.20
+        type: weight
+        value: 120
+        unit: kg
+        anomalous: true
