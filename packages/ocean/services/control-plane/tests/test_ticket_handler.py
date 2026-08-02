@@ -290,6 +290,26 @@ class TestHandleTicketUpdated:
         producer.publish.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_bridge_links_on_update_run_before_staleness_return(self):
+        """Bridge links are additive and idempotent, so a stale event still applies them."""
+        from src.handlers.tickets import handle_ticket_updated
+
+        status_result = MagicMock()
+        status_result.scalar_one_or_none.return_value = "open"
+        update_result = MagicMock()
+        update_result.rowcount = 0
+        link_result = MagicMock()
+        session = AsyncMock()
+        session.execute = AsyncMock(side_effect=[status_result, update_result, link_result])
+        producer = AsyncMock()
+        event = _make_ticket_updated_event(new_status="in_progress", task_ids=["task-late"])
+
+        await handle_ticket_updated(event, session, producer=producer)
+
+        assert session.execute.call_count == 3
+        producer.publish.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_bridge_links_on_update(self):
         """New task_ids in update payload are linked via bridge table."""
         from src.handlers.tickets import handle_ticket_updated
@@ -307,3 +327,110 @@ class TestHandleTicketUpdated:
         all_params = [c[0][1] for c in session.execute.call_args_list if len(c[0]) > 1]
         task_id_params = [p.get("task_id") for p in all_params if "task_id" in p]
         assert "task-new" in task_id_params
+
+
+# ---------------------------------------------------------------------------
+# handle_ticket_updated sequence guard (task 3.7)
+# ---------------------------------------------------------------------------
+
+
+class TestTicketUpdateSequenceGuard:
+    """Event-time sequence guard on the ticket status write, per event-delivery spec.
+
+    The guard compares envelope event time, never `updated_at` (processing time,
+    Caveat A). A stale write updates zero rows and skips every status-dependent
+    side effect: escalation removal and all publishes.
+    """
+
+    def _session(self, current_status="open", update_rowcount=1, extra_results=0):
+        status_result = MagicMock()
+        status_result.scalar_one_or_none.return_value = current_status
+        update_result = MagicMock()
+        update_result.rowcount = update_rowcount
+        results = [status_result, update_result] + [MagicMock() for _ in range(extra_results)]
+        session = AsyncMock()
+        session.execute = AsyncMock(side_effect=results)
+        return session
+
+    def _update_call(self, session):
+        for call in session.execute.call_args_list:
+            sql = " ".join(str(call[0][0]).split())
+            if sql.startswith("UPDATE tickets SET"):
+                return sql, call[0][1]
+        raise AssertionError("no UPDATE tickets statement was executed")
+
+    @pytest.mark.asyncio
+    async def test_status_write_is_guarded_on_event_time(self):
+        """The UPDATE writes last_event_at from the envelope and guards on it."""
+        from datetime import UTC, datetime
+
+        from src.handlers.tickets import handle_ticket_updated
+
+        session = self._session(extra_results=1)
+        event = _make_ticket_updated_event(new_status="in_progress")
+
+        await handle_ticket_updated(event, session, producer=AsyncMock())
+
+        sql, params = self._update_call(session)
+        assert "last_event_at = :event_at" in sql
+        assert "last_event_at IS NULL OR last_event_at < :event_at" in sql
+        assert "updated_at <" not in sql, "processing time must not be the guard column"
+        assert params["event_at"] == datetime(2026, 3, 11, 11, 0, 0, tzinfo=UTC)
+
+    @pytest.mark.asyncio
+    async def test_stale_update_skips_escalation_and_publish(self):
+        """rowcount 0 means a newer event already wrote the row: no side effects."""
+        from src.handlers.tickets import handle_ticket_updated
+
+        session = self._session(current_status="in_progress", update_rowcount=0)
+        producer = AsyncMock()
+        event = _make_ticket_updated_event(new_status="resolved")
+
+        await handle_ticket_updated(event, session, producer=producer)
+
+        # SELECT status + guarded UPDATE only — no escalation DELETE, no publish
+        assert session.execute.call_count == 2
+        producer.publish.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_fresh_update_publishes(self):
+        """rowcount 1 keeps today's behaviour: escalation removal and publishes run."""
+        from src.handlers.tickets import handle_ticket_updated
+
+        session = self._session(current_status="in_progress", update_rowcount=1, extra_results=1)
+        producer = AsyncMock()
+        event = _make_ticket_updated_event(new_status="resolved")
+
+        await handle_ticket_updated(event, session, producer=producer)
+
+        assert producer.publish.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_missing_timestamp_raises_before_any_write(self):
+        """An event with no event time cannot be ordered; fail for redelivery, never guess."""
+        from src.handlers.tickets import handle_ticket_updated
+
+        session = AsyncMock()
+        event = _make_ticket_updated_event(new_status="in_progress")
+        del event["timestamp"]
+
+        with pytest.raises(ValueError):
+            await handle_ticket_updated(event, session, producer=AsyncMock())
+
+        session.execute.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_outcome_relay_carries_source_event_time(self):
+        """The outcome.recorded envelope and resolved_at carry the source event's
+        timestamp, matching the other four relays — 3.1's guard compares this field."""
+        from src.handlers.tickets import handle_ticket_updated
+
+        session = self._session(current_status="in_progress", update_rowcount=1, extra_results=1)
+        producer = AsyncMock()
+        event = _make_ticket_updated_event(new_status="resolved")
+
+        await handle_ticket_updated(event, session, producer=producer)
+
+        outcome = next(c[0][1] for c in producer.publish.call_args_list if c[0][1]["event_type"] == "outcome.recorded")
+        assert outcome["timestamp"] == event["timestamp"]
+        assert outcome["payload"]["resolved_at"] == event["timestamp"]

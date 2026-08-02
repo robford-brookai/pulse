@@ -39,6 +39,31 @@ def _parse_ts(ts_str: str) -> datetime:
     return datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
 
 
+def _event_time(event_data: dict) -> datetime:
+    """Return the envelope's event time as a timezone-aware datetime.
+
+    Raises:
+        ValueError: the envelope carries no timestamp, or one that cannot be
+            parsed. An event with no event time cannot be ordered, and falling
+            back to the clock would silently reintroduce arrival-order
+            semantics — so the handler fails and the message is redelivered or
+            dead-lettered rather than corrupting state.
+    """
+    raw = event_data.get("timestamp")
+    if isinstance(raw, datetime):
+        parsed = raw
+    elif isinstance(raw, str) and raw:
+        try:
+            parsed = _parse_ts(raw)
+        except ValueError as exc:
+            raise ValueError(f"event envelope carries an unparseable timestamp: {raw!r}") from exc
+    else:
+        raise ValueError("event envelope carries no timestamp; the write cannot be ordered")
+
+    # The envelope declares UTC ISO 8601; a naive value is UTC that lost its suffix.
+    return parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed
+
+
 async def handle_ticket_created(event_data: dict, session, producer=None) -> None:
     """Handle incoming ticket creation request.
 
@@ -153,6 +178,16 @@ async def handle_ticket_updated(event_data: dict, session, producer=None) -> Non
 
     Validates transition legality, updates DB, publishes ticket.updated.
     On resolution, also publishes ticket.resolved.
+
+    The status write carries an event-time sequence guard on
+    `tickets.last_event_at` (envelope timestamp, migration 0020): delivery is
+    unordered, so a later-arriving older event must not overwrite state a newer
+    one already wrote. `is_valid_transition` stays as request validation — it
+    rejects illegal transitions, not stale ones. `updated_at` is processing
+    time and deliberately not the guard column. When the guarded write matches
+    zero rows the event is stale: bridge links still apply (additive and
+    idempotent, so convergence needs them), but escalation removal and every
+    publish are skipped — a dropped write must not re-announce the old status.
     """
     payload = event_data.get("payload", {})
     ticket_id = event_data.get("entity_id", "")
@@ -161,6 +196,7 @@ async def handle_ticket_updated(event_data: dict, session, producer=None) -> Non
     waiting_reason = payload.get("waiting_reason")
     task_ids = payload.get("task_ids", [])
     alert_ids = payload.get("alert_ids", [])
+    event_at = _event_time(event_data)
     now = datetime.now(tz=UTC)
 
     # Fetch current status
@@ -184,12 +220,18 @@ async def handle_ticket_updated(event_data: dict, session, producer=None) -> Non
         return
 
     # Build UPDATE
-    set_clauses = ["status = :new_status", "updated_at = :updated_at", "last_event_id = :event_id"]
+    set_clauses = [
+        "status = :new_status",
+        "updated_at = :updated_at",
+        "last_event_id = :event_id",
+        "last_event_at = :event_at",
+    ]
     params: dict = {
         "ticket_id": ticket_id,
         "new_status": new_status,
         "updated_at": now,
         "event_id": event_data.get("event_id", ""),
+        "event_at": event_at,
     }
 
     if new_priority is not None:
@@ -202,10 +244,15 @@ async def handle_ticket_updated(event_data: dict, session, producer=None) -> Non
     elif new_status != "waiting":
         set_clauses.append("waiting_reason = NULL")
 
-    await session.execute(
-        sa.text(f"UPDATE tickets SET {', '.join(set_clauses)} WHERE ticket_id = :ticket_id"),
+    update_result = await session.execute(
+        sa.text(
+            f"UPDATE tickets SET {', '.join(set_clauses)} "
+            "WHERE ticket_id = :ticket_id "
+            "  AND (last_event_at IS NULL OR last_event_at < :event_at)"
+        ),
         params,
     )
+    stale = update_result.rowcount == 0
 
     # Link new tasks/alerts
     for tid in task_ids:
@@ -227,6 +274,15 @@ async def handle_ticket_updated(event_data: dict, session, producer=None) -> Non
             ),
             {"ticket_id": ticket_id, "alert_id": aid, "linked_at": now},
         )
+
+    if stale:
+        log.info(
+            "stale_ticket_update_dropped",
+            ticket_id=ticket_id,
+            target=new_status,
+            event_at=event_at.isoformat(),
+        )
+        return
 
     # Remove escalation tracking on resolution or in_progress (claimed)
     if new_status in ("resolved", "in_progress"):
@@ -270,14 +326,17 @@ async def handle_ticket_updated(event_data: dict, session, producer=None) -> Non
             }
             await producer.publish("ocean.tickets", resolved_event)
 
-            # Dual-publish outcome.recorded to ocean.outcomes
+            # Dual-publish outcome.recorded to ocean.outcomes. The source event's
+            # timestamp passes through untouched, matching the other four outcome
+            # relays: 3.1's sequence guard in graph-projection compares this field,
+            # and processing time here would poison it (arrival order, Caveat A).
             outcome_event = build_outcome_event(
                 entity_type="ticket",
                 entity_id=ticket_id,
                 resolution_type="resolved",
                 resolved_by=payload.get("actor_id", "system"),
                 correlation_id=event_data.get("correlation_id", ""),
-                timestamp=now.isoformat(),
+                timestamp=event_data.get("timestamp"),
             )
             await producer.publish("ocean.outcomes", outcome_event)
 

@@ -49,9 +49,10 @@ ORDER_DEPENDENT = "Order-dependent"
 class _Result:
     """Stands in for a SQLAlchemy Result over the handful of accessors the handlers use."""
 
-    def __init__(self, value: Any = None, row: Any = None) -> None:
+    def __init__(self, value: Any = None, row: Any = None, rowcount: int = 1) -> None:
         self._value = value
         self._row = row
+        self.rowcount = rowcount
 
     def scalar_one_or_none(self) -> Any:
         return self._value
@@ -80,7 +81,15 @@ class RecordingSession:
         self.statements.append((sql, params))
 
         if sql.startswith("UPDATE tickets SET") and "status = :new_status" in sql:
+            # Model the event-time sequence guard the way Postgres evaluates it:
+            # a write whose event time is not strictly newer updates zero rows.
+            guarded = "last_event_at IS NULL OR last_event_at < :event_at" in sql
+            last_event_at = self.rows.get("ticket_last_event_at")
+            if guarded and last_event_at is not None and params["event_at"] <= last_event_at:
+                return _Result(rowcount=0)
             self.rows["ticket_status"] = params["new_status"]
+            if guarded:
+                self.rows["ticket_last_event_at"] = params["event_at"]
             return _Result()
         if sql.startswith("SELECT status FROM tickets"):
             return _Result(value=self.rows.get("ticket_status"))
@@ -357,45 +366,57 @@ class TestTicketCreationIsOrderTolerant:
 # ---------------------------------------------------------------------------
 
 
-class TestTicketUpdatedIsOrderDependent:
-    """`ticket.update.requested` / `ticket.updated` — reads `status`, writes `status`, no guard."""
+class TestTicketUpdatedIsGuardedOnEventTime:
+    """`ticket.update.requested` / `ticket.updated` — event-time sequence guard, task 3.7.
 
-    async def _drive(self, statuses: list[str]) -> tuple[RecordingSession, RecordingProducer]:
+    The status write carries a monotonic predicate on `tickets.last_event_at`, populated from
+    the envelope `timestamp` (migration 0020). `is_valid_transition` stays as request
+    validation; ordering protection comes from the guard. Each event below carries the
+    timestamp of its lifecycle position, so "reversed" means the same events delivered
+    backwards — not a different history.
+    """
+
+    async def _drive(self, events: list[tuple[str, str]]) -> tuple[RecordingSession, RecordingProducer]:
         from src.handlers.tickets import handle_ticket_updated
 
         session = RecordingSession(ticket_status="open")
         producer = RecordingProducer()
-        for index, status in enumerate(statuses):
-            event = _event(
-                "ticket.update.requested",
-                "ticket-3-6",
-                f"2026-03-11T1{index}:00:00Z",
-                new_status=status,
-            )
+        for status, timestamp in events:
+            event = _event("ticket.update.requested", "ticket-3-6", timestamp, new_status=status)
             await handle_ticket_updated(event, session, producer=producer)
         return session, producer
 
-    async def test_the_status_write_carries_no_sequence_guard(self):
-        session, _producer = await self._drive(["in_progress"])
-        (sql, _params) = session.sql_matching("UPDATE tickets SET")[0]
-        assert "WHERE ticket_id = :ticket_id" in sql
-        assert "updated_at <" not in sql, "no monotonic predicate on the status write"
+    async def test_the_status_write_carries_an_event_time_sequence_guard(self):
+        session, _producer = await self._drive([("in_progress", "2026-03-11T10:00:00Z")])
+        (sql, params) = session.sql_matching("UPDATE tickets SET")[0]
+        assert "last_event_at IS NULL OR last_event_at < :event_at" in sql
+        assert "updated_at <" not in sql, "processing time must never be the guard column (Caveat A)"
+        assert params["event_at"].isoformat() == "2026-03-11T10:00:00+00:00"
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="order-dependent: needs an event-time sequence guard on the ticket status write (HANDOFF task 3.7)",
-    )
     async def test_reversed_lifecycle_reaches_the_same_terminal_status(self):
-        """`event-delivery`: out-of-order delivery must reach the state in-order delivery reaches."""
-        in_order, _ = await self._drive(["in_progress", "resolved"])
-        reversed_order, _ = await self._drive(["resolved", "in_progress"])
+        """`event-delivery`: out-of-order delivery must reach the state in-order delivery reaches.
+
+        `waiting ↔ in_progress` are both legal, so before 3.7 the terminal status inside the
+        working states was whichever event was processed last. The guard drops the stale one.
+        """
+        lifecycle = [("waiting", "2026-03-11T10:00:00Z"), ("in_progress", "2026-03-11T11:00:00Z")]
+        in_order, _ = await self._drive(lifecycle)
+        reversed_order, _ = await self._drive(list(reversed(lifecycle)))
+        assert in_order.rows["ticket_status"] == "in_progress"
         assert reversed_order.rows["ticket_status"] == in_order.rows["ticket_status"]
+
+    async def test_a_stale_event_publishes_nothing(self):
+        """A dropped write must not re-announce the old status downstream (blast radius: slack-bot)."""
+        lifecycle = [("waiting", "2026-03-11T10:00:00Z"), ("in_progress", "2026-03-11T11:00:00Z")]
+        _, producer = await self._drive(list(reversed(lifecycle)))
+        announced = [event["payload"]["status"] for _topic, event in producer.published]
+        assert announced == ["in_progress"], "the stale `waiting` event must not be published"
 
     async def test_a_late_earlier_event_does_not_overwrite_a_resolved_ticket(self):
         """`resolved` is a sink in VALID_TRANSITIONS, so the terminal state alone is protected.
 
-        This is the one thing the state machine does buy, and it is worth recording: the guard
-        task 3.7 adds is about the working states, not about resurrecting a resolved ticket.
+        Before 3.7 this was the one thing the state machine bought; the guard now enforces the
+        same outcome one layer lower.
         """
         from src.handlers.tickets import handle_ticket_updated
 
@@ -410,21 +431,19 @@ class TestTicketUpdatedIsOrderDependent:
         )
         assert session.rows["ticket_status"] == "resolved"
 
-    async def test_the_transition_check_is_not_a_sequence_guard(self):
-        """It rejects illegal transitions, which is not the same as rejecting stale ones.
+    async def test_an_early_resolved_event_is_still_dropped_by_the_legality_check(self):
+        """Characterisation, not endorsement: a `resolved` that outruns its `in_progress` is lost.
 
-        `waiting → in_progress` is legal in both directions, so the state machine offers no
-        protection at all against a reordered pair inside the working states.
+        From `open`, `resolved` is an illegal transition, so the legality check drops it before
+        the guarded write is ever attempted — the same precondition-drop class as Finding 2. A
+        sequence guard cannot fix an event whose precondition has not arrived; that treatment
+        (park or redeliver, against 6.3's DLQ design) is task 3.8's, and this pin changes when
+        it is extended here.
         """
-        forward, _ = await self._drive(["waiting", "in_progress"])
-        backward, _ = await self._drive(["in_progress", "waiting"])
-        assert forward.rows["ticket_status"] != backward.rows["ticket_status"]
+        lifecycle = [("in_progress", "2026-03-11T10:00:00Z"), ("resolved", "2026-03-11T11:00:00Z")]
+        reversed_order, _ = await self._drive(list(reversed(lifecycle)))
+        assert reversed_order.rows["ticket_status"] == "in_progress", "the early resolved event is silently lost today"
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="the ticket outcome relay stamps processing time, poisoning the event-time guard in 3.1 "
-        "(HANDOFF task 3.7)",
-    )
     async def test_the_ticket_outcome_relay_carries_event_time(self):
         from src.handlers.tickets import handle_ticket_updated
 

@@ -22,7 +22,7 @@ marker turns red until it is removed.
 | `connector.heartbeat` | `handle_connector_heartbeat` | Order-tolerant | Order-tolerant by erasure: `last_seen` is written as `now()` at processing time and the event's own timestamp is never read, so a stale heartbeat cannot rewind liveness. The single write is the whole effect. Caveat B. |
 | `ticket.create.requested` | `handle_ticket_created` | Order-tolerant | Reads no ticket state. Each event writes its own row under a fresh `uuid4`, so no two deliveries contend. Caveat C. |
 | `ticket.created` | `handle_ticket_created` | Order-tolerant | Same handler, same reasoning — but this key should not exist at all: see Finding 3. |
-| `ticket.update.requested` | `handle_ticket_updated` | Order-dependent | **Finding 1.** Reads `status`, writes `status`, no predicate on the write. |
+| `ticket.update.requested` | `handle_ticket_updated` | Order-dependent | **Finding 1 — guard landed (task 3.7).** The status write now carries an event-time guard on `tickets.last_event_at` (migration 0020), which closes the working-state races. What remains is a precondition drop, Finding 2's class: a `resolved` that outruns its `in_progress` is rejected by the legality check and lost. |
 | `ticket.updated` | `handle_ticket_updated` | Order-dependent | Same handler. Reached only by control-plane's own echo, which carries no `new_status` and is therefore dropped — but the verdict follows the handler, not the path. |
 | `ticket.rma.requested` | `handle_rma_requested` | Order-dependent | **Finding 2.** Returns silently when its ticket row is absent; the message is then acknowledged and the RMA is lost. |
 | `return.updated` | `handle_return_status_update` | Order-dependent | **Finding 2.** Same shape: no `returns` row yet means no `ticket.rma.status` is ever emitted for that milestone. |
@@ -38,7 +38,17 @@ handler in this service wrote within the same delivery.
 
 ## Findings
 
-### Finding 1 — `handle_ticket_updated` is order-dependent (proposed task 3.7)
+### Finding 1 — `handle_ticket_updated` is order-dependent (task 3.7 — guard landed)
+
+**Status: the sequence guard and the outcome-relay fix shipped with task 3.7.** The status write
+is guarded on `tickets.last_event_at`, populated from the envelope `timestamp` (migration 0020);
+a stale write updates zero rows and skips escalation removal and every publish, while bridge
+links still apply (additive and idempotent). `build_outcome_event` now passes the source event's
+`timestamp` through, matching the other four relays. What 3.7 does **not** fix is the
+precondition drop: from `open`, a `resolved` that arrives before its `in_progress` is rejected
+by `is_valid_transition` before the guarded write is attempted, and the resolution is lost —
+Finding 2's class, needing 3.8's park-or-redeliver treatment, which is why the verdict stays
+Order-dependent. The original analysis follows.
 
 `tickets.py:167` reads the current status, `tickets.py:205` writes the new one. The only thing
 between them is `is_valid_transition`, which is a legality check, not a sequence guard.
@@ -122,8 +132,10 @@ pattern will encode the cycle into the new transport.
 
 ## How this was verified
 
-`services/control-plane/tests/test_ordering_verdicts.py` — 25 tests: 22 green, 3
-`xfail(strict=True)`, one per finding. The handlers' only state
+`services/control-plane/tests/test_ordering_verdicts.py` — 26 tests: 25 green, 1
+`xfail(strict=True)` (Finding 3; Findings 1's markers were removed when task 3.7 landed the
+guard, and Finding 2's residual case is pinned as a passing characterisation test). The
+handlers' only state
 input is what they read back from `session`, so the tests drive the real handler functions against
 a recording session double that models the four rows they actually read, and compare final state
 and emitted events between in-order and reversed delivery.
@@ -137,9 +149,6 @@ Keep `--all-packages`. Without it, uv re-resolves the shared workspace venv down
 project's own dependency set, which drops `fastmcp` and leaves `task typecheck` red on an
 otherwise clean tree until the next `uv sync --all-packages`.
 
-These tests do not run in `task check`: ocean's services are outside `TESTED_PATHS` because their
-tests import `from src.X` and resolve only when pytest runs from inside each service directory
-(task 1.4, DNA-779). Ten of control-plane's pre-existing unit tests are red for an unrelated
-reason — `AsyncMock` returns a coroutine from `result.fetchone()`, which `handlers/alerts.py:39`
-and one ticket test then dereference. That rot is what an untested service scope produces, and it
-is worth knowing before task 5.4 leans on those tests.
+Since task 4.14, `task test` runs every ocean service suite (one pytest process per service), so
+these tests are in CI. The ten pre-existing `AsyncMock`-rot failures this note originally
+recorded have since been fixed; the control-plane suite is green as of task 3.7.
