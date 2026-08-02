@@ -4,6 +4,7 @@ Revision ID: 0014
 Revises: 0013
 Create Date: 2026-03-15
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
@@ -31,11 +32,7 @@ def upgrade() -> None:
             """
         )
     )
-    op.execute(
-        sa.text(
-            "CREATE INDEX ix_simulations_completed_at ON simulations(completed_at DESC)"
-        )
-    )
+    op.execute(sa.text("CREATE INDEX ix_simulations_completed_at ON simulations(completed_at DESC)"))
 
 
 def downgrade() -> None:

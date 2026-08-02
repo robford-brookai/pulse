@@ -5,20 +5,20 @@ calls the ZCC outbound call API (dispatch_zcc_outbound_call). The call includes
 the task_id in user_data for engagement correlation. Dispatch is stubbed when
 PHI_STORE_URL is not configured, but the call is always made.
 """
+
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch, call as mock_call
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from utils import setup_service
 
 setup_service("slack-bot")
 
-import src.bolt_app as _bolt_app_mod  # noqa: E402
-import src.zcc_dispatch as _zcc_dispatch_mod  # noqa: E402
-from src.bolt_app import handle_outreach_approve, set_publisher, set_session_maker  # noqa: E402
-from src.zcc_dispatch import dispatch_zcc_outbound_call  # noqa: E402
+import src.bolt_app as _bolt_app_mod
+import src.zcc_dispatch as _zcc_dispatch_mod
+from src.bolt_app import handle_outreach_approve, set_publisher, set_session_maker
+from src.zcc_dispatch import dispatch_zcc_outbound_call
 
 
 def _body(draft_id: str = "draft-001") -> dict:
@@ -65,9 +65,7 @@ async def test_dispatch_called_with_task_id_in_user_data():
 
     dispatch_mock.assert_awaited_once()
     _, kwargs = dispatch_mock.call_args
-    assert kwargs.get("task_id") == "task-corr-001", (
-        f"Expected task_id='task-corr-001' in dispatch call, got: {kwargs}"
-    )
+    assert kwargs.get("task_id") == "task-corr-001", f"Expected task_id='task-corr-001' in dispatch call, got: {kwargs}"
 
 
 @pytest.mark.asyncio
@@ -76,9 +74,7 @@ async def test_dispatch_called_with_agent_user_id():
     mock_session = AsyncMock()
     mock_session.__aenter__ = AsyncMock(return_value=mock_session)
     mock_session.__aexit__ = AsyncMock(return_value=False)
-    mock_session.execute = AsyncMock(
-        return_value=MagicMock(fetchone=MagicMock(return_value=_make_row()))
-    )
+    mock_session.execute = AsyncMock(return_value=MagicMock(fetchone=MagicMock(return_value=_make_row())))
     mock_session.commit = AsyncMock()
 
     set_session_maker(MagicMock(return_value=mock_session))
@@ -104,7 +100,6 @@ async def test_dispatch_called_with_agent_user_id():
 @pytest.mark.asyncio
 async def test_zcc_dispatch_function_sends_make_call_action():
     """dispatch_zcc_outbound_call POSTs 'make_call' action with task_id in user_data."""
-    import httpx
 
     captured_json: list[dict] = []
 

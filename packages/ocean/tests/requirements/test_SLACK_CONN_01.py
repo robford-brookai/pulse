@@ -6,6 +6,7 @@ Verifies:
 - main.py contains auth_test call
 - handle_task_created posts to correct channel based on severity
 """
+
 from __future__ import annotations
 
 import importlib

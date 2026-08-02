@@ -4,18 +4,18 @@ Requirement: When a task.created event is processed, the system fetches graph
 context (signals + alerts) for the patient via Hasura and generates a 1-2
 sentence clinical summary using Claude (claude-sonnet-4-6).
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from utils import setup_service
 
 setup_service("slack-bot")
 
-import src.ai_summary as _ai_summary_mod  # noqa: E402
-from src.ai_summary import generate_summary_with_context  # noqa: E402
+import src.ai_summary as _ai_summary_mod
+from src.ai_summary import generate_summary_with_context
 
 
 @pytest.mark.asyncio

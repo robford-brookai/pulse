@@ -4,13 +4,14 @@ Sourced from test/cat6_business_logic.py. The 4 event-type mapping tests
 are omitted (covered by tests/requirements/test_INGEST_02.py).
 This file covers the unique duration/disposition payload assertion.
 """
+
 from __future__ import annotations
 
 from utils import setup_service
 
 setup_service("zcc-connector")
 
-from src.normalizer import normalize_zcc_event  # noqa: E402
+from src.normalizer import normalize_zcc_event
 
 
 def _zcc_payload(event_name: str, engagement_id: str = "eng-001") -> dict:

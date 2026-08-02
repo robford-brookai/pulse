@@ -5,6 +5,7 @@ handle_ticket_updated: Validates state transitions, publishes state change event
 handle_rma_requested: Looks up patient data, calls Impilo create_rma, publishes result.
 handle_return_status_update: Filters milestone statuses, publishes ticket.rma.status.
 """
+
 from __future__ import annotations
 
 import os
@@ -59,9 +60,7 @@ async def handle_ticket_created(event_data: dict, session, producer=None) -> Non
 
     # Generate human-readable ID from per-category sequence
     prefix = CATEGORY_PREFIXES.get(category, "TKT")
-    seq_result = await session.execute(
-        sa.text(f"SELECT nextval('ticket_seq_{category}')")
-    )
+    seq_result = await session.execute(sa.text(f"SELECT nextval('ticket_seq_{category}')"))
     seq_val = seq_result.scalar_one()
     human_id = f"{prefix}-{seq_val:05d}"
 
@@ -204,9 +203,7 @@ async def handle_ticket_updated(event_data: dict, session, producer=None) -> Non
         set_clauses.append("waiting_reason = NULL")
 
     await session.execute(
-        sa.text(
-            f"UPDATE tickets SET {', '.join(set_clauses)} WHERE ticket_id = :ticket_id"
-        ),
+        sa.text(f"UPDATE tickets SET {', '.join(set_clauses)} WHERE ticket_id = :ticket_id"),
         params,
     )
 
@@ -289,9 +286,7 @@ async def handle_ticket_updated(event_data: dict, session, producer=None) -> Non
 # RMA handlers (Phase 19)
 # ---------------------------------------------------------------------------
 
-MILESTONE_STATUSES = frozenset(
-    ["label_created", "shipped", "received", "inspected", "completed"]
-)
+MILESTONE_STATUSES = frozenset(["label_created", "shipped", "received", "inspected", "completed"])
 
 
 async def handle_rma_requested(event_data: dict, session, producer=None) -> None:
@@ -309,9 +304,7 @@ async def handle_rma_requested(event_data: dict, session, producer=None) -> None
 
     # Look up ticket to get patient_id and validate category
     result = await session.execute(
-        sa.text(
-            "SELECT patient_id, category FROM tickets WHERE ticket_id = :ticket_id"
-        ),
+        sa.text("SELECT patient_id, category FROM tickets WHERE ticket_id = :ticket_id"),
         {"ticket_id": ticket_id},
     )
     row = result.fetchone()
@@ -332,11 +325,7 @@ async def handle_rma_requested(event_data: dict, session, producer=None) -> None
 
     # Look up order_id from fulfillments
     ful_result = await session.execute(
-        sa.text(
-            "SELECT order_id FROM fulfillments "
-            "WHERE patient_id = :patient_id "
-            "ORDER BY created_at DESC LIMIT 1"
-        ),
+        sa.text("SELECT order_id FROM fulfillments WHERE patient_id = :patient_id ORDER BY created_at DESC LIMIT 1"),
         {"patient_id": patient_id},
     )
     order_id = ful_result.scalar_one_or_none()
@@ -344,8 +333,7 @@ async def handle_rma_requested(event_data: dict, session, producer=None) -> None
     # Look up device_id from device_associations
     dev_result = await session.execute(
         sa.text(
-            "SELECT device_id FROM device_associations "
-            "WHERE patient_id = :patient_id AND status = 'active' LIMIT 1"
+            "SELECT device_id FROM device_associations WHERE patient_id = :patient_id AND status = 'active' LIMIT 1"
         ),
         {"patient_id": patient_id},
     )

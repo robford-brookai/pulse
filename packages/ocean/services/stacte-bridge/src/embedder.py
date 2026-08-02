@@ -3,6 +3,7 @@
 Converts entity rows into searchable text and embeds them using voyage-3
 (1024-dimensional vectors). Processes in batches of 128 for efficiency.
 """
+
 from __future__ import annotations
 
 import os
@@ -23,7 +24,8 @@ def _get_client():
     """Return the VoyageAI async client (lazy import to avoid hard dep at test time)."""
     global _client
     if _client is None:
-        import voyageai  # noqa: PLC0415
+        import voyageai
+
         api_key = os.environ.get("VOYAGE_API_KEY", "")
         _client = voyageai.AsyncClient(api_key=api_key)
     return _client

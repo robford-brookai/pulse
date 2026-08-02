@@ -1,4 +1,5 @@
 """Tests for HubSpot webhook receiver — signature verification, event routing."""
+
 from __future__ import annotations
 
 import hashlib

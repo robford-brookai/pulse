@@ -4,6 +4,7 @@ Leader election via Postgres advisory locks ensures only one replica
 actively watches MongoDB collections.  Standby replicas poll the lock
 every 5 seconds and promote automatically when the leader drops.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -35,9 +36,7 @@ _STANDBY_POLL_SECONDS = 5
 _TOKEN_STALENESS_THRESHOLD = 60
 
 # SQL to fetch the most recent resume-token update timestamp.
-_LATEST_TOKEN_SQL = text(
-    "SELECT MAX(updated_at) FROM cdc_resume_tokens"
-)
+_LATEST_TOKEN_SQL = text("SELECT MAX(updated_at) FROM cdc_resume_tokens")
 
 
 @asynccontextmanager
@@ -54,9 +53,7 @@ async def lifespan(app: FastAPI):
     # Validate against registry — fail fast on typos.
     unknown = set(collections_list) - set(TRANSFORMER_REGISTRY.keys())
     if unknown:
-        raise ValueError(
-            f"WATCH_COLLECTIONS contains unknown collection(s): {sorted(unknown)}"
-        )
+        raise ValueError(f"WATCH_COLLECTIONS contains unknown collection(s): {sorted(unknown)}")
 
     # ---- Motor (MongoDB) ----
     mongo_client = motor.motor_asyncio.AsyncIOMotorClient(mongodb_uri)

@@ -3,6 +3,7 @@
 Polls an SQS queue, unwraps SNS envelopes, normalizes Impilo payloads,
 and publishes to Redpanda. Feature-flagged by SQS_QUEUE_URL env var.
 """
+
 from __future__ import annotations
 
 import asyncio

@@ -1,4 +1,5 @@
 """Graph projection handlers for signal events."""
+
 from __future__ import annotations
 
 from datetime import datetime

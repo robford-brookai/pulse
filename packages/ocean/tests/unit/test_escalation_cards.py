@@ -3,6 +3,7 @@
 Verifies services/slack-bot/src/cards.py contains escalation card
 builders and the escalated parameter on alert_card and ticket_card.
 """
+
 import re
 from pathlib import Path
 
@@ -34,9 +35,7 @@ def test_alert_card_escalated_parameter():
     # Find the def alert_card( block and check escalated appears before the closing )
     match = re.search(r"def alert_card\([^)]+\)", src, re.DOTALL)
     assert match, "alert_card function not found"
-    assert "escalated" in match.group(0), (
-        "alert_card must accept 'escalated' parameter"
-    )
+    assert "escalated" in match.group(0), "alert_card must accept 'escalated' parameter"
 
 
 def test_ticket_card_escalated_parameter():
@@ -44,9 +43,7 @@ def test_ticket_card_escalated_parameter():
     src = _source()
     match = re.search(r"def ticket_card\([^)]+\)", src, re.DOTALL)
     assert match, "ticket_card function not found"
-    assert "escalated" in match.group(0), (
-        "ticket_card must accept 'escalated' parameter"
-    )
+    assert "escalated" in match.group(0), "ticket_card must accept 'escalated' parameter"
 
 
 def test_escalated_badge_text():

@@ -6,6 +6,7 @@ Verifies:
 - interaction_id is NULL (nullable per migration 0014)
 - graph-projection consumer.py EVENT_HANDLERS contains "outcome.recorded"
 """
+
 from __future__ import annotations
 
 import ast
@@ -86,9 +87,7 @@ class TestOutcomeRecordedSourceInspection:
 
     def test_consumer_has_outcome_recorded_handler(self):
         keys = _parse_event_handler_keys(CONSUMER_PATH)
-        assert "outcome.recorded" in keys, (
-            "EVENT_HANDLERS must contain 'outcome.recorded' key"
-        )
+        assert "outcome.recorded" in keys, "EVENT_HANDLERS must contain 'outcome.recorded' key"
 
     def test_handler_file_contains_handle_outcome_recorded(self):
         source = HANDLER_PATH.read_text()

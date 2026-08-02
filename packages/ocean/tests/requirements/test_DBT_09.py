@@ -1,9 +1,18 @@
 """DBT-09: dbt test asserts Ocean mart models contain no columns from PHI-adjacent source tables."""
+
 from __future__ import annotations
 
 from pathlib import Path
 
-PHI_TEST_FILE = Path(__file__).resolve().parents[2] / ".repos" / "streamline" / "dbt_project" / "tests" / "ocean" / "assert_ocean_no_phi_sources.sql"
+PHI_TEST_FILE = (
+    Path(__file__).resolve().parents[2]
+    / ".repos"
+    / "streamline"
+    / "dbt_project"
+    / "tests"
+    / "ocean"
+    / "assert_ocean_no_phi_sources.sql"
+)
 MART_DIR = Path(__file__).resolve().parents[2] / ".repos" / "streamline" / "dbt_project" / "models" / "ocean" / "marts"
 
 

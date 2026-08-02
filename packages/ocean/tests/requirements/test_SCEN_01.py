@@ -4,6 +4,7 @@ Requirement: The smoke_test scenario has 50 patients, all anomalous signals
 carry severity_hint CRITICAL for deterministic approve path, and compression_ratio
 keeps the scenario under 2 minutes wall-clock time.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -16,7 +17,8 @@ _SCENARIO_PATH = _SIM_DRIVER / "scenarios" / "smoke_test.yaml"
 
 # Import models from sim-driver without polluting sys.path
 _spec = importlib.util.spec_from_file_location(
-    "sim_driver_models", _SIM_DRIVER / "src" / "models.py",
+    "sim_driver_models",
+    _SIM_DRIVER / "src" / "models.py",
 )
 _mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
@@ -64,11 +66,7 @@ def test_anomalous_signals_are_critical():
 def test_compression_ratio_under_two_minutes():
     """With compression_ratio 720, max sim_hour 0.3 -> 0.3*3600/720 = 1.5s."""
     scenario = _load_scenario()
-    max_sim_hour = max(
-        signal.sim_hour
-        for patient in scenario.patients
-        for signal in patient.signals
-    )
+    max_sim_hour = max(signal.sim_hour for patient in scenario.patients for signal in patient.signals)
     wall_seconds = max_sim_hour * 3600 / scenario.compression_ratio
     assert wall_seconds < 120, f"Scenario would take {wall_seconds:.1f}s, exceeds 2 min"
 

@@ -6,6 +6,7 @@ to avoid importing each service with its full dependency tree.
 
 No Docker required.
 """
+
 from __future__ import annotations
 
 import pathlib
@@ -45,18 +46,14 @@ class TestHealthEndpoints:
     def test_health_route_defined(self, service: str):
         """Service main.py must define a /health GET route."""
         source = _read_main_source(service)
-        assert '"/health"' in source or "'/health'" in source, (
-            f"Service {service}: no /health route found in main.py"
-        )
+        assert '"/health"' in source or "'/health'" in source, f"Service {service}: no /health route found in main.py"
 
     @pytest.mark.parametrize("service", _SERVICES)
     def test_health_returns_status_ok(self, service: str):
         """Service /health route must return a response containing 'ok'."""
         source = _read_main_source(service)
         # All services return {"status": "ok", ...}
-        assert '"ok"' in source or "'ok'" in source, (
-            f"Service {service}: /health response does not contain 'ok'"
-        )
+        assert '"ok"' in source or "'ok'" in source, f"Service {service}: /health response does not contain 'ok'"
 
     @pytest.mark.parametrize("service", _OPTIONAL_SERVICES)
     def test_optional_service_health(self, service: str):
@@ -65,6 +62,4 @@ class TestHealthEndpoints:
         if not service_dir.exists():
             pytest.skip(f"Optional service {service} not present")
         source = _read_main_source(service)
-        assert '"/health"' in source or "'/health'" in source, (
-            f"Optional service {service}: no /health route found"
-        )
+        assert '"/health"' in source or "'/health'" in source, f"Optional service {service}: no /health route found"

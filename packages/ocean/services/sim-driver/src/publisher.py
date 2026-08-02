@@ -1,4 +1,5 @@
 """Redpanda publisher for sim-driver synthetic events."""
+
 from __future__ import annotations
 
 import asyncio

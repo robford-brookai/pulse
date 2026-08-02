@@ -3,6 +3,7 @@
 Source-inspection + unit tests for scripts/demo.py.
 Verifies health polling, scenario triggering, completion detection, and banner output.
 """
+
 from __future__ import annotations
 
 import sys
@@ -112,9 +113,8 @@ async def test_wait_for_health_timeout(demo_module):
 
     services = {"svc1": "http://localhost:9999/health"}
 
-    with patch("demo.httpx.AsyncClient", return_value=mock_client):
-        with pytest.raises(TimeoutError, match="svc1"):
-            await demo_module.wait_for_health(services, timeout=1)
+    with patch("demo.httpx.AsyncClient", return_value=mock_client), pytest.raises(TimeoutError, match="svc1"):
+        await demo_module.wait_for_health(services, timeout=1)
 
 
 @pytest.mark.asyncio

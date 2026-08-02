@@ -5,17 +5,17 @@ is created in the operational graph with:
   - outcome_type: 'call_completed' or 'call_missed'
   - resolution_status: 'resolved' (completed) or 'no_contact' (missed)
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
 import pytest
-
 from utils import setup_service
 
 setup_service("graph-projection")
 
-from src.handlers.outcomes import handle_call_completed, handle_call_missed  # noqa: E402
+from src.handlers.outcomes import handle_call_completed, handle_call_missed
 
 
 def _call_event(event_type: str, disposition: str = "resolved") -> dict:
@@ -123,6 +123,4 @@ async def test_call_completed_outcome_id_is_deterministic():
     second_outcome_id = second_params.get("outcome_id")
 
     assert first_outcome_id is not None
-    assert first_outcome_id == second_outcome_id, (
-        "Outcome ID must be deterministic for idempotent re-processing"
-    )
+    assert first_outcome_id == second_outcome_id, "Outcome ID must be deterministic for idempotent re-processing"

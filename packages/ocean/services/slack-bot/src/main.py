@@ -2,6 +2,7 @@
 # This service is safe to build and test locally. Production deploy is blocked until BAA is in place.
 # Track BAA status: [link to Linear/Notion issue]
 """slack-bot FastAPI app — health endpoint, Slack bolt integration, background tasks."""
+
 from __future__ import annotations
 
 import asyncio
@@ -60,13 +61,10 @@ async def lifespan(app: FastAPI):
     from slack_sdk.web.async_client import AsyncWebClient
 
     from src import consumer as consumer_module
-    from src.bolt_app import bolt_handler
+    from src.bolt_app import bolt_handler, set_hasura_secret, set_publisher, set_session_maker
     from src.health_poller import poll_connector_health
-
-    from src.bolt_app import set_session_maker, set_publisher, set_hasura_secret
-    from src.slash_commands import set_slash_deps
     from src.publisher import RedpandaPublisher
-
+    from src.slash_commands import set_slash_deps
     from src.thread_manager import ThreadManager
 
     slack_client = AsyncWebClient(token=SLACK_BOT_TOKEN)
@@ -106,13 +104,15 @@ async def lifespan(app: FastAPI):
 
     consumer_task = asyncio.create_task(
         consumer_module.run_consumer(
-            slack_client, session_maker, REDPANDA_BROKERS, HASURA_URL,
-            publisher=publisher, thread_manager=thread_manager,
+            slack_client,
+            session_maker,
+            REDPANDA_BROKERS,
+            HASURA_URL,
+            publisher=publisher,
+            thread_manager=thread_manager,
         )
     )
-    poller_task = asyncio.create_task(
-        poll_connector_health(slack_client, OPS_SLACK_CHANNEL, session_maker)
-    )
+    poller_task = asyncio.create_task(poll_connector_health(slack_client, OPS_SLACK_CHANNEL, session_maker))
 
     log.info("slack_bot_started", brokers=REDPANDA_BROKERS, ops_channel=OPS_SLACK_CHANNEL)
     yield
@@ -132,7 +132,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="slack-bot", version="0.1.0", lifespan=lifespan)
 
 # Mount MCP server at /mcp (Phase 15 Plan 03)
-from src.mcp_server import create_mcp_app  # noqa: E402
+from src.mcp_server import create_mcp_app
 
 app.mount("/mcp", create_mcp_app())
 app.add_middleware(MCPApiKeyMiddleware)

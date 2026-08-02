@@ -1,4 +1,5 @@
 """Redpanda publisher for call-simulator events."""
+
 from __future__ import annotations
 
 import asyncio

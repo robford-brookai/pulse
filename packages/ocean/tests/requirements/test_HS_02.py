@@ -1,4 +1,5 @@
 """HS-02: HubSpot connector normalizes contact lifecycle events."""
+
 from pathlib import Path
 
 _ROOT = Path(__file__).parents[2]

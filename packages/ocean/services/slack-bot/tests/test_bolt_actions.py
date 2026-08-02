@@ -1,15 +1,15 @@
 """Tests for bolt_app action handlers: claim and resolve."""
+
 from __future__ import annotations
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_body(action_id: str, task_id: str = "task-abc123") -> dict:
     return {
@@ -29,6 +29,7 @@ def _make_mock_result(has_row: bool) -> MagicMock:
 # ---------------------------------------------------------------------------
 # handle_task_claim
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_claim_ack_called_first():
@@ -155,6 +156,7 @@ async def test_claim_duplicate_does_not_publish_event():
 # ---------------------------------------------------------------------------
 # handle_task_resolve
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_resolve_ack_called_first():

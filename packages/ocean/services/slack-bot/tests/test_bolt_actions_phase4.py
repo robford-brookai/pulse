@@ -1,14 +1,15 @@
 """Tests for Phase 4 Bolt action handlers: outreach approve and reject."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_body(action_id: str, draft_id: str = "draft-abc123") -> dict:
     return {
@@ -36,6 +37,7 @@ def _make_mock_result_with_row(row_data: dict | None) -> MagicMock:
 # ---------------------------------------------------------------------------
 # outreach_approve: ack first
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_outreach_approve_acks_first():
@@ -73,7 +75,16 @@ async def test_outreach_approve_acks_first():
 
     with patch("src.bolt_app.dispatch_zcc_outbound_call", new=AsyncMock(return_value={"stubbed": True})):
         with patch("src.bolt_app.publish_ai_event", new=AsyncMock()):
-            with patch.dict("os.environ", {"PHI_STORE_URL": "", "ZCC_ACCOUNT_ID": "", "ZCC_CLIENT_ID": "", "ZCC_CLIENT_SECRET": "", "ZCC_DEFAULT_QUEUE_ID": ""}):
+            with patch.dict(
+                "os.environ",
+                {
+                    "PHI_STORE_URL": "",
+                    "ZCC_ACCOUNT_ID": "",
+                    "ZCC_CLIENT_ID": "",
+                    "ZCC_CLIENT_SECRET": "",
+                    "ZCC_DEFAULT_QUEUE_ID": "",
+                },
+            ):
                 await handle_outreach_approve(
                     ack=tracking_ack,
                     body=_make_body("outreach_approve"),
@@ -86,6 +97,7 @@ async def test_outreach_approve_acks_first():
 # ---------------------------------------------------------------------------
 # outreach_approve: marks draft approved
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_outreach_approve_marks_draft_approved():
@@ -114,7 +126,16 @@ async def test_outreach_approve_marks_draft_approved():
 
     with patch("src.bolt_app.dispatch_zcc_outbound_call", new=AsyncMock(return_value={"stubbed": True})):
         with patch("src.bolt_app.publish_ai_event", new=AsyncMock()):
-            with patch.dict("os.environ", {"PHI_STORE_URL": "", "ZCC_ACCOUNT_ID": "", "ZCC_CLIENT_ID": "", "ZCC_CLIENT_SECRET": "", "ZCC_DEFAULT_QUEUE_ID": ""}):
+            with patch.dict(
+                "os.environ",
+                {
+                    "PHI_STORE_URL": "",
+                    "ZCC_ACCOUNT_ID": "",
+                    "ZCC_CLIENT_ID": "",
+                    "ZCC_CLIENT_SECRET": "",
+                    "ZCC_DEFAULT_QUEUE_ID": "",
+                },
+            ):
                 await handle_outreach_approve(
                     ack=AsyncMock(),
                     body=_make_body("outreach_approve", draft_id="draft-abc123"),
@@ -124,7 +145,7 @@ async def test_outreach_approve_marks_draft_approved():
     # The SQL should have been executed
     mock_session.execute.assert_awaited()
     sql_call = mock_session.execute.call_args_list[0]
-    sql_text = str(sql_call.args[0].text if hasattr(sql_call.args[0], 'text') else sql_call.args[0])
+    sql_text = str(sql_call.args[0].text if hasattr(sql_call.args[0], "text") else sql_call.args[0])
     assert "approved" in sql_text.lower()
     assert "ai_drafts" in sql_text.lower()
 
@@ -132,6 +153,7 @@ async def test_outreach_approve_marks_draft_approved():
 # ---------------------------------------------------------------------------
 # outreach_approve: publishes ai.output.approved
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_outreach_approve_publishes_ai_output_approved_event():
@@ -169,7 +191,16 @@ async def test_outreach_approve_publishes_ai_output_approved_event():
 
     with patch("src.bolt_app.dispatch_zcc_outbound_call", new=AsyncMock(return_value={"stubbed": True})):
         with patch("src.bolt_app.publish_ai_event", new=capture_publish_ai_event):
-            with patch.dict("os.environ", {"PHI_STORE_URL": "", "ZCC_ACCOUNT_ID": "", "ZCC_CLIENT_ID": "", "ZCC_CLIENT_SECRET": "", "ZCC_DEFAULT_QUEUE_ID": ""}):
+            with patch.dict(
+                "os.environ",
+                {
+                    "PHI_STORE_URL": "",
+                    "ZCC_ACCOUNT_ID": "",
+                    "ZCC_CLIENT_ID": "",
+                    "ZCC_CLIENT_SECRET": "",
+                    "ZCC_DEFAULT_QUEUE_ID": "",
+                },
+            ):
                 await handle_outreach_approve(
                     ack=AsyncMock(),
                     body=_make_body("outreach_approve", draft_id="draft-abc123"),
@@ -186,6 +217,7 @@ async def test_outreach_approve_publishes_ai_output_approved_event():
 # ---------------------------------------------------------------------------
 # outreach_reject: ack first
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_outreach_reject_acks_first():
@@ -229,6 +261,7 @@ async def test_outreach_reject_acks_first():
 # outreach_reject: marks draft rejected
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_outreach_reject_marks_draft_rejected():
     """UPDATE ai_drafts SET status='rejected' is executed when reject is pressed."""
@@ -258,7 +291,7 @@ async def test_outreach_reject_marks_draft_rejected():
 
     mock_session.execute.assert_awaited()
     sql_call = mock_session.execute.call_args_list[0]
-    sql_text = str(sql_call.args[0].text if hasattr(sql_call.args[0], 'text') else sql_call.args[0])
+    sql_text = str(sql_call.args[0].text if hasattr(sql_call.args[0], "text") else sql_call.args[0])
     assert "rejected" in sql_text.lower()
     assert "ai_drafts" in sql_text.lower()
 
@@ -266,6 +299,7 @@ async def test_outreach_reject_marks_draft_rejected():
 # ---------------------------------------------------------------------------
 # outreach_reject: publishes ai.output.rejected
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_outreach_reject_publishes_ai_output_rejected_event():
@@ -314,6 +348,7 @@ async def test_outreach_reject_publishes_ai_output_rejected_event():
 # outreach_draft_card structure
 # ---------------------------------------------------------------------------
 
+
 def test_outreach_draft_card_structure():
     """outreach_draft_card returns blocks with AI: header text and approve/reject actions."""
     from src.cards import outreach_draft_card
@@ -326,8 +361,9 @@ def test_outreach_draft_card_structure():
 
     # Must have section block with "AI: Outreach Draft"
     section_blocks = [b for b in blocks if b.get("type") == "section"]
-    assert any("AI: Outreach Draft" in b.get("text", {}).get("text", "") for b in section_blocks), \
+    assert any("AI: Outreach Draft" in b.get("text", {}).get("text", "") for b in section_blocks), (
         "No section block with 'AI: Outreach Draft' found"
+    )
 
     # Must have actions block with approve + reject buttons
     action_blocks = [b for b in blocks if b.get("type") == "actions"]
@@ -341,6 +377,7 @@ def test_outreach_draft_card_structure():
 # ---------------------------------------------------------------------------
 # alert_card AI label
 # ---------------------------------------------------------------------------
+
 
 def test_alert_card_ai_label():
     """alert_card with cited_signals uses 'AI:' label (not '🤖 AI Summary')."""

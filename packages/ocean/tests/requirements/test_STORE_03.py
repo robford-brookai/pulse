@@ -4,6 +4,7 @@ Verification: Writing N events then replaying (writing same N events again) prod
 no new rows thanks to ON CONFLICT DO NOTHING. This proves the event store is
 idempotent to replay.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -24,9 +25,7 @@ _EVENT_STORE = str(_ROOT / "services" / "event-store")
 
 
 def _load_writer():
-    spec = importlib.util.spec_from_file_location(
-        "writer", os.path.join(_EVENT_STORE, "src", "writer.py")
-    )
+    spec = importlib.util.spec_from_file_location("writer", os.path.join(_EVENT_STORE, "src", "writer.py"))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -49,16 +48,11 @@ async def writer_mod(postgres_container, event_store_tables, session_factory):
 
 @pytest_asyncio.fixture
 async def clean_tables(session_factory, event_store_tables):
-    async with session_factory() as session:
-        async with session.begin():
-            await session.execute(
-                sa.text("ALTER TABLE audit_log DISABLE TRIGGER audit_log_no_update_delete")
-            )
-            await session.execute(sa.text("DELETE FROM audit_log"))
-            await session.execute(
-                sa.text("ALTER TABLE audit_log ENABLE TRIGGER audit_log_no_update_delete")
-            )
-            await session.execute(sa.text("DELETE FROM events"))
+    async with session_factory() as session, session.begin():
+        await session.execute(sa.text("ALTER TABLE audit_log DISABLE TRIGGER audit_log_no_update_delete"))
+        await session.execute(sa.text("DELETE FROM audit_log"))
+        await session.execute(sa.text("ALTER TABLE audit_log ENABLE TRIGGER audit_log_no_update_delete"))
+        await session.execute(sa.text("DELETE FROM events"))
     yield
 
 

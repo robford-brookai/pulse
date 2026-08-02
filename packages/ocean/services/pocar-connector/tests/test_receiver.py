@@ -1,4 +1,5 @@
 """Tests for POCAR webhook receiver — signature validation and routing."""
+
 from __future__ import annotations
 
 import hashlib

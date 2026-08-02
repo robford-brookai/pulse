@@ -1,4 +1,5 @@
 """FastAPI router for POCAR webhook ingestion."""
+
 from __future__ import annotations
 
 import hashlib
@@ -55,28 +56,27 @@ async def receive_pocar_webhook(request: Request) -> dict:
 
     # Write audit_log row — only on successful Redpanda publish (DLQ path skips audit)
     session_maker = request.app.state.session_maker
-    async with session_maker() as session:
-        async with session.begin():
-            await session.execute(
-                sa.text(
-                    "INSERT INTO audit_log "
-                    "(audit_id, event_id, action_type, actor_id, source_system, "
-                    "entity_type, entity_id, timestamp, detail) "
-                    "VALUES "
-                    "(:audit_id, :event_id, :action_type, :actor_id, :source_system, "
-                    ":entity_type, :entity_id, :timestamp, :detail)"
-                ),
-                {
-                    "audit_id": str(uuid.uuid4()),
-                    "event_id": str(event.event_id),
-                    "action_type": "webhook_received",
-                    "actor_id": "system",
-                    "source_system": "pocar",
-                    "entity_type": event.entity_type,
-                    "entity_id": event.entity_id,
-                    "timestamp": datetime.now(tz=UTC),
-                    "detail": json.dumps({"event_type": event.event_type}),
-                },
-            )
+    async with session_maker() as session, session.begin():
+        await session.execute(
+            sa.text(
+                "INSERT INTO audit_log "
+                "(audit_id, event_id, action_type, actor_id, source_system, "
+                "entity_type, entity_id, timestamp, detail) "
+                "VALUES "
+                "(:audit_id, :event_id, :action_type, :actor_id, :source_system, "
+                ":entity_type, :entity_id, :timestamp, :detail)"
+            ),
+            {
+                "audit_id": str(uuid.uuid4()),
+                "event_id": str(event.event_id),
+                "action_type": "webhook_received",
+                "actor_id": "system",
+                "source_system": "pocar",
+                "entity_type": event.entity_type,
+                "entity_id": event.entity_id,
+                "timestamp": datetime.now(tz=UTC),
+                "detail": json.dumps({"event_type": event.event_type}),
+            },
+        )
 
     return {"status": "accepted", "event_id": str(event.event_id)}

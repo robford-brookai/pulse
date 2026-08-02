@@ -1,4 +1,5 @@
 """Tests for graph_search — N-hop neighborhood traversal."""
+
 from __future__ import annotations
 
 import pathlib

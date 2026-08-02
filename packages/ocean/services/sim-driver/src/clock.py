@@ -1,4 +1,5 @@
 """Time compression helper — maps simulated hours to wall-clock sleep durations."""
+
 from __future__ import annotations
 
 import asyncio

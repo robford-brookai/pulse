@@ -4,10 +4,10 @@ Publishes periodic connector.heartbeat events to ocean.ops so the
 control-plane can update connector_health and the slack-bot health
 poller can detect silent connectors.
 """
+
 from __future__ import annotations
 
 import asyncio
-import json
 from datetime import UTC, datetime
 from uuid import uuid4
 

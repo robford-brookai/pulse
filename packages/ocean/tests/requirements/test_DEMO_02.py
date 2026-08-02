@@ -4,6 +4,7 @@ Verifies pilot_demo.yaml has 10 patients with correct severity distribution,
 staggered sim_hours, proper patient_id pattern, and compression_ratio.
 Also validates Taskfile.yml demo task configuration.
 """
+
 from __future__ import annotations
 
 import re
@@ -86,9 +87,7 @@ def test_patient_id_pattern(scenario):
 
 def test_patient_id_range(scenario):
     """Patient IDs must span 001 to 010."""
-    numbers = sorted(
-        int(p["patient_id"].split("-")[-1]) for p in scenario["patients"]
-    )
+    numbers = sorted(int(p["patient_id"].split("-")[-1]) for p in scenario["patients"])
     assert numbers[0] == 1
     assert numbers[-1] == 10
     assert len(numbers) == 10

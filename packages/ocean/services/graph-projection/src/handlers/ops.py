@@ -1,4 +1,5 @@
 """Graph projection handlers for operational events (ocean.ops topic)."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -16,9 +17,7 @@ def _parse_ts(ts_str: str) -> datetime:
 async def handle_connector_heartbeat(event_data: dict, session) -> None:
     """Project connector.heartbeat — upsert connector_health with last_seen."""
     payload = event_data.get("payload", {})
-    connector_id = (
-        payload.get("connector_id") or event_data.get("source_system", "unknown")
-    )
+    connector_id = payload.get("connector_id") or event_data.get("source_system", "unknown")
     connector_name = payload.get("connector_name", connector_id)
     now = datetime.now(tz=UTC)
 

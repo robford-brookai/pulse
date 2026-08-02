@@ -1,10 +1,8 @@
 """Tests for decision pipeline, fallback, and event builders."""
+
 from __future__ import annotations
 
-import os
 from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
 
 from src.personas import Persona
 
@@ -46,58 +44,47 @@ def _alert_context(
 # Fallback tests
 # ---------------------------------------------------------------------------
 
+
 class TestDeterministicFallback:
     def test_critical_always_approves(self):
         from src.fallback import deterministic_fallback
 
-        action, confidence = deterministic_fallback(
-            _alert_context(severity="CRITICAL", signal_type="heart_rate")
-        )
+        action, confidence = deterministic_fallback(_alert_context(severity="CRITICAL", signal_type="heart_rate"))
         assert action == "approve"
         assert confidence == 1.0
 
     def test_urgent_glucose_approves(self):
         from src.fallback import deterministic_fallback
 
-        action, confidence = deterministic_fallback(
-            _alert_context(severity="URGENT", signal_type="glucose")
-        )
+        action, confidence = deterministic_fallback(_alert_context(severity="URGENT", signal_type="glucose"))
         assert action == "approve"
         assert confidence == 0.8
 
     def test_urgent_spo2_approves(self):
         from src.fallback import deterministic_fallback
 
-        action, confidence = deterministic_fallback(
-            _alert_context(severity="URGENT", signal_type="spo2")
-        )
+        action, confidence = deterministic_fallback(_alert_context(severity="URGENT", signal_type="spo2"))
         assert action == "approve"
         assert confidence == 0.8
 
     def test_urgent_other_escalates(self):
         from src.fallback import deterministic_fallback
 
-        action, confidence = deterministic_fallback(
-            _alert_context(severity="URGENT", signal_type="weight")
-        )
+        action, confidence = deterministic_fallback(_alert_context(severity="URGENT", signal_type="weight"))
         assert action == "escalate"
         assert confidence == 0.5
 
     def test_high_escalates(self):
         from src.fallback import deterministic_fallback
 
-        action, confidence = deterministic_fallback(
-            _alert_context(severity="HIGH", signal_type="glucose")
-        )
+        action, confidence = deterministic_fallback(_alert_context(severity="HIGH", signal_type="glucose"))
         assert action == "escalate"
         assert confidence == 0.3
 
     def test_low_severity_escalates(self):
         from src.fallback import deterministic_fallback
 
-        action, confidence = deterministic_fallback(
-            _alert_context(severity="LOW", signal_type="glucose")
-        )
+        action, confidence = deterministic_fallback(_alert_context(severity="LOW", signal_type="glucose"))
         assert action == "escalate"
         assert confidence == 0.3
 
@@ -113,6 +100,7 @@ class TestDeterministicFallback:
 # ---------------------------------------------------------------------------
 # Decision pipeline tests (mocked Anthropic)
 # ---------------------------------------------------------------------------
+
 
 class TestGenerateOutreachDecision:
     async def test_returns_action_and_reasoning(self):
@@ -151,9 +139,7 @@ class TestJudgeDecision:
 
         with patch("src.decision._client") as mock_client:
             mock_client.messages.create = AsyncMock(return_value=mock_response)
-            confidence = await judge_decision(
-                {"action": "approve", "reasoning": "test"}, _alert_context()
-            )
+            confidence = await judge_decision({"action": "approve", "reasoning": "test"}, _alert_context())
 
         assert isinstance(confidence, float)
         assert 0.0 <= confidence <= 1.0
@@ -170,9 +156,7 @@ class TestDecideWithFallback:
         judge_response.content = [MagicMock(text='{"confidence": 0.9}')]
 
         with patch("src.decision._client") as mock_client:
-            mock_client.messages.create = AsyncMock(
-                side_effect=[decision_response, judge_response]
-            )
+            mock_client.messages.create = AsyncMock(side_effect=[decision_response, judge_response])
             action, confidence = await decide_with_fallback(_alert_context())
 
         assert action == "approve"
@@ -183,9 +167,7 @@ class TestDecideWithFallback:
 
         with patch("src.decision._client") as mock_client:
             mock_client.messages.create = AsyncMock(side_effect=Exception("API down"))
-            action, confidence = await decide_with_fallback(
-                _alert_context(severity="CRITICAL")
-            )
+            action, confidence = await decide_with_fallback(_alert_context(severity="CRITICAL"))
 
         # Should use deterministic fallback
         assert action == "approve"
@@ -199,9 +181,7 @@ class TestDecideWithFallback:
 
         with patch("src.decision._client") as mock_client:
             mock_client.messages.create = AsyncMock(return_value=mock_response)
-            action, confidence = await decide_with_fallback(
-                _alert_context(severity="URGENT", signal_type="spo2")
-            )
+            action, confidence = await decide_with_fallback(_alert_context(severity="URGENT", signal_type="spo2"))
 
         assert action == "approve"
         assert confidence == 0.8
@@ -210,6 +190,7 @@ class TestDecideWithFallback:
 # ---------------------------------------------------------------------------
 # Event builder tests
 # ---------------------------------------------------------------------------
+
 
 class TestBuildAgentEvent:
     def test_envelope_shape(self):
@@ -245,9 +226,7 @@ class TestPublishAiRecommendation:
         }
         persona = _make_persona()
 
-        await publish_ai_recommendation(
-            publisher, task_data, "approve", 0.9, persona
-        )
+        await publish_ai_recommendation(publisher, task_data, "approve", 0.9, persona)
 
         publisher.publish.assert_called_once()
         call_args = publisher.publish.call_args
@@ -274,9 +253,7 @@ class TestPublishAiDecision:
             retry_delay_seconds=120,
         )
 
-        await publish_ai_decision(
-            publisher, task_data, "approve", 0.9, persona, approved=True
-        )
+        await publish_ai_decision(publisher, task_data, "approve", 0.9, persona, approved=True)
 
         call_args = publisher.publish.call_args
         assert call_args[0][0] == "ocean.ai-ops"
@@ -298,9 +275,7 @@ class TestPublishAiDecision:
         }
         persona = _make_persona()
 
-        await publish_ai_decision(
-            publisher, task_data, "escalate", 0.3, persona, approved=False
-        )
+        await publish_ai_decision(publisher, task_data, "escalate", 0.3, persona, approved=False)
 
         event = publisher.publish.call_args[0][1]
         assert event["event_type"] == "ai.output.rejected"
@@ -314,9 +289,7 @@ class TestPublishAiDecision:
         persona = _make_persona()
 
         # Should not raise
-        await publish_ai_decision(
-            publisher, task_data, "approve", 0.9, persona, approved=True
-        )
+        await publish_ai_decision(publisher, task_data, "approve", 0.9, persona, approved=True)
 
 
 class TestPublishTaskCompleted:

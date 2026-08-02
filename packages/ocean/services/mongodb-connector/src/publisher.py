@@ -3,6 +3,7 @@
 Uses the synchronous ``produce()`` + ``poll(0)`` pattern from confluent-kafka
 (NOT the async AIOProducer).  All events are JSON-serialised before sending.
 """
+
 from __future__ import annotations
 
 import json

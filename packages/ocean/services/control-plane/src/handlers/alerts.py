@@ -3,6 +3,7 @@
 Evaluates routing rules, writes a task record to Postgres, and publishes
 task.created + task.assigned events to ocean.tasks topic.
 """
+
 from __future__ import annotations
 
 import uuid

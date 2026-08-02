@@ -101,9 +101,7 @@ def address_for(domain: str) -> EventBridgeAddress:
     try:
         return _ADDRESSES[domain]
     except KeyError:
-        raise KeyError(
-            f"{domain!r} is not a live OCEAN domain; expected one of {sorted(LIVE_DOMAINS)}"
-        ) from None
+        raise KeyError(f"{domain!r} is not a live OCEAN domain; expected one of {sorted(LIVE_DOMAINS)}") from None
 
 
 def addressing_table() -> dict[str, EventBridgeAddress]:
@@ -158,8 +156,7 @@ def terraform_inputs() -> dict[str, object]:
         "event_source": EVENT_SOURCE,
         "event_domains": sorted(LIVE_DOMAINS),
         "domain_event_patterns": {
-            domain: json.dumps(rule_pattern([domain]), separators=(",", ":"))
-            for domain in sorted(LIVE_DOMAINS)
+            domain: json.dumps(rule_pattern([domain]), separators=(",", ":")) for domain in sorted(LIVE_DOMAINS)
         },
     }
 

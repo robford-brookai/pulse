@@ -8,13 +8,12 @@ Verifies INGEST-02 + ZCC-02 + ZCC-03 end-to-end with real Postgres:
    - 1 Interaction row with the correct interaction_id and task_id FK.
    - 1 Outcome row with outcome_type='call_completed' and resolution_status='resolved'.
 """
+
 from __future__ import annotations
 
 import pathlib
-import sys
 
 import pytest
-import pytest_asyncio
 import sqlalchemy as sa
 
 _ROOT = pathlib.Path(__file__).parents[2]
@@ -30,37 +29,41 @@ pytestmark = pytest.mark.integration
 def seed_patient_and_task(postgres_container):
     """Synchronous setup of prerequisite rows (patient + task) needed for FK constraints."""
     import sqlalchemy as sa_sync
-    from sqlalchemy import create_engine, text as sync_text
+    from sqlalchemy import text as sync_text
 
     url = postgres_container.get_connection_url()
     engine = sa_sync.create_engine(url)
     with engine.begin() as conn:
-        conn.execute(sync_text(
-            "INSERT INTO patients (patient_id, clinic_id, enrollment_status, updated_at) "
-            "VALUES ('pt-integ-001', 'clinic-1', 'active', NOW()) "
-            "ON CONFLICT (patient_id) DO NOTHING"
-        ))
-        conn.execute(sync_text(
-            "INSERT INTO alerts (alert_id, patient_id, alert_type, severity, status, "
-            "source_system, created_at, updated_at, correlation_id) "
-            "VALUES ('alert-integ-001', 'pt-integ-001', 'glucose_high', 'URGENT', 'open', "
-            "'pocar', NOW(), NOW(), 'corr-001') "
-            "ON CONFLICT (alert_id) DO NOTHING"
-        ))
-        conn.execute(sync_text(
-            "INSERT INTO tasks (task_id, alert_id, patient_id, task_type, priority, status, "
-            "created_at, updated_at) "
-            "VALUES ('task-integ-001', 'alert-integ-001', 'pt-integ-001', 'outreach', 'high', "
-            "'open', NOW(), NOW()) "
-            "ON CONFLICT (task_id) DO NOTHING"
-        ))
+        conn.execute(
+            sync_text(
+                "INSERT INTO patients (patient_id, clinic_id, enrollment_status, updated_at) "
+                "VALUES ('pt-integ-001', 'clinic-1', 'active', NOW()) "
+                "ON CONFLICT (patient_id) DO NOTHING"
+            )
+        )
+        conn.execute(
+            sync_text(
+                "INSERT INTO alerts (alert_id, patient_id, alert_type, severity, status, "
+                "source_system, created_at, updated_at, correlation_id) "
+                "VALUES ('alert-integ-001', 'pt-integ-001', 'glucose_high', 'URGENT', 'open', "
+                "'pocar', NOW(), NOW(), 'corr-001') "
+                "ON CONFLICT (alert_id) DO NOTHING"
+            )
+        )
+        conn.execute(
+            sync_text(
+                "INSERT INTO tasks (task_id, alert_id, patient_id, task_type, priority, status, "
+                "created_at, updated_at) "
+                "VALUES ('task-integ-001', 'alert-integ-001', 'pt-integ-001', 'outreach', 'high', "
+                "'open', NOW(), NOW()) "
+                "ON CONFLICT (task_id) DO NOTHING"
+            )
+        )
     engine.dispose()
 
 
 @pytest.mark.asyncio
-async def test_call_completed_projects_interaction_and_outcome(
-    session_factory, seed_patient_and_task
-):
+async def test_call_completed_projects_interaction_and_outcome(session_factory, seed_patient_and_task):
     """Normalize a ZCC engagement_ended event and project it — verify Postgres rows."""
     # Import normalizer from zcc-connector — must use importlib to avoid src conflict
     import importlib.util
@@ -71,7 +74,7 @@ async def test_call_completed_projects_interaction_and_outcome(
     spec.loader.exec_module(zcc_normalizer)
 
     # Import graph-projection handlers — these import from src.* (graph-projection is first in path)
-    from src.handlers.outcomes import handle_call_completed  # noqa: PLC0415
+    from src.handlers.outcomes import handle_call_completed
 
     zcc_payload = {
         "event": "contact_center.engagement_ended",
@@ -93,9 +96,8 @@ async def test_call_completed_projects_interaction_and_outcome(
     assert normalized["event_type"] == "call.completed"
 
     # Project event into Postgres
-    async with session_factory() as session:
-        async with session.begin():
-            await handle_call_completed(normalized, session)
+    async with session_factory() as session, session.begin():
+        await handle_call_completed(normalized, session)
 
     # Verify Interaction row
     async with session_factory() as session:
@@ -106,17 +108,12 @@ async def test_call_completed_projects_interaction_and_outcome(
         row = result.fetchone()
 
     assert row is not None, "Interaction row not found after handle_call_completed"
-    assert row.task_id == "task-integ-001", (
-        f"ZCC-02: task_id FK expected 'task-integ-001', got '{row.task_id}'"
-    )
+    assert row.task_id == "task-integ-001", f"ZCC-02: task_id FK expected 'task-integ-001', got '{row.task_id}'"
 
     # Verify Outcome row
     async with session_factory() as session:
         result = await session.execute(
-            sa.text(
-                "SELECT outcome_type, resolution_status FROM outcomes "
-                "WHERE interaction_id = :id"
-            ),
+            sa.text("SELECT outcome_type, resolution_status FROM outcomes WHERE interaction_id = :id"),
             {"id": "eng-integ-001"},
         )
         outcome_row = result.fetchone()
@@ -140,7 +137,7 @@ async def test_call_missed_projects_no_contact_outcome(session_factory, seed_pat
     zcc_normalizer = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(zcc_normalizer)
 
-    from src.handlers.outcomes import handle_call_missed  # noqa: PLC0415
+    from src.handlers.outcomes import handle_call_missed
 
     zcc_payload = {
         "event": "contact_center.engagement_missed",
@@ -160,16 +157,12 @@ async def test_call_missed_projects_no_contact_outcome(session_factory, seed_pat
     normalized = zcc_normalizer.normalize_zcc_event(zcc_payload)
     assert normalized is not None
 
-    async with session_factory() as session:
-        async with session.begin():
-            await handle_call_missed(normalized, session)
+    async with session_factory() as session, session.begin():
+        await handle_call_missed(normalized, session)
 
     async with session_factory() as session:
         result = await session.execute(
-            sa.text(
-                "SELECT outcome_type, resolution_status FROM outcomes "
-                "WHERE interaction_id = :id"
-            ),
+            sa.text("SELECT outcome_type, resolution_status FROM outcomes WHERE interaction_id = :id"),
             {"id": "eng-integ-002"},
         )
         outcome_row = result.fetchone()

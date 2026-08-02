@@ -1,10 +1,8 @@
 """Tests for call simulation logic."""
+
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock, patch
-
-import pytest
 
 from src.call_sim import build_call_event, simulate_call
 
@@ -72,8 +70,7 @@ class TestSimulateCallAnswered:
         publisher = AsyncMock()
         approval = _make_approval_event(call_answer_rate=1.0)
 
-        with patch("src.call_sim.random") as mock_random, \
-             patch("src.call_sim.asyncio.sleep", new_callable=AsyncMock):
+        with patch("src.call_sim.random") as mock_random, patch("src.call_sim.asyncio.sleep", new_callable=AsyncMock):
             mock_random.random.return_value = 0.5  # < 1.0 = answered
             mock_random.uniform.return_value = 10.0
 
@@ -90,8 +87,7 @@ class TestSimulateCallAnswered:
         publisher = AsyncMock()
         approval = _make_approval_event(call_answer_rate=1.0)
 
-        with patch("src.call_sim.random") as mock_random, \
-             patch("src.call_sim.asyncio.sleep", new_callable=AsyncMock):
+        with patch("src.call_sim.random") as mock_random, patch("src.call_sim.asyncio.sleep", new_callable=AsyncMock):
             mock_random.random.return_value = 0.5
             mock_random.uniform.return_value = 10.0
 
@@ -105,8 +101,7 @@ class TestSimulateCallAnswered:
         publisher = AsyncMock()
         approval = _make_approval_event(call_answer_rate=1.0, compression_ratio=960)
 
-        with patch("src.call_sim.random") as mock_random, \
-             patch("src.call_sim.asyncio.sleep", new_callable=AsyncMock):
+        with patch("src.call_sim.random") as mock_random, patch("src.call_sim.asyncio.sleep", new_callable=AsyncMock):
             mock_random.random.return_value = 0.5
             mock_random.uniform.return_value = 120.0  # sim-seconds
 
@@ -122,12 +117,9 @@ class TestSimulateCallMissed:
 
     async def test_missed_no_retry(self):
         publisher = AsyncMock()
-        approval = _make_approval_event(
-            call_answer_rate=0.0, missed_call_retry_count=0
-        )
+        approval = _make_approval_event(call_answer_rate=0.0, missed_call_retry_count=0)
 
-        with patch("src.call_sim.random") as mock_random, \
-             patch("src.call_sim.asyncio.sleep", new_callable=AsyncMock):
+        with patch("src.call_sim.random") as mock_random, patch("src.call_sim.asyncio.sleep", new_callable=AsyncMock):
             mock_random.random.return_value = 0.99  # > 0.0 = missed
             mock_random.uniform.return_value = 10.0
 
@@ -142,12 +134,9 @@ class TestSimulateCallMissedThenRetrySuccess:
 
     async def test_retry_success(self):
         publisher = AsyncMock()
-        approval = _make_approval_event(
-            call_answer_rate=0.5, missed_call_retry_count=1
-        )
+        approval = _make_approval_event(call_answer_rate=0.5, missed_call_retry_count=1)
 
-        with patch("src.call_sim.random") as mock_random, \
-             patch("src.call_sim.asyncio.sleep", new_callable=AsyncMock):
+        with patch("src.call_sim.random") as mock_random, patch("src.call_sim.asyncio.sleep", new_callable=AsyncMock):
             # First call: miss (0.99 > 0.5), retry: answer (0.1 < 0.5)
             mock_random.random.side_effect = [0.99, 0.1]
             mock_random.uniform.return_value = 10.0
@@ -156,8 +145,11 @@ class TestSimulateCallMissedThenRetrySuccess:
 
         event_types = [c.args[1]["event_type"] for c in publisher.publish.call_args_list]
         assert event_types == [
-            "call.started", "call.missed",
-            "call.started", "call.connected", "call.completed",
+            "call.started",
+            "call.missed",
+            "call.started",
+            "call.connected",
+            "call.completed",
         ]
 
 
@@ -168,8 +160,7 @@ class TestSimulateCallSourceSystem:
         publisher = AsyncMock()
         approval = _make_approval_event(call_answer_rate=1.0)
 
-        with patch("src.call_sim.random") as mock_random, \
-             patch("src.call_sim.asyncio.sleep", new_callable=AsyncMock):
+        with patch("src.call_sim.random") as mock_random, patch("src.call_sim.asyncio.sleep", new_callable=AsyncMock):
             mock_random.random.return_value = 0.5
             mock_random.uniform.return_value = 10.0
 
@@ -186,16 +177,13 @@ class TestSimulateCallTiming:
 
     async def test_ring_delay_compressed(self):
         publisher = AsyncMock()
-        approval = _make_approval_event(
-            call_answer_rate=1.0, compression_ratio=960
-        )
+        approval = _make_approval_event(call_answer_rate=1.0, compression_ratio=960)
         sleep_calls = []
 
         async def mock_sleep(duration):
             sleep_calls.append(duration)
 
-        with patch("src.call_sim.random") as mock_random, \
-             patch("src.call_sim.asyncio.sleep", side_effect=mock_sleep):
+        with patch("src.call_sim.random") as mock_random, patch("src.call_sim.asyncio.sleep", side_effect=mock_sleep):
             mock_random.random.return_value = 0.5
             mock_random.uniform.return_value = 9.6  # sim-seconds
 

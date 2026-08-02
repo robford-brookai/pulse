@@ -1,4 +1,5 @@
 """SLACK-CONN-05: Slash commands — /ocean status, patient, sim, help."""
+
 from __future__ import annotations
 
 import re
@@ -62,8 +63,7 @@ class TestBoltAppSlashRegistration:
 
     def test_registers_ocean_command(self):
         source = _read_source(BOLT_APP_PATH)
-        assert re.search(r'command.*["\']/ocean["\']', source) or \
-               re.search(r'["\']/ocean["\']', source)
+        assert re.search(r'command.*["\']/ocean["\']', source) or re.search(r'["\']/ocean["\']', source)
 
 
 # ---------------------------------------------------------------------------
@@ -75,6 +75,7 @@ class TestBoltAppSlashRegistration:
 def _clear_slash_modules():
     """Ensure clean imports of slash_commands."""
     import sys
+
     keys_to_remove = [k for k in sys.modules if "slash_commands" in k]
     for k in keys_to_remove:
         del sys.modules[k]
@@ -99,9 +100,7 @@ def _import_slash_commands():
     for k in keys_to_remove:
         del sys.modules[k]
 
-    spec = importlib.util.spec_from_file_location(
-        "src.slash_commands", SLASH_COMMANDS_PATH
-    )
+    spec = importlib.util.spec_from_file_location("src.slash_commands", SLASH_COMMANDS_PATH)
     mod = importlib.util.module_from_spec(spec)
     sys.modules["src.slash_commands"] = mod
     spec.loader.exec_module(mod)
@@ -126,7 +125,9 @@ class TestHandleOceanCommand:
         body = {"text": "help", "user_id": "U123"}
 
         await mod.handle_ocean_command(
-            ack=ack, body=body, respond=respond,
+            ack=ack,
+            body=body,
+            respond=respond,
         )
 
         assert call_order[0] == "ack"
@@ -141,11 +142,15 @@ class TestHandleOceanCommand:
         block = [{"type": "section", "text": {"type": "mrkdwn", "text": "t"}}]
 
         with patch.object(
-            mod, "build_status_response", new_callable=AsyncMock,
+            mod,
+            "build_status_response",
+            new_callable=AsyncMock,
         ) as mock_status:
             mock_status.return_value = block
             await mod.handle_ocean_command(
-                ack=ack, body=body, respond=respond,
+                ack=ack,
+                body=body,
+                respond=respond,
             )
             mock_status.assert_awaited_once()
 
@@ -159,11 +164,15 @@ class TestHandleOceanCommand:
         block = [{"type": "section", "text": {"type": "mrkdwn", "text": "t"}}]
 
         with patch.object(
-            mod, "build_patient_response", new_callable=AsyncMock,
+            mod,
+            "build_patient_response",
+            new_callable=AsyncMock,
         ) as mock_patient:
             mock_patient.return_value = block
             await mod.handle_ocean_command(
-                ack=ack, body=body, respond=respond,
+                ack=ack,
+                body=body,
+                respond=respond,
             )
             mock_patient.assert_awaited_once_with("P123")
 
@@ -177,11 +186,15 @@ class TestHandleOceanCommand:
         block = [{"type": "section", "text": {"type": "mrkdwn", "text": "t"}}]
 
         with patch.object(
-            mod, "trigger_sim_response", new_callable=AsyncMock,
+            mod,
+            "trigger_sim_response",
+            new_callable=AsyncMock,
         ) as mock_sim:
             mock_sim.return_value = block
             await mod.handle_ocean_command(
-                ack=ack, body=body, respond=respond,
+                ack=ack,
+                body=body,
+                respond=respond,
             )
             mock_sim.assert_awaited_once_with("pilot_demo")
 
@@ -197,7 +210,9 @@ class TestHandleOceanCommand:
         with patch.object(mod, "build_help_response") as mock_help:
             mock_help.return_value = block
             await mod.handle_ocean_command(
-                ack=ack, body=body, respond=respond,
+                ack=ack,
+                body=body,
+                respond=respond,
             )
             mock_help.assert_called_once()
 
@@ -213,7 +228,9 @@ class TestHandleOceanCommand:
         with patch.object(mod, "build_help_response") as mock_help:
             mock_help.return_value = block
             await mod.handle_ocean_command(
-                ack=ack, body=body, respond=respond,
+                ack=ack,
+                body=body,
+                respond=respond,
             )
             mock_help.assert_called_once()
 

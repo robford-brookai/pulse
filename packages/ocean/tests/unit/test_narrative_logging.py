@@ -7,6 +7,7 @@ structured log calls.
 Uses importlib for direct file imports to avoid src/ namespace collisions
 between services that all use flat `src/` package layouts.
 """
+
 from __future__ import annotations
 
 import importlib
@@ -14,7 +15,7 @@ import importlib.util
 import sys
 from pathlib import Path
 from types import ModuleType
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 from structlog.testing import capture_logs
 
@@ -61,6 +62,7 @@ def _load_module(name: str, file_path: Path, deps: dict[str, ModuleType] | None 
 
 
 # ── sim-driver ──────────────────────────────────────────────────
+
 
 class TestSimDriverNarrative:
     """PatientSimulator emits [SIM] narrative lines for signals and alerts."""
@@ -114,8 +116,12 @@ class TestSimDriverNarrative:
             clinic_id="clinic-demo",
             signals=[
                 SignalConfig(
-                    sim_hour=0.0, type="spo2", value=85, unit="%",
-                    anomalous=True, severity_hint="URGENT",
+                    sim_hour=0.0,
+                    type="spo2",
+                    value=85,
+                    unit="%",
+                    anomalous=True,
+                    severity_hint="URGENT",
                 ),
             ],
         )
@@ -125,10 +131,7 @@ class TestSimDriverNarrative:
         with capture_logs() as cap:
             await sim.run()
 
-        alert_lines = [
-            e for e in cap
-            if "[SIM]" in str(e.get("event", "")) and "ALERT" in str(e.get("event", ""))
-        ]
+        alert_lines = [e for e in cap if "[SIM]" in str(e.get("event", "")) and "ALERT" in str(e.get("event", ""))]
         assert len(alert_lines) >= 1, f"Expected [SIM] ALERT narrative, got: {cap}"
         line = alert_lines[0]["event"]
         assert "P-002" in line
@@ -137,6 +140,7 @@ class TestSimDriverNarrative:
 
 
 # ── control-plane (source inspection) ───────────────────────────
+
 
 class TestControlPlaneNarrative:
     """alerts.py contains a [TASK] narrative log line (source inspection)."""
@@ -150,6 +154,7 @@ class TestControlPlaneNarrative:
 
 # ── agent-worker claim (source inspection) ──────────────────────
 
+
 class TestAgentWorkerClaimNarrative:
     """claim.py contains a [CLAIM] narrative log line (source inspection)."""
 
@@ -161,6 +166,7 @@ class TestAgentWorkerClaimNarrative:
 
 
 # ── agent-worker decision (source inspection) ───────────────────
+
 
 class TestAgentWorkerDecisionNarrative:
     """consumer.py contains [AI] and [GATE] narrative log lines."""
@@ -181,6 +187,7 @@ class TestAgentWorkerDecisionNarrative:
 
 # ── call-simulator ──────────────────────────────────────────────
 
+
 class TestCallSimNarrative:
     """simulate_call emits [CALL] narrative lines."""
 
@@ -193,6 +200,7 @@ class TestCallSimNarrative:
             del sys.modules[k]
         sys.modules.pop("src", None)
         from src.call_sim import simulate_call
+
         return simulate_call
 
     async def test_call_sim_started_narrative(self):
@@ -213,10 +221,7 @@ class TestCallSimNarrative:
         with capture_logs() as cap:
             await simulate_call(approval, publisher)
 
-        started_lines = [
-            e for e in cap
-            if "[CALL]" in str(e.get("event", "")) and "started" in str(e.get("event", ""))
-        ]
+        started_lines = [e for e in cap if "[CALL]" in str(e.get("event", "")) and "started" in str(e.get("event", ""))]
         assert len(started_lines) >= 1, f"Expected [CALL] started narrative, got: {cap}"
         assert "P-006" in started_lines[0]["event"]
 

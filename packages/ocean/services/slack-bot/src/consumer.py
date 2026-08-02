@@ -116,9 +116,7 @@ async def handle_task_created(
     )
 
     # Store parent message for thread tracking (Phase 15)
-    message_ts = (
-        response.get("ts", "") if isinstance(response, dict) else getattr(response, "ts", "")
-    )
+    message_ts = response.get("ts", "") if isinstance(response, dict) else getattr(response, "ts", "")
     if thread_manager and message_ts:
         await thread_manager.store_parent_message(task_id, channel, message_ts)
 
@@ -293,9 +291,7 @@ async def handle_ai_rejected(
     actor = payload.get("actor", "unknown")
     reason = payload.get("reason", "")
     if thread_manager:
-        await thread_manager.queue_update(
-            task_id, {"type": "ai_rejected", "actor": actor, "reason": reason}
-        )
+        await thread_manager.queue_update(task_id, {"type": "ai_rejected", "actor": actor, "reason": reason})
     log.info("ai_rejected_handled", task_id=task_id)
 
 
@@ -369,9 +365,7 @@ async def handle_scenario_completed(
             text=f"[SIMULATION COMPLETE] {scenario_name}",
         )
     except Exception:
-        log.warning(
-            "scenario_completed_card_post_failed", scenario_name=scenario_name, exc_info=True
-        )
+        log.warning("scenario_completed_card_post_failed", scenario_name=scenario_name, exc_info=True)
     log.info("scenario_completed_posted", scenario_name=scenario_name)
 
 
@@ -429,9 +423,7 @@ async def handle_ticket_created(
         text=f"[{priority.upper()}] {human_id} — {category}",
     )
 
-    message_ts = (
-        response.get("ts", "") if isinstance(response, dict) else getattr(response, "ts", "")
-    )
+    message_ts = response.get("ts", "") if isinstance(response, dict) else getattr(response, "ts", "")
     if thread_manager and message_ts:
         await thread_manager.store_ticket_parent(ticket_id, channel, message_ts)
 
@@ -768,9 +760,7 @@ async def handle_delivery_notify(
         text=f"Device Delivered - {device_type} for patient {patient_id}",
     )
 
-    message_ts = (
-        response.get("ts", "") if isinstance(response, dict) else getattr(response, "ts", "")
-    )
+    message_ts = response.get("ts", "") if isinstance(response, dict) else getattr(response, "ts", "")
     if thread_manager and message_ts:
         await thread_manager.store_parent_message(f"delivery:{order_id}", channel, message_ts)
 

@@ -1,4 +1,5 @@
 """PTLN-03: Extended patient command with consolidated timeline view."""
+
 from __future__ import annotations
 
 import re
@@ -26,9 +27,7 @@ class TestPTLN03SourceInspection:
     def test_queries_patient_timeline_view(self):
         """build_patient_response must query patient_timeline (not N separate tables)."""
         source = _read_source()
-        assert "patient_timeline" in source, (
-            "build_patient_response should query patient_timeline view"
-        )
+        assert "patient_timeline" in source, "build_patient_response should query patient_timeline view"
 
     def test_summary_includes_open_tickets(self):
         source = _read_source()
@@ -82,9 +81,7 @@ class TestPTLN03SourceInspection:
         """Timeline should be capped at 30 entries."""
         source = _read_source()
         # Should reference a max/limit of 30 for timeline display
-        assert re.search(r"\b30\b", source), (
-            "Timeline should cap at 30 entries"
-        )
+        assert re.search(r"\b30\b", source), "Timeline should cap at 30 entries"
 
     def test_help_mentions_patient_timeline(self):
         """Help response should mention patient command with timeline."""
@@ -111,9 +108,7 @@ def _import_slash_commands():
     for k in keys_to_remove:
         del sys.modules[k]
 
-    spec = importlib.util.spec_from_file_location(
-        "src.slash_commands", SLASH_COMMANDS_PATH
-    )
+    spec = importlib.util.spec_from_file_location("src.slash_commands", SLASH_COMMANDS_PATH)
     mod = importlib.util.module_from_spec(spec)
     sys.modules["src.slash_commands"] = mod
     spec.loader.exec_module(mod)
@@ -123,6 +118,7 @@ def _import_slash_commands():
 @pytest.fixture
 def _clear_slash_modules():
     import sys
+
     keys_to_remove = [k for k in sys.modules if "slash_commands" in k]
     for k in keys_to_remove:
         del sys.modules[k]
@@ -136,16 +132,76 @@ SAMPLE_HASURA_RESPONSE = {
     "data": {
         "patients": [{"patient_id": "P001", "enrollment_status": "active"}],
         "patient_timeline": [
-            {"event_type": "alert", "event_id": "a1", "status": "open", "summary": "High BP reading", "created_at": "2026-03-10T10:00:00Z"},
-            {"event_type": "task", "event_id": "t1", "status": "open", "summary": "Follow up call", "created_at": "2026-03-10T09:00:00Z"},
-            {"event_type": "ticket", "event_id": "tk1", "status": "open", "summary": "Device issue reported", "created_at": "2026-03-09T15:00:00Z"},
-            {"event_type": "ticket", "event_id": "tk2", "status": "resolved", "summary": "Activation complete", "created_at": "2026-03-08T10:00:00Z"},
-            {"event_type": "fulfillment", "event_id": "f1", "status": "shipped", "summary": "BP cuff shipment", "created_at": "2026-03-07T12:00:00Z"},
-            {"event_type": "return", "event_id": "r1", "status": "received", "summary": "RMA for defective scale", "created_at": "2026-03-06T08:00:00Z"},
-            {"event_type": "device", "event_id": "d1", "status": "associated", "summary": "BP Monitor (SN-123)", "created_at": "2026-03-05T14:00:00Z"},
-            {"event_type": "device", "event_id": "d2", "status": "associated", "summary": "Scale (SN-456)", "created_at": "2026-03-04T11:00:00Z"},
-            {"event_type": "interaction", "event_id": "i1", "status": "completed", "summary": "Outbound call - connected", "created_at": "2026-03-03T16:00:00Z"},
-            {"event_type": "signal", "event_id": "s1", "status": "active", "summary": "weight=185", "created_at": "2026-03-02T08:00:00Z"},
+            {
+                "event_type": "alert",
+                "event_id": "a1",
+                "status": "open",
+                "summary": "High BP reading",
+                "created_at": "2026-03-10T10:00:00Z",
+            },
+            {
+                "event_type": "task",
+                "event_id": "t1",
+                "status": "open",
+                "summary": "Follow up call",
+                "created_at": "2026-03-10T09:00:00Z",
+            },
+            {
+                "event_type": "ticket",
+                "event_id": "tk1",
+                "status": "open",
+                "summary": "Device issue reported",
+                "created_at": "2026-03-09T15:00:00Z",
+            },
+            {
+                "event_type": "ticket",
+                "event_id": "tk2",
+                "status": "resolved",
+                "summary": "Activation complete",
+                "created_at": "2026-03-08T10:00:00Z",
+            },
+            {
+                "event_type": "fulfillment",
+                "event_id": "f1",
+                "status": "shipped",
+                "summary": "BP cuff shipment",
+                "created_at": "2026-03-07T12:00:00Z",
+            },
+            {
+                "event_type": "return",
+                "event_id": "r1",
+                "status": "received",
+                "summary": "RMA for defective scale",
+                "created_at": "2026-03-06T08:00:00Z",
+            },
+            {
+                "event_type": "device",
+                "event_id": "d1",
+                "status": "associated",
+                "summary": "BP Monitor (SN-123)",
+                "created_at": "2026-03-05T14:00:00Z",
+            },
+            {
+                "event_type": "device",
+                "event_id": "d2",
+                "status": "associated",
+                "summary": "Scale (SN-456)",
+                "created_at": "2026-03-04T11:00:00Z",
+            },
+            {
+                "event_type": "interaction",
+                "event_id": "i1",
+                "status": "completed",
+                "summary": "Outbound call - connected",
+                "created_at": "2026-03-03T16:00:00Z",
+            },
+            {
+                "event_type": "signal",
+                "event_id": "s1",
+                "status": "active",
+                "summary": "weight=185",
+                "created_at": "2026-03-02T08:00:00Z",
+            },
         ],
     }
 }
@@ -275,8 +331,13 @@ class TestBuildPatientResponseUnit:
         mod = _import_slash_commands()
         # Create 35 timeline entries
         timeline_entries = [
-            {"event_type": "signal", "event_id": f"s{i}", "status": "active",
-             "summary": f"val={i}", "created_at": f"2026-03-{10-i//30:02d}T{i%24:02d}:00:00Z"}
+            {
+                "event_type": "signal",
+                "event_id": f"s{i}",
+                "status": "active",
+                "summary": f"val={i}",
+                "created_at": f"2026-03-{10 - i // 30:02d}T{i % 24:02d}:00:00Z",
+            }
             for i in range(35)
         ]
         big_response = {

@@ -1,4 +1,5 @@
 """Unit tests for delivery card builder functions."""
+
 from __future__ import annotations
 
 import os
@@ -6,7 +7,6 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-import pytest
 
 from src.cards import delivery_card, delivery_claimed_card
 

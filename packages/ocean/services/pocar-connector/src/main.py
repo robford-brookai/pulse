@@ -1,4 +1,5 @@
 """pocar-connector FastAPI app — lifespan, health, and webhook router."""
+
 from __future__ import annotations
 
 import asyncio
@@ -32,9 +33,7 @@ async def lifespan(app: FastAPI):
     app.state.publisher = publisher
     log.info("pocar_connector_started", brokers=bootstrap_servers)
 
-    heartbeat_task = asyncio.create_task(
-        publish_heartbeat(publisher, "pocar-connector", "POCAR")
-    )
+    heartbeat_task = asyncio.create_task(publish_heartbeat(publisher, "pocar-connector", "POCAR"))
 
     yield
 

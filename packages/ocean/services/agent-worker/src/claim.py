@@ -1,4 +1,5 @@
 """Claim competition logic with persona delays."""
+
 from __future__ import annotations
 
 import asyncio
@@ -66,9 +67,7 @@ async def compete_for_claim(
 
         # Build task.claimed event with BaseEvent envelope
         correlation_id = task_event.get("correlation_id", "")
-        event_id = hashlib.sha256(
-            f"task.claimed:{entity_id}:{persona.id}".encode()
-        ).hexdigest()
+        event_id = hashlib.sha256(f"task.claimed:{entity_id}:{persona.id}".encode()).hexdigest()
 
         claimed_event = {
             "event_id": event_id,

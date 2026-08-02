@@ -1,4 +1,5 @@
 """Deterministic severity-based fallback for when Anthropic API is unavailable."""
+
 from __future__ import annotations
 
 import structlog
@@ -18,15 +19,9 @@ def deterministic_fallback(alert_context: dict) -> tuple[str, float]:
       URGENT + other -> escalate (0.5)
       HIGH or lower -> escalate (0.3)
     """
-    severity = (
-        alert_context.get("severity", "")
-        or alert_context.get("priority", "")
-    ).upper()
+    severity = (alert_context.get("severity", "") or alert_context.get("priority", "")).upper()
 
-    signal_type = (
-        alert_context.get("signal_type", "")
-        or alert_context.get("task_type", "")
-    ).lower()
+    signal_type = (alert_context.get("signal_type", "") or alert_context.get("task_type", "")).lower()
 
     if severity == "CRITICAL":
         return ("approve", 1.0)

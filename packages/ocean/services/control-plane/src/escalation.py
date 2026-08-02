@@ -6,6 +6,7 @@ instead of upgrading further.
 
 State is persisted in task_escalation_state table and rehydrated on startup.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -61,15 +62,10 @@ async def insert_escalation_state(
     )
 
 
-async def remove_escalation_state(
-    session, entity_type: str, entity_id: str
-) -> None:
+async def remove_escalation_state(session, entity_type: str, entity_id: str) -> None:
     """Remove escalation tracking for a claimed/resolved item."""
     await session.execute(
-        sa.text(
-            "DELETE FROM task_escalation_state "
-            "WHERE entity_type = :entity_type AND entity_id = :entity_id"
-        ),
+        sa.text("DELETE FROM task_escalation_state WHERE entity_type = :entity_type AND entity_id = :entity_id"),
         {"entity_type": entity_type, "entity_id": entity_id},
     )
 
@@ -171,13 +167,8 @@ async def check_and_escalate(session, publisher) -> int:
                 "old_priority": current_priority,
                 "new_priority": new_priority,
                 "escalation_count": new_count,
-                "minutes_unclaimed": int(
-                    (now - created_at).total_seconds() / 60
-                ),
-                "policy_name": (
-                    f"auto_escalate_{current_priority}"
-                    f"_{ESCALATION_THRESHOLDS[current_priority]}s"
-                ),
+                "minutes_unclaimed": int((now - created_at).total_seconds() / 60),
+                "policy_name": (f"auto_escalate_{current_priority}_{ESCALATION_THRESHOLDS[current_priority]}s"),
             },
         }
         await publisher.publish(topic, event)
@@ -202,9 +193,7 @@ async def rehydrate_and_catch_up(session, publisher) -> int:
     return await check_and_escalate(session, publisher)
 
 
-async def run_escalation_poller(
-    session_maker, publisher, interval: int | None = None
-) -> None:
+async def run_escalation_poller(session_maker, publisher, interval: int | None = None) -> None:
     """Background poller that periodically checks for escalation candidates.
 
     Disabled when ESCALATION_ENABLED is false (sim profile default).

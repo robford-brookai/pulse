@@ -1,4 +1,5 @@
 """Unit tests for connector heartbeat publish loop."""
+
 from __future__ import annotations
 
 import asyncio
@@ -6,14 +7,12 @@ import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from utils import setup_service
 
 setup_service("pocar-connector")
 
-import src.heartbeat as heartbeat_mod  # noqa: E402
-
-from src.heartbeat import HEARTBEAT_INTERVAL_SECS, publish_heartbeat  # noqa: E402
+import src.heartbeat as heartbeat_mod
+from src.heartbeat import HEARTBEAT_INTERVAL_SECS, publish_heartbeat
 
 
 @pytest.mark.asyncio

@@ -3,6 +3,7 @@
 # anomalous (bool) ONLY -- no free-text clinical notes, no PHI identifiers.
 # Production deploy is blocked until BAA is confirmed.
 """AI decision pipeline: Haiku outreach decision + judge scoring."""
+
 from __future__ import annotations
 
 import json

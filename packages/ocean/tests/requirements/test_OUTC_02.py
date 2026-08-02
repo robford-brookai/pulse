@@ -3,17 +3,17 @@
 Requirement: When handle_ticket_updated resolves a ticket (new_status="resolved"),
 it publishes both ticket.resolved to ocean.tickets AND outcome.recorded to ocean.outcomes.
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from utils import setup_service
 
 setup_service("control-plane")
 
-from src.handlers.tickets import handle_ticket_updated  # noqa: E402
+from src.handlers.tickets import handle_ticket_updated
 
 
 @pytest.mark.asyncio
@@ -50,8 +50,7 @@ async def test_ticket_resolved_publishes_outcome(mock_publisher, mock_session):
 
     # Find outcome.recorded call
     outcome_calls = [
-        (t, e) for t, e in zip(topics, events)
-        if t == "ocean.outcomes" and e.get("event_type") == "outcome.recorded"
+        (t, e) for t, e in zip(topics, events) if t == "ocean.outcomes" and e.get("event_type") == "outcome.recorded"
     ]
     assert len(outcome_calls) == 1, "Expected exactly 1 outcome.recorded publish to ocean.outcomes"
 
@@ -82,8 +81,5 @@ async def test_ticket_non_resolved_no_outcome(mock_publisher, mock_session):
     await handle_ticket_updated(event_data, mock_session, producer=mock_publisher)
 
     calls = mock_publisher.publish.call_args_list
-    outcome_calls = [
-        c for c in calls
-        if c[0][0] == "ocean.outcomes"
-    ]
+    outcome_calls = [c for c in calls if c[0][0] == "ocean.outcomes"]
     assert len(outcome_calls) == 0, "Should not publish outcome for non-resolved status"

@@ -1,4 +1,5 @@
 """Tests for RMA-related card rendering in slack-bot."""
+
 from __future__ import annotations
 
 from src.cards import (
@@ -6,7 +7,6 @@ from src.cards import (
     ticket_card,
     ticket_claimed_card,
 )
-
 
 TICKET_ID = "tkt-rma-001"
 HUMAN_ID = "DEV-00042"
@@ -51,8 +51,14 @@ class TestRmaBadgeOnCard:
 
     def test_ticket_card_rma_badge_in_header(self):
         blocks = ticket_card(
-            TICKET_ID, HUMAN_ID, CATEGORY, PRIORITY, "in_progress",
-            DESCRIPTION, AI_SUMMARY, patient_id=PATIENT_ID,
+            TICKET_ID,
+            HUMAN_ID,
+            CATEGORY,
+            PRIORITY,
+            "in_progress",
+            DESCRIPTION,
+            AI_SUMMARY,
+            patient_id=PATIENT_ID,
             rma_return_id="ret-001",
         )
         header_text = blocks[0]["text"]["text"]
@@ -61,16 +67,28 @@ class TestRmaBadgeOnCard:
 
     def test_ticket_card_no_rma_badge_without_return_id(self):
         blocks = ticket_card(
-            TICKET_ID, HUMAN_ID, CATEGORY, PRIORITY, "in_progress",
-            DESCRIPTION, AI_SUMMARY, patient_id=PATIENT_ID,
+            TICKET_ID,
+            HUMAN_ID,
+            CATEGORY,
+            PRIORITY,
+            "in_progress",
+            DESCRIPTION,
+            AI_SUMMARY,
+            patient_id=PATIENT_ID,
         )
         header_text = blocks[0]["text"]["text"]
         assert "[RMA]" not in header_text
 
     def test_ticket_card_rma_status_field(self):
         blocks = ticket_card(
-            TICKET_ID, HUMAN_ID, CATEGORY, PRIORITY, "in_progress",
-            DESCRIPTION, AI_SUMMARY, patient_id=PATIENT_ID,
+            TICKET_ID,
+            HUMAN_ID,
+            CATEGORY,
+            PRIORITY,
+            "in_progress",
+            DESCRIPTION,
+            AI_SUMMARY,
+            patient_id=PATIENT_ID,
             rma_status="shipped",
         )
         fields_section = blocks[1]
@@ -80,8 +98,14 @@ class TestRmaBadgeOnCard:
 
     def test_ticket_card_no_rma_status_without_param(self):
         blocks = ticket_card(
-            TICKET_ID, HUMAN_ID, CATEGORY, PRIORITY, "in_progress",
-            DESCRIPTION, AI_SUMMARY, patient_id=PATIENT_ID,
+            TICKET_ID,
+            HUMAN_ID,
+            CATEGORY,
+            PRIORITY,
+            "in_progress",
+            DESCRIPTION,
+            AI_SUMMARY,
+            patient_id=PATIENT_ID,
         )
         fields_section = blocks[1]
         # Standard 4 fields only
@@ -89,7 +113,9 @@ class TestRmaBadgeOnCard:
 
     def test_claimed_card_rma_badge(self):
         blocks = ticket_claimed_card(
-            TICKET_ID, HUMAN_ID, "U99999",
+            TICKET_ID,
+            HUMAN_ID,
+            "U99999",
             rma_return_id="ret-001",
         )
         header_text = blocks[0]["text"]["text"]

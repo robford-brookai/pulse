@@ -1,4 +1,5 @@
 """GH-01: GitHub connector validates HMAC-SHA256 webhook signatures."""
+
 from pathlib import Path
 
 _ROOT = Path(__file__).parents[2]

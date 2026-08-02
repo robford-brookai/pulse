@@ -1,4 +1,5 @@
 """Tests for PatientSimulator: event construction, schema conformance, severity, timing."""
+
 from __future__ import annotations
 
 import hashlib
@@ -10,14 +11,11 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 # Ensure ocean-events is importable
-sys.path.insert(
-    0, str(Path(__file__).resolve().parents[3] / "libs" / "ocean-events" / "src")
-)
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "libs" / "ocean-events" / "src"))
 
-from ocean_events.base import BaseEvent  # noqa: E402
-
-from src.models import PatientConfig, SignalConfig  # noqa: E402
-from src.patient_simulator import PatientSimulator  # noqa: E402
+from ocean_events.base import BaseEvent
+from src.models import PatientConfig, SignalConfig
+from src.patient_simulator import PatientSimulator
 
 
 def _make_patient(

@@ -1,11 +1,11 @@
 """Tests for the Impilo webhook receiver endpoint."""
+
 from __future__ import annotations
 
 import inspect
 import json
 
 import pytest
-
 
 VALID_READING_BODY = json.dumps({
     "type": "reading.weight",

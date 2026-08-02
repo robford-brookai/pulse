@@ -3,6 +3,7 @@
 Adds the tests/ directory itself to sys.path so that tests/utils.py is
 importable as `utils` from any test file under tests/.
 """
+
 from __future__ import annotations
 
 import pathlib

@@ -1,4 +1,5 @@
 """Redpanda publisher for linear-connector outbound events."""
+
 from __future__ import annotations
 
 import asyncio

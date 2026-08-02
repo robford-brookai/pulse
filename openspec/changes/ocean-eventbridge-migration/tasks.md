@@ -47,10 +47,38 @@ can be dispatched. `task dispatch` must not emit work orders for them.
       `git log --oneline -- packages/ocean | wc -l` is greater than 1 — history preserved, not squashed
       `git log --all --diff-filter=A --name-only | grep -c '/\.env$'` is 0
       The monorepo's own `AGENTS.md`, `CLAUDE.md` and `.gitignore` are unmodified by this commit.
-- [ ] 1.3 [DNA-735] Conform `packages/ocean` to the monorepo toolchain (ruff, mypy, pytest, workspace
-      membership) in a commit separate from 1.2. Green `task check` with the package included.
+- [x] 1.3 [DNA-735] Bring `packages/ocean` under the monorepo's **formatter and linter**, plus uv
+      workspace membership, in a commit separate from 1.2.
       `[model: sonnet | deps: 1.2 | lane: repo_change | wave: 0]`
       `serial: workspace_roots` — edits root tool configuration.
+      **Lint only. Typecheck and test are task 1.4** — see below for why that split exists, and do
+      not widen this one to swallow them.
+      Adopting the formatter reformats ocean's tree wholesale (~330 files). That is expected and
+      unavoidable if ruff is to cover the package, but it must be **its own commit**, separate
+      from the configuration change, and its SHA added to `.git-blame-ignore-revs` — otherwise it
+      erases blame on history 1.2 existed to preserve.
+      **Declared scope must equal executed scope.** A variable that lists `packages/ocean` while
+      the command hardcodes `src` is a false claim about what CI checks. If a target cannot cover
+      ocean yet, say so in `Taskfile.yml` with the reason; do not leave the variable implying it
+      does. This is a review-reject.
+      Done when: `task lint` checks every Python file under `packages/ocean` and passes; the
+      typecheck and test targets state plainly that ocean is out of scope and why.
+- [ ] 1.4 [DNA-779] Bring `packages/ocean` under **mypy and pytest**.
+      `[model: opus | deps: 1.3 | lane: repo_change | wave: 0]`
+      `serial: workspace_roots` — edits root tool configuration.
+      Split from 1.3 because this is real work, not configuration. Ocean's tests need Postgres and
+      Kafka: 18 test modules fail collection without them, and 56 tests collect cleanly. Its libs
+      have unresolved import errors under mypy.
+      The first attempt at 1.3 met a combined "conformance" goal by pointing mypy at `src` and
+      pytest at `tests` while the variables claimed ocean was included — a green gate covering 0
+      of 339 ocean files. That is the failure mode this split exists to prevent, so narrowing the
+      gate is not an available answer here either.
+      Likely shape: mark service-dependent tests with a marker CI deselects, get the 56
+      collectable tests running, and resolve or explicitly ignore the mypy import errors per
+      module with a reason. Coverage floor for ocean is a decision to make in this task, not an
+      assumption to inherit.
+      Done when: mypy covers `packages/ocean` (or every exclusion is per-module with a stated
+      reason), and ocean's collectable tests run in `task test`.
 
 ## 2. Wave 1 — the two contracts
 

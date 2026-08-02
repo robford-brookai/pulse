@@ -13,6 +13,10 @@ vars:
   APP: pkg_pulse
   SRC: src
   TESTS: tests
+  # Lint reaches the absorbed package; typecheck and test do not yet. These are separate vars so
+  # each target's scope is readable at the point of use — a var that names packages/ocean while
+  # the command runs against src is a false claim about what CI verifies (task 1.3).
+  LINT_PATHS: src tests packages/ocean
   CHANGE: ""
   VISIBILITY: --private
 
@@ -69,24 +73,29 @@ tasks:
   fmt:
     desc: Auto-format and apply fixable lint rules
     cmds:
-      - uv run ruff format {{.SRC}} {{.TESTS}}
-      - uv run ruff check --fix {{.SRC}} {{.TESTS}}
+      - uv run ruff format {{.LINT_PATHS}}
+      - uv run ruff check --fix {{.LINT_PATHS}}
 
   lint:
     desc: Check formatting and lint rules (read-only)
     cmds:
-      - uv run ruff format {{.SRC}} {{.TESTS}} --check
-      - uv run ruff check {{.SRC}} {{.TESTS}}
+      - uv run ruff format {{.LINT_PATHS}} --check
+      - uv run ruff check {{.LINT_PATHS}}
 
   typecheck:
-    desc: Type check with mypy
+    desc: Type check with mypy (packages/ocean NOT covered — see task 1.4 / DNA-779)
+    # packages/ocean is excluded on purpose: its libs have unresolved import errors under mypy.
+    # Bringing it in is DNA-779, not a config tweak. Stated here rather than only in a handoff,
+    # so the gap is visible to anyone reading what CI actually checks.
     cmds:
       - uv run mypy {{.SRC}}
 
   # --- 4. Test ---
 
   test:
-    desc: Run tests with coverage
+    desc: Run tests with coverage (packages/ocean NOT covered — see task 1.4 / DNA-779)
+    # packages/ocean/tests is excluded on purpose: 18 of its modules fail collection without
+    # Postgres and Kafka, and 56 collect cleanly. Getting those running is DNA-779.
     cmds:
       - uv run pytest {{.TESTS}} --cov={{.SRC}}/{{.APP}} --cov-report=term-missing
 

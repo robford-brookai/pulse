@@ -1,8 +1,8 @@
 """Unit tests for graph projection handlers and consumer dispatch."""
+
 from __future__ import annotations
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, call
+from unittest.mock import AsyncMock
 
 import pytest
 

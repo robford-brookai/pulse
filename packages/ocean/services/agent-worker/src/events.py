@@ -2,6 +2,7 @@
 
 All publish functions are fire-and-forget: log errors but never re-raise.
 """
+
 from __future__ import annotations
 
 import os

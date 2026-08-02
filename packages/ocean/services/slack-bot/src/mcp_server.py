@@ -1,4 +1,5 @@
 """MCP server — 12 operational tools for Ocean Slack Connector."""
+
 from __future__ import annotations
 
 import os
@@ -46,6 +47,7 @@ def create_mcp_app():
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 async def _hasura_query(query: str, variables: dict | None = None) -> dict:
     """Execute a Hasura GraphQL query."""
     async with httpx.AsyncClient() as client:
@@ -62,6 +64,7 @@ async def _hasura_query(query: str, variables: dict | None = None) -> dict:
 # ---------------------------------------------------------------------------
 # Slack tools (6)
 # ---------------------------------------------------------------------------
+
 
 @mcp.tool()
 async def slack_send_message(channel: str, text: str) -> dict:
@@ -81,7 +84,9 @@ async def slack_post_card(channel: str, blocks: list[dict], text: str) -> dict:
     log.info("mcp_tool_call", tool="slack_post_card", channel=channel)
     try:
         resp = await _slack_client.chat_postMessage(
-            channel=channel, blocks=blocks, text=text,
+            channel=channel,
+            blocks=blocks,
+            text=text,
         )
         return {"ok": True, "ts": resp["ts"]}
     except Exception as e:
@@ -115,7 +120,10 @@ async def slack_react(channel: str, timestamp: str, emoji: str) -> dict:
 
 @mcp.tool()
 async def slack_update_message(
-    channel: str, timestamp: str, text: str, blocks: list[dict] | None = None,
+    channel: str,
+    timestamp: str,
+    text: str,
+    blocks: list[dict] | None = None,
 ) -> dict:
     """Update an existing Slack message."""
     log.info("mcp_tool_call", tool="slack_update_message", channel=channel, ts=timestamp)
@@ -145,6 +153,7 @@ async def slack_list_channels(limit: int = 100) -> dict:
 # ---------------------------------------------------------------------------
 # Ocean tools (4)
 # ---------------------------------------------------------------------------
+
 
 @mcp.tool()
 async def ocean_get_task_status(task_id: str) -> dict:

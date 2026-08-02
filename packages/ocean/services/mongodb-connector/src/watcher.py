@@ -7,6 +7,7 @@ persists resume tokens in Postgres via ``ResumeTokenStore``.
 Resume token is saved *after* a successful publish to guarantee
 at-least-once delivery semantics.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -67,7 +68,7 @@ class CollectionWatcher:
                 break
             except pymongo.errors.PyMongoError as exc:
                 retry_count += 1
-                delay = min(2 ** retry_count + random.uniform(0, 1), _MAX_BACKOFF_SECONDS)
+                delay = min(2**retry_count + random.uniform(0, 1), _MAX_BACKOFF_SECONDS)
                 logger.error(
                     "watcher_error",
                     collection=self._collection_name,
@@ -129,9 +130,7 @@ class CollectionWatcher:
                 }
 
                 # Publish, then persist resume token (at-least-once)
-                self._publisher.publish(
-                    self._topic, transformed["patient_id"], event_dict
-                )
+                self._publisher.publish(self._topic, transformed["patient_id"], event_dict)
 
                 token_dict = _resume_token_to_dict(change["_id"])
                 await self._save_resume_token(token_dict)

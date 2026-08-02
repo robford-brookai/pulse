@@ -175,11 +175,7 @@ class TestSurfacesCannotDrift:
 
     def test_every_matchable_detail_type_is_one_a_publisher_can_emit(self):
         publishable = {a.detail_type for a in addressing_table().values()}
-        matchable = {
-            detail_type
-            for domain in LIVE_DOMAINS
-            for detail_type in rule_pattern([domain])["detail-type"]
-        }
+        matchable = {detail_type for domain in LIVE_DOMAINS for detail_type in rule_pattern([domain])["detail-type"]}
 
         assert matchable == publishable
 
