@@ -88,10 +88,10 @@ class TestAlertCard:
         assert actions["type"] == "actions"
         assert actions["block_id"] == f"task_actions_{TASK_ID}"
 
-    def test_actions_block_has_exactly_3_elements(self):
+    def test_actions_block_has_exactly_4_elements(self):
         blocks = make_alert_card()
         actions = blocks[6]
-        assert len(actions["elements"]) == 3
+        assert len(actions["elements"]) == 4
 
     def test_action_ids_are_correct(self):
         blocks = make_alert_card()
@@ -99,6 +99,7 @@ class TestAlertCard:
         action_ids = [el["action_id"] for el in actions["elements"]]
         assert "task_claim" in action_ids
         assert "task_resolve" in action_ids
+        assert "task_snooze" in action_ids
         assert "task_view_context" in action_ids
 
     def test_task_claim_has_primary_style(self):

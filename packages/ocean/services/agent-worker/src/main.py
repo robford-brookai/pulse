@@ -16,7 +16,7 @@ from fastapi import FastAPI
 
 from src.consumer import run_consumer
 from src.personas import load_personas
-from src.publisher import RedpandaPublisher
+from src.publisher import build_publisher
 
 __version__ = "0.1.0"
 
@@ -26,33 +26,37 @@ _consumer_task: asyncio.Task | None = None
 _claimed_tasks: set[str] = set()
 
 
-async def _start_worker(brokers: str, personas, compression: float) -> None:
+async def _start_worker(queue_url: str, personas, compression: float) -> None:
     """Initialize publisher and consumer in background.
 
     Runs after lifespan yields so /health is already responsive.
     """
-    publisher = await asyncio.to_thread(RedpandaPublisher, bootstrap_servers=brokers)
+    if not queue_url:
+        log.error("consumer_not_started_missing_queue_url", env_var="SQS_QUEUE_URL")
+        return
+    # Off the loop: the boto3 client reads credential and config files as it is constructed.
+    publisher = await asyncio.to_thread(build_publisher)
     log.info(
         "agent_worker_started",
-        brokers=brokers,
+        queue_url=queue_url,
         personas=[p.id for p in personas],
         compression_ratio=compression,
     )
-    await run_consumer(personas, brokers, publisher, _claimed_tasks)
+    await run_consumer(personas, queue_url, publisher, _claimed_tasks)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _consumer_task
 
-    brokers = os.environ.get("REDPANDA_BROKERS", "redpanda:29092")
+    queue_url = os.environ.get("SQS_QUEUE_URL", "")
     agents_path = os.environ.get("AGENTS_MD_PATH", "/app/AGENTS.md")
     compression = float(os.environ.get("COMPRESSION_RATIO", "960"))
 
     personas = load_personas(agents_path)
 
     # Defer publisher + consumer to background task so /health responds immediately
-    _consumer_task = asyncio.create_task(_start_worker(brokers, personas, compression))
+    _consumer_task = asyncio.create_task(_start_worker(queue_url, personas, compression))
 
     yield
 

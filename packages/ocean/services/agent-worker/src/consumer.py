@@ -1,11 +1,18 @@
-"""Async Kafka consumer for agent-worker.
+"""SQS consumer for agent-worker.
 
-Reads from ocean.tasks, filters for task.created from control-plane only,
-dispatches to claim competition, then runs AI decision pipeline.
+Receives EventBridge-delivered events from the agent-worker queue, filters for
+task.created from control-plane only, dispatches to claim competition, then runs
+the AI decision pipeline.
 
-Uses synchronous confluent_kafka.Consumer with poll() offloaded to a thread
-via asyncio.to_thread() so the event loop is never blocked. This keeps the
-FastAPI /health endpoint responsive during broker negotiation and polling.
+Ordering verdict: order-tolerant. The consumer handles a single event type
+(task.created) from a single source (control-plane); there is no cross-event
+lifecycle, so delivery order cannot change the final state.
+
+Receive → process → delete: a message is deleted only after handle_message
+returns, so a failure is left to visibility-timeout redelivery. This preserves
+the at-least-once, commit-after-success semantics the Kafka consumer had.
+Blocking boto3 calls are offloaded to a thread via asyncio.to_thread() so the
+event loop is never blocked and the FastAPI /health endpoint stays responsive.
 """
 
 from __future__ import annotations
@@ -13,31 +20,27 @@ from __future__ import annotations
 import asyncio
 import json
 import random
+from typing import Any
 
 import structlog
-from confluent_kafka import Consumer, KafkaError
+from ocean_broker import EventBridgePublisher
 
 from src.claim import compete_for_claim
 from src.decision import decide_with_fallback
 from src.events import publish_ai_decision, publish_ai_recommendation, publish_task_completed
 from src.personas import Persona
-from src.publisher import RedpandaPublisher
 
 log = structlog.get_logger()
 
-TOPICS = ["ocean.tasks"]
-
-CONSUMER_CONFIG: dict = {
-    "group.id": "agent-worker",
-    "auto.offset.reset": "earliest",
-    "enable.auto.commit": False,
-}
+SQS_MAX_MESSAGES = 10
+SQS_WAIT_TIME_SECONDS = 20
+SQS_ERROR_BACKOFF_SECONDS = 5
 
 
 async def handle_message(
     event_data: dict,
     personas: list[Persona],
-    publisher: RedpandaPublisher,
+    publisher: EventBridgePublisher,
     claimed_tasks: set[str],
 ) -> str:
     """Process a single deserialized event. Returns status string for testing."""
@@ -99,45 +102,79 @@ async def handle_message(
     return "dispatched"
 
 
+def _envelope_from_body(body: object) -> dict | None:
+    """Extract the event envelope from a parsed SQS message body.
+
+    An EventBridge rule delivers the envelope whole inside ``detail``. A body
+    with no ``detail`` key is accepted as a bare envelope so local tooling can
+    send straight to the queue.
+    """
+    if not isinstance(body, dict):
+        return None
+    detail = body.get("detail", body)
+    return detail if isinstance(detail, dict) else None
+
+
 async def run_consumer(
     personas: list[Persona],
-    bootstrap_servers: str,
-    publisher: RedpandaPublisher,
+    queue_url: str,
+    publisher: EventBridgePublisher,
     claimed_tasks: set[str],
+    *,
+    sqs_client: Any = None,
 ) -> None:
-    """Run the agent-worker consumer loop.
+    """Run the agent-worker consumer loop against its SQS queue.
 
-    Uses synchronous Consumer.poll() offloaded to a thread so the
-    asyncio event loop stays free for /health and other endpoints.
+    Deletes a message only after successful processing; a failed or malformed
+    message is left for visibility-timeout redelivery (the queue's redrive
+    policy dead-letters a poison message). Blocking receive/delete calls run
+    in a thread so the asyncio event loop stays free for /health.
     """
-    conf = {**CONSUMER_CONFIG, "bootstrap.servers": bootstrap_servers}
-    consumer = Consumer(conf)
-    consumer.subscribe(TOPICS)
-    log.info("agent_worker_consumer_started", topics=TOPICS, brokers=bootstrap_servers)
+    if sqs_client is None:
+        import boto3
 
-    try:
-        while True:
-            # Offload blocking poll to thread — keeps event loop responsive
-            msg = await asyncio.to_thread(consumer.poll, 1.0)
-            if msg is None:
+        sqs_client = boto3.client("sqs")
+
+    log.info("agent_worker_consumer_started", queue_url=queue_url)
+
+    while True:
+        try:
+            response = await asyncio.to_thread(
+                sqs_client.receive_message,
+                QueueUrl=queue_url,
+                MaxNumberOfMessages=SQS_MAX_MESSAGES,
+                WaitTimeSeconds=SQS_WAIT_TIME_SECONDS,
+            )
+        except Exception:
+            log.exception("sqs_receive_failed", queue_url=queue_url)
+            await asyncio.sleep(SQS_ERROR_BACKOFF_SECONDS)
+            continue
+
+        for msg in response.get("Messages", []):
+            receipt_handle = msg.get("ReceiptHandle", "")
+
+            try:
+                body = json.loads(msg["Body"])
+            except (json.JSONDecodeError, KeyError):
+                log.warning("sqs_malformed_message", receipt_handle=receipt_handle)
                 continue
 
-            if msg.error():
-                if msg.error().code() == KafkaError._PARTITION_EOF:
-                    continue
-                log.error("consumer_error", error=str(msg.error()))
+            event_data = _envelope_from_body(body)
+            if event_data is None:
+                log.warning("sqs_body_not_an_envelope", receipt_handle=receipt_handle)
                 continue
 
             try:
-                event_data = json.loads(msg.value())
                 await handle_message(event_data, personas, publisher, claimed_tasks)
-                consumer.commit(message=msg)
             except Exception:
-                log.exception(
-                    "agent_worker_dispatch_failed",
-                    offset=msg.offset(),
-                    topic=msg.topic(),
+                log.exception("agent_worker_dispatch_failed", receipt_handle=receipt_handle)
+                continue
+
+            try:
+                await asyncio.to_thread(
+                    sqs_client.delete_message,
+                    QueueUrl=queue_url,
+                    ReceiptHandle=receipt_handle,
                 )
-    finally:
-        consumer.close()
-        log.info("agent_worker_consumer_closed")
+            except Exception:
+                log.exception("sqs_delete_failed", receipt_handle=receipt_handle)

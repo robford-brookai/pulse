@@ -63,6 +63,63 @@ LIVE_DOMAINS: tuple[DomainName, ...] = (
 #: Former topics that survive only as history. They address to nothing.
 RETIRED_DOMAINS: tuple[str, ...] = ("warehouse-dlq",)
 
+ConsumerName = Literal[
+    "event-store",
+    "agent-worker",
+    "call-simulator",
+    "control-plane",
+    "graph-projection",
+    "slack-bot",
+    "warehouse-sync",
+]
+
+#: The seven consumers (design D2) and the domain set each one's rule matches,
+#: transcribed from each consumer's Kafka subscription at conversion time.
+#: ``warehouse-sync`` subscribed with the regex ``^ocean\..*``, so it takes every
+#: live domain. Task 6.2's rules and queues fan out over this mapping; edit it,
+#: regenerate, commit — the same discipline as :data:`LIVE_DOMAINS`.
+CONSUMER_DOMAINS: Mapping[ConsumerName, tuple[DomainName, ...]] = {
+    "event-store": (
+        "signals",
+        "alerts",
+        "tasks",
+        "interactions",
+        "outcomes",
+        "ai-ops",
+        "audit",
+        "logistics",
+        "ops",
+    ),
+    "agent-worker": ("tasks",),
+    "call-simulator": ("ai-ops",),
+    "control-plane": (
+        "alerts",
+        "ops",
+        "tickets",
+        "logistics",
+        "tasks",
+        "interactions",
+    ),
+    "graph-projection": (
+        "signals",
+        "alerts",
+        "tasks",
+        "interactions",
+        "outcomes",
+        "tickets",
+        "logistics",
+        "ai-ops",
+        "audit",
+        "ops",
+    ),
+    "slack-bot": ("tasks", "ai-ops", "interactions", "ops", "tickets"),
+    "warehouse-sync": LIVE_DOMAINS,
+}
+
+#: The namespace every retired Kafka topic carried: `ocean.<domain>`. Only
+#: :func:`domain_for_topic` should need it.
+TOPIC_PREFIX = "ocean."
+
 #: Path of the generated Terraform input, relative to the ``packages/ocean`` root.
 TFVARS_RELATIVE_PATH = Path("infra") / "terraform" / "generated" / "event_catalog.auto.tfvars.json"
 
@@ -104,6 +161,24 @@ def address_for(domain: str) -> EventBridgeAddress:
         raise KeyError(f"{domain!r} is not a live OCEAN domain; expected one of {sorted(LIVE_DOMAINS)}") from None
 
 
+def domain_for_topic(topic: str) -> str:
+    """Translate a former Kafka topic name to its catalog domain.
+
+    Accepts either form — ``ocean.tasks`` or ``tasks`` — because legacy call sites
+    use the prefixed name and the catalog keys on the bare domain. One shared copy
+    (hoisted from per-service duplicates, task 4.14): every publish site that still
+    names its destination by topic translates here.
+
+    Raises:
+        KeyError: if the result is not a live domain. Resolution happens before the
+            bus is touched, so a retired or misspelled topic fails loudly instead of
+            publishing to an address no rule matches.
+    """
+    domain = topic.removeprefix(TOPIC_PREFIX)
+    address_for(domain)
+    return domain
+
+
 def addressing_table() -> dict[str, EventBridgeAddress]:
     """Return the full domain → address mapping as a fresh dict."""
     return dict(_ADDRESSES)
@@ -126,6 +201,22 @@ def rule_pattern(domains: Iterable[str]) -> dict[str, list[str]]:
         raise ValueError("a rule pattern needs at least one domain")
 
     return {"source": [EVENT_SOURCE], "detail-type": wanted}
+
+
+def consumer_rule_pattern(consumer: str) -> dict[str, list[str]]:
+    """Build the EventBridge pattern for one consumer's rule (task 6.2).
+
+    Raises:
+        KeyError: if the consumer is not one of the seven in
+            :data:`CONSUMER_DOMAINS` — a rule for an unknown consumer would
+            deliver events to a queue nothing reads.
+    """
+    try:
+        domains = CONSUMER_DOMAINS[consumer]  # type: ignore[index]
+    except KeyError:
+        raise KeyError(f"{consumer!r} is not an OCEAN consumer; expected one of {sorted(CONSUMER_DOMAINS)}") from None
+
+    return rule_pattern(domains)
 
 
 def pattern_matches(pattern: Mapping[str, list[str]], source: str, detail_type: str) -> bool:
@@ -157,6 +248,10 @@ def terraform_inputs() -> dict[str, object]:
         "event_domains": sorted(LIVE_DOMAINS),
         "domain_event_patterns": {
             domain: json.dumps(rule_pattern([domain]), separators=(",", ":")) for domain in sorted(LIVE_DOMAINS)
+        },
+        "consumer_rule_patterns": {
+            consumer: json.dumps(consumer_rule_pattern(consumer), separators=(",", ":"))
+            for consumer in sorted(CONSUMER_DOMAINS)
         },
     }
 

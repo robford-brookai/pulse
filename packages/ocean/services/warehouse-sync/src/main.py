@@ -1,16 +1,16 @@
-"""warehouse-sync — pipes Redpanda events to Snowflake OCEAN_RAW.EVENTS."""
+"""warehouse-sync — pipes OCEAN bus events from its SQS queue to Snowflake OCEAN_RAW.EVENTS."""
 
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import time
+from typing import Any
 
 import snowflake.connector
 import structlog
 import uvicorn
-from confluent_kafka import KafkaError, Producer
-from confluent_kafka.aio import AIOConsumer as Consumer
 from cryptography.hazmat.primitives import serialization
 from fastapi import FastAPI
 
@@ -18,7 +18,9 @@ log = structlog.get_logger()
 
 BATCH_SIZE = 1000
 BATCH_TIMEOUT_S = 10.0
-CONSUMER_GROUP = "warehouse-sync"
+SQS_MAX_MESSAGES = 10
+SQS_WAIT_TIME_S = 5
+SQS_DELETE_CHUNK = 10
 app = FastAPI(title="warehouse-sync", version="0.1.0")
 
 
@@ -46,95 +48,154 @@ def _connect_snowflake() -> snowflake.connector.SnowflakeConnection:
     )
 
 
-def _make_producer(brokers: str) -> Producer:
-    return Producer({"bootstrap.servers": brokers})
+def _parse_message(msg: dict[str, Any]) -> tuple[str, str, str] | None:
+    """Extract (envelope json, domain, receipt handle) from an EventBridge→SQS message.
 
-
-def _publish_to_dlq(producer: Producer, messages: list[tuple[bytes, str]]) -> None:
-    for value, topic in messages:
-        producer.produce(
-            "ocean.warehouse-dlq",
-            value=value,
-            headers=[("original_topic", topic.encode())],
-        )
-    producer.flush()
+    The EventBridge event carries the envelope whole in ``detail`` and the domain in
+    ``detail-type``. A message that does not parse is returned as None and left
+    undeleted, so the queue's redrive policy moves it to the DLQ.
+    """
+    receipt = msg["ReceiptHandle"]
+    try:
+        body = json.loads(msg["Body"])
+        domain = body["detail-type"]
+        detail = body["detail"]
+    except (json.JSONDecodeError, KeyError, TypeError):
+        log.warning("malformed_message", receipt_handle=receipt)
+        return None
+    if not isinstance(domain, str):
+        log.warning("malformed_message", receipt_handle=receipt)
+        return None
+    return json.dumps(detail), domain, receipt
 
 
 async def _flush_batch(
     sf_conn: snowflake.connector.SnowflakeConnection,
-    producer: Producer,
-    batch: list[tuple[bytes, str]],
+    batch: list[tuple[str, str]],
 ) -> None:
+    """MERGE a batch into the raw events table, keyed on the envelope's event_id.
+
+    A row whose event_id already exists is skipped, never updated — so a message
+    redelivered after a lost delete cannot produce a duplicate row. Raises on
+    failure: the caller must leave the messages undeleted so they are redelivered.
+    """
     if not batch:
         return
+    cur = sf_conn.cursor()
     try:
-        cur = sf_conn.cursor()
         placeholders = ", ".join(["(%s, %s)"] * len(batch))
         sql = (
-            f"INSERT INTO STREAMLINE.OCEAN_RAW.EVENTS (data, _topic) "
-            f"SELECT PARSE_JSON(column1), column2 FROM VALUES {placeholders}"
+            f"MERGE INTO STREAMLINE.OCEAN_RAW.EVENTS t USING ("
+            f"SELECT PARSE_JSON(column1) AS data, column2 AS domain "
+            f"FROM VALUES {placeholders} "
+            f"QUALIFY ROW_NUMBER() OVER (PARTITION BY data:event_id ORDER BY column2) = 1"
+            f") s ON t.data:event_id = s.data:event_id "
+            f"WHEN NOT MATCHED THEN INSERT (data, _topic) VALUES (s.data, s.domain)"
         )
-        params = []
-        for v, t in batch:
-            params.extend([v.decode(), t])
+        params: list[str] = []
+        for data, domain in batch:
+            params.extend([data, domain])
         cur.execute(sql, params)
+    finally:
         cur.close()
-        log.info("batch_inserted", count=len(batch))
-    except Exception:
-        log.exception("batch_insert_failed", count=len(batch))
-        _publish_to_dlq(producer, batch)
+    log.info("batch_merged", count=len(batch))
 
 
-async def _consume_loop(brokers: str) -> None:
+async def _delete_messages(sqs_client: Any, queue_url: str, receipts: list[str]) -> None:
+    """Delete processed messages. A failed delete is logged, not retried: the
+    message redelivers, and the MERGE makes the redelivery a no-op."""
+    for i in range(0, len(receipts), SQS_DELETE_CHUNK):
+        chunk = receipts[i : i + SQS_DELETE_CHUNK]
+        entries = [{"Id": str(j), "ReceiptHandle": r} for j, r in enumerate(chunk)]
+        try:
+            resp = await sqs_client.delete_message_batch(QueueUrl=queue_url, Entries=entries)
+        except Exception:
+            log.exception("sqs_delete_failed", count=len(chunk))
+            continue
+        failed = resp.get("Failed", [])
+        if failed:
+            log.warning("sqs_delete_partial_failure", count=len(failed))
+
+
+async def _consume_loop(queue_url: str, *, sqs_client: Any = None) -> None:
+    """Receive → flush to Snowflake → delete.
+
+    At-least-once, delete-after-success: a failed flush raises, the messages stay
+    on the queue past their visibility timeout, and repeated failure reaches the
+    queue's redrive threshold and its DLQ (task 7.2).
+    """
     sf_conn = _connect_snowflake()
-    producer = _make_producer(brokers)
+    owns_client = sqs_client is None
+    if owns_client:
+        import aioboto3
 
-    conf = {
-        "bootstrap.servers": brokers,
-        "group.id": CONSUMER_GROUP,
-        "auto.offset.reset": "earliest",
-        "enable.auto.commit": False,
-        "topic.metadata.refresh.interval.ms": 30000,
-    }
-    consumer = Consumer(conf)
-    await consumer.subscribe(["^ocean\\..*"])
-    log.info("consumer_started", pattern="^ocean\\..*", brokers=brokers)
+        session = aioboto3.Session()
+        sqs_client = await session.client("sqs").__aenter__()
+    log.info("consumer_started", queue_url=queue_url)
 
-    batch: list[tuple[bytes, str]] = []
+    batch: list[tuple[str, str]] = []
+    receipts: list[str] = []
     last_flush = time.monotonic()
 
     try:
         while True:
-            msg = await consumer.poll(timeout=1.0)
+            try:
+                response = await sqs_client.receive_message(
+                    QueueUrl=queue_url,
+                    MaxNumberOfMessages=SQS_MAX_MESSAGES,
+                    WaitTimeSeconds=SQS_WAIT_TIME_S,
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception("sqs_receive_failed", queue_url=queue_url)
+                await asyncio.sleep(SQS_WAIT_TIME_S)
+                continue
 
-            if msg is not None:
-                if msg.error():
-                    if msg.error().code() != KafkaError._PARTITION_EOF:
-                        log.error("consumer_error", error=str(msg.error()))
-                    # Continue regardless (EOF is normal, other errors are logged)
-                elif msg.topic() != "ocean.warehouse-dlq":
-                    batch.append((msg.value(), msg.topic()))
+            for msg in response.get("Messages", []):
+                parsed = _parse_message(msg)
+                if parsed is None:
+                    continue
+                data, domain, receipt = parsed
+                batch.append((data, domain))
+                receipts.append(receipt)
 
             elapsed = time.monotonic() - last_flush
             if len(batch) >= BATCH_SIZE or (batch and elapsed >= BATCH_TIMEOUT_S):
-                await _flush_batch(sf_conn, producer, batch)
-                await consumer.commit()
+                try:
+                    await _flush_batch(sf_conn, batch)
+                except Exception:
+                    # Nothing to fall back to. Stop without deleting: the batch is
+                    # redelivered, and repeated failure reaches the queue's redrive
+                    # threshold and its DLQ (task 7.2).
+                    log.exception("batch_insert_failed", count=len(batch))
+                    raise
+                await _delete_messages(sqs_client, queue_url, receipts)
                 batch.clear()
+                receipts.clear()
                 last_flush = time.monotonic()
     finally:
-        if batch:
-            await _flush_batch(sf_conn, producer, batch)
-            await consumer.commit()
-        await consumer.close()
+        if owns_client:
+            await sqs_client.__aexit__(None, None, None)
         sf_conn.close()
         log.info("consumer_closed")
 
 
+def _log_consumer_exit(task: asyncio.Task) -> None:
+    """Surface a consumer that died. Without this the exception is swallowed."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        log.error("consumer_exited", error=str(exc), exc_info=exc)
+
+
 @app.on_event("startup")
 async def startup() -> None:
-    brokers = os.environ.get("REDPANDA_BROKERS", "redpanda:29092")
-    log.info("starting_consumer", brokers=brokers)
-    asyncio.create_task(_consume_loop(brokers))
+    queue_url = os.environ["SQS_QUEUE_URL"]
+    log.info("starting_consumer", queue_url=queue_url)
+    task = asyncio.create_task(_consume_loop(queue_url))
+    task.add_done_callback(_log_consumer_exit)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 """call-simulator FastAPI app -- lifespan + consumer + health endpoint.
 
-Consumes outreach approval events from ocean.ai-ops and simulates
-call lifecycles, publishing events to ocean.interactions.
+Consumes outreach approval events from the `ai-ops` domain's dedicated SQS queue and simulates
+call lifecycles, publishing events to the `interactions` domain on the OCEAN event bus.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import structlog
 from fastapi import FastAPI
 
 from src.consumer import AIOConsumer
-from src.publisher import RedpandaPublisher
+from src.publisher import build_publisher
 
 __version__ = "1.0.0"
 
@@ -28,12 +28,16 @@ _consumer_task: asyncio.Task | None = None
 async def lifespan(app: FastAPI):
     global _consumer, _consumer_task
 
-    brokers = os.environ.get("REDPANDA_BROKERS", "redpanda:29092")
-    publisher = RedpandaPublisher(bootstrap_servers=brokers)
-    _consumer = AIOConsumer(bootstrap_servers=brokers, publisher=publisher)
-    _consumer_task = asyncio.create_task(_consumer.start())
+    queue_url = os.environ.get("SQS_QUEUE_URL")
+    publisher = build_publisher()
+    if queue_url:
+        _consumer = AIOConsumer(queue_url=queue_url, publisher=publisher)
+        _consumer_task = asyncio.create_task(_consumer.start())
+    else:
+        # No queue, no consumer: the service still serves /health, and the gap is loud in logs.
+        log.warning("consumer_disabled_no_queue_url")
 
-    log.info("call_simulator_started", brokers=brokers)
+    log.info("call_simulator_started", queue_url=queue_url)
     yield
 
     if _consumer is not None:

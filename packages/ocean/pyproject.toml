@@ -18,6 +18,16 @@ ocean-broker = { workspace = true, editable = true }
 
 [dependency-groups]
 dev = [
+    # alembic + psycopg2 are the sync pair the migration runner uses: infra/postgres/env.py
+    # strips +asyncpg before handing the URL to alembic. Needed by the migration-chain test.
+    "alembic>=1.18.0",
+    # agent-worker and slack-bot import the Anthropic SDK, and slack-bot imports slack-bolt;
+    # their suites run in `task test:services` against this root venv (task 4.14, DNA-781).
+    "anthropic>=0.40.0",
+    "slack-bolt>=1.27.0",
+    # slack-bolt's AsyncApp does `from aiohttp import web` unconditionally.
+    "aiohttp>=3.9",
+    "psycopg2-binary>=2.9.10",
     "asyncpg>=0.31.0",
     "confluent-kafka>=2.13.2",
     "fastapi>=0.135.1",

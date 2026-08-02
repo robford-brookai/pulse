@@ -4,37 +4,22 @@ The service owns no transport code: every emit goes through `EventBridgePublishe
 `ocean-broker`, which resolves addressing from the generated event catalog and falls back to the
 Postgres `failed_webhooks` table when the bus rejects a write.
 
-What is left here is a naming adapter. Handlers and the escalation poller name their destination
-by the former Kafka topic (`ocean.tasks`), and translating that to the catalog domain in one place
-keeps their payload construction untouched.
+Handlers and the escalation poller name their destination by the former Kafka topic
+(`ocean.tasks`); the shared `domain_for_topic` from `ocean_broker.catalog` translates that to
+the catalog domain (re-exported here for the tests), keeping their payload construction
+untouched.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from ocean_broker import EventBridgePublisher, address_for
+from ocean_broker import EventBridgePublisher, domain_for_topic
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-_TOPIC_PREFIX = "ocean."
-
-
-def domain_for_topic(topic: str) -> str:
-    """Translate a former Kafka topic name to its catalog domain.
-
-    Accepts either form — `ocean.tasks` or `tasks` — because call sites use the prefixed name and
-    the catalog keys on the bare domain.
-
-    Raises:
-        KeyError: if the result is not a live domain. Resolution happens before the bus is
-            touched, so a retired or misspelled topic fails loudly instead of publishing to an
-            address no rule matches.
-    """
-    domain = topic.removeprefix(_TOPIC_PREFIX)
-    address_for(domain)
-    return domain
+__all__ = ["ControlPlanePublisher", "domain_for_topic"]
 
 
 class ControlPlanePublisher:

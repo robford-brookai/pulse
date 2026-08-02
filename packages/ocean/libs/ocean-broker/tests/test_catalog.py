@@ -19,9 +19,11 @@ from ocean_broker.catalog import (
     EVENT_SOURCE,
     LIVE_DOMAINS,
     RETIRED_DOMAINS,
+    TOPIC_PREFIX,
     EventBridgeAddress,
     address_for,
     addressing_table,
+    domain_for_topic,
     pattern_matches,
     render_tfvars_json,
     rule_pattern,
@@ -72,6 +74,35 @@ class TestSourceTable:
         provisioned = set(re.findall(r'^\s*"ocean\.([a-z-]+)"', script, re.MULTILINE))
 
         assert provisioned == set(LIVE_DOMAINS) | set(RETIRED_DOMAINS)
+
+
+class TestTopicTranslation:
+    """`domain_for_topic` — the one shared naming adapter for legacy call sites.
+
+    Hoisted here from per-service copies (task 4.14): every publish site that still
+    names its destination `ocean.<domain>` translates through this single function.
+    """
+
+    @pytest.mark.parametrize("domain", sorted(LIVE_DOMAINS))
+    def test_legacy_topic_maps_to_its_domain(self, domain):
+        assert domain_for_topic(f"{TOPIC_PREFIX}{domain}") == domain
+
+    @pytest.mark.parametrize("domain", sorted(LIVE_DOMAINS))
+    def test_bare_domain_passes_through(self, domain):
+        assert domain_for_topic(domain) == domain
+
+    def test_retired_topic_is_rejected_before_the_bus(self):
+        with pytest.raises(KeyError):
+            domain_for_topic("ocean.warehouse-dlq")
+
+    def test_unknown_topic_is_rejected_before_the_bus(self):
+        with pytest.raises(KeyError):
+            domain_for_topic("ocean.no-such-domain")
+
+    def test_prefix_matches_the_retired_topic_namespace(self):
+        """Every kafka_topic in the table is TOPIC_PREFIX + domain, so translation round-trips."""
+        for domain in LIVE_DOMAINS:
+            assert domain_for_topic(address_for(domain).kafka_topic) == domain
 
 
 class TestPublisherAddressing:
