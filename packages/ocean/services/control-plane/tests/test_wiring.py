@@ -3,7 +3,6 @@
 Verifies that:
 - run_consumer propagates publisher to dispatch
 - dispatch passes producer kwarg to handlers
-- main.py creates RedpandaPublisher and passes to run_consumer
 """
 
 from __future__ import annotations
@@ -78,32 +77,28 @@ class TestRunConsumerPassesPublisher:
 
         session_maker = MagicMock(return_value=mock_session_ctx)
 
-        # Build a fake message
-        fake_msg = MagicMock()
-        fake_msg.error.return_value = None
-        fake_msg.value.return_value = json.dumps({"event_type": "alert.created"}).encode()
+        # Build a fake SQS client: one message, then stop the loop
+        envelope = {"event_type": "alert.created"}
+        body = json.dumps({"detail": envelope, "detail-type": "alerts", "source": "ocean"})
+        batches = [{"Messages": [{"Body": body, "ReceiptHandle": "rh-1"}]}]
 
-        call_count = 0
+        def fake_receive(**kwargs):
+            if not batches:
+                raise KeyboardInterrupt  # stop the loop
+            return batches.pop(0)
 
-        async def fake_poll(timeout=1.0):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return fake_msg
-            raise KeyboardInterrupt  # stop the loop
+        sqs_client = MagicMock()
+        sqs_client.receive_message = fake_receive
+        sqs_client.delete_message = MagicMock()
 
-        mock_consumer_instance = AsyncMock()
-        mock_consumer_instance.poll = fake_poll
-        mock_consumer_instance.subscribe = AsyncMock()
-        mock_consumer_instance.commit = AsyncMock()
-        mock_consumer_instance.close = AsyncMock()
-
-        with (
-            patch("src.consumer.Consumer", return_value=mock_consumer_instance),
-            patch("src.consumer.dispatch", new_callable=AsyncMock) as mock_dispatch,
-        ):
+        with patch("src.consumer.dispatch", new_callable=AsyncMock) as mock_dispatch:
             try:
-                await consumer.run_consumer(session_maker, "localhost:9092", publisher=publisher)
+                await consumer.run_consumer(
+                    session_maker,
+                    "https://sqs.us-east-1.amazonaws.com/000000000000/ocean-control-plane",
+                    publisher=publisher,
+                    sqs_client=sqs_client,
+                )
             except KeyboardInterrupt:
                 pass
 
