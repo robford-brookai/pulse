@@ -64,6 +64,7 @@ including the run log.
 from __future__ import annotations
 
 import asyncio
+import itertools
 import json
 from types import SimpleNamespace
 from typing import Any
@@ -211,6 +212,27 @@ async def test_duplicate_within_a_single_batch_yields_one_row(harness, stage_log
     stage_log.observe(table_rows=sorted(harness.sf.table), batch_size_at_flush=2)
 
 
+@pytest.mark.duplicates
+async def test_redelivery_with_mutated_payload_does_not_overwrite(harness, stage_log):
+    """Append semantics, the never-update half (task 7.3): the MERGE has no
+    WHEN MATCHED clause, so a redelivery whose bytes differ from the original
+    — a producer retry after a partial write, a replayed archive — leaves the
+    first-committed row untouched rather than silently rewriting history."""
+    client = harness.client([
+        {"messages": [make_message("evt-120")], "advance": 11.0},
+        {"messages": [make_message("evt-120", delivery=1, name="mutated-evt-120")], "advance": 11.0},
+    ])
+    await harness.run_to_shutdown(client)
+
+    assert sorted(harness.sf.table) == ["evt-120"]
+    assert harness.sf.table["evt-120"]["data"]["payload"]["name"] == "fixture-evt-120"
+    assert "rh-evt-120-d1" in client.deleted  # the mutated redelivery is still retired
+    stage_log.observe(
+        table_rows=sorted(harness.sf.table),
+        retained_payload=harness.sf.table["evt-120"]["data"]["payload"]["name"],
+    )
+
+
 # ---------------------------------------------------------------------------
 # S4-reordering — delivery order does not change table contents
 # ---------------------------------------------------------------------------
@@ -246,6 +268,30 @@ async def test_interleaved_redelivery_order_is_immaterial(harness, stage_log):
 
     assert sorted(harness.sf.table) == ["evt-210", "evt-211"]
     stage_log.observe(table_rows=sorted(harness.sf.table))
+
+
+@pytest.mark.reordering
+async def test_every_permutation_across_flush_boundaries_converges(harness, stage_log):
+    """Append semantics, the order-tolerance half (task 7.3): the reversed-set
+    test above holds order constant *within* one flush; this one exhausts it
+    *across* flushes. Every permutation of a three-event set, delivered one
+    message per flush cycle, must produce byte-identical table contents —
+    commit order is the only thing allowed to vary."""
+    events = ["evt-220", "evt-221", "evt-222"]
+    reference: dict[str, Any] | None = None
+
+    for perm in itertools.permutations(events):
+        harness.sf.table.clear()
+        client = harness.client([{"messages": [make_message(e)], "advance": 11.0} for e in perm])
+        await harness.run_to_shutdown(client)
+
+        assert sorted(harness.sf.table) == events
+        if reference is None:
+            reference = dict(harness.sf.table)
+        else:
+            assert harness.sf.table == reference, f"permutation {perm} diverged"
+
+    stage_log.observe(permutations_checked=6, table_rows=sorted(harness.sf.table))
 
 
 # ---------------------------------------------------------------------------

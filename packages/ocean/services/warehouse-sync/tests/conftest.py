@@ -306,13 +306,17 @@ class ScriptedSqsClient:
         self.aexit_called = True
 
 
-def make_message(event_id: str, *, domain: str = "alerts", delivery: int = 0) -> dict[str, Any]:
+def make_message(
+    event_id: str, *, domain: str = "alerts", delivery: int = 0, name: str | None = None
+) -> dict[str, Any]:
     """A synthetic EventBridge→SQS message. ``delivery`` distinguishes the
-    receipt handle of a redelivery from the original's — as SQS does."""
+    receipt handle of a redelivery from the original's — as SQS does. ``name``
+    overrides the payload body, for tests where a redelivery carries different
+    bytes than the original."""
     envelope = {
         "event_id": event_id,
         "domain": domain,
-        "payload": {"synthetic": True, "name": f"fixture-{event_id}"},
+        "payload": {"synthetic": True, "name": name or f"fixture-{event_id}"},
     }
     return {
         "ReceiptHandle": f"rh-{event_id}-d{delivery}",
