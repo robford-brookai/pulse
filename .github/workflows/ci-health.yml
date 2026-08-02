@@ -34,12 +34,12 @@ jobs:
 
           echo "Verifying critical imports"
           python - <<'PY'
-import importlib, sys
-for mod in ("pydantic", "uvicorn"):
-    try:
-        importlib.import_module(mod)
-        print(f"{mod} OK")
-    except Exception as e:
-        print(f"{mod} import failed: {e}")
-        sys.exit(1)
-PY
+          import importlib, sys
+          for mod in ("pydantic", "uvicorn"):
+              try:
+                  importlib.import_module(mod)
+                  print(f"{mod} OK")
+              except Exception as e:
+                  print(f"{mod} import failed: {e}")
+                  sys.exit(1)
+          PY
