@@ -19,8 +19,9 @@ if str(_CONNECTOR_ROOT) not in sys.path:
     sys.path.insert(0, str(_CONNECTOR_ROOT))
 
 # Stub out third-party modules that aren't available in the test environment.
+# ocean_broker is deliberately absent: it is a workspace library, installed, and the module
+# under test now imports EventBridgePublisher from it for real.
 for _mod_name in (
-    "ocean_broker",
     "confluent_kafka",
     "motor",
     "motor.motor_asyncio",

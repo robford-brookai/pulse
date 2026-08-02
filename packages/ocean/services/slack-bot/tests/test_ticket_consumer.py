@@ -126,7 +126,9 @@ class TestHandleTicketCreated:
             publisher=publisher,
             thread_manager=thread_manager,
         )
-        thread_manager.store_ticket_parent.assert_called_once_with("tkt-001", "#device-issues", "1234567890.123456")
+        thread_manager.store_ticket_parent.assert_called_once_with(
+            "tkt-001", "#device-issues", "1234567890.123456", event_ts="2026-03-13T10:00:00Z"
+        )
 
 
 class TestHandleTicketUpdated:

@@ -80,6 +80,9 @@ class Interaction(Base):
     outcome = Column(Text, nullable=True)
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
+    # Event time of the event that last wrote this row — the sequence-guard column.
+    # `completed_at` above is processing time and must never be used for that.
+    last_event_at = Column(DateTime(timezone=True), nullable=True)
     last_event_id = Column(Text, nullable=True)
 
 

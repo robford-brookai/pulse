@@ -12,9 +12,9 @@ from typing import Any
 
 import structlog
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from ocean_broker import EventBridgePublisher
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from src.publisher import EventPublisher
 from src.resume_token import ResumeTokenStore
 from src.transformer import BaseTransformer
 from src.watcher import CollectionWatcher
@@ -29,12 +29,12 @@ class WatcherManager:
         self,
         *,
         db: AsyncIOMotorDatabase,
-        publisher: EventPublisher,
+        publisher: EventBridgePublisher,
         token_store: ResumeTokenStore,
         db_session_factory: async_sessionmaker,
         transformer_registry: dict[str, BaseTransformer],
         collections: list[str] | None = None,
-        topic: str = "ocean.patient-state",
+        domain: str = "patient-state",
     ) -> None:
         # Default to all registered collections when none specified.
         if collections is None:
@@ -51,7 +51,7 @@ class WatcherManager:
         self._session_factory = db_session_factory
         self._registry = transformer_registry
         self._collections = collections
-        self._topic = topic
+        self._domain = domain
         self._tasks: dict[str, asyncio.Task[Any]] = {}
 
     # ------------------------------------------------------------------
@@ -67,7 +67,7 @@ class WatcherManager:
                 publisher=self._publisher,
                 token_store=self._token_store,
                 db_session_factory=self._session_factory,
-                topic=self._topic,
+                domain=self._domain,
                 collection_name=name,
             )
             task = asyncio.create_task(watcher.watch(shutdown_event), name=f"watcher-{name}")

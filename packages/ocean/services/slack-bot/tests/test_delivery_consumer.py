@@ -87,7 +87,7 @@ class TestDeliveryNotifyHandler:
         )
 
         thread_manager.store_parent_message.assert_called_once_with(
-            "delivery:ord-dlv-001", "#ocean-activation", "1234567890.123"
+            "delivery:ord-dlv-001", "#ocean-activation", "1234567890.123", event_ts="2026-03-14T12:00:00Z"
         )
 
     @pytest.mark.asyncio

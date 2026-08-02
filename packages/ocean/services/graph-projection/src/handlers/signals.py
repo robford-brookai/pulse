@@ -28,7 +28,8 @@ async def handle_signal_received(event_data: dict, session) -> None:
             "    (:signal_id, :patient_id, :signal_type, :value, :unit, :received_at, :anomalous, :event_id) "
             "ON CONFLICT (signal_id) DO UPDATE SET "
             "    anomalous = EXCLUDED.anomalous, "
-            "    last_event_id = EXCLUDED.last_event_id "
+            "    last_event_id = EXCLUDED.last_event_id, "
+            "    received_at = EXCLUDED.received_at "
             "WHERE signals.received_at <= EXCLUDED.received_at"
         ),
         {
@@ -46,7 +47,11 @@ async def handle_signal_received(event_data: dict, session) -> None:
 
 
 async def handle_signal_missing(event_data: dict, session) -> None:
-    """Project signal.missing — missing signal IS an anomaly."""
+    """Project signal.missing — missing signal IS an anomaly.
+
+    Guarded on `received_at`, which is event time (the envelope's `timestamp`), so a stale
+    missing event cannot mark a signal anomalous after a newer event said otherwise.
+    """
     payload = event_data.get("payload", {})
     signal_id = event_data.get("entity_id", "")
     received_at = _parse_ts(event_data["timestamp"])
@@ -59,7 +64,9 @@ async def handle_signal_missing(event_data: dict, session) -> None:
             "    (:signal_id, :patient_id, :signal_type, NULL, NULL, :received_at, true, :event_id) "
             "ON CONFLICT (signal_id) DO UPDATE SET "
             "    anomalous = true, "
-            "    last_event_id = EXCLUDED.last_event_id"
+            "    last_event_id = EXCLUDED.last_event_id, "
+            "    received_at = EXCLUDED.received_at "
+            "WHERE signals.received_at <= EXCLUDED.received_at"
         ),
         {
             "signal_id": signal_id,
