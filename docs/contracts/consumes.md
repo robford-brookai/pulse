@@ -21,6 +21,12 @@ pinned only where a gate depends on its behaviour.
 | OpenLore | npm global CLI + MCP server | `openlore` | `openlore drift` is a pre-commit hook; `orient()` for agents |
 | Orca ADE | desktop app + CLI | onorca.dev | worktree execution; `dispatch_tasks.py` prints its commands |
 | go-task | task runner | brew / taskfile.dev | every documented command; CI invokes `task check` |
+| Linear CLI | CLI, **optional** | linear.app | only `workflow:lint:linear`; absent means that check skips, never fails |
+
+The Linear CLI is the one optional entry. `workflow:lint:linear` verifies WORKFLOW.md's declared
+team, project and status set against the live workspace, and prints `SKIPPED` and exits 0 when the
+client is missing or unreachable. A gate that fails because a machine lacks an optional tool
+teaches people to ignore it; one that answers and disagrees is a hard failure.
 
 Python dependencies are declared in `pyproject.toml` and locked in `uv.lock`; that lockfile, not
 this table, is the source of truth for them.

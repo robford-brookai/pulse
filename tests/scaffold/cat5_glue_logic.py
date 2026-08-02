@@ -475,3 +475,22 @@ def test_diagram_may_not_invent_a_gate(tmp_path: Path) -> None:
 def test_header_version_must_match_the_yaml(tmp_path: Path) -> None:
     block, text = workflow.load(_workflow_md(tmp_path, MINIMAL.replace("**Status:** v1.0.0", "**Status:** v9.9.9")))
     assert any("stale" in e for e in workflow.check_projections(block, text))
+
+
+def test_live_linear_check_skips_rather_than_fails_when_the_client_is_absent(tmp_path: Path) -> None:
+    """A gate that fails because a machine lacks an optional tool teaches people to ignore it.
+
+    `workflow:lint:linear` runs inside `task verify`, and the Linear CLI is optional per
+    docs/contracts/consumes.md — so an absent client must skip loudly, not break the gate.
+    """
+    block, _ = workflow.load(_workflow_md(tmp_path, MINIMAL))
+    with pytest.raises(workflow.LinearUnavailable, match=r"unavailable|failed|parse"):
+        workflow.check_linear_live(block)
+
+
+def test_lint_exits_zero_when_the_live_check_is_skipped(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    path = _workflow_md(tmp_path, MINIMAL)
+    assert workflow.lint(path, with_linear=True) == 0
+    captured = capsys.readouterr()
+    assert "SKIPPED" in captured.err, "a skipped live check must say so"
+    assert "SKIPPED" in captured.out, "the summary must not claim the live check ran"
