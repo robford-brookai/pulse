@@ -524,8 +524,18 @@ def test_logistics_events_registered_in_event_handlers():
     assert "device.disassociated" in EVENT_HANDLERS
 
 
-def test_ocean_logistics_in_topics():
-    """ocean.logistics is in the consumer TOPICS list."""
-    from src.consumer import TOPICS
+def test_logistics_event_types_registered():
+    """Logistics event types stay registered after the SQS conversion (DNA-761).
 
-    assert "ocean.logistics" in TOPICS
+    Topic subscription is retired; the logistics domain reaches this consumer
+    via its dedicated EventBridge rule and queue.
+    """
+    from src.consumer import EVENT_HANDLERS
+
+    for event_type in (
+        "fulfillment.updated",
+        "return.updated",
+        "device.associated",
+        "device.disassociated",
+    ):
+        assert event_type in EVENT_HANDLERS

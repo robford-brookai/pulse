@@ -225,8 +225,9 @@ def test_ticket_events_registered_in_event_handlers():
     assert "ticket.resolved" in EVENT_HANDLERS
 
 
-def test_ocean_tickets_in_topics():
-    """ocean.tickets is in the consumer TOPICS list."""
-    from src.consumer import TOPICS
+def test_ticket_event_types_registered():
+    """Ticket event types stay registered after the SQS conversion (DNA-761)."""
+    from src.consumer import EVENT_HANDLERS
 
-    assert "ocean.tickets" in TOPICS
+    for event_type in ("ticket.created", "ticket.updated", "ticket.resolved"):
+        assert event_type in EVENT_HANDLERS
