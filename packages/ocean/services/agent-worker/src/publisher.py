@@ -1,27 +1,41 @@
-"""Redpanda publisher for agent-worker events."""
+"""Publisher wiring for agent-worker.
+
+The transport is ocean-broker's :class:`EventBridgePublisher`; this module only resolves what the
+service knows and the library does not — the Postgres connection behind the ``failed_webhooks``
+dead-letter fallback. Nothing here addresses the bus: the domain → ``(source, detail-type)`` mapping
+lives in the shared event catalog.
+"""
 
 from __future__ import annotations
 
-import asyncio
-import json
-import logging
+import os
 
-from confluent_kafka import Producer
+import structlog
+from ocean_broker import EventBridgePublisher
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-log = logging.getLogger(__name__)
+log = structlog.get_logger()
 
 
-class RedpandaPublisher:
-    """Async wrapper around confluent_kafka Producer."""
+def build_publisher() -> EventBridgePublisher:
+    """Build the shared EventBridge publisher for this service.
 
-    def __init__(self, bootstrap_servers: str) -> None:
-        self._producer = Producer({"bootstrap.servers": bootstrap_servers})
+    Under Kafka this service published fire-and-forget with no dead-letter path. It gains one here
+    by inheritance: a bus failure writes the envelope to ``failed_webhooks`` instead of dropping it,
+    provided ``DATABASE_URL`` points at the Postgres holding that table.
+    """
+    return EventBridgePublisher(db_session_maker=_dlq_session_maker())
 
-    async def publish(self, topic: str, event: dict) -> None:
-        payload = json.dumps(event).encode("utf-8")
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, self._produce_sync, topic, payload)
 
-    def _produce_sync(self, topic: str, payload: bytes) -> None:
-        self._producer.produce(topic, value=payload)
-        self._producer.flush()
+def _dlq_session_maker() -> async_sessionmaker[AsyncSession] | None:
+    """Return the session maker for the dead-letter table, or None if no database is configured.
+
+    A missing ``DATABASE_URL`` is logged rather than raised: without it the service still publishes,
+    it just cannot durably queue a failed envelope, and the publisher already logs that case per
+    event.
+    """
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        log.warning("dlq_not_configured", reason="DATABASE_URL is unset; failed publishes are logged only")
+        return None
+    return async_sessionmaker(create_async_engine(url), expire_on_commit=False)
