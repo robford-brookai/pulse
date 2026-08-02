@@ -45,9 +45,7 @@ class EventBridgePublisher:
         self._db_session_maker = db_session_maker
         self._client = boto3.client("events", region_name=region)
 
-    async def publish(
-        self, detail_type: str, event: dict[str, Any], key: str | None = None
-    ) -> None:
+    async def publish(self, detail_type: str, event: dict[str, Any], key: str | None = None) -> None:
         """Publish an event envelope to EventBridge, falling back to the Postgres DLQ.
 
         A bus rejection never propagates: the envelope is written to ``failed_webhooks`` and the
@@ -87,16 +85,12 @@ class EventBridgePublisher:
         # put_events reports per-entry rejection in the response, not by raising.
         if response.get("FailedEntryCount", 0) > 0:
             entry = response.get("Entries", [{}])[0]
-            await self._handle_failure(
-                detail_type, key, envelope, entry.get("ErrorMessage", "unknown error")
-            )
+            await self._handle_failure(detail_type, key, envelope, entry.get("ErrorMessage", "unknown error"))
             return
 
         log.info("event_published", detail_type=detail_type, key=key)
 
-    async def _handle_failure(
-        self, detail_type: str, key: str | None, envelope: dict[str, Any], error: str
-    ) -> None:
+    async def _handle_failure(self, detail_type: str, key: str | None, envelope: dict[str, Any], error: str) -> None:
         """Log a publish failure and durably queue the envelope, if a DLQ is configured."""
         log.error("eventbridge_publish_failed", detail_type=detail_type, key=key, error=error)
         session_maker = self._db_session_maker

@@ -98,11 +98,7 @@ class TestEventBridgePublisher:
         call_args = mock_eventbridge_client.put_events.call_args
 
         # The envelope should be in the Entries
-        entries = (
-            call_args.kwargs["Entries"]
-            if "Entries" in call_args.kwargs
-            else call_args[1]["Entries"]
-        )
+        entries = call_args.kwargs["Entries"] if "Entries" in call_args.kwargs else call_args[1]["Entries"]
         assert len(entries) == 1
         entry = entries[0]
 
@@ -132,11 +128,7 @@ class TestEventBridgePublisher:
         # -- Verify detail-type is the domain, not the event_type --
         mock_eventbridge_client.put_events.assert_called_once()
         call_args = mock_eventbridge_client.put_events.call_args
-        entries = (
-            call_args.kwargs["Entries"]
-            if "Entries" in call_args.kwargs
-            else call_args[1]["Entries"]
-        )
+        entries = call_args.kwargs["Entries"] if "Entries" in call_args.kwargs else call_args[1]["Entries"]
         entry = entries[0]
 
         assert entry["DetailType"] == "patient-state"
@@ -160,20 +152,14 @@ class TestEventBridgePublisher:
         # -- Verify key is in the envelope detail --
         mock_eventbridge_client.put_events.assert_called_once()
         call_args = mock_eventbridge_client.put_events.call_args
-        entries = (
-            call_args.kwargs["Entries"]
-            if "Entries" in call_args.kwargs
-            else call_args[1]["Entries"]
-        )
+        entries = call_args.kwargs["Entries"] if "Entries" in call_args.kwargs else call_args[1]["Entries"]
         entry = entries[0]
 
         detail = json.loads(entry["Detail"])
         assert detail["key"] == key
 
     @pytest.mark.asyncio
-    async def test_bus_failure_writes_failed_webhooks(
-        self, publisher, mock_eventbridge_client, mock_db_session_maker
-    ):
+    async def test_bus_failure_writes_failed_webhooks(self, publisher, mock_eventbridge_client, mock_db_session_maker):
         """On EventBridge failure, write to failed_webhooks table and do not raise.
 
         A publish failure should not raise an exception; instead it should
@@ -214,9 +200,7 @@ class TestEventBridgePublisher:
         assert params["error"] == error_message
 
     @pytest.mark.asyncio
-    async def test_bus_failure_does_not_raise(
-        self, publisher, mock_eventbridge_client, mock_db_session_maker
-    ):
+    async def test_bus_failure_does_not_raise(self, publisher, mock_eventbridge_client, mock_db_session_maker):
         """Bus failure should not raise an exception."""
         publisher._db_session_maker = mock_db_session_maker
         mock_eventbridge_client.put_events.return_value = {
@@ -230,9 +214,7 @@ class TestEventBridgePublisher:
         await publisher.publish(detail_type="signals", event=envelope, key="key")
 
     @pytest.mark.asyncio
-    async def test_success_does_not_touch_the_dlq(
-        self, publisher, mock_eventbridge_client, mock_db_session_maker
-    ):
+    async def test_success_does_not_touch_the_dlq(self, publisher, mock_eventbridge_client, mock_db_session_maker):
         """A successful publish must not write to failed_webhooks."""
         publisher._db_session_maker = mock_db_session_maker
 
@@ -260,9 +242,7 @@ class TestEventBridgePublisher:
         mock_eventbridge_client.put_events.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_client_exception_writes_dlq(
-        self, publisher, mock_eventbridge_client, mock_db_session_maker
-    ):
+    async def test_client_exception_writes_dlq(self, publisher, mock_eventbridge_client, mock_db_session_maker):
         """A raising boto3 client is handled on the same path as a rejected entry."""
         publisher._db_session_maker = mock_db_session_maker
         mock_eventbridge_client.put_events.side_effect = RuntimeError("connection reset")
@@ -274,9 +254,7 @@ class TestEventBridgePublisher:
         assert json.loads(params["payload"].decode())["key"] == "k"
 
     @pytest.mark.asyncio
-    async def test_every_live_domain_addresses_from_the_catalog(
-        self, publisher, mock_eventbridge_client
-    ):
+    async def test_every_live_domain_addresses_from_the_catalog(self, publisher, mock_eventbridge_client):
         """Each live domain publishes at the address the catalog gives it.
 
         The list is not restated here: a domain added to the catalog is covered by this test
@@ -292,9 +270,7 @@ class TestEventBridgePublisher:
             assert entry["DetailType"] == expected.detail_type
 
     @pytest.mark.asyncio
-    async def test_what_is_published_is_what_the_rules_match(
-        self, publisher, mock_eventbridge_client
-    ):
+    async def test_what_is_published_is_what_the_rules_match(self, publisher, mock_eventbridge_client):
         """Every address this publisher emits is caught by the generated rule pattern.
 
         This is the publisher half of the surface equivalence: the two derived surfaces cannot
