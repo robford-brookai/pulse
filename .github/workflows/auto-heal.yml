@@ -165,10 +165,10 @@ jobs:
     if: ${{ needs.diagnose.outputs.healthy == 'true' && github.event.workflow_run.conclusion == 'failure' }}
     steps:
       - name: Re-run failed workflow
-          uses: peter-evans/re-run-workflow@0000000000000000000000000000000000000000 # v2.0
-          with:
-            run_id: ${{ github.event.workflow_run.id }}
-            token: ${{ secrets.GITHUB_TOKEN }}
+        uses: peter-evans/re-run-workflow@0000000000000000000000000000000000000000 # v2.0
+        with:
+          run_id: ${{ github.event.workflow_run.id }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   notify:
     needs: diagnose
