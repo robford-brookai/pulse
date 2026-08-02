@@ -20,7 +20,14 @@ from typing import Any
 import pytest
 import yaml
 from ocean_broker.catalog import CONSUMER_DOMAINS, terraform_inputs
-from ocean_broker.local_topology import apply_topology, main, resource_name
+from ocean_broker.local_topology import (
+    DLQ_MAX_RECEIVE_COUNT,
+    DLQ_MESSAGE_RETENTION_SECONDS,
+    apply_topology,
+    dlq_name,
+    main,
+    resource_name,
+)
 
 #: `packages/ocean`, from `packages/ocean/libs/ocean-broker/tests/`.
 _COMPOSE_FILE = Path(__file__).resolve().parents[3] / "infra" / "docker-compose.yml"
@@ -65,16 +72,26 @@ class FakeEventsClient:
 
 
 class FakeSqsClient:
-    """In-memory SQS: queue URLs, ARNs, and attributes keyed by queue name."""
+    """In-memory SQS: queue URLs, ARNs, and attributes keyed by queue name.
+
+    Also models the message half of the redrive contract, so a test can drive
+    a message through repeated failed receives and observe it land in the DLQ
+    the queue's ``RedrivePolicy`` names — the semantics the real SQS applies.
+    """
 
     def __init__(self) -> None:
         self.queues: dict[str, dict[str, str]] = {}
+        self.messages: dict[str, list[dict[str, Any]]] = {}
 
-    def create_queue(self, QueueName: str) -> dict[str, str]:
+    def create_queue(self, QueueName: str, Attributes: dict[str, str] | None = None) -> dict[str, str]:
         url = f"http://localstack:4566/000000000000/{QueueName}"
         self.queues.setdefault(
             QueueName,
-            {"QueueUrl": url, "QueueArn": f"arn:aws:sqs:us-east-1:000000000000:{QueueName}"},
+            {
+                "QueueUrl": url,
+                "QueueArn": f"arn:aws:sqs:us-east-1:000000000000:{QueueName}",
+                **(Attributes or {}),
+            },
         )
         return {"QueueUrl": self.queues[QueueName]["QueueUrl"]}
 
@@ -85,11 +102,46 @@ class FakeSqsClient:
     def set_queue_attributes(self, QueueUrl: str, Attributes: dict[str, str]) -> None:
         self._by_url(QueueUrl).update(Attributes)
 
+    def send_message(self, QueueUrl: str, MessageBody: str) -> None:
+        name = self._name_by_url(QueueUrl)
+        self.messages.setdefault(name, []).append({"Body": MessageBody, "receive_count": 0})
+
+    def receive_message(self, QueueUrl: str, **_: Any) -> dict[str, list[dict[str, Any]]]:
+        """Return the queue's visible messages, dead-lettering any past the redrive threshold.
+
+        Real SQS moves a message to the redrive target once its receive count
+        exceeds ``maxReceiveCount`` — receiving without deleting is how a failing
+        consumer drives a message toward the DLQ.
+        """
+        name = self._name_by_url(QueueUrl)
+        redrive = json.loads(self.queues[name].get("RedrivePolicy", "null"))
+        delivered, dead = [], []
+        for message in self.messages.get(name, []):
+            message["receive_count"] += 1
+            if redrive and message["receive_count"] > redrive["maxReceiveCount"]:
+                dead.append(message)
+            else:
+                delivered.append(message)
+        if dead:
+            dlq = self._name_by_arn(redrive["deadLetterTargetArn"])
+            self.messages[dlq] = self.messages.get(dlq, []) + dead
+        self.messages[name] = delivered
+        return {"Messages": [{"Body": m["Body"], "ReceiptHandle": f"rh-{i}"} for i, m in enumerate(delivered)]}
+
     def _by_url(self, url: str) -> dict[str, str]:
-        for queue in self.queues.values():
+        return self.queues[self._name_by_url(url)]
+
+    def _name_by_url(self, url: str) -> str:
+        for name, queue in self.queues.items():
             if queue["QueueUrl"] == url:
-                return queue
+                return name
         raise AssertionError(f"unknown queue URL {url!r}")
+
+    def _name_by_arn(self, arn: str) -> str:
+        for name, queue in self.queues.items():
+            if queue["QueueArn"] == arn:
+                return name
+        raise AssertionError(f"unknown queue ARN {arn!r}")
 
 
 def _state(events: FakeEventsClient, sqs: FakeSqsClient) -> dict[str, Any]:
@@ -108,7 +160,7 @@ def test_creates_bus_and_one_rule_and_queue_per_consumer() -> None:
 
     assert events.buses == {"ocean"}
     assert set(events.rules) == {resource_name("ocean", consumer) for consumer in CONSUMER_DOMAINS}
-    assert set(sqs.queues) == set(events.rules)
+    assert set(sqs.queues) == set(events.rules) | {dlq_name("ocean", consumer) for consumer in CONSUMER_DOMAINS}
     for rule_name, targets in events.targets.items():
         assert [t["Arn"] for t in targets] == [sqs.queues[rule_name]["QueueArn"]]
 
@@ -162,6 +214,65 @@ def test_queue_policy_admits_only_the_consumers_own_rule() -> None:
         assert rule_arn.endswith(f"/ocean/{name}")
 
 
+def test_every_consumer_queue_redrives_to_its_own_dlq() -> None:
+    """Task 7.2: dead-lettering is the queue's redrive policy, uniform across consumers.
+
+    Mirrors dlq.tf — same names, same maxReceiveCount, same retention, and a
+    redrive-allow policy admitting only the consumer's own queue.
+    """
+    events, sqs = FakeEventsClient(), FakeSqsClient()
+
+    apply_topology(events, sqs, event_bus_name="ocean")
+
+    for consumer in CONSUMER_DOMAINS:
+        queue = sqs.queues[resource_name("ocean", consumer)]
+        dlq = sqs.queues[dlq_name("ocean", consumer)]
+
+        redrive = json.loads(queue["RedrivePolicy"])
+        assert redrive == {
+            "deadLetterTargetArn": dlq["QueueArn"],
+            "maxReceiveCount": DLQ_MAX_RECEIVE_COUNT,
+        }, consumer
+
+        assert dlq["MessageRetentionPeriod"] == str(DLQ_MESSAGE_RETENTION_SECONDS), consumer
+
+        allow = json.loads(dlq["RedriveAllowPolicy"])
+        assert allow == {
+            "redrivePermission": "byQueue",
+            "sourceQueueArns": [queue["QueueArn"]],
+        }, consumer
+
+
+@pytest.mark.parametrize("consumer", ["warehouse-sync", "event-store"])
+def test_repeatedly_failing_event_lands_in_the_consumers_own_dlq(consumer: str) -> None:
+    """Spec `warehouse-event-sync`: warehouse failures dead-letter uniformly.
+
+    A consumer that keeps failing receives without deleting — warehouse-sync's
+    failed-flush contract. Under the redrive policy the topology sets, the
+    event must land in that consumer's own DLQ once the threshold is passed,
+    and it must do so through the same mechanism as any other consumer's
+    (hence the parametrisation over a second consumer).
+    """
+    events, sqs = FakeEventsClient(), FakeSqsClient()
+    queue_urls = apply_topology(events, sqs, event_bus_name="ocean")
+    sqs.send_message(queue_urls[consumer], '{"detail-type": "ops", "detail": {"event_id": "evt-1"}}')
+
+    # The consumer fails every flush: each receive returns the message, nothing deletes it.
+    for _ in range(DLQ_MAX_RECEIVE_COUNT):
+        (message,) = sqs.receive_message(QueueUrl=queue_urls[consumer])["Messages"]
+        assert "evt-1" in message["Body"]
+
+    # Past the threshold the message is gone from the consumer queue and sits in its DLQ.
+    assert sqs.receive_message(QueueUrl=queue_urls[consumer])["Messages"] == []
+    dead = sqs.messages[dlq_name("ocean", consumer)]
+    assert [json.loads(m["Body"])["detail"]["event_id"] for m in dead] == ["evt-1"]
+
+    # No other consumer's DLQ saw it — failure attribution stays exact.
+    for other in CONSUMER_DOMAINS:
+        if other != consumer:
+            assert sqs.messages.get(dlq_name("ocean", other), []) == []
+
+
 def test_compose_runs_no_kafka_and_wires_consumers_to_their_queues() -> None:
     """Spec `local-event-stack`: no redpanda container; consumers read their own queue."""
     services = yaml.safe_load(_COMPOSE_FILE.read_text())["services"]
@@ -195,4 +306,8 @@ def test_main_builds_clients_and_applies(monkeypatch: pytest.MonkeyPatch) -> Non
 
     assert sorted(built) == ["events", "sqs"]
     assert events.buses == {"ocean-local"}
-    assert set(sqs.queues) == {resource_name("ocean-local", consumer) for consumer in CONSUMER_DOMAINS}
+    assert set(sqs.queues) == {
+        name
+        for consumer in CONSUMER_DOMAINS
+        for name in (resource_name("ocean-local", consumer), dlq_name("ocean-local", consumer))
+    }
