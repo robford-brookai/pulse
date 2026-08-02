@@ -409,7 +409,8 @@ services:
       context: ..
       dockerfile: services/sim-driver/Dockerfile
     environment:
-      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      OCEAN_EVENT_BUS_NAME: ${OCEAN_EVENT_BUS_NAME:-ocean}
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN_SIM:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     ports:
