@@ -17,4 +17,4 @@ jobs:
           uv-version: '0.10.12'
 
       - name: Run quick health checks
-        run: bash -lc 'set -e; echo "Checking uv sync with retries"; tries=0; until [ $tries -ge 3 ]; do uv sync --all-packages --frozen && break; tries=$((tries+1)); echo "uv sync failed, retrying ($tries/3)..."; sleep $((tries * 5)); done; if [ $tries -ge 3 ]; then echo "uv sync failed after 3 attempts" >&2; exit 1; fi; echo "Verifying critical imports"; python -c "import importlib, sys; importlib.import_module(\"pydantic\"); importlib.import_module(\"uvicorn\"); print('OK')"'
+        run: bash .github/scripts/ci_health.sh

@@ -25,7 +25,7 @@ jobs:
 
       - name: Check imports 3.10
         id: ci310
-        run: python -c "import importlib, sys; importlib.import_module('pydantic'); importlib.import_module('uvicorn'); print('OK')"
+        run: python .github/scripts/check_imports.py pydantic uvicorn
         continue-on-error: true
 
       - name: Diagnose Python 3.11
@@ -38,7 +38,7 @@ jobs:
 
       - name: Check imports 3.11
         id: ci311
-        run: python -c "import importlib, sys; importlib.import_module('pydantic'); importlib.import_module('uvicorn'); print('OK')"
+        run: python .github/scripts/check_imports.py pydantic uvicorn
         continue-on-error: true
 
       - name: Diagnose Python 3.12
@@ -51,7 +51,7 @@ jobs:
 
       - name: Check imports 3.12
         id: ci312
-        run: python -c "import importlib, sys; importlib.import_module('pydantic'); importlib.import_module('uvicorn'); print('OK')"
+        run: python .github/scripts/check_imports.py pydantic uvicorn
         continue-on-error: true
 
       - name: Diagnose Python 3.13
@@ -64,7 +64,7 @@ jobs:
 
       - name: Check imports 3.13
         id: ci313
-        run: python -c "import importlib, sys; importlib.import_module('pydantic'); importlib.import_module('uvicorn'); print('OK')"
+        run: python .github/scripts/check_imports.py pydantic uvicorn
         continue-on-error: true
 
       - name: Diagnose Python 3.14
@@ -77,7 +77,7 @@ jobs:
 
       - name: Check imports 3.14
         id: ci314
-        run: python -c "import importlib, sys; importlib.import_module('pydantic'); importlib.import_module('uvicorn'); print('OK')"
+        run: python .github/scripts/check_imports.py pydantic uvicorn
         continue-on-error: true
 
       - name: Aggregate diagnostics
