@@ -18,6 +18,10 @@ ocean-broker = { workspace = true, editable = true }
 
 [dependency-groups]
 dev = [
+    # alembic + psycopg2 are the sync pair the migration runner uses: infra/postgres/env.py
+    # strips +asyncpg before handing the URL to alembic. Needed by the migration-chain test.
+    "alembic>=1.18.0",
+    "psycopg2-binary>=2.9.10",
     "asyncpg>=0.31.0",
     "confluent-kafka>=2.13.2",
     "fastapi>=0.135.1",
