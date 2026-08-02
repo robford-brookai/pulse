@@ -1,7 +1,7 @@
 """Call lifecycle simulation logic.
 
 Consumes outreach approval events and produces call.started, call.connected,
-call.completed, and call.missed events on ocean.interactions.
+call.completed, and call.missed events on the `interactions` domain.
 """
 
 from __future__ import annotations
@@ -12,12 +12,11 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 import structlog
+from ocean_broker import EventBridgePublisher
 
-from src.publisher import RedpandaPublisher
+from src.publisher import DOMAIN
 
 log = structlog.get_logger()
-
-TOPIC = "ocean.interactions"
 
 
 def build_call_event(
@@ -41,7 +40,7 @@ def build_call_event(
     }
 
 
-async def simulate_call(approval_event: dict, publisher: RedpandaPublisher) -> None:
+async def simulate_call(approval_event: dict, publisher: EventBridgePublisher) -> None:
     """Run a full call lifecycle based on an outreach approval event.
 
     Extracts persona configuration from the approval payload and simulates
@@ -69,7 +68,7 @@ async def simulate_call(approval_event: dict, publisher: RedpandaPublisher) -> N
             correlation_id=correlation_id,
             payload={**base_payload, "attempt": attempt + 1},
         )
-        await publisher.publish(TOPIC, started)
+        await publisher.publish(DOMAIN, started)
         log.info("call_started", interaction_id=interaction_id, attempt=attempt + 1)
         log.info(f"[CALL] Patient {patient_id}: call attempt {attempt + 1} started")
 
@@ -88,7 +87,7 @@ async def simulate_call(approval_event: dict, publisher: RedpandaPublisher) -> N
                 correlation_id=correlation_id,
                 payload=base_payload,
             )
-            await publisher.publish(TOPIC, connected)
+            await publisher.publish(DOMAIN, connected)
             log.info("call_connected", interaction_id=interaction_id)
             log.info(f"[CALL] Patient {patient_id}: call CONNECTED")
 
@@ -104,7 +103,7 @@ async def simulate_call(approval_event: dict, publisher: RedpandaPublisher) -> N
                 correlation_id=correlation_id,
                 payload={**base_payload, "duration_seconds": round(talk_duration, 1)},
             )
-            await publisher.publish(TOPIC, completed)
+            await publisher.publish(DOMAIN, completed)
             log.info("call_completed", interaction_id=interaction_id, duration=talk_duration)
             log.info(f"[CALL] Patient {patient_id}: call COMPLETED, duration {round(talk_duration, 1)}s")
             return  # Call succeeded, no more retries
@@ -116,7 +115,7 @@ async def simulate_call(approval_event: dict, publisher: RedpandaPublisher) -> N
             correlation_id=correlation_id,
             payload={**base_payload, "attempt": attempt + 1},
         )
-        await publisher.publish(TOPIC, missed)
+        await publisher.publish(DOMAIN, missed)
         log.info("call_missed", interaction_id=interaction_id, attempt=attempt + 1)
         log.info(f"[CALL] Patient {patient_id}: call MISSED (attempt {attempt + 1})")
 
