@@ -65,12 +65,13 @@ def test_every_service_with_tests_is_matched_by_the_glob():
     assert services_with_tests == matched
 
 
-def test_services_without_tests_are_the_known_two():
-    """Only mongodb-connector and warehouse-sync ship no tests (stated exclusions).
+def test_services_without_tests_are_the_known_one():
+    """Only mongodb-connector ships no tests (stated exclusion).
 
-    Neither has a suite to run — that is a gap in those services, not in the
-    runner (flagged in DNA-781's handoff). A third name appearing here means a new
-    or converted service shipped untested; add tests, don't extend this list.
+    It has no suite to run — that is a gap in the service, not in the runner
+    (flagged in DNA-781's handoff; warehouse-sync left this list at task 5.9).
+    A second name appearing here means a new or converted service shipped
+    untested; add tests, don't extend this list.
     """
     untested = {p.name for p in sorted(_SERVICES_DIR.iterdir()) if p.is_dir() and not (p / "tests").is_dir()}
-    assert untested == {"mongodb-connector", "warehouse-sync"}
+    assert untested == {"mongodb-connector"}
