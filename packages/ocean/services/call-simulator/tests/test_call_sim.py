@@ -77,10 +77,11 @@ class TestSimulateCallAnswered:
             await simulate_call(approval, publisher)
 
         calls = publisher.publish.call_args_list
-        topics = [c.args[0] for c in calls]
+        detail_types = [c.args[0] for c in calls]
         event_types = [c.args[1]["event_type"] for c in calls]
 
-        assert all(t == "ocean.interactions" for t in topics)
+        # The domain, not the event_type and not the former topic name.
+        assert all(d == "interactions" for d in detail_types)
         assert event_types == ["call.started", "call.connected", "call.completed"]
 
     async def test_answered_call_propagates_correlation_id(self):
