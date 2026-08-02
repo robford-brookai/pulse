@@ -16,7 +16,7 @@ from fastapi import FastAPI
 
 from src.consumer import run_consumer
 from src.personas import load_personas
-from src.publisher import RedpandaPublisher
+from src.publisher import build_publisher
 
 __version__ = "0.1.0"
 
@@ -31,7 +31,8 @@ async def _start_worker(brokers: str, personas, compression: float) -> None:
 
     Runs after lifespan yields so /health is already responsive.
     """
-    publisher = await asyncio.to_thread(RedpandaPublisher, bootstrap_servers=brokers)
+    # Off the loop: the boto3 client reads credential and config files as it is constructed.
+    publisher = await asyncio.to_thread(build_publisher)
     log.info(
         "agent_worker_started",
         brokers=brokers,
