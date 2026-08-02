@@ -106,6 +106,10 @@ COLUMN_CLASSES: dict[str, dict[str, str]] = {
         "severity": P,
         "status": P,
         "source_system": P,
+        # pgvector column (0006). Populated only by an explicit stacte-bridge
+        # /sync, so a sim capture holds NULLs; compared verbatim so a
+        # transport that somehow touched it would fail the gate.
+        "embedding": P,
         "created_at": TS,
         "updated_at": TS,
         "correlation_id": ID,
@@ -119,6 +123,7 @@ COLUMN_CLASSES: dict[str, dict[str, str]] = {
         "priority": P,
         "status": P,
         "assigned_to": P,
+        "embedding": P,  # pgvector (0006), see alerts.embedding
         "created_at": TS,
         "updated_at": TS,
         "last_event_id": ID,
@@ -129,6 +134,7 @@ COLUMN_CLASSES: dict[str, dict[str, str]] = {
         "patient_id": ID,
         "interaction_type": P,
         "outcome": P,
+        "embedding": P,  # pgvector (0006), see alerts.embedding
         "started_at": TS,
         "completed_at": TS,
         "last_event_at": TS,
@@ -141,6 +147,7 @@ COLUMN_CLASSES: dict[str, dict[str, str]] = {
         "outcome_type": P,
         "resolution_status": P,
         "notes": P,
+        "embedding": P,  # pgvector (0006), see alerts.embedding
         "recorded_at": TS,
         "last_event_id": ID,
     },
@@ -334,27 +341,45 @@ def _prepared_rows(snapshot: dict) -> dict[str, list[dict]]:
     return prepared
 
 
-def _blind_key(row: dict, classes: dict[str, str], universe: frozenset[str]) -> str:
-    """Canonical sort key with every non-universe UUID blinded to one token.
+def _blind_key(row: dict, classes: dict[str, str], universe: frozenset[str], mapping: dict[str, str]) -> str:
+    """Canonical sort key with every genuinely-unseen UUID blinded to one token.
 
     Token assignment must not depend on the random values themselves, so rows
     are ordered by what they look like *after* renaming would erase those
-    values — this key is that view.
+    values — this key is that view. UUIDs the renamer has already mapped keep
+    their assigned token: those tokens were themselves assigned in canonical
+    order, so they are safe to sort by, and they are what distinguishes rows
+    like the per-call audit entries (mapped entity_id + fresh event_id and
+    audit_id). Blinding them too made all such rows tie, pairing fresh tokens
+    with mapped ones in physical capture order — two runs differing only in
+    row order then diffed as NOT EQUIVALENT (found by the live 8.2 runs).
     """
-    blind = _Renamer(universe=universe, mapping={}, preserved=0, renamed=0)
-    blind.rewrite = lambda text: UUID_RE.sub(  # type: ignore[method-assign]
-        lambda m: m.group(0).lower() if m.group(0).lower() in universe else "<uuid>", text
-    )
-    projected = {col: blind.rewrite_value(v) if classes[col] == ID else v for col, v in row.items()}
+
+    def blind(text: str) -> str:
+        def sub(match: re.Match[str]) -> str:
+            value = match.group(0).lower()
+            if value in universe:
+                return value
+            return mapping.get(value, "<uuid>")
+
+        return UUID_RE.sub(sub, text)
+
+    def per_string(s: str) -> str:
+        return TS_TOKEN if _ISO_TS_RE.match(s) else blind(s)
+
+    projected = {col: _walk_strings(v, per_string) if classes[col] == ID else v for col, v in row.items()}
     return json.dumps(projected, sort_keys=True, default=str)
 
 
 def normalize_snapshot(snapshot: dict) -> dict:
     """Return the snapshot with noise-by-construction removed, nothing else.
 
-    Two-pass: rows are first sorted by a key blind to their random uuids, then
-    tokens are assigned by first sight in that canonical order — so two runs
-    whose states differ only in random identifiers normalize identically.
+    Two-pass: rows are first sorted by a key blind to their *unseen* random
+    uuids (uuids already renamed while processing earlier tables keep their
+    assigned token), then tokens are assigned by first sight in that canonical
+    order — so two runs whose states differ only in random identifiers
+    normalize identically. Table order in CAPTURE_TABLES is therefore part of
+    the canonicalization: graph tables assign the tokens audit_log sorts by.
     """
     universe = frozenset(snapshot.get("deterministic_ids", []))
     prepared = _prepared_rows(snapshot)
@@ -364,7 +389,10 @@ def normalize_snapshot(snapshot: dict) -> dict:
 
     for table in prepared:
         classes = COLUMN_CLASSES[table]
-        keyed = sorted(((_blind_key(r, classes, universe), r) for r in prepared[table]), key=lambda kr: kr[0])
+        keyed = sorted(
+            ((_blind_key(r, classes, universe, renamer.mapping), r) for r in prepared[table]),
+            key=lambda kr: kr[0],
+        )
 
         # Ties among rows that still contain random uuids make token
         # assignment between them arbitrary; surface every such group.
@@ -398,6 +426,7 @@ def normalize_snapshot(snapshot: dict) -> dict:
 class DiffResult:
     equivalent: bool
     ignored: list[str]
+    ignored_audit_events: list[str]
     table_counts: dict[str, tuple[int, int]]
     only_in_a: dict[str, list[str]]
     only_in_b: dict[str, list[str]]
@@ -424,9 +453,36 @@ def _drop_ignored(tables: dict[str, list[dict]], ignore: Iterable[str]) -> dict[
     return out
 
 
-def diff_snapshots(a: dict, b: dict, ignore: list[str] | None = None) -> DiffResult:
+def _drop_audit_events(snapshot: dict, event_types: list[str]) -> dict:
+    """Drop audit_log rows whose ``detail.event_type`` is excluded, pre-normalization.
+
+    Must run on the raw capture: excluded event types exist precisely because
+    their row count differs between sides (e.g. uptime-driven heartbeats), and
+    rows removed after token assignment would shift every token numbered after
+    them in canonical order, faulting rows that actually match.
+    """
+    if not event_types:
+        return snapshot
+    excluded = set(event_types)
+    out = {**snapshot, "tables": dict(snapshot["tables"])}
+    rows = out["tables"].get("audit_log", [])
+    out["tables"]["audit_log"] = [
+        r for r in rows if not (isinstance(r.get("detail"), dict) and r["detail"].get("event_type") in excluded)
+    ]
+    return out
+
+
+def diff_snapshots(
+    a: dict,
+    b: dict,
+    ignore: list[str] | None = None,
+    ignore_audit_events: list[str] | None = None,
+) -> DiffResult:
     """Diff two raw captures. Rows compare as multisets of normalized rows."""
     ignore = list(ignore or [])
+    ignore_audit_events = list(ignore_audit_events or [])
+    a = _drop_audit_events(a, ignore_audit_events)
+    b = _drop_audit_events(b, ignore_audit_events)
     norm_a, norm_b = normalize_snapshot(a), normalize_snapshot(b)
     tables_a = _drop_ignored(norm_a["tables"], ignore)
     tables_b = _drop_ignored(norm_b["tables"], ignore)
@@ -455,6 +511,7 @@ def diff_snapshots(a: dict, b: dict, ignore: list[str] | None = None) -> DiffRes
     return DiffResult(
         equivalent=not only_in_a and not only_in_b,
         ignored=ignore,
+        ignored_audit_events=ignore_audit_events,
         table_counts=table_counts,
         only_in_a=only_in_a,
         only_in_b=only_in_b,
@@ -464,9 +521,12 @@ def diff_snapshots(a: dict, b: dict, ignore: list[str] | None = None) -> DiffRes
 
 def render_report(result: DiffResult, max_rows: int = 5) -> str:
     lines = ["EQUIVALENT" if result.equivalent else "NOT EQUIVALENT", ""]
-    if result.ignored:
+    if result.ignored or result.ignored_audit_events:
         lines.append("Explicitly ignored (excluded from the comparison, by request):")
         lines.extend(f"  - {path}" for path in result.ignored)
+        lines.extend(
+            f"  - audit_log rows with detail.event_type={event_type}" for event_type in result.ignored_audit_events
+        )
         lines.append("")
     lines.append("Rows compared per table (A/B):")
     lines.extend(f"  {table}: {ca}/{cb}" for table, (ca, cb) in sorted(result.table_counts.items()))
@@ -552,6 +612,16 @@ def main(argv: list[str] | None = None) -> int:
         metavar="TABLE.COLUMN[.JSONKEY]",
         help="explicitly exclude a field; every exclusion is recorded in the report",
     )
+    dif.add_argument(
+        "--ignore-audit-event",
+        action="append",
+        default=[],
+        metavar="EVENT_TYPE",
+        help=(
+            "exclude audit_log rows with this detail.event_type (e.g. uptime-driven "
+            "connector.heartbeat); recorded in the report like column ignores"
+        ),
+    )
     dif.add_argument("--report", help="also write the report to this path")
 
     args = parser.parse_args(argv)
@@ -572,6 +642,7 @@ def main(argv: list[str] | None = None) -> int:
         json.loads(Path(args.snapshot_a).read_text()),
         json.loads(Path(args.snapshot_b).read_text()),
         ignore=args.ignore,
+        ignore_audit_events=args.ignore_audit_event,
     )
     report = render_report(result)
     print(report)

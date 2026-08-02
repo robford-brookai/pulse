@@ -1,0 +1,27 @@
+EQUIVALENT
+
+Explicitly ignored (excluded from the comparison, by request):
+  - audit_log.detail.topic
+  - signals.last_event_at
+  - interactions.last_event_at
+  - audit_log rows with detail.event_type=connector.heartbeat
+
+Rows compared per table (A/B):
+  alert_tasks: 0/0
+  alerts: 50/50
+  audit_log: 618/618
+  interactions: 50/50
+  outcomes: 150/150
+  patients: 50/50
+  signals: 66/66
+  task_escalation_state: 50/50
+  tasks: 50/50
+  ticket_alerts: 0/0
+  ticket_tasks: 0/0
+  tickets: 0/0
+
+Warnings:
+  - A: 50 indistinguishable outcomes rows carry random ids; token assignment between them is arbitrary
+  - A: 50 indistinguishable outcomes rows carry random ids; token assignment between them is arbitrary
+  - B: 50 indistinguishable outcomes rows carry random ids; token assignment between them is arbitrary
+  - B: 50 indistinguishable outcomes rows carry random ids; token assignment between them is arbitrary

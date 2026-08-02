@@ -1,0 +1,51 @@
+# Compose override for the 8.2 equivalence run, EventBridge/LocalStack side.
+# Used as: docker compose -p ocean-eb -f infra/docker-compose.yml -f docs/equivalence/runconfig/override-eventbridge.yml ...
+# - Mounts the pinned persona roster over the baked-in AGENTS.md.
+# - Forces ANTHROPIC_API_KEY empty so decide_with_fallback takes the
+#   deterministic severity-rule path (CRITICAL -> approve) on every task.
+# - Disables control-plane escalation: it fires on wall-clock timeouts, which
+#   the gate does not compare, and a slow run would otherwise grow
+#   task_escalation_state rows the other run lacks.
+services:
+  # botocore (1.40.x) resolves the client region from AWS_DEFAULT_REGION,
+  # not AWS_REGION, and the compose env only sets AWS_REGION. Publishers
+  # survive because ocean_broker passes region_name explicitly, but
+  # localstack-init and EVERY SQS consumer build region-less clients and die
+  # at startup with NoRegionError -- silently, because consumers run as
+  # fire-and-forget asyncio tasks. Without these lines nothing consumes and
+  # the graph stays empty. Reported via HANDOFF.md rather than editing the
+  # owned compose file.
+  localstack-init:
+    environment:
+      AWS_DEFAULT_REGION: us-east-1
+  event-store:
+    environment:
+      AWS_DEFAULT_REGION: us-east-1
+  graph-projection:
+    environment:
+      AWS_DEFAULT_REGION: us-east-1
+  call-simulator:
+    environment:
+      AWS_DEFAULT_REGION: us-east-1
+  impilo-connector:
+    environment:
+      AWS_DEFAULT_REGION: us-east-1
+  agent-worker:
+    volumes:
+      - ${PINNED_AGENTS_MD:?absolute path to AGENTS-pinned.md}:/app/AGENTS.md:ro
+    environment:
+      ANTHROPIC_API_KEY: ""
+      AWS_DEFAULT_REGION: us-east-1
+  control-plane:
+    environment:
+      ESCALATION_ENABLED: "false"
+      AWS_DEFAULT_REGION: us-east-1
+  slack-bot:
+    environment:
+      SLACK_BOT_TOKEN: ""
+      ANTHROPIC_API_KEY: ""
+      AWS_DEFAULT_REGION: us-east-1
+  sim-driver:
+    environment:
+      SLACK_BOT_TOKEN: ""
+      ANTHROPIC_API_KEY: ""
