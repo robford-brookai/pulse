@@ -360,7 +360,7 @@ shape, Dockerfile, and EKS deployment unchanged. Each records its ordering verdi
 
 ## 8. Wave 4 — equivalence gate
 
-- [ ] 8.1 [DNA-773] Build the equivalence harness: capture graph tables and `audit_log` after a
+- [x] 8.1 [DNA-773] Build the equivalence harness: capture graph tables and `audit_log` after a
       `call-simulator` + `sim-driver` run, normalized for wall-clock and random identifiers, and
       diff two runs.
       `[model: opus | deps: 6.5 | lane: repo_change | wave: 4]`
