@@ -10,11 +10,14 @@ RUN uv pip install --system --no-cache \
     uvicorn==0.41.0 \
     "confluent-kafka==2.13.2" \
     "pydantic>=2.0" \
-    "structlog==25.5.0"
+    "structlog==25.5.0" \
+    "sqlalchemy[asyncio]>=2.0" \
+    "asyncpg>=0.29"
 
-# Install ocean-events shared library
+# Install ocean shared libraries: the event envelope and the EventBridge publisher/catalog
 COPY libs/ocean-events /app/ocean-events
-RUN uv pip install --system /app/ocean-events
+COPY libs/ocean-broker /app/ocean-broker
+RUN uv pip install --system /app/ocean-events /app/ocean-broker
 
 # Copy source code
 COPY services/call-simulator/src ./src
