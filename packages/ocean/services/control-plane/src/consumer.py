@@ -1,18 +1,34 @@
-"""Async Kafka consumer for control-plane.
+"""SQS consumer for control-plane.
 
-Reads from ocean.alerts (routing) and ocean.ops (connector heartbeats).
-Uses a separate consumer group (control-plane-worker) so it receives events
-independently of other consumers.
-Manual offset commit — offset committed only AFTER successful processing.
+Receives EventBridge-delivered events from control-plane's dedicated queue (rule
+generated from ``CONSUMER_DOMAINS`` in ``ocean_broker.catalog``: alerts, ops,
+tickets, logistics, tasks, interactions) and dispatches them to
+``EVENT_HANDLERS``, one session transaction per message.
+
+Receive → process → delete: a message is deleted only after its handler
+transaction commits, so a failure is left to visibility-timeout redelivery and
+the queue's redrive policy dead-letters a poison message. This preserves the
+at-least-once, commit-after-success semantics the Kafka loop had. Blocking
+boto3 calls run in a thread via ``asyncio.to_thread`` so the FastAPI event
+loop — /health and the escalation poller — stays responsive.
+
+Ordering verdict (task 3.6, DNA-743): **mixed, per handler** — see
+``packages/ocean/docs/ordering-verdict-control-plane.md``. Ten of thirteen
+``EVENT_HANDLERS`` keys are order-tolerant; ``ticket.update.requested`` /
+``ticket.updated`` (unguarded status write), ``ticket.rma.requested`` and
+``return.updated`` (silent drop when the precondition row is absent) are
+order-dependent. Their guards are follow-up tasks 3.7-3.9, tracked by the
+``xfail(strict=True)`` claims in ``tests/test_ordering_verdicts.py``; this
+conversion deliberately changes transport only.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
+from typing import Any
 
 import structlog
-from confluent_kafka import KafkaError
-from confluent_kafka.aio import AIOConsumer as Consumer
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.handlers.alerts import handle_alert_created
@@ -33,20 +49,9 @@ from src.handlers.tickets import (
 
 log = structlog.get_logger()
 
-TOPICS = [
-    "ocean.alerts",
-    "ocean.ops",
-    "ocean.tickets",
-    "ocean.logistics",
-    "ocean.tasks",
-    "ocean.interactions",
-]
-
-CONSUMER_CONFIG: dict = {
-    "group.id": "control-plane-worker",
-    "auto.offset.reset": "earliest",
-    "enable.auto.commit": False,
-}
+SQS_MAX_MESSAGES = 10
+SQS_WAIT_TIME_SECONDS = 20
+SQS_ERROR_BACKOFF_SECONDS = 5
 
 EVENT_HANDLERS: dict = {
     "alert.created": handle_alert_created,
@@ -78,46 +83,102 @@ async def dispatch(event_data: dict, session: AsyncSession, producer=None) -> No
     await handler(event_data, session, producer=producer)
 
 
+def _envelope_from_body(body: object) -> dict | None:
+    """Extract the event envelope from a parsed SQS message body.
+
+    An EventBridge rule delivers the envelope whole inside ``detail``. A body
+    with no ``detail`` key is accepted as a bare envelope so local tooling can
+    send straight to the queue.
+    """
+    if not isinstance(body, dict):
+        return None
+    detail = body.get("detail", body)
+    return detail if isinstance(detail, dict) else None
+
+
 async def run_consumer(
     session_maker: async_sessionmaker,
-    bootstrap_servers: str,
+    queue_url: str,
     publisher=None,
+    *,
+    sqs_client: Any = None,
 ) -> None:
-    """Run the control-plane consumer loop."""
-    conf = {**CONSUMER_CONFIG, "bootstrap.servers": bootstrap_servers}
-    consumer = Consumer(conf)
-    await consumer.subscribe(TOPICS)
-    log.info("control_plane_consumer_started", topics=TOPICS, brokers=bootstrap_servers)
+    """Run the control-plane consumer loop against its SQS queue.
 
-    try:
-        while True:
-            msg = await consumer.poll(timeout=1.0)
-            if msg is None:
+    A message is deleted only after its handler transaction commits; a failed
+    or malformed message is left for visibility-timeout redelivery, and the
+    queue's redrive policy dead-letters a poison message.
+
+    Args:
+        session_maker: Async session maker; one transaction per message.
+        queue_url: URL of the dedicated queue fed by control-plane's rule.
+        publisher: Passed through to handlers as ``producer``.
+        sqs_client: Optional pre-built SQS client (for testing). Defaults to a
+            boto3 client resolving region from the environment.
+    """
+    if sqs_client is None:
+        import boto3
+
+        sqs_client = boto3.client("sqs")
+
+    log.info("control_plane_consumer_started", queue_url=queue_url)
+
+    while True:
+        try:
+            response = await asyncio.to_thread(
+                sqs_client.receive_message,
+                QueueUrl=queue_url,
+                MaxNumberOfMessages=SQS_MAX_MESSAGES,
+                WaitTimeSeconds=SQS_WAIT_TIME_SECONDS,
+            )
+        except asyncio.CancelledError:
+            log.info("control_plane_consumer_closed")
+            raise
+        except Exception:
+            log.exception("sqs_receive_failed", queue_url=queue_url)
+            await asyncio.sleep(SQS_ERROR_BACKOFF_SECONDS)
+            continue
+
+        for msg in response.get("Messages", []):
+            receipt_handle = msg.get("ReceiptHandle", "")
+
+            try:
+                body = json.loads(msg["Body"])
+            except (json.JSONDecodeError, KeyError, TypeError):
+                # Left undeleted on purpose: redelivery, then the DLQ redrive
+                # policy retains it for inspection.
+                log.warning("sqs_malformed_message", receipt_handle=receipt_handle)
                 continue
 
-            if msg.error():
-                if msg.error().code() == KafkaError._PARTITION_EOF:
-                    continue
-                log.error(
-                    "consumer_error",
-                    error=str(msg.error()),
-                    topic=msg.topic(),
-                    partition=msg.partition(),
+            event_data = _envelope_from_body(body)
+            if event_data is None:
+                log.warning("sqs_body_not_an_envelope", receipt_handle=receipt_handle)
+                continue
+
+            try:
+                async with session_maker() as session, session.begin():
+                    await dispatch(event_data, session, producer=publisher)
+            except asyncio.CancelledError:
+                log.info("control_plane_consumer_closed")
+                raise
+            except Exception:
+                log.exception(
+                    "control_plane_dispatch_failed_no_delete",
+                    receipt_handle=receipt_handle,
+                    event_type=event_data.get("event_type", ""),
                 )
                 continue
 
             try:
-                event_data = json.loads(msg.value())
-                async with session_maker() as session, session.begin():
-                    await dispatch(event_data, session, producer=publisher)
-                await consumer.commit(message=msg)
-            except Exception:
-                log.exception(
-                    "control_plane_dispatch_failed_no_commit",
-                    offset=msg.offset(),
-                    topic=msg.topic(),
-                    partition=msg.partition(),
+                await asyncio.to_thread(
+                    sqs_client.delete_message,
+                    QueueUrl=queue_url,
+                    ReceiptHandle=receipt_handle,
                 )
-    finally:
-        await consumer.close()
-        log.info("control_plane_consumer_closed")
+            except asyncio.CancelledError:
+                log.info("control_plane_consumer_closed")
+                raise
+            except Exception:
+                # A failed delete just redelivers; handlers absorb or log the
+                # duplicate per their recorded verdicts.
+                log.exception("sqs_delete_failed", receipt_handle=receipt_handle)
