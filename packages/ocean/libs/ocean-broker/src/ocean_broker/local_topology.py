@@ -6,6 +6,12 @@ and publisher addressing — so local and deployed topology cannot be maintained
 separately: adding a domain or consumer to the catalog updates both with no
 additional edit.
 
+Each consumer queue also gets its own dead-letter queue and redrive policy
+(task 7.2), mirroring ``infra/terraform/modules/eventbridge-ocean/dlq.tf``:
+without them, an event a local consumer repeatedly fails — warehouse-sync's
+failed-flush contract relies on this — would be redelivered forever instead of
+landing somewhere observable.
+
 Every call is an upsert. ``create_event_bus`` is the one AWS API here that
 rejects a duplicate, so its already-exists error is treated as success;
 ``create_queue``, ``put_rule``, ``put_targets`` and ``set_queue_attributes``
@@ -32,10 +38,22 @@ log = structlog.get_logger()
 
 _DEFAULT_EVENT_BUS = "ocean"
 
+#: Receives a message survives before moving to the DLQ — dlq.tf's
+#: ``dlq_max_receive_count`` default. Bounded redelivery: not discarded, not retried forever.
+DLQ_MAX_RECEIVE_COUNT = 5
+
+#: Seconds a dead-lettered message is retained — dlq.tf's default, the SQS maximum of 14 days.
+DLQ_MESSAGE_RETENTION_SECONDS = 1209600
+
 
 def resource_name(event_bus_name: str, consumer: str) -> str:
     """The shared rule/queue name for one consumer — ``<bus>-<consumer>``, as Terraform names them."""
     return f"{event_bus_name}-{consumer}"
+
+
+def dlq_name(event_bus_name: str, consumer: str) -> str:
+    """The consumer's dead-letter queue name — ``<bus>-<consumer>-dlq``, as Terraform names it."""
+    return f"{resource_name(event_bus_name, consumer)}-dlq"
 
 
 def _queue_policy(queue_arn: str, rule_arn: str) -> str:
@@ -56,7 +74,7 @@ def _queue_policy(queue_arn: str, rule_arn: str) -> str:
 
 
 def apply_topology(events_client: Any, sqs_client: Any, *, event_bus_name: str = _DEFAULT_EVENT_BUS) -> dict[str, str]:
-    """Create the bus and, per consumer, its rule, queue, target and queue policy.
+    """Create the bus and, per consumer, its rule, queue, target, queue policy, DLQ and redrive.
 
     Args:
         events_client: A boto3 EventBridge (``events``) client.
@@ -90,10 +108,40 @@ def apply_topology(events_client: Any, sqs_client: Any, *, event_bus_name: str =
             EventBusName=event_bus_name,
             Targets=[{"Id": f"{name}-queue", "Arn": queue_arn}],
         )
-        sqs_client.set_queue_attributes(QueueUrl=queue_url, Attributes={"Policy": _queue_policy(queue_arn, rule_arn)})
+
+        # Dead-lettering (task 7.2), mirroring dlq.tf: the consumer's own DLQ,
+        # a redrive policy bounding redelivery, and a redrive-allow policy so
+        # only this consumer's queue may name the DLQ as its target.
+        dlq_url = sqs_client.create_queue(
+            QueueName=dlq_name(event_bus_name, consumer),
+            Attributes={"MessageRetentionPeriod": str(DLQ_MESSAGE_RETENTION_SECONDS)},
+        )["QueueUrl"]
+        dlq_arn = sqs_client.get_queue_attributes(QueueUrl=dlq_url, AttributeNames=["QueueArn"])["Attributes"][
+            "QueueArn"
+        ]
+
+        sqs_client.set_queue_attributes(
+            QueueUrl=queue_url,
+            Attributes={
+                "Policy": _queue_policy(queue_arn, rule_arn),
+                "RedrivePolicy": json.dumps({
+                    "deadLetterTargetArn": dlq_arn,
+                    "maxReceiveCount": DLQ_MAX_RECEIVE_COUNT,
+                }),
+            },
+        )
+        sqs_client.set_queue_attributes(
+            QueueUrl=dlq_url,
+            Attributes={
+                "RedriveAllowPolicy": json.dumps({
+                    "redrivePermission": "byQueue",
+                    "sourceQueueArns": [queue_arn],
+                }),
+            },
+        )
 
         queue_urls[consumer] = queue_url
-        log.info("consumer_wired", consumer=consumer, rule=name, queue_url=queue_url)
+        log.info("consumer_wired", consumer=consumer, rule=name, queue_url=queue_url, dlq_url=dlq_url)
 
     return queue_urls
 

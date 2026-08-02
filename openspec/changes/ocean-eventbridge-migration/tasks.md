@@ -351,10 +351,10 @@ shape, Dockerfile, and EKS deployment unchanged. Each records its ordering verdi
 - [x] 7.1 [DNA-770] Delete `infra/redpanda/connect.yaml` and the `ocean.warehouse-dlq` topic; move warehouse
       delivery onto the `warehouse-sync` queue from 6.2.
       `[model: sonnet | deps: 5.7, 6.2 | lane: repo_change | wave: 4]`
-- [ ] 7.2 [DNA-771] Point warehouse dead-lettering at the `warehouse-sync` queue's DLQ. Test: a repeatedly
+- [x] 7.2 [DNA-771] Point warehouse dead-lettering at the `warehouse-sync` queue's DLQ. Test: a repeatedly
       failing event lands there and is observable like any other consumer's.
       `[model: sonnet | deps: 7.1, 6.3 | lane: repo_change | wave: 4]`
-- [ ] 7.3 [DNA-772] Assert warehouse append semantics: out-of-order delivery yields identical table contents,
+- [x] 7.3 [DNA-772] Assert warehouse append semantics: out-of-order delivery yields identical table contents,
       and redelivery creates no duplicate row.
       `[model: sonnet | deps: 7.1 | lane: repo_change | wave: 4]`
 
