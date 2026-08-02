@@ -164,7 +164,7 @@ per finding, so each of these tasks has a failing test waiting for it. The D3 au
       pass the source event's `timestamp` through untouched. That single line poisons the field
       3.1's guard compares, for exactly the events that reach `graph-projection` from here. Fix
       both or neither.
-      `[model: opus | deps: 3.0, 5.4 | lane: repo_change | wave: 2a]`
+      `[model: opus | deps: 3.0, 5.4 | lane: repo_change | wave: 3]`
       `serial: alembic_sequence` — needs a new revision on the shared sequence.
 - [ ] 3.8 `handle_rma_requested` and `handle_return_status_update` each read a row the event being
       processed did not write, and `return` when it is missing — after which the consumer commits
@@ -175,7 +175,7 @@ per finding, so each of these tasks has a failing test waiting for it. The D3 au
       designed against the DLQ and redrive behaviour from 6.3, which is why it depends on it.
       `return.updated` was already live-hazardous under Kafka: it arrives on `ocean.logistics` from
       a connector while the `returns` row is written by control-plane itself.
-      `[model: opus | deps: 5.4, 6.3 | lane: repo_change | wave: 2a]`
+      `[model: opus | deps: 5.4, 6.3 | lane: repo_change | wave: 4]`
 - [ ] 3.9 Break the `ticket.created` echo cycle. `handle_ticket_created` publishes `ticket.created`,
       control-plane subscribes to that domain, and `EVENT_HANDLERS["ticket.created"]` routes it
       straight back into the same handler — minting a fresh `uuid4` and a fresh `human_id` each
@@ -185,7 +185,7 @@ per finding, so each of these tasks has a failing test waiting for it. The D3 au
       `EVENT_HANDLERS` key has no legitimate producer and is the mistake it looks like.
       **This must land before 9.1 provisions the real rules**, or the cycle is encoded into the new
       transport with a live bus behind it. Not an ordering property — found in the same wiring.
-      `[model: opus | deps: 5.4 | lane: repo_change | wave: 2a]`
+      `[model: opus | deps: 5.4 | lane: repo_change | wave: 3]`
       Blocks 9.1.
 
 ## 4. Wave 2b — publish-site conversions
@@ -276,7 +276,7 @@ shape, Dockerfile, and EKS deployment unchanged. Each records its ordering verdi
       Test: `event-store`'s rule pattern matches every live domain, and the generated tfvars
       round-trips against the table. Assert the two previously-missing domains explicitly by name,
       so a future narrowing fails loudly rather than silently.
-      `[model: sonnet | deps: 5.1, 6.2 | lane: repo_change | wave: 2c]`
+      `[model: sonnet | deps: 5.1, 6.2 | lane: repo_change | wave: 4]`
       `serial: catalog_generated_surfaces` — edits the catalog both producers and rules derive
       from.
 - [ ] 5.9 Give `warehouse-sync` a MECE test suite. It is the only converted service with **zero**
