@@ -56,14 +56,16 @@ def test_no_dead_letter_write_remains() -> None:
 
 
 async def test_flush_batch_inserts_rows() -> None:
+    # Since task 5.7 the batch carries (envelope json, domain) strings, not
+    # (bytes, topic) — the SQS conversion parses before batching.
     cursor = _Cursor()
-    batch = [(b'{"id": 1}', "ocean.clinical"), (b'{"id": 2}', "ocean.ops")]
+    batch = [('{"id": 1}', "interactions"), ('{"id": 2}', "ops")]
 
     await main._flush_batch(_Conn(cursor), batch)
 
     sql, params = cursor.executed[0]
     assert "STREAMLINE.OCEAN_RAW.EVENTS" in sql
-    assert params == ['{"id": 1}', "ocean.clinical", '{"id": 2}', "ocean.ops"]
+    assert params == ['{"id": 1}', "interactions", '{"id": 2}', "ops"]
     assert cursor.closed
 
 
@@ -78,7 +80,7 @@ async def test_flush_batch_raises_so_the_caller_does_not_commit() -> None:
     cursor = _Cursor(fail=True)
 
     with pytest.raises(RuntimeError):
-        await main._flush_batch(_Conn(cursor), [(b'{"id": 1}', "ocean.clinical")])
+        await main._flush_batch(_Conn(cursor), [('{"id": 1}', "interactions")])
 
     assert cursor.closed, "the cursor is released even when the insert fails"
 

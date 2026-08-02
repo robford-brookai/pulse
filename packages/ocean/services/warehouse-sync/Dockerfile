@@ -11,7 +11,7 @@ COPY services/warehouse-sync/pyproject.toml .
 RUN uv pip install --system --no-cache \
     fastapi==0.135.1 \
     uvicorn==0.41.0 \
-    "confluent-kafka==2.13.2" \
+    "aioboto3>=13.0.0" \
     "snowflake-connector-python==3.12.3" \
     "cryptography>=43.0.0" \
     "pyopenssl==24.3.0" \
