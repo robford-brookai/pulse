@@ -110,7 +110,7 @@ own `0019` — four files, one revision number, four heads at merge. 3.0 lands t
 once, up front; the guards then rebase onto it and stay parallel. Added 2026-08-02 after 3.2
 raised the collision mid-flight; the original plan declared 3.1–3.5 `parallel: yes` and missed it.
 
-- [ ] 3.0 Add `last_event_at TIMESTAMPTZ NULL` to `interactions`, `device_associations`, `signals`
+- [x] 3.0 [DNA-780] Add `last_event_at TIMESTAMPTZ NULL` to `interactions`, `device_associations`, `signals`
       and `slack_messages` in a single migration `0019`. Nullable on purpose: a pre-migration row
       has no known event time, and `IS NULL OR … < EXCLUDED…` then treats it as overwritable. No
       `now()` default — a processing-time default is the bug this wave removes. The value stored is
@@ -118,29 +118,29 @@ raised the collision mid-flight; the original plan declared 3.1–3.5 `parallel:
       `[model: sonnet | deps: 1.3 | lane: repo_change | wave: 2a]`
       `serial: alembic_sequence` — the only task in this wave that may touch
       `infra/postgres/versions/`. Blocks 3.1–3.5.
-- [ ] 3.1 [DNA-738] `graph-projection/src/handlers/outcomes.py:44` and `:103` — replace the unguarded
+- [x] 3.1 [DNA-738] `graph-projection/src/handlers/outcomes.py:44` and `:103` — replace the unguarded
       `DO UPDATE SET outcome = …` pairs with an event-time sequence guard. Note `completed_at` is
       written as `:now` (processing time) and MUST NOT be the guard column; add an event-time
       column if none exists. This is the audit's worst case: today a completed call can be
       silently rewritten to missed.
       `[model: opus | deps: 3.0 | lane: repo_change | wave: 2a]`
       Model `opus`: concurrency judgement, and the obvious fix is the wrong one.
-- [ ] 3.2 [DNA-739] `graph-projection/src/handlers/interactions.py:36` and `:72` — replace the
+- [x] 3.2 [DNA-739] `graph-projection/src/handlers/interactions.py:36` and `:72` — replace the
       `last_event_id IS DISTINCT FROM` predicate with a sequence guard. Dedup is not ordering.
       `[model: opus | deps: 3.0 | lane: repo_change | wave: 2a]`
-- [ ] 3.3 [DNA-740] `graph-projection/src/handlers/logistics.py:125` (`device_associations`) — same
+- [x] 3.3 [DNA-740] `graph-projection/src/handlers/logistics.py:125` (`device_associations`) — same
       dedup-only predicate, same replacement.
       `[model: opus | deps: 3.0 | lane: repo_change | wave: 2a]`
-- [ ] 3.4 [DNA-741] `graph-projection/src/handlers/signals.py:59` — add a guard to the unguarded
+- [x] 3.4 [DNA-741] `graph-projection/src/handlers/signals.py:59` — add a guard to the unguarded
       `DO UPDATE SET anomalous = true`. Monotonic in effect today; guarded for uniformity so the
       audit's verdict holds by construction rather than by argument.
       `[model: sonnet | deps: 3.0 | lane: repo_change | wave: 2a]`
-- [ ] 3.5 [DNA-742] Add a sequence column to `slack-bot`'s stored message record and guard `chat_update` on
+- [x] 3.5 [DNA-742] Add a sequence column to `slack-bot`'s stored message record and guard `chat_update` on
       it, so a stale update is dropped rather than applied. Test: out-of-order ticket lifecycle
       (`created` → `updated` → `resolved`) leaves the same terminal Slack text as in-order.
       `[model: opus | deps: 3.0 | lane: repo_change | wave: 2a]`
       Model `opus`: the effect leaves the system and is not undoable by a later event.
-- [ ] 3.6 [DNA-743] Re-confirm `control-plane`'s ordering verdict per handler in `EVENT_HANDLERS` and record
+- [x] 3.6 [DNA-743] Re-confirm `control-plane`'s ordering verdict per handler in `EVENT_HANDLERS` and record
       the evidence. Any handler found order-dependent gets the 3.1 treatment as a new task under
       this group.
       `[model: opus | deps: 1.3 | lane: repo_change | wave: 2a]`
@@ -182,7 +182,7 @@ scope creep; call it out in the HANDOFF):
 - [x] 4.13 [DNA-756] `services/warehouse-sync/src/main.py` — inline `Producer` used for dead-letter writes.
       Removed rather than converted: its role passes to the queue DLQ in 7.2.
       `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
-- [ ] 4.14 Bring the converted services into `task test`. `TESTED_PATHS` is
+- [ ] 4.14 [DNA-781] Bring the converted services into `task test`. `TESTED_PATHS` is
       `tests packages/ocean/libs` — ocean's 16 services are excluded (honestly declared, per 1.3
       and DNA-779). Every wave-2b task therefore writes tests that CI never runs: their green
       `task check` is truthful about what it covers and says nothing about the conversion. Until
@@ -259,7 +259,7 @@ shape, Dockerfile, and EKS deployment unchanged. Each records its ordering verdi
       and redelivery creates no duplicate row.
       `[model: sonnet | deps: 7.1 | lane: repo_change | wave: 4]`
 
-## 8. Equivalence gate
+## 8. Wave 4 — equivalence gate
 
 - [ ] 8.1 [DNA-773] Build the equivalence harness: capture graph tables and `audit_log` after a
       `call-simulator` + `sim-driver` run, normalized for wall-clock and random identifiers, and
@@ -271,7 +271,7 @@ shape, Dockerfile, and EKS deployment unchanged. Each records its ordering verdi
       This result gates 9.2.
       `[model: sonnet | deps: 8.1, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 7.1 | lane: repo_change | wave: 4]`
 
-## 9. Out of lane — destructive ops
+## 9. Post-merge — destructive ops (out of lane)
 
 Not dispatched. Open Engine queue (team CCC), operator runbooks with agent-prepared scripts,
 G_APPROVAL comment required before each. Run after merge and verification.
@@ -285,7 +285,7 @@ G_APPROVAL comment required before each. Run after merge and verification.
       commit and a README pointing at `packages/ocean`.
       `[model: fable | deps: 9.2 | lane: destructive_ops | wave: post-merge]`
 
-## 10. Documentation
+## 10. Wave 4 — documentation
 
 - [ ] 10.1 [DNA-775] Record the absorption as an ADR in `docs/adr/`, and update
       `docs/contracts/publishes.md` and `consumes.md` for the transport change.

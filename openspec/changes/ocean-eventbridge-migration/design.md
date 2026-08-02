@@ -190,9 +190,9 @@ wins at high volume, and at PRM volume it does not.
   definition of done, not the simulator.
 - **`outcomes.py`'s `completed_at = :now` invites a wrong fix** → The guard must use an event-time
   field. Called out explicitly in that task's work order; a `completed_at` guard is a review-reject.
-- **No dual-bus period means a bad cutover is visible in production** → Waves 0–3 land before MSK
-  teardown, so revert restores the Kafka path (proposal — Rollback). Teardown is a separate
-  `destructive_ops` item gated on the equivalence run.
+- **No dual-bus period means a bad cutover is visible in production** → Every conversion wave
+  lands before MSK teardown, so revert restores the Kafka path (proposal — Rollback). Teardown
+  (9.2) is a separate `destructive_ops` item gated on the equivalence run (8.2, wave 4).
 - **LocalStack's EventBridge/SQS fidelity is not AWS's** → It validates wiring and consumer logic,
   not IAM, quotas, or delivery-latency behavior. Rule-pattern correctness is additionally asserted
   against the D1 table in a unit test, so a LocalStack quirk cannot mask a wrong pattern.
@@ -212,12 +212,19 @@ Waves, gated on dependencies merging. Wave numbering is the dispatch order.
   roots → `serial_lane_always`.
 - **Wave 1** (serial) — the D1 mapping table (generated surface, alone), then the shared
   `EventBridgePublisher`. Everything downstream depends on both.
-- **Wave 2** (parallel) — 13 publish-site conversions and 7 consumer conversions. Order-dependent
-  consumers carry their D3 guard and its out-of-order test in the same commit.
+- **Wave 2a** — sequence guards, on the current transport. 3.0 lands the shared alembic `0019`
+  event-time columns alone (`serial: alembic_sequence`); 3.1–3.6 then run in parallel. Guards land
+  before consumer conversion so ordering safety never depends on the transport.
+- **Wave 2b** (parallel) — 13 publish-site conversions, closed by 4.14 alone
+  (`serial: workspace_roots`), which brings the converted services into `task test`. Until 4.14
+  lands, wave-2b tests exist but CI does not run them.
+- **Wave 2c** — 7 consumer conversions, each unlocked by its guard from 2a. Order-dependent
+  consumers carry their D3 guard and its out-of-order test.
 - **Wave 3** — IaC: delete `infra/terraform/modules/msk-ocean/`, add bus, per-consumer rule and
   queue, per-queue DLQ and redrive, archive with retention. LocalStack into
   `infra/docker-compose.yml`.
-- **Wave 4** — warehouse path per D6.
+- **Wave 4** — warehouse path per D6, the equivalence harness and run (8.x), and documentation
+  (10.x).
 
 Then, outside the Orca lane: the equivalence run, `terraform apply`, MSK teardown, and the source
 repo archive — all `destructive_ops`, all behind G_APPROVAL.
