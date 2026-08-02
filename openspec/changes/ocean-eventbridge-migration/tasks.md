@@ -181,7 +181,7 @@ per finding, so each of these tasks has a failing test waiting for it. The D3 au
       has not arrived, not a stale write, so control-plane's verdict stays Order-dependent until
       this task lands. 3.7 left it pinned as a characterisation test; make that test pass.
       `[model: opus | deps: 5.4, 6.3 | lane: repo_change | wave: 4]`
-- [ ] 3.9 Break the `ticket.created` echo cycle. `handle_ticket_created` publishes `ticket.created`,
+- [x] 3.9 Break the `ticket.created` echo cycle. `handle_ticket_created` publishes `ticket.created`,
       control-plane subscribes to that domain, and `EVENT_HANDLERS["ticket.created"]` routes it
       straight back into the same handler — minting a fresh `uuid4` and a fresh `human_id` each
       pass, so one requested ticket becomes an unbounded stream of tickets. Control-plane is the
@@ -377,8 +377,10 @@ G_APPROVAL comment required before each. Run after merge and verification.
 
 - [ ] 9.1 [CCC-16] `terraform apply` — provision bus, rules, queues, DLQs, archive.
       `[model: sonnet | deps: 3.9, 6.4, 8.2 | lane: destructive_ops | wave: post-merge]`
-      3.9 is a hard gate, not a nicety: until the `ticket.created` echo cycle is broken, applying
-      the control-plane rule encodes an unbounded ticket-minting loop into a live bus.
+      3.9 was a hard gate, not a nicety: until the `ticket.created` echo cycle was broken, applying
+      the control-plane rule would have encoded an unbounded ticket-minting loop into a live bus.
+      **Released 2026-08-02** — 3.9 landed in #56, removing both self-consumed keys
+      (`ticket.updated` echoed the same way; control-plane is the only publisher of either).
 - [ ] 9.2 [CCC-17] Tear down MSK Serverless. Gated on 8.2 passing — after this there is no transport
       rollback, only forward recovery via archive replay.
       `[model: sonnet | deps: 9.1, 8.2 | lane: destructive_ops | wave: post-merge]`
