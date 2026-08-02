@@ -1,0 +1,119 @@
+name: Auto Heal CI
+
+on:
+  workflow_run:
+    workflows: ["Main"]
+    types: [completed]
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    outputs:
+      healthy: ${{ steps.aggregate.outputs.healthy }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@0000000000000000000000000000000000000000 # v4.0
+
+      - name: Diagnose Python 3.10
+        id: d310
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: '3.10'
+          uv-version: '0.10.12'
+        continue-on-error: true
+
+      - name: Check imports 3.10
+        id: ci310
+        run: python .github/scripts/check_imports.py pydantic uvicorn
+        continue-on-error: true
+
+      - name: Diagnose Python 3.11
+        id: d311
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: '3.11'
+          uv-version: '0.10.12'
+        continue-on-error: true
+
+      - name: Check imports 3.11
+        id: ci311
+        run: python .github/scripts/check_imports.py pydantic uvicorn
+        continue-on-error: true
+
+      - name: Diagnose Python 3.12
+        id: d312
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: '3.12'
+          uv-version: '0.10.12'
+        continue-on-error: true
+
+      - name: Check imports 3.12
+        id: ci312
+        run: python .github/scripts/check_imports.py pydantic uvicorn
+        continue-on-error: true
+
+      - name: Diagnose Python 3.13
+        id: d313
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: '3.13'
+          uv-version: '0.10.12'
+        continue-on-error: true
+
+      - name: Check imports 3.13
+        id: ci313
+        run: python .github/scripts/check_imports.py pydantic uvicorn
+        continue-on-error: true
+
+      - name: Diagnose Python 3.14
+        id: d314
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: '3.14'
+          uv-version: '0.10.12'
+        continue-on-error: true
+
+      - name: Check imports 3.14
+        id: ci314
+        run: python .github/scripts/check_imports.py pydantic uvicorn
+        continue-on-error: true
+
+      - name: Aggregate diagnostics
+        id: aggregate
+        env:
+          ci310: ${{ steps.ci310.outcome }}
+          ci311: ${{ steps.ci311.outcome }}
+          ci312: ${{ steps.ci312.outcome }}
+          ci313: ${{ steps.ci313.outcome }}
+          ci314: ${{ steps.ci314.outcome }}
+        run: bash .github/scripts/aggregate_diagnostics.sh
+        shell: bash
+
+  rerun:
+    needs: diagnose
+    runs-on: ubuntu-latest
+    if: ${{ needs.diagnose.outputs.healthy == 'true' && github.event.workflow_run.conclusion == 'failure' }}
+    steps:
+      - name: Re-run failed workflow
+        uses: peter-evans/re-run-workflow@0000000000000000000000000000000000000000 # v2.0
+        with:
+          run_id: ${{ github.event.workflow_run.id }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  notify:
+    needs: diagnose
+    runs-on: ubuntu-latest
+    if: ${{ needs.diagnose.outputs.healthy != 'true' && github.event.workflow_run.conclusion == 'failure' }}
+    steps:
+      - name: Open issue for human attention
+        uses: actions/github-script@0000000000000000000000000000000000000000 # v7.0
+        with:
+          script: |
+            github.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `CI auto-heal diagnostic failed for run ${context.payload.workflow_run.id}`,
+              body: `Auto-heal diagnostic failed for workflow run: ${context.payload.workflow_run.html_url}\n\nPlease inspect and resolve.`
+            })
