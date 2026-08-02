@@ -39,7 +39,7 @@ class TestSlackBotWiring:
             patch("src.bolt_app.set_session_maker") as mock_set_sm,
             patch("src.bolt_app.set_publisher"),
             patch("src.bolt_app.set_hasura_secret"),
-            patch("src.publisher.RedpandaPublisher"),
+            patch("src.publisher.EventPublisher"),
             patch("src.health_poller.poll_connector_health", new_callable=AsyncMock),
         ):
             app = MagicMock()
@@ -52,7 +52,7 @@ class TestSlackBotWiring:
 
     @pytest.mark.asyncio
     async def test_set_publisher_called(self):
-        """set_publisher is called with a RedpandaPublisher during lifespan."""
+        """set_publisher is called with an EventPublisher during lifespan."""
         mock_engine = MagicMock()
         mock_engine.dispose = AsyncMock()
 
@@ -67,7 +67,7 @@ class TestSlackBotWiring:
             patch("src.bolt_app.set_session_maker"),
             patch("src.bolt_app.set_publisher") as mock_set_pub,
             patch("src.bolt_app.set_hasura_secret"),
-            patch("src.publisher.RedpandaPublisher"),
+            patch("src.publisher.EventPublisher"),
             patch("src.health_poller.poll_connector_health", new_callable=AsyncMock),
         ):
             app = MagicMock()
@@ -95,7 +95,7 @@ class TestSlackBotWiring:
             patch("src.bolt_app.set_session_maker"),
             patch("src.bolt_app.set_publisher"),
             patch("src.bolt_app.set_hasura_secret") as mock_set_hs,
-            patch("src.publisher.RedpandaPublisher"),
+            patch("src.publisher.EventPublisher"),
             patch("src.health_poller.poll_connector_health", new_callable=AsyncMock),
             patch.dict(os.environ, {"HASURA_GRAPHQL_ADMIN_SECRET": "test-secret-123"}),
         ):
@@ -127,7 +127,7 @@ class TestSlackBotWiring:
             patch("src.bolt_app.set_session_maker"),
             patch("src.bolt_app.set_publisher"),
             patch("src.bolt_app.set_hasura_secret"),
-            patch("src.publisher.RedpandaPublisher", return_value=mock_publisher),
+            patch("src.publisher.EventPublisher", return_value=mock_publisher),
             patch("src.health_poller.poll_connector_health", new_callable=AsyncMock),
             patch.object(consumer_mod, "run_consumer", new_callable=AsyncMock) as mock_rc,
         ):

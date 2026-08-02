@@ -16,7 +16,6 @@ WEBHOOK_SECRET = "test-github-secret"
 @pytest.fixture()
 def _set_env(monkeypatch):
     monkeypatch.setenv("GITHUB_WEBHOOK_SECRET", WEBHOOK_SECRET)
-    monkeypatch.setenv("REDPANDA_BROKERS", "localhost:9092")
 
 
 def _sign(body: bytes) -> str:
@@ -110,8 +109,7 @@ class TestPullRequestEvents:
         assert resp.status_code == 200
         assert resp.json()["status"] == "accepted"
         mock_pub.publish.assert_called_once()
-        call_args = mock_pub.publish.call_args
-        assert call_args.kwargs["topic"] == "ocean.signals" or call_args[1].get("topic") == "ocean.signals"
+        assert mock_pub.publish.call_args.kwargs["detail_type"] == "signals"
 
     def test_pr_merged_publishes(self, client):
         test_client, mock_pub = client
@@ -128,8 +126,7 @@ class TestPullRequestEvents:
         )
         assert resp.status_code == 200
         assert resp.json()["status"] == "accepted"
-        published_value = mock_pub.publish.call_args[1].get("value") or mock_pub.publish.call_args[0][2]
-        event = json.loads(published_value)
+        event = mock_pub.publish.call_args.kwargs["event"]
         assert event["event_type"] == "pr.merged"
 
     def test_pr_closed_without_merge(self, client):
@@ -146,8 +143,7 @@ class TestPullRequestEvents:
             },
         )
         assert resp.status_code == 200
-        published_value = mock_pub.publish.call_args[1].get("value") or mock_pub.publish.call_args[0][2]
-        event = json.loads(published_value)
+        event = mock_pub.publish.call_args.kwargs["event"]
         assert event["event_type"] == "pr.closed"
 
     def test_unsupported_pr_action_skipped(self, client):
@@ -184,8 +180,7 @@ class TestPushEvents:
         )
         assert resp.status_code == 200
         assert resp.json()["status"] == "accepted"
-        published_value = mock_pub.publish.call_args[1].get("value") or mock_pub.publish.call_args[0][2]
-        event = json.loads(published_value)
+        event = mock_pub.publish.call_args.kwargs["event"]
         assert event["event_type"] == "commit.pushed"
         assert event["entity_id"] == "brookai/ocean@abc123def456"
 

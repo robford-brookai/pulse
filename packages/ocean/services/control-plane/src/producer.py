@@ -1,32 +1,70 @@
-"""Redpanda publisher for control-plane outbound events."""
+"""EventBridge publish site for control-plane outbound events.
+
+The service owns no transport code: every emit goes through `EventBridgePublisher` from
+`ocean-broker`, which resolves addressing from the generated event catalog and falls back to the
+Postgres `failed_webhooks` table when the bus rejects a write.
+
+What is left here is a naming adapter. Handlers and the escalation poller name their destination
+by the former Kafka topic (`ocean.tasks`), and translating that to the catalog domain in one place
+keeps their payload construction untouched.
+"""
 
 from __future__ import annotations
 
-import asyncio
-import json
-import logging
+from typing import TYPE_CHECKING, Any
 
-from confluent_kafka import Producer
+from ocean_broker import EventBridgePublisher, address_for
 
-log = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+_TOPIC_PREFIX = "ocean."
 
 
-class RedpandaPublisher:
-    """Async wrapper around confluent_kafka Producer.
+def domain_for_topic(topic: str) -> str:
+    """Translate a former Kafka topic name to its catalog domain.
 
-    Runs blocking produce/flush calls in a thread executor to avoid
-    blocking the event loop.
+    Accepts either form — `ocean.tasks` or `tasks` — because call sites use the prefixed name and
+    the catalog keys on the bare domain.
+
+    Raises:
+        KeyError: if the result is not a live domain. Resolution happens before the bus is
+            touched, so a retired or misspelled topic fails loudly instead of publishing to an
+            address no rule matches.
     """
+    domain = topic.removeprefix(_TOPIC_PREFIX)
+    address_for(domain)
+    return domain
 
-    def __init__(self, bootstrap_servers: str) -> None:
-        self._producer = Producer({"bootstrap.servers": bootstrap_servers})
 
-    async def publish(self, topic: str, event: dict) -> None:
-        """Serialize event to JSON and produce it to the given topic."""
-        payload = json.dumps(event).encode("utf-8")
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, self._produce_sync, topic, payload)
+class ControlPlanePublisher:
+    """Publishes control-plane events to EventBridge, keyed by former topic name."""
 
-    def _produce_sync(self, topic: str, payload: bytes) -> None:
-        self._producer.produce(topic, value=payload)
-        self._producer.flush()
+    def __init__(
+        self,
+        db_session_maker: async_sessionmaker[AsyncSession] | None = None,
+        region: str | None = None,
+        event_bus_name: str | None = None,
+    ) -> None:
+        """Build the publish site.
+
+        Args:
+            db_session_maker: Session maker for the `failed_webhooks` fallback. This site had no
+                dead-letter path under Kafka; without a session maker a failed publish is only
+                logged, so wire it wherever one is available.
+            region: AWS region. Defaults to the shared publisher's resolution.
+            event_bus_name: Bus to publish to. Defaults to the shared publisher's resolution.
+        """
+        self._publisher = EventBridgePublisher(
+            region=region,
+            db_session_maker=db_session_maker,
+            event_bus_name=event_bus_name,
+        )
+
+    async def publish(self, topic: str, event: dict[str, Any], key: str | None = None) -> None:
+        """Publish an event envelope, addressing it by the topic's domain.
+
+        The envelope crosses the bus whole: `event_type` stays an envelope field and is never
+        promoted to `detail-type`. A bus failure does not propagate to the caller.
+        """
+        await self._publisher.publish(domain_for_topic(topic), event, key)
