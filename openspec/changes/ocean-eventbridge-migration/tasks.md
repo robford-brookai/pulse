@@ -110,7 +110,7 @@ own `0019` — four files, one revision number, four heads at merge. 3.0 lands t
 once, up front; the guards then rebase onto it and stay parallel. Added 2026-08-02 after 3.2
 raised the collision mid-flight; the original plan declared 3.1–3.5 `parallel: yes` and missed it.
 
-- [x] 3.0 Add `last_event_at TIMESTAMPTZ NULL` to `interactions`, `device_associations`, `signals`
+- [x] 3.0 [DNA-780] Add `last_event_at TIMESTAMPTZ NULL` to `interactions`, `device_associations`, `signals`
       and `slack_messages` in a single migration `0019`. Nullable on purpose: a pre-migration row
       has no known event time, and `IS NULL OR … < EXCLUDED…` then treats it as overwritable. No
       `now()` default — a processing-time default is the bug this wave removes. The value stored is
@@ -182,7 +182,7 @@ scope creep; call it out in the HANDOFF):
 - [x] 4.13 [DNA-756] `services/warehouse-sync/src/main.py` — inline `Producer` used for dead-letter writes.
       Removed rather than converted: its role passes to the queue DLQ in 7.2.
       `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
-- [ ] 4.14 Bring the converted services into `task test`. `TESTED_PATHS` is
+- [ ] 4.14 [DNA-781] Bring the converted services into `task test`. `TESTED_PATHS` is
       `tests packages/ocean/libs` — ocean's 16 services are excluded (honestly declared, per 1.3
       and DNA-779). Every wave-2b task therefore writes tests that CI never runs: their green
       `task check` is truthful about what it covers and says nothing about the conversion. Until
