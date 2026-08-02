@@ -11,30 +11,31 @@ from ocean_events.base import _PHI_FIELD_NAMES, BaseEvent
 
 log = structlog.get_logger()
 
-# Impilo event type prefix -> (ocean_event_type, ocean_topic, entity_type)
+# Impilo event type prefix -> (ocean_event_type, ocean_domain, entity_type).
+# The domain is the EventBridge detail-type, not the envelope's event_type.
 EVENT_MAP: dict[str, tuple[str, str, str]] = {
-    "reading": ("signal.received", "ocean.signals", "signal"),
-    "patient": ("patient.enrolled", "ocean.signals", "patient"),
-    "device": ("signal.missing", "ocean.signals", "signal"),
-    "order": ("order.created", "ocean.logistics", "logistics"),
-    "kit": ("kit.updated", "ocean.logistics", "logistics"),
-    "procurement": ("procurement.requested", "ocean.logistics", "logistics"),
-    "return": ("return.updated", "ocean.logistics", "return"),
+    "reading": ("signal.received", "signals", "signal"),
+    "patient": ("patient.enrolled", "signals", "patient"),
+    "device": ("signal.missing", "signals", "signal"),
+    "order": ("order.created", "logistics", "logistics"),
+    "kit": ("kit.updated", "logistics", "logistics"),
+    "procurement": ("procurement.requested", "logistics", "logistics"),
+    "return": ("return.updated", "logistics", "return"),
 }
 
 # Subtype-level overrides — checked before prefix-level EVENT_MAP.
-# Full type string -> (ocean_event_type, ocean_topic, entity_type)
+# Full type string -> (ocean_event_type, ocean_domain, entity_type)
 SUBTYPE_MAP: dict[str, tuple[str, str, str]] = {
-    "order.statusFull": ("fulfillment.updated", "ocean.logistics", "fulfillment"),
-    "return.statusFull": ("return.updated", "ocean.logistics", "return"),
+    "order.statusFull": ("fulfillment.updated", "logistics", "fulfillment"),
+    "return.statusFull": ("return.updated", "logistics", "return"),
     "device.associationCreated": (
         "device.associated",
-        "ocean.logistics",
+        "logistics",
         "device_association",
     ),
     "device.associationRemoved": (
         "device.disassociated",
-        "ocean.logistics",
+        "logistics",
         "device_association",
     ),
 }
@@ -137,7 +138,7 @@ def _extract_signal_type(event_type: str) -> str:
 
 
 def normalize_impilo_payload(raw: dict) -> tuple[BaseEvent, str]:
-    """Normalize a raw Impilo webhook dict into a canonical (BaseEvent, topic) tuple.
+    """Normalize a raw Impilo webhook dict into a canonical (BaseEvent, domain) tuple.
 
     Steps:
     1. Parse event type prefix from raw["type"]
@@ -147,7 +148,7 @@ def normalize_impilo_payload(raw: dict) -> tuple[BaseEvent, str]:
     5. Extract needed fields, build clean payload
     6. Verify built payload has no PHI keys
     7. Construct BaseEvent
-    8. Return (event, topic)
+    8. Return (event, domain)
 
     Raises:
         ValueError: unknown event type, PHI detected, or unmapped device event
@@ -158,9 +159,9 @@ def normalize_impilo_payload(raw: dict) -> tuple[BaseEvent, str]:
     # Check subtype-level overrides first (exact match on full type string)
     is_subtype = event_type_str in SUBTYPE_MAP
     if is_subtype:
-        ocean_event_type, topic, entity_type = SUBTYPE_MAP[event_type_str]
+        ocean_event_type, domain, entity_type = SUBTYPE_MAP[event_type_str]
     elif prefix in EVENT_MAP:
-        ocean_event_type, topic, entity_type = EVENT_MAP[prefix]
+        ocean_event_type, domain, entity_type = EVENT_MAP[prefix]
     else:
         raise ValueError(
             f"Unknown Impilo event type prefix '{prefix}' from '{event_type_str}'. "
@@ -274,8 +275,8 @@ def normalize_impilo_payload(raw: dict) -> tuple[BaseEvent, str]:
     log.debug(
         "impilo_event_normalized",
         event_type=ocean_event_type,
-        topic=topic,
+        domain=domain,
         entity_id=str(payload_id),
     )
 
-    return event, topic
+    return event, domain
