@@ -1,0 +1,167 @@
+# https://taskfile.dev
+version: "3"
+
+vars:
+  COMPOSE_FILE: infra/docker-compose.yml
+
+includes:
+  sim-driver:
+    taskfile: ./services/sim-driver/Taskfile.yml
+    dir: ./services/sim-driver
+    optional: true
+  agent-worker:
+    taskfile: ./services/agent-worker/Taskfile.yml
+    dir: ./services/agent-worker
+    optional: true
+  call-simulator:
+    taskfile: ./services/call-simulator/Taskfile.yml
+    dir: ./services/call-simulator
+    optional: true
+
+tasks:
+  # --- Testing ---
+
+  test:
+    desc: Run all unit tests (root + services)
+    cmds:
+      - python -m pytest tests/ -x -q -m "not integration"
+      - task: test:services
+
+  test:services:
+    desc: Run tests for all services with test directories
+    cmds:
+      - for: [sim-driver, event-store, control-plane, graph-projection, slack-bot, pocar-connector, impilo-connector, zcc-connector, linear-connector, github-connector, hubspot-connector, stacte-bridge]
+        cmd: |
+          if [ -d "services/{{.ITEM}}/tests" ]; then
+            echo "=== {{.ITEM}} ===" && cd services/{{.ITEM}} && python -m pytest tests/ -x -q && cd ../..
+          fi
+
+  test:root:
+    desc: Run root-level tests only
+    cmds:
+      - python -m pytest tests/ -x -q -m "not integration"
+
+  test:integration:
+    desc: Run integration tests (requires Docker stack)
+    cmds:
+      - python -m pytest tests/ -x -q -m integration
+
+  test:lib:
+    desc: Run ocean-events library tests
+    dir: libs/ocean-events
+    cmds:
+      - python -m pytest tests/ -x -q
+
+  # --- Docker Compose ---
+
+  up:
+    desc: Start core stack (no sim profile)
+    cmds:
+      - docker compose --env-file .env -f {{.COMPOSE_FILE}} up -d
+
+  up:sim:
+    desc: Start full stack with simulation services
+    env:
+      ESCALATION_ENABLED: "false"
+    cmds:
+      - docker compose --env-file .env -f {{.COMPOSE_FILE}} --profile sim up -d
+
+  up:warehouse:
+    desc: Start full stack including warehouse-sync service (requires Snowflake credentials)
+    cmds:
+      - docker compose --env-file .env -f {{.COMPOSE_FILE}} --profile warehouse up -d
+
+  warehouse:smoke:
+    desc: Run sim smoke_test scenario and verify events appear in Snowflake within 60 seconds
+    dotenv: ['.env']
+    cmds:
+      - uv run python scripts/warehouse_smoke.py
+
+  down:
+    desc: Stop all services
+    cmds:
+      - docker compose --env-file .env -f {{.COMPOSE_FILE}} --profile sim down
+
+  logs:
+    desc: Follow logs for all services
+    cmds:
+      - docker compose --env-file .env -f {{.COMPOSE_FILE}} --profile sim logs -f
+
+  logs:sim:
+    desc: Stream sim event flow to logs/sim.log
+    cmds:
+      - mkdir -p logs
+      - echo "Writing sim logs to logs/sim.log — tail -f logs/sim.log to follow"
+      - docker compose --env-file .env -f {{.COMPOSE_FILE}} logs -f --tail=0 sim-driver control-plane agent-worker call-simulator event-store > logs/sim.log 2>&1
+
+  demo:
+    desc: "Run full Ocean demo: boot stack, run scenario, print summary"
+    vars:
+      WAREHOUSE: '{{.WAREHOUSE | default "false"}}'
+    env:
+      ESCALATION_ENABLED: "true"
+      ESCALATION_TIMEOUT_CRITICAL: "30"
+      ESCALATION_TIMEOUT_HIGH: "30"
+      ESCALATION_TIMEOUT_MEDIUM: "30"
+      ESCALATION_TIMEOUT_LOW: "30"
+      ESCALATION_POLL_INTERVAL: "10"
+    cmds:
+      - cmd: >-
+          docker compose --env-file .env -f {{.COMPOSE_FILE}}
+          --profile sim
+          {{if eq .WAREHOUSE "true"}}--profile warehouse{{end}}
+          down -v 2>/dev/null || true
+      - cmd: >-
+          docker compose --env-file .env -f {{.COMPOSE_FILE}}
+          --profile sim
+          {{if eq .WAREHOUSE "true"}}--profile warehouse{{end}}
+          up -d --build
+      - cmd: >-
+          uv run python scripts/demo.py
+          {{if eq .WAREHOUSE "true"}}--warehouse{{end}}
+
+  sim:
+    desc: "Run a simulation scenario (default: smoke_test). Usage: task sim SCENARIO=pilot_demo"
+    vars:
+      SCENARIO: '{{.SCENARIO | default "smoke_test"}}'
+    cmds:
+      - cmd: 'curl -s -X POST http://localhost:8060/simulate -H "Content-Type: application/json" -d "{\"scenario\":\"{{.SCENARIO}}\"}"'
+      - cmd: echo ""
+
+  tunnel:
+    desc: Start ngrok tunnel to slack-bot (required for Slack events/commands in local dev)
+    cmds:
+      - echo "Starting ngrok tunnel to slack-bot on port 8005..."
+      - echo "Update Slack app Request URLs with the HTTPS URL shown below + /slack/events"
+      - ngrok http 8005
+
+  ps:
+    desc: Show running containers
+    cmds:
+      - docker compose --env-file .env -f {{.COMPOSE_FILE}} --profile sim ps
+
+  # --- Linting ---
+
+  lint:
+    desc: Run ruff check + format on entire repo
+    cmds:
+      - ruff check .
+      - ruff format --check .
+
+  lint:fix:
+    desc: Auto-fix ruff issues
+    cmds:
+      - ruff check --fix .
+      - ruff format .
+
+  # --- Infra ---
+
+  topics:
+    desc: Create Redpanda topics (idempotent)
+    cmds:
+      - bash infra/redpanda/topics.sh
+
+  migrate:
+    desc: Run Alembic migrations
+    cmds:
+      - docker compose --env-file .env -f {{.COMPOSE_FILE}} run --rm migrate

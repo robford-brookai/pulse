@@ -1,0 +1,67 @@
+# Build + Deploy Pipeline for mongodb-connector (Ocean)
+#
+# Orchestrates the full CI/CD pipeline: build → deploy.
+# Triggers on push to main or manual dispatch.
+# Supports deploying a pre-built image by providing image_tag (skips build).
+#
+name: "[Ocean] MongoDB Connector — Build + Deploy Pipeline"
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "services/mongodb-connector/**"
+      - "libs/**"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: The environment to deploy to
+        type: choice
+        options:
+          - dev01-brook
+        required: true
+        default: dev01-brook
+      image_tag:
+        description: ECR image tag to deploy (optional — skips build if provided)
+        type: string
+        required: false
+
+jobs:
+  build:
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.image_tag == '' }}
+    uses: ./.github/workflows/mongodb-connector-build.yaml
+    with:
+      environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'dev01-brook' }}
+    secrets: inherit
+
+  deploy:
+    if: ${{ always() && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
+    needs: build
+    uses: ./.github/workflows/mongodb-connector-deploy.yaml
+    with:
+      environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'dev01-brook' }}
+      image_uri: ${{ needs.build.outputs.image_uri }}
+      image_tag: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.image_tag || '' }}
+    secrets: inherit
+
+  summary:
+    name: Pipeline Summary
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [build, deploy]
+    steps:
+      - name: Create Pipeline Summary
+        run: |
+          echo "# Pipeline Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Build | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Deploy | ${{ needs.deploy.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** \`${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'dev01-brook' }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by:** @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY

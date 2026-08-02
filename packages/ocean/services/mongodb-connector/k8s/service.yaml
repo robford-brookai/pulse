@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-connector
+  labels:
+    app: mongodb-connector
+spec:
+  type: ClusterIP
+  selector:
+    app: mongodb-connector
+  ports:
+    - port: 8000
+      targetPort: http
+      name: http

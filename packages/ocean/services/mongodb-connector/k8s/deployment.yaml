@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb-connector
+  labels:
+    app: mongodb-connector
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: mongodb-connector
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: mongodb-connector
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: mongodb-connector
+          # Placeholder — replace with actual ECR repo URI after DuploCloud setup
+          image: <ECR_ACCOUNT>.dkr.ecr.us-east-1.amazonaws.com/mongodb-connector:latest
+          ports:
+            - containerPort: 8000
+              name: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 3
+            successThreshold: 1
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          # Environment variables — in production these come from DuploCloud
+          # env config or k8s Secrets. The envFrom blocks below are placeholders
+          # showing the expected sources.
+          envFrom:
+            - configMapRef:
+                name: mongodb-connector-config
+            - secretRef:
+                name: mongodb-connector-secrets
+          # Expected env vars provided by the ConfigMap/Secret:
+          #   MONGODB_URI          — MongoDB connection string
+          #   MONGODB_DATABASE     — target database name
+          #   DATABASE_URL         — Postgres connection string (leader election + resume tokens)
+          #   MSK_BOOTSTRAP_SERVERS — Kafka bootstrap servers
+          #   WATCH_COLLECTIONS    — (optional) comma-separated collection names to watch

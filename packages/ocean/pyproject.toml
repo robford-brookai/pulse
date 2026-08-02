@@ -1,0 +1,57 @@
+[project]
+name = "ocean"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "ocean-events",
+    "ocean-broker",
+    "pyyaml>=6.0.3",
+    "ruff>=0.15.5",
+    "ty>=0.0.21",
+]
+
+[tool.uv.workspace]
+members = [
+    "libs/ocean-events",
+    "libs/ocean-broker",
+]
+
+[tool.uv.sources]
+ocean-events = { workspace = true, editable = true }
+ocean-broker = { workspace = true, editable = true }
+
+[dependency-groups]
+dev = [
+    "asyncpg>=0.31.0",
+    "confluent-kafka>=2.13.2",
+    "fastapi>=0.135.1",
+    "greenlet>=3.3.2",
+    "httpx>=0.28.1",
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "sqlalchemy>=2.0.48",
+    "structlog>=25.5.0",
+    "testcontainers[kafka,postgres]>=4.9.0",
+    "uvicorn>=0.41.0",
+    "requests>=2.32.0",
+    "snowflake-connector-python>=3.12.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["tests"]
+markers = [
+    "integration: marks tests requiring Docker (deselect with -m 'not integration')",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = []
