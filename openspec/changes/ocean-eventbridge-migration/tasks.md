@@ -21,7 +21,7 @@ can be dispatched. `task dispatch` must not emit work orders for them.
       the import precondition. Blocks 1.2.
       `[model: sonnet | deps: — | lane: destructive_ops | wave: 0]`
       Out of lane: touches live credentials, no reviewable diff.
-- [ ] 1.2 [DNA-734] Import `robford-brookai/ocean` at `7bc9d2c` to `packages/ocean` via `git-filter-repo`
+- [x] 1.2 [DNA-734] Import `robford-brookai/ocean` at `7bc9d2c` to `packages/ocean` via `git-filter-repo`
       with the ADR §6.1 path allowlist and `--to-subdirectory-filter`. Pure move — no file content
       changes in this commit.
       `[model: opus | deps: 1.1 | lane: repo_change | wave: 0]`
