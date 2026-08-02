@@ -1,6 +1,6 @@
 """Heartbeat background task for the Linear connector.
 
-Publishes periodic connector.heartbeat events to ocean.ops so the
+Publishes periodic connector.heartbeat events to the ``ops`` domain so the
 control-plane can update connector_health and the slack-bot health
 poller can detect silent connectors.
 """
@@ -46,7 +46,7 @@ async def publish_heartbeat(
         }
         try:
             await publisher.publish(
-                topic="ocean.ops",
+                detail_type="ops",
                 event=event,
             )
             log.debug("heartbeat_published", connector_id=connector_id)
