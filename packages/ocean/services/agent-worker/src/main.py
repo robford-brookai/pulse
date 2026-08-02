@@ -32,7 +32,7 @@ async def _start_worker(queue_url: str, personas, compression: float) -> None:
     Runs after lifespan yields so /health is already responsive.
     """
     if not queue_url:
-        log.error("consumer_not_started_missing_queue_url", env_var="OCEAN_QUEUE_URL")
+        log.error("consumer_not_started_missing_queue_url", env_var="SQS_QUEUE_URL")
         return
     # Off the loop: the boto3 client reads credential and config files as it is constructed.
     publisher = await asyncio.to_thread(build_publisher)
@@ -49,7 +49,7 @@ async def _start_worker(queue_url: str, personas, compression: float) -> None:
 async def lifespan(app: FastAPI):
     global _consumer_task
 
-    queue_url = os.environ.get("OCEAN_QUEUE_URL", "")
+    queue_url = os.environ.get("SQS_QUEUE_URL", "")
     agents_path = os.environ.get("AGENTS_MD_PATH", "/app/AGENTS.md")
     compression = float(os.environ.get("COMPRESSION_RATIO", "960"))
 
