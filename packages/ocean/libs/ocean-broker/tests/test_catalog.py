@@ -69,11 +69,14 @@ class TestSourceTable:
         """topics.sh is the pre-migration topic list; the table must cover it exactly.
 
         Guards the window before 6.5 replaces topics.sh with catalog-driven creation.
+        Retired domains are absent: task 7.1 removed ``ocean.warehouse-dlq`` along
+        with the Redpanda Connect sink it served.
         """
         script = (_REPO_OCEAN / "infra" / "redpanda" / "topics.sh").read_text()
         provisioned = set(re.findall(r'^\s*"ocean\.([a-z-]+)"', script, re.MULTILINE))
 
-        assert provisioned == set(LIVE_DOMAINS) | set(RETIRED_DOMAINS)
+        assert provisioned == set(LIVE_DOMAINS)
+        assert provisioned.isdisjoint(RETIRED_DOMAINS)
 
 
 class TestTopicTranslation:
