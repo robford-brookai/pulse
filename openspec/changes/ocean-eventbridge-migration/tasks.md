@@ -153,7 +153,15 @@ site, each swapping its transport code for `EventBridgePublisher` and keeping it
 construction unchanged. Each test asserts the site emits through the shared publisher and that its
 failure path writes `failed_webhooks`.
 
-Keyed connector publishers (already had the `failed_webhooks` fallback — preserve it):
+Keyed connector publishers (~~already had the `failed_webhooks` fallback — preserve it~~):
+
+**Correction, 2026-08-02.** That parenthetical is false and was believed by the plan, not checked.
+4.1 and 4.2 both found the fallback was *dead code*: `producer.py` accepted a `db_session_maker`
+and `main.py` never passed one, so a publish failure dropped the event silently. Both wired it from
+`DATABASE_URL`. Verify rather than assume on 4.3, 4.5 and 4.6 — do not "preserve" a fallback
+without first confirming it was ever reachable. 4.10 found the mirror of this on the unkeyed side:
+inheriting the fallback is not free either, since a service with no Postgres wiring at all needs a
+session maker, deps, and compose env added before it has anywhere to dead-letter to.
 
 - [ ] 4.1 [DNA-744] `services/github-connector/src/producer.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
 - [ ] 4.2 [DNA-745] `services/hubspot-connector/src/producer.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
@@ -174,6 +182,20 @@ scope creep; call it out in the HANDOFF):
 - [ ] 4.13 [DNA-756] `services/warehouse-sync/src/main.py` — inline `Producer` used for dead-letter writes.
       Removed rather than converted: its role passes to the queue DLQ in 7.2.
       `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
+- [ ] 4.14 Bring the converted services into `task test`. `TESTED_PATHS` is
+      `tests packages/ocean/libs` — ocean's 16 services are excluded (honestly declared, per 1.3
+      and DNA-779). Every wave-2b task therefore writes tests that CI never runs: their green
+      `task check` is truthful about what it covers and says nothing about the conversion. Until
+      this lands, wave 2b is unverified by CI.
+      `[model: opus | deps: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9, 4.10, 4.11, 4.12, 4.13 | lane: repo_change | wave: 2b]`
+      `serial: workspace_roots` — edits `Taskfile.yml`, which thirteen parallel branches would
+      collide on. Raised independently by 4.1, 4.2 and 4.10; deliberately deferred out of each of
+      them for exactly that reason.
+      Done when converted services' tests run in `task test` and the suite is green, or each
+      exclusion that remains is per-service with a stated reason.
+      Also fold in the de-duplication those tasks flagged: `_TOPIC_PREFIX` and `domain_for_topic`
+      were copied verbatim into every converted service. Hoist one copy into `ocean_broker.catalog`
+      and delete the rest.
 
 ## 5. Wave 2c — consumer conversions
 
