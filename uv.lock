@@ -1439,6 +1439,7 @@ source = { editable = "packages/ocean/libs/ocean-broker" }
 dependencies = [
     { name = "aws-msk-iam-sasl-signer-python" },
     { name = "confluent-kafka" },
+    { name = "sqlalchemy" },
     { name = "structlog" },
 ]
 
@@ -1446,6 +1447,7 @@ dependencies = [
 requires-dist = [
     { name = "aws-msk-iam-sasl-signer-python", specifier = ">=1.0.0" },
     { name = "confluent-kafka", specifier = ">=2.13.0" },
+    { name = "sqlalchemy", specifier = ">=2.0.0" },
     { name = "structlog", specifier = ">=25.5.0" },
 ]
 

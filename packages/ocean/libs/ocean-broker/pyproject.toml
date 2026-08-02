@@ -4,9 +4,12 @@ version = "0.1.0"
 description = "Dual-mode Kafka broker config factory (Redpanda local / MSK Serverless)"
 requires-python = ">=3.13"
 dependencies = [
+    # confluent-kafka and the MSK IAM signer are still here because config.py still exists;
+    # both leave with the Kafka teardown (task 9.2), along with config.py itself.
     "confluent-kafka>=2.13.0",
     "aws-msk-iam-sasl-signer-python>=1.0.0",
     "structlog>=25.5.0",
+    "sqlalchemy>=2.0.0",
 ]
 
 [build-system]
