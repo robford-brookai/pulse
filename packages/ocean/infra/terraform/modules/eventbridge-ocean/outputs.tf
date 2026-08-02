@@ -17,3 +17,18 @@ output "publisher_policy_arn" {
   description = "ARN of the IAM policy granting events:PutEvents on this bus"
   value       = aws_iam_policy.publisher.arn
 }
+
+output "consumer_queue_urls" {
+  description = "Consumer name -> SQS queue URL (the value each service sets as SQS_QUEUE_URL)"
+  value       = { for consumer, queue in aws_sqs_queue.consumer : consumer => queue.url }
+}
+
+output "consumer_queue_arns" {
+  description = "Consumer name -> SQS queue ARN (task 6.3 attaches each queue's DLQ and redrive policy)"
+  value       = { for consumer, queue in aws_sqs_queue.consumer : consumer => queue.arn }
+}
+
+output "consumer_rule_arns" {
+  description = "Consumer name -> EventBridge rule ARN"
+  value       = { for consumer, rule in aws_cloudwatch_event_rule.consumer : consumer => rule.arn }
+}

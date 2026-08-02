@@ -15,6 +15,11 @@ variable "archive_retention_days" {
   }
 }
 
+variable "consumer_rule_patterns" {
+  description = "Consumer name -> serialised EventBridge event pattern. Generated from ocean_broker.catalog into generated/event_catalog.auto.tfvars.json; never hand-written, deliberately without a fallback value."
+  type        = map(string)
+}
+
 variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)
