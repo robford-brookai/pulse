@@ -4,22 +4,23 @@ WORKDIR /app
 
 RUN pip install uv --quiet
 
-# Copy ocean-events library first (build context = repo root)
+# Copy the shared libraries first (build context = repo root)
 COPY libs/ocean-events /libs/ocean-events
+COPY libs/ocean-broker /libs/ocean-broker
 
-# Install ocean-events editable so it's available to zcc-connector
-RUN uv pip install --system --no-cache -e /libs/ocean-events
+# Install them editable so they're available to zcc-connector. ocean-broker is the publisher:
+# it brings boto3 and the EventBridge transport, which is why no bus client is pinned below.
+RUN uv pip install --system --no-cache -e /libs/ocean-events -e /libs/ocean-broker
 
 # Copy zcc-connector pyproject.toml and install deps
 COPY services/zcc-connector/pyproject.toml .
 
-# Install dependencies (ocean-events already installed above)
+# Install dependencies (the shared libraries are already installed above)
 RUN uv pip install --system --no-cache \
     fastapi==0.135.1 \
     uvicorn==0.41.0 \
     "sqlalchemy==2.0.48" \
     asyncpg==0.31.0 \
-    "confluent-kafka==2.13.2" \
     "structlog==25.5.0"
 
 # Copy source code

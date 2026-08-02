@@ -1,66 +1,32 @@
-"""Redpanda producer with dead-letter queue fallback to Postgres."""
+"""Publisher wiring for the ZCC connector.
+
+The connector holds no transport code of its own. Publishing is
+:class:`ocean_broker.EventBridgePublisher`, which resolves its bus addressing from the event
+catalog; this module only supplies the Postgres session maker that publisher's
+``failed_webhooks`` fallback writes through.
+"""
 
 from __future__ import annotations
 
-import uuid
-from datetime import UTC, datetime
+import os
 
-import sqlalchemy as sa
-import structlog
-from confluent_kafka import KafkaException
-from confluent_kafka.aio import AIOProducer
-from sqlalchemy.ext.asyncio import async_sessionmaker
-
-log = structlog.get_logger()
+from ocean_broker import EventBridgePublisher
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 
-class RedpandaPublisher:
-    """Async Redpanda publisher with Postgres DLQ fallback on broker failure."""
+def build_dlq_session_maker() -> async_sessionmaker[AsyncSession]:
+    """Build the session maker the publisher's ``failed_webhooks`` fallback writes through."""
+    engine = create_async_engine(os.environ["DATABASE_URL"], echo=False)
+    return async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
-    def __init__(self, bootstrap_servers: str, db_session_maker: async_sessionmaker | None = None) -> None:
-        self._bootstrap_servers = bootstrap_servers
-        self._db_session_maker = db_session_maker
-        self._producer: AIOProducer | None = None
 
-    def _get_producer(self) -> AIOProducer:
-        if self._producer is None:
-            self._producer = AIOProducer({"bootstrap.servers": self._bootstrap_servers})
-        return self._producer
+def build_publisher(db_session_maker: async_sessionmaker[AsyncSession] | None = None) -> EventBridgePublisher:
+    """Build the connector's publisher.
 
-    async def publish(self, topic: str, key: str, value: bytes) -> None:
-        """Publish value to topic. On KafkaException, writes to DLQ if available and returns."""
-        producer = self._get_producer()
-        try:
-            future = await producer.produce(topic=topic, key=key.encode(), value=value)
-            await future
-            log.info("event_published", topic=topic, key=key)
-        except KafkaException as exc:
-            log.error("publish_failed_routing_to_dlq", topic=topic, key=key, error=str(exc))
-            if self._db_session_maker is not None:
-                await self._write_dlq(key, value, str(exc))
-
-    async def _write_dlq(self, key: str, value: bytes, error: str) -> None:
-        """Insert failed webhook into the failed_webhooks dead-letter table."""
-        async with self._db_session_maker() as session, session.begin():
-            await session.execute(
-                sa.text(
-                    "INSERT INTO failed_webhooks (id, key, payload, error, created_at, retry_count) "
-                    "VALUES (:id, :key, :payload, :error, :created_at, :retry_count)"
-                ),
-                {
-                    "id": str(uuid.uuid4()),
-                    "key": key,
-                    "payload": value,
-                    "error": error,
-                    "created_at": datetime.now(tz=UTC),
-                    "retry_count": 0,
-                },
-            )
-        log.info("dlq_write", key=key, error=error)
-
-    async def close(self) -> None:
-        """Flush and close the producer if it was created."""
-        if self._producer is not None:
-            await self._producer.flush()
-            await self._producer.close()
-            log.info("producer_closed")
+    Args:
+        db_session_maker: Session maker for the ``failed_webhooks`` fallback. Built from
+            ``DATABASE_URL`` when omitted. The fallback is not optional — a missing
+            ``DATABASE_URL`` raises at startup rather than leaving failed publishes to be
+            logged and dropped.
+    """
+    return EventBridgePublisher(db_session_maker=db_session_maker or build_dlq_session_maker())
