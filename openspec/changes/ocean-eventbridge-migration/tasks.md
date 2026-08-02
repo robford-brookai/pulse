@@ -284,7 +284,7 @@ shape, Dockerfile, and EKS deployment unchanged. Each records its ordering verdi
       `[model: sonnet | deps: 5.1, 6.2 | lane: repo_change | wave: 4]`
       `serial: catalog_generated_surfaces` — edits the catalog both producers and rules derive
       from.
-- [ ] 5.9 Give `warehouse-sync` a MECE test suite. It is the only converted service with **zero**
+- [x] 5.9 Give `warehouse-sync` a MECE test suite. It is the only converted service with **zero**
       tests, and 5.7 changed real semantics without any: the flush moved from `INSERT` to a `MERGE`
       on `data:event_id`, making duplicate-safety a property the Kafka loop never had. That
       property is currently asserted nowhere.
