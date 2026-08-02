@@ -28,14 +28,14 @@ class TestLoadScenario:
         config = load_scenario("smoke_test")
         assert isinstance(config, ScenarioConfig)
 
-    def test_smoke_test_has_three_patients(self) -> None:
+    def test_smoke_test_has_fifty_patients(self) -> None:
+        """smoke_test grew from 3 to 50 patients for broader happy-path coverage (phase 12)."""
         config = load_scenario("smoke_test")
-        assert len(config.patients) == 3
+        assert len(config.patients) == 50
 
-    def test_smoke_test_patient_has_source(self) -> None:
+    def test_smoke_test_patients_have_sources(self) -> None:
         config = load_scenario("smoke_test")
-        assert config.patients[0].source == "pocar"
-        assert config.patients[1].source == "impilo"
+        assert {p.source for p in config.patients} == {"pocar", "impilo"}
 
     def test_invalid_scenario_raises(self, tmp_path: pathlib.Path) -> None:
         """A YAML file missing patient_id should raise ValidationError."""
@@ -45,25 +45,58 @@ class TestLoadScenario:
             load_scenario("bad")
 
 
+_FIXTURE_SCENARIO = """\
+name: fixture
+compression_ratio: 720
+patients:
+  - patient_id: "sim-pt-fix-001"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - {sim_hour: 0.1, type: glucose, value: 225, unit: "mg/dL", anomalous: true}
+      - {sim_hour: 0.3, type: spo2, value: 85, unit: "%", anomalous: true}
+  - patient_id: "sim-pt-fix-002"
+    clinic_id: "clinic-demo"
+    source: impilo
+    signals:
+      - {sim_hour: 0.2, type: weight, value: 76, unit: "kg", anomalous: false}
+  - patient_id: "sim-pt-fix-003"
+    clinic_id: "clinic-demo"
+    source: pocar
+    signals:
+      - {sim_hour: 0.15, type: heart_rate, value: 130, unit: "bpm", anomalous: true}
+"""
+
+
+@pytest.fixture
+def fixture_scenario_dir(tmp_path: pathlib.Path):
+    """A scenario the tests control, so the property formulas are pinned against known
+    inputs instead of whatever smoke_test.yaml currently holds (it grew 3 -> 50 patients
+    once already and silently stranded the old hardcoded expectations)."""
+    (tmp_path / "fixture.yaml").write_text(_FIXTURE_SCENARIO)
+    with patch("src.scenario_engine._SCENARIOS_DIR", tmp_path):
+        yield tmp_path
+
+
 class TestScenarioEngineProperties:
     """ScenarioEngine exposes patient_count, expected_event_count, estimated_duration_seconds."""
 
-    def test_patient_count(self) -> None:
+    def test_patient_count(self, fixture_scenario_dir) -> None:
         pub = AsyncMock()
-        engine = ScenarioEngine(scenario_name="smoke_test", publisher=pub)
+        engine = ScenarioEngine(scenario_name="fixture", publisher=pub)
         assert engine.patient_count == 3
 
-    def test_expected_event_count(self) -> None:
-        """smoke_test: 4 signals total, 3 anomalous -> 4 + 3 = 7 events."""
+    def test_expected_event_count(self, fixture_scenario_dir) -> None:
+        """fixture: 4 signals total, 3 anomalous -> 4 + 3 = 7 events."""
         pub = AsyncMock()
-        engine = ScenarioEngine(scenario_name="smoke_test", publisher=pub)
+        engine = ScenarioEngine(scenario_name="fixture", publisher=pub)
         assert engine.expected_event_count == 7
 
-    def test_estimated_duration_seconds(self) -> None:
+    def test_estimated_duration_seconds(self, fixture_scenario_dir) -> None:
         """Max sim_hour across all patients is 0.3 (patient 1).
         estimated = 0.3 * 3600 / 720 = 1.5 seconds."""
         pub = AsyncMock()
-        engine = ScenarioEngine(scenario_name="smoke_test", publisher=pub)
+        engine = ScenarioEngine(scenario_name="fixture", publisher=pub)
         assert engine.estimated_duration_seconds == pytest.approx(1.5, rel=0.01)
 
     def test_scenario_name(self) -> None:

@@ -7,7 +7,9 @@ import os
 import pytest
 from src.personas import Persona, load_personas
 
-AGENTS_MD = os.path.join(os.path.dirname(__file__), os.pardir, os.pardir, os.pardir, "agents.md")
+# The exact name the Dockerfile copies — "agents.md" only resolved on case-insensitive
+# filesystems, and CI's is not.
+AGENTS_MD = os.path.join(os.path.dirname(__file__), os.pardir, os.pardir, os.pardir, "AGENTS.md")
 
 
 class TestPersonaModel:

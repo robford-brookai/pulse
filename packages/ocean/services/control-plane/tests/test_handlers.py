@@ -5,12 +5,36 @@ from __future__ import annotations
 import os
 import sys
 import uuid
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 # Allow importing src package from service root
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
+
+
+def _mock_session() -> AsyncMock:
+    """Session whose SELECTs return no rows: no active snooze, no false-positive history.
+
+    A bare AsyncMock's fetchone() yields a truthy coroutine, which reads as an active
+    snooze and short-circuits the handler before the task insert.
+    """
+    result = MagicMock()
+    result.fetchone.return_value = None
+    session = AsyncMock()
+    session.execute.return_value = result
+    return session
+
+
+def _tasks_insert_params(session: AsyncMock) -> dict:
+    """Bound params of the INSERT INTO tasks call, wherever it sits in the call list.
+
+    The handler now runs the snooze and false-positive SELECTs before the insert and the
+    escalation-state insert after it, so `call_args` (the last call) is never the task row.
+    """
+    call = next(c for c in session.execute.call_args_list if "INSERT INTO tasks" in str(c[0][0]))
+    return call[0][1]
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -59,31 +83,30 @@ class TestHandleAlertCreated:
         """handle_alert_created with alert_type='glucose' uses priority='critical'."""
         from src.handlers.alerts import handle_alert_created
 
-        session = AsyncMock()
+        session = _mock_session()
         event = _make_alert_event(alert_type="glucose")
 
         await handle_alert_created(event, session)
 
         assert session.execute.called
-        _, kwargs = session.execute.call_args
-        params = session.execute.call_args[0][1]
+        params = _tasks_insert_params(session)
         assert params["priority"] == "critical"
         assert params["task_type"] == "glucose"
         # status is a literal in the SQL string, not a bound param
-        sql_text = str(session.execute.call_args[0][0])
-        assert "open" in sql_text
+        insert_call = next(c for c in session.execute.call_args_list if "INSERT INTO tasks" in str(c[0][0]))
+        assert "open" in str(insert_call[0][0])
 
     @pytest.mark.asyncio
     async def test_unknown_alert_type_uses_medium_priority(self):
         """Unknown alert_type falls back to priority='medium'."""
         from src.handlers.alerts import handle_alert_created
 
-        session = AsyncMock()
+        session = _mock_session()
         event = _make_alert_event(alert_type="some_unknown_type")
 
         await handle_alert_created(event, session)
 
-        params = session.execute.call_args[0][1]
+        params = _tasks_insert_params(session)
         assert params["priority"] == "medium"
 
     @pytest.mark.asyncio
@@ -94,15 +117,13 @@ class TestHandleAlertCreated:
         alert_id = "alert-fixed-id-456"
         event = _make_alert_event(alert_id=alert_id)
 
-        session1 = AsyncMock()
+        session1 = _mock_session()
         await handle_alert_created(event, session1)
-        params1 = session1.execute.call_args[0][1]
-        task_id_1 = params1["task_id"]
+        task_id_1 = _tasks_insert_params(session1)["task_id"]
 
-        session2 = AsyncMock()
+        session2 = _mock_session()
         await handle_alert_created(event, session2)
-        params2 = session2.execute.call_args[0][1]
-        task_id_2 = params2["task_id"]
+        task_id_2 = _tasks_insert_params(session2)["task_id"]
 
         assert task_id_1 == task_id_2
         # Ensure it's a valid UUID string
@@ -113,7 +134,7 @@ class TestHandleAlertCreated:
         """After DB write, producer.publish is called with ocean.tasks topic and task.created event_type."""
         from src.handlers.alerts import handle_alert_created
 
-        session = AsyncMock()
+        session = _mock_session()
         producer = AsyncMock()
         event = _make_alert_event(alert_type="glucose")
 
@@ -132,7 +153,7 @@ class TestHandleAlertCreated:
         """Without a producer, handler completes without error."""
         from src.handlers.alerts import handle_alert_created
 
-        session = AsyncMock()
+        session = _mock_session()
         event = _make_alert_event()
 
         await handle_alert_created(event, session, producer=None)
@@ -144,13 +165,13 @@ class TestHandleAlertCreated:
         """alert_id and patient_id are passed through to DB params."""
         from src.handlers.alerts import handle_alert_created
 
-        session = AsyncMock()
+        session = _mock_session()
         event = _make_alert_event(alert_id="my-alert-99")
         event["payload"]["patient_id"] = "patient-007"
 
         await handle_alert_created(event, session)
 
-        params = session.execute.call_args[0][1]
+        params = _tasks_insert_params(session)
         assert params["alert_id"] == "my-alert-99"
         assert params["patient_id"] == "patient-007"
 
@@ -159,7 +180,7 @@ class TestHandleAlertCreated:
         """task.created event payload contains channel field from channel_for()."""
         from src.handlers.alerts import handle_alert_created
 
-        session = AsyncMock()
+        session = _mock_session()
         producer = AsyncMock()
         event = _make_alert_event(alert_type="glucose")
 
@@ -174,7 +195,7 @@ class TestHandleAlertCreated:
         """When payload has assigned_to, producer.publish is called twice: task.created + task.assigned."""
         from src.handlers.alerts import handle_alert_created
 
-        session = AsyncMock()
+        session = _mock_session()
         producer = AsyncMock()
         event = _make_alert_event(alert_type="glucose")
         event["payload"]["assigned_to"] = "nurse-jane"
@@ -197,7 +218,7 @@ class TestHandleAlertCreated:
         """Without assigned_to in payload, producer.publish is called once (task.created only)."""
         from src.handlers.alerts import handle_alert_created
 
-        session = AsyncMock()
+        session = _mock_session()
         producer = AsyncMock()
         event = _make_alert_event(alert_type="glucose")
         # No assigned_to in payload
