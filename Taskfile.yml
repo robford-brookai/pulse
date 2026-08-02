@@ -17,12 +17,15 @@ vars:
   # each target's scope is readable at the point of use — a var that names packages/ocean while
   # the command runs against src is a false claim about what CI verifies (task 1.3).
   LINT_PATHS: src tests packages/ocean
-  # Typecheck and test reach ocean's libs but not its 16 services (task 1.4, DNA-779). The
-  # services carry 217 mypy errors, and their tests import `from src.X` so they only resolve
-  # when pytest runs from inside each service directory. Both are stated here rather than
-  # implied, so what CI verifies is readable from this file.
+  # Typecheck reaches ocean's libs but not its 16 services (task 1.4, DNA-779): the services
+  # carry 217 mypy errors. Stated here rather than implied, so what CI verifies is readable
+  # from this file.
   TYPED_PATHS: src packages/ocean/libs/ocean-events/src packages/ocean/libs/ocean-broker/src packages/ocean/libs/ocean-connector-mcp/src
-  TESTED_PATHS: tests packages/ocean/libs
+  # Tests reach ocean's libs, plus graph-projection: its tests import `from src.X`, which used to
+  # resolve only with pytest run from inside the service, and now resolves from anywhere because
+  # that service's tests/conftest.py states the path (task 3.4, DNA-741). The sequence guards in
+  # wave 2a are only a gate if CI runs them. The other 15 services still need the same treatment.
+  TESTED_PATHS: tests packages/ocean/libs packages/ocean/services/graph-projection/tests
   # Coverage covers ocean-events because it is the envelope every consumer depends on, and it is
   # at 100%. ocean-broker joins it at task 2.2: the reason it was excluded — that 2.2 would throw
   # its tests away — expired when 2.2 landed EventBridgePublisher and the event catalog, which are
