@@ -13,7 +13,8 @@
 # and puts ordering in consumer-side sequence guards instead. Competing
 # consumers within a service are multiple pollers on the same queue.
 #
-# DLQs and redrive policies attach to these queues in task 6.3. Consumers need
+# DLQs and redrive policies attach to these queues in dlq.tf (task 6.3), via
+# the standalone redrive resources so nothing here changes. Consumers need
 # no IAM policy here for the same reason the publisher policy is not attached
 # to a role (see iam.tf): queue-read permissions land with the environment
 # config, once the EKS service account role ARNs are known.
