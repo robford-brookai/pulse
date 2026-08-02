@@ -255,12 +255,12 @@ shape, Dockerfile, and EKS deployment unchanged. Each records its ordering verdi
 - [x] 5.3 [DNA-759] `services/call-simulator/src/consumer.py` — verdict order-tolerant (single topic, single
       dispatch per approval).
       `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2c]`
-- [ ] 5.4 [DNA-760] `services/control-plane/src/consumer.py` — verdict per 3.6.
+- [x] 5.4 [DNA-760] `services/control-plane/src/consumer.py` — verdict per 3.6.
       `[model: sonnet | deps: 2.2, 3.6 | lane: repo_change | wave: 2c]`
-- [ ] 5.5 [DNA-761] `services/graph-projection/src/consumer.py` — convert only; all guard work landed in
+- [x] 5.5 [DNA-761] `services/graph-projection/src/consumer.py` — convert only; all guard work landed in
       3.1–3.4.
       `[model: sonnet | deps: 2.2, 3.1, 3.2, 3.3, 3.4 | lane: repo_change | wave: 2c]`
-- [ ] 5.6 [DNA-762] `services/slack-bot/src/consumer.py` — convert only; guard landed in 3.5.
+- [x] 5.6 [DNA-762] `services/slack-bot/src/consumer.py` — convert only; guard landed in 3.5.
       `[model: sonnet | deps: 2.2, 3.5 | lane: repo_change | wave: 2c]`
 - [x] 5.7 [DNA-763] `services/warehouse-sync/src/main.py` — inline `AIOConsumer` to SQS receive/delete.
       `[model: sonnet | deps: 2.2, 4.13 | lane: repo_change | wave: 2c]`
@@ -309,20 +309,30 @@ shape, Dockerfile, and EKS deployment unchanged. Each records its ordering verdi
 - [x] 6.2 [DNA-765] Add one rule and one SQS queue per consumer, patterns generated from 2.1. Test: each
       rule's pattern matches exactly its consumer's domain set.
       `[model: sonnet | deps: 6.1 | lane: repo_change | wave: 3]`
-- [ ] 6.3 [DNA-766] Add a DLQ and redrive policy per queue, with dead-letter volume exposed to monitoring
+- [x] 6.3 [DNA-766] Add a DLQ and redrive policy per queue, with dead-letter volume exposed to monitoring
       per consumer. This is where ADR §1.4's DLQ-with-monitor stops being an assumption.
       `[model: sonnet | deps: 6.2 | lane: repo_change | wave: 3]`
 - [x] 6.4 [DNA-767] Add the bus archive with retention. This is where ADR §4.6's replay stops being an
       assumption. Retention value per design Open Questions — any value 30–90 days satisfies the
       spec.
       `[model: sonnet | deps: 6.1 | lane: repo_change | wave: 3]`
-- [ ] 6.5 [DNA-768] Replace `redpanda`, `redpanda-console` and `redpanda-init` in `infra/docker-compose.yml`
+- [x] 6.5 [DNA-768] Replace `redpanda`, `redpanda-console` and `redpanda-init` in `infra/docker-compose.yml`
       with LocalStack, and replace `infra/redpanda/topics.sh` with idempotent bus/rule/queue
       creation driven by 2.1's table. Test: re-running against an existing stack leaves it
       unchanged.
       `[model: sonnet | deps: 2.1, 6.2 | lane: repo_change | wave: 3]`
-- [ ] 6.6 [DNA-769] Remove `confluent_kafka` from every package manifest and lockfile; add the AWS client
-      dependency. Test: no source file outside the shared publisher references a bus client.
+- [ ] 6.6 [DNA-769] Remove `confluent_kafka` from every package manifest, lockfile **and Dockerfile**;
+      add the AWS client dependency. Test: no source file outside the shared publisher references a
+      bus client.
+      **Scope widened 2026-08-02 to Dockerfiles, which are the deployment-breaking half.** 5.6
+      found `slack-bot`'s Dockerfile still pinning `confluent-kafka==2.13.2` while installing
+      neither `ocean-broker` nor `boto3` — that image cannot start as built, which is worse than a
+      stale manifest and is invisible to every test we have. `agent-worker` and `call-simulator`
+      share the gap, and 5.7/5.5 both noted the "Dockerfile unchanged" line in §5 is not literally
+      achievable because several services pin deps inline. Sweep every service.
+      Second test, and the one that would have caught this: for each service, the set of
+      distributions its Dockerfile installs must satisfy the imports its `src/` actually makes.
+      A Dockerfile that installs a bus client nothing imports, or omits one something does, fails.
       `[model: sonnet | deps: 4.13, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7 | lane: repo_change | wave: 3]`
       `serial: workspace_roots` — touches the workspace lockfile.
       **Dependency corrected 2026-08-02.** It read `4.13, 5.7`, which the graph considered
@@ -333,7 +343,7 @@ shape, Dockerfile, and EKS deployment unchanged. Each records its ordering verdi
 
 ## 7. Wave 4 — warehouse path
 
-- [ ] 7.1 [DNA-770] Delete `infra/redpanda/connect.yaml` and the `ocean.warehouse-dlq` topic; move warehouse
+- [x] 7.1 [DNA-770] Delete `infra/redpanda/connect.yaml` and the `ocean.warehouse-dlq` topic; move warehouse
       delivery onto the `warehouse-sync` queue from 6.2.
       `[model: sonnet | deps: 5.7, 6.2 | lane: repo_change | wave: 4]`
 - [ ] 7.2 [DNA-771] Point warehouse dead-lettering at the `warehouse-sync` queue's DLQ. Test: a repeatedly
