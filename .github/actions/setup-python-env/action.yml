@@ -26,5 +26,8 @@ runs:
         cache-suffix: ${{ matrix.python-version }}
 
     - name: Install Python dependencies
-      run: uv sync --frozen
+      # --all-packages: the workspace has members under packages/, and typecheck and
+      # test now cover them. A root-only sync leaves their deps missing, which fails
+      # as an unimportable mypy plugin rather than as anything obviously about deps.
+      run: uv sync --all-packages --frozen
       shell: bash
