@@ -1,6 +1,6 @@
 # ADR: Absorbing OCEAN into the PULSE Ledger Foundation
 
-**Status:** Proposed — repo reconciliation complete (§9, 2026-08-01); all four §9.1 failures closed 2026-08-01 (V3 → EventBridge migration; V5 → convention + CI schema check; V7 → named migration M1, §6.2; V11 → filtered import, §6.1); pending Tal sign-off
+**Status:** **Accepted** 2026-08-01 (Tal sign-off on Option C topology and the absorption decision, §2) — repo reconciliation complete (§9); all four §9.1 failures closed (V3 → EventBridge migration; V5 → convention + CI schema check; V7 → named migration M1, §6.2; V11 → filtered import, §6.1). Delivery is the OpenSpec change `ocean-eventbridge-migration` (DNA-733).
 **Date:** 2026-07-31 (rev 2 — absorption framing)
 **Deciders:** Ford (author), Tal (sign-off).
 **Scope:** How the OCEAN pattern and codebase (event backbone + Operational Data Graph, "events are facts, tasks are derived") are absorbed into PULSE (Patient Unified Ledger of State and Events). PULSE is OCEAN's only application — doctrine has shifted wholly to declarative, so OCEAN is not amended for one domain, it is superseded and its code migrates into the PULSE repo as the distribution subsystem. One project, one repo, one doctrine.
@@ -381,7 +381,7 @@ Two local checkouts of `robford-brookai/ocean` exist and they are not equivalent
 1. [x] **V3 backbone settled** 2026-08-01 — migrate everything to EventBridge (§9.1). §§0, 4.1, 4.5 restated; §4.2 and §4.6 already correct. Delivered as OpenSpec change `ocean-eventbridge-migration`
 1. [x] **V11 import rewritten** 2026-08-01 — §6.1 step 2 is now `git-filter-repo` with an explicit path allowlist and a `--to-subdirectory-filter` graft. Surfaced a precondition the finding missed: `.env` is tracked in the source repo, so every credential in it rotates before the import
 1. [x] **V7 registered** 2026-08-01 as named Phase 3 migration **M1** (§6.2), retiring at the S3 exit criterion — no calendar date exists to name, the program sequences by gate. Scope corrected against the code: the derivation is an FK bootstrap that mints patient rows with a hardcoded `'pending'`, not a status derived from the feed; nothing ever updates the column. Smaller than V7 reads, and out of scope for `ocean-eventbridge-migration`
-2. [ ] Tal: sign off Option C topology and the absorption decision (§2) — the record-versus-feed line and "one repo, one doctrine" are the two load-bearing sentences
+2. [x] **Tal signed off** 2026-08-01 — Option C topology and the absorption decision (§2) accepted. The record-versus-feed line and "one repo, one doctrine" stand as written. This ADR moves Proposed → Accepted.
 3. [ ] Extend the DNA-695 (S0.1) work order with the §6.1 absorption steps — scaffold, subtree import to `packages/ocean`, conform-in-place commit, archive source with the §7 supersession notice as its final commit
 4. [ ] Add SoR registry fields and envelope surface to the S0.2 catalog work order — no new project name, OCEAN is now a package name only
 5. [ ] Fold §4 (contract + registry + producer policy) into `DNA-SPEC-DECLARED-STATE-PRM` at the PRD merge, adjacent to the object-model section

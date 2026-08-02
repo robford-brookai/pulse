@@ -17,7 +17,7 @@ can be dispatched. `task dispatch` must not emit work orders for them.
 
 ## 1. Wave 0 — absorption
 
-- [ ] 1.1 [CCC-15] Rotate every credential in the source repo's tracked `.env`, and record the rotation as
+- [x] 1.1 [CCC-15] Rotate every credential in the source repo's tracked `.env`, and record the rotation as
       the import precondition. Blocks 1.2.
       `[model: sonnet | deps: — | lane: destructive_ops | wave: 0]`
       Out of lane: touches live credentials, no reviewable diff.
