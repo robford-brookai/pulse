@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 import sys
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -78,13 +80,15 @@ def _make_device_associated_event(
     device_id: str = "dev-001",
     device_name: str = "BP Monitor",
     order_id: str = "ORD-001",
+    event_id: str = "evt-da-001",
+    timestamp: str = "2026-03-13T12:00:00Z",
 ) -> dict:
     return {
-        "event_id": "evt-da-001",
+        "event_id": event_id,
         "event_type": "device.associated",
         "entity_type": "device_association",
         "entity_id": device_id,
-        "timestamp": "2026-03-13T12:00:00Z",
+        "timestamp": timestamp,
         "source_system": "impilo",
         "correlation_id": "corr-da-001",
         "payload": {
@@ -100,13 +104,15 @@ def _make_device_disassociated_event(
     patient_id: str = "sha256_patient_abc",
     device_id: str = "dev-001",
     device_name: str = "BP Monitor",
+    event_id: str = "evt-dd-001",
+    timestamp: str = "2026-03-13T13:00:00Z",
 ) -> dict:
     return {
-        "event_id": "evt-dd-001",
+        "event_id": event_id,
         "event_type": "device.disassociated",
         "entity_type": "device_association",
         "entity_id": device_id,
-        "timestamp": "2026-03-13T13:00:00Z",
+        "timestamp": timestamp,
         "source_system": "impilo",
         "correlation_id": "corr-dd-001",
         "payload": {
@@ -119,8 +125,12 @@ def _make_device_disassociated_event(
 
 @pytest.fixture
 def mock_session():
+    # rowcount=1 by default: the guarded upserts read it to tell an applied write
+    # from one the sequence guard dropped.
+    result = MagicMock()
+    result.rowcount = 1
     session = AsyncMock()
-    session.execute = AsyncMock(return_value=None)
+    session.execute = AsyncMock(return_value=result)
     return session
 
 
@@ -255,6 +265,29 @@ class TestHandleDeviceAssociated:
         assert "status = 'active'" in sql_text
         assert "removed_at = NULL" in sql_text
 
+    @pytest.mark.asyncio
+    async def test_guard_compares_event_time_not_event_identity(self, mock_session):
+        """The ON CONFLICT guard compares last_event_at, not last_event_id."""
+        from src.handlers.logistics import handle_device_associated
+
+        await handle_device_associated(_make_device_associated_event(), mock_session)
+
+        sql_text = str(mock_session.execute.call_args[0][0].text)
+        assert "last_event_at < EXCLUDED.last_event_at" in sql_text
+        # Dedup is not ordering: the old identity predicate must be gone.
+        assert "IS DISTINCT FROM" not in sql_text
+
+    @pytest.mark.asyncio
+    async def test_binds_envelope_timestamp_as_event_time(self, mock_session):
+        """event_at is the envelope timestamp, fixed at production, not now()."""
+        from src.handlers.logistics import handle_device_associated
+
+        event = _make_device_associated_event(timestamp="2026-03-13T12:00:00Z")
+        await handle_device_associated(event, mock_session)
+
+        params = mock_session.execute.call_args[0][1]
+        assert params["event_at"] == datetime.fromisoformat("2026-03-13T12:00:00+00:00")
+
 
 # ---------------------------------------------------------------------------
 # handle_device_disassociated
@@ -263,11 +296,10 @@ class TestHandleDeviceAssociated:
 
 class TestHandleDeviceDisassociated:
     @pytest.mark.asyncio
-    async def test_updates_device_to_removed(self, mock_session):
-        """handle_device_disassociated sets status='removed' and removed_at."""
+    async def test_marks_device_removed(self, mock_session):
+        """handle_device_disassociated records status='removed' and removed_at."""
         from src.handlers.logistics import handle_device_disassociated
 
-        # Simulate UPDATE returning 1 row affected
         result_mock = MagicMock()
         result_mock.rowcount = 1
         mock_session.execute = AsyncMock(return_value=result_mock)
@@ -280,25 +312,201 @@ class TestHandleDeviceDisassociated:
         sql_text = str(call_args[0][0].text)
         params = call_args[0][1]
 
-        assert "UPDATE device_associations" in sql_text
+        assert "device_associations" in sql_text
         assert "status = 'removed'" in sql_text
         assert params["patient_id"] == "sha256_patient_abc"
         assert params["device_id"] == "dev-001"
 
     @pytest.mark.asyncio
-    async def test_noop_when_no_matching_row(self, mock_session):
-        """No-op (no crash) when device not found -- mock returns rowcount=0."""
+    async def test_writes_a_tombstone_when_no_row_exists(self, mock_session):
+        """A disassociation arriving first inserts the removed row rather than no-opping.
+
+        Without the tombstone a later-arriving, older association would create an
+        active row and the entity would converge to the wrong terminal state.
+        """
         from src.handlers.logistics import handle_device_disassociated
 
-        # Simulate UPDATE returning 0 rows
+        result_mock = MagicMock()
+        result_mock.rowcount = 1
+        mock_session.execute = AsyncMock(return_value=result_mock)
+
+        await handle_device_disassociated(_make_device_disassociated_event(), mock_session)
+
+        sql_text = str(mock_session.execute.call_args[0][0].text)
+        assert "INSERT INTO device_associations" in sql_text
+        assert "ON CONFLICT (patient_id, device_id) DO UPDATE SET" in sql_text
+
+    @pytest.mark.asyncio
+    async def test_guard_compares_event_time(self, mock_session):
+        """The disassociation is guarded on last_event_at, not on status."""
+        from src.handlers.logistics import handle_device_disassociated
+
+        result_mock = MagicMock()
+        result_mock.rowcount = 1
+        mock_session.execute = AsyncMock(return_value=result_mock)
+
+        event = _make_device_disassociated_event(timestamp="2026-03-13T13:00:00Z")
+        await handle_device_disassociated(event, mock_session)
+
+        call_args = mock_session.execute.call_args
+        sql_text = str(call_args[0][0].text)
+        assert "last_event_at < EXCLUDED.last_event_at" in sql_text
+        assert call_args[0][1]["event_at"] == datetime.fromisoformat("2026-03-13T13:00:00+00:00")
+
+    @pytest.mark.asyncio
+    async def test_stale_disassociation_does_not_raise(self, mock_session):
+        """A guard-rejected write (rowcount 0) is logged, not raised."""
+        from src.handlers.logistics import handle_device_disassociated
+
         result_mock = MagicMock()
         result_mock.rowcount = 0
         mock_session.execute = AsyncMock(return_value=result_mock)
 
-        event = _make_device_disassociated_event()
-        # Should not raise
-        await handle_device_disassociated(event, mock_session)
+        await handle_device_disassociated(_make_device_disassociated_event(), mock_session)
         assert mock_session.execute.called
+
+
+# ---------------------------------------------------------------------------
+# Out-of-order delivery — the handlers' real SQL against a real SQL engine
+# ---------------------------------------------------------------------------
+
+# SQLite speaks the same `ON CONFLICT (...) DO UPDATE SET ... WHERE ...` upsert and
+# the same `:name` bind syntax the handlers emit, so the sequence guard is exercised
+# by a SQL engine rather than by an assertion on a query string. Postgres-only types
+# are widened to their SQLite equivalents; nothing in these two statements depends on
+# them. This keeps the ordering test in the default run, with no Docker and no
+# service dependency.
+_DEVICE_ASSOCIATIONS_DDL = """
+CREATE TABLE device_associations (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    patient_id    TEXT NOT NULL,
+    device_id     TEXT NOT NULL,
+    device_name   TEXT,
+    status        TEXT NOT NULL DEFAULT 'active',
+    associated_at TEXT NOT NULL,
+    removed_at    TEXT,
+    last_event_id TEXT,
+    last_event_at TEXT,
+    UNIQUE (patient_id, device_id)
+)
+"""
+
+
+class _SqliteSession:
+    """Async session double that runs the handlers' SQL against in-memory SQLite."""
+
+    def __init__(self) -> None:
+        self.conn = sqlite3.connect(":memory:")
+        self.conn.row_factory = sqlite3.Row
+        self.conn.execute(_DEVICE_ASSOCIATIONS_DDL)
+
+    async def execute(self, stmt, params):
+        bound = {k: (v.isoformat() if isinstance(v, datetime) else v) for k, v in params.items()}
+        return self.conn.execute(str(stmt.text), bound)
+
+    def state(self) -> list[dict]:
+        """The projected state, minus the two processing-time columns.
+
+        `associated_at` and `removed_at` are stamped with wall clock, so they differ
+        between two runs by construction. `removed_at` still carries meaning as a
+        presence flag, which is what is compared.
+        """
+        cur = self.conn.execute(
+            "SELECT patient_id, device_id, device_name, status, removed_at, "
+            "       last_event_id, last_event_at "
+            "FROM device_associations ORDER BY patient_id, device_id"
+        )
+        rows = []
+        for row in cur.fetchall():
+            record = dict(row)
+            record["removed_at"] = record["removed_at"] is not None
+            rows.append(record)
+        return rows
+
+
+async def _deliver(events: list[dict]) -> list[dict]:
+    from src.handlers.logistics import (
+        handle_device_associated,
+        handle_device_disassociated,
+    )
+
+    handlers = {
+        "device.associated": handle_device_associated,
+        "device.disassociated": handle_device_disassociated,
+    }
+    session = _SqliteSession()
+    for event in events:
+        await handlers[event["event_type"]](event, session)
+    return session.state()
+
+
+class TestDeviceAssociationOrdering:
+    @pytest.mark.asyncio
+    async def test_reverse_delivery_reaches_the_same_state(self):
+        """Reverse-order delivery of a device lifecycle converges on in-order state."""
+        lifecycle = [
+            _make_device_associated_event(timestamp="2026-03-13T12:00:00Z"),
+            _make_device_disassociated_event(timestamp="2026-03-13T13:00:00Z"),
+        ]
+
+        in_order = await _deliver(lifecycle)
+        reversed_order = await _deliver(list(reversed(lifecycle)))
+
+        assert in_order == reversed_order
+        assert in_order[0]["status"] == "removed"
+        assert in_order[0]["last_event_at"] == "2026-03-13T13:00:00+00:00"
+
+    @pytest.mark.asyncio
+    async def test_a_stale_association_does_not_resurrect_a_removed_device(self):
+        """This is the bug the dedup-only predicate left open."""
+        state = await _deliver([
+            _make_device_disassociated_event(timestamp="2026-03-13T13:00:00Z"),
+            _make_device_associated_event(timestamp="2026-03-13T12:00:00Z"),
+        ])
+
+        assert state[0]["status"] == "removed"
+        assert state[0]["removed_at"] is True
+
+    @pytest.mark.asyncio
+    async def test_a_later_reassociation_is_applied(self):
+        """The guard drops stale writes only — a genuinely newer event still lands."""
+        state = await _deliver([
+            _make_device_associated_event(timestamp="2026-03-13T12:00:00Z"),
+            _make_device_disassociated_event(timestamp="2026-03-13T13:00:00Z"),
+            _make_device_associated_event(
+                device_name="BP Monitor v2",
+                event_id="evt-da-002",
+                timestamp="2026-03-13T14:00:00Z",
+            ),
+        ])
+
+        assert state[0]["status"] == "active"
+        assert state[0]["removed_at"] is False
+        assert state[0]["device_name"] == "BP Monitor v2"
+
+    @pytest.mark.asyncio
+    async def test_reverse_delivery_of_two_associations_keeps_the_newer(self):
+        updates = [
+            _make_device_associated_event(
+                device_name="BP Monitor", event_id="evt-da-001", timestamp="2026-03-13T12:00:00Z"
+            ),
+            _make_device_associated_event(
+                device_name="BP Monitor v2", event_id="evt-da-002", timestamp="2026-03-13T14:00:00Z"
+            ),
+        ]
+
+        assert await _deliver(updates) == await _deliver(list(reversed(updates)))
+        assert (await _deliver(list(reversed(updates))))[0]["device_name"] == "BP Monitor v2"
+
+    @pytest.mark.asyncio
+    async def test_redelivery_of_the_same_event_is_a_no_op(self):
+        """The guard subsumes the dedup the identity predicate used to provide."""
+        event = _make_device_associated_event(timestamp="2026-03-13T12:00:00Z")
+
+        once = await _deliver([event])
+        twice = await _deliver([event, event])
+
+        assert once == twice
 
 
 # ---------------------------------------------------------------------------

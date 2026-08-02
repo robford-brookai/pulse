@@ -8,6 +8,11 @@ dependencies = [
     "confluent-kafka==2.13.2",
     "pydantic>=2.0",
     "structlog==25.5.0",
+    # Transport: the shared EventBridge publisher and the event catalog. confluent-kafka stays
+    # until the consumer converts (task 5.3); sqlalchemy/asyncpg back the failed_webhooks DLQ.
+    "ocean-broker",
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.29",
 ]
 
 [build-system]

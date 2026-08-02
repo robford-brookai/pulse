@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from contextlib import asynccontextmanager
 
 import structlog
 from fastapi import FastAPI
 
 from src.heartbeat import publish_heartbeat
-from src.producer import RedpandaPublisher
+from src.producer import build_publisher
 from src.receiver import router
 
 log = structlog.get_logger()
@@ -19,21 +18,20 @@ log = structlog.get_logger()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    bootstrap_servers = os.environ.get("REDPANDA_BROKERS", "redpanda:29092")
-    publisher = RedpandaPublisher(bootstrap_servers=bootstrap_servers)
+    publisher = build_publisher()
     app.state.publisher = publisher
     heartbeat_task = asyncio.create_task(publish_heartbeat(publisher, "zcc-connector", "Zoom Contact Center"))
-    log.info("zcc_connector_started", brokers=bootstrap_servers)
+    log.info("zcc_connector_started")
 
     yield
 
-    # Shutdown
+    # Shutdown. The publisher needs no close: EventBridge PutEvents is a request per call, so
+    # there is no producer queue to flush the way the Kafka client had.
     heartbeat_task.cancel()
     try:
         await heartbeat_task
     except asyncio.CancelledError:
         pass
-    await publisher.close()
     log.info("zcc_connector_stopped")
 
 

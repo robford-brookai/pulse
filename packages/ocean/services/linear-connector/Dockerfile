@@ -4,11 +4,13 @@ WORKDIR /app
 
 RUN pip install uv --quiet
 
-# Copy ocean-events library first (build context = repo root)
+# Copy shared libraries first (build context = repo root)
 COPY libs/ocean-events /libs/ocean-events
+COPY libs/ocean-broker /libs/ocean-broker
 
-# Install ocean-events editable so it's available to linear-connector
+# Install them editable so they're available to linear-connector
 RUN uv pip install --system --no-cache -e /libs/ocean-events
+RUN uv pip install --system --no-cache -e /libs/ocean-broker
 
 # Copy linear-connector pyproject.toml and install deps
 COPY services/linear-connector/pyproject.toml .
@@ -17,8 +19,9 @@ COPY services/linear-connector/pyproject.toml .
 RUN uv pip install --system --no-cache \
     fastapi==0.135.1 \
     uvicorn==0.41.0 \
-    "confluent-kafka==2.13.2" \
-    "structlog==25.5.0"
+    "structlog==25.5.0" \
+    "asyncpg>=0.29" \
+    "sqlalchemy[asyncio]>=2.0"
 
 # Copy source code
 COPY services/linear-connector/src ./src
