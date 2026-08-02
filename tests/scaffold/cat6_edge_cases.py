@@ -62,14 +62,14 @@ def test_dispatch_empty_tasks_md_is_a_documented_noop(tmp_path: Path) -> None:
 
 def test_dispatch_header_only_tasks_md_is_a_noop(tmp_path: Path) -> None:
     write_change(tmp_path, "headers", "# Tasks\n\n## Milestone 1\n\n## Milestone 2\n")
-    r = run_cli(DISPATCH_CLI, "--change", "headers", cwd=tmp_path)
+    r = run_cli(DISPATCH_CLI, "--change", "headers", "--skip-hardening", cwd=tmp_path)
     assert r.returncode == 0
     assert "No tasks found" in r.stdout
 
 
 def test_dispatch_honors_output_override(tmp_path: Path) -> None:
     write_change(tmp_path, "c", "- [ ] One task\n")
-    r = run_cli(DISPATCH_CLI, "--change", "c", "--output", "custom_dir", cwd=tmp_path)
+    r = run_cli(DISPATCH_CLI, "--change", "c", "--output", "custom_dir", "--skip-hardening", cwd=tmp_path)
     assert r.returncode == 0, r.stderr
     assert (tmp_path / "custom_dir/c/task-001.md").is_file()
 
@@ -77,7 +77,7 @@ def test_dispatch_honors_output_override(tmp_path: Path) -> None:
 def test_dispatch_prints_go_task_var_syntax(tmp_path: Path) -> None:
     """Regression: `task collect --change X` exits 2. The hint must use CHANGE=X."""
     write_change(tmp_path, "c", "- [ ] One task\n")
-    r = run_cli(DISPATCH_CLI, "--change", "c", cwd=tmp_path)
+    r = run_cli(DISPATCH_CLI, "--change", "c", "--skip-hardening", cwd=tmp_path)
     assert "task collect CHANGE=c" in r.stdout
     assert "--change" not in r.stdout, "go-task rejects --change as an unknown flag"
 
@@ -122,10 +122,10 @@ def test_awkward_titles_still_emit_valid_files(tmp_path: Path, title: str) -> No
 
 def test_rerun_is_deterministic_and_does_not_duplicate(tmp_path: Path) -> None:
     write_change(tmp_path, "c", "- [ ] One\n- [ ] Two\n")
-    first = run_cli(DISPATCH_CLI, "--change", "c", cwd=tmp_path)
+    first = run_cli(DISPATCH_CLI, "--change", "c", "--skip-hardening", cwd=tmp_path)
     out = tmp_path / "work_orders/c"
     snapshot = {p.name: p.read_text() for p in sorted(out.glob("*.md"))}
-    second = run_cli(DISPATCH_CLI, "--change", "c", cwd=tmp_path)
+    second = run_cli(DISPATCH_CLI, "--change", "c", "--skip-hardening", cwd=tmp_path)
     assert first.returncode == second.returncode == 0
     assert {p.name: p.read_text() for p in sorted(out.glob("*.md"))} == snapshot
     assert len(list(out.glob("*.md"))) == 2, "re-run must overwrite, not accumulate"

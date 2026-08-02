@@ -34,8 +34,10 @@ parallel task — which is what makes this backward compatible with an unannotat
 """
 
 import argparse
+import json
 import re
 import sys
+from datetime import date
 from pathlib import Path
 
 # docs/process/dispatch-template.md §2. `lane` is the WORKFLOW.md v2 addition.
@@ -59,6 +61,93 @@ TASK_KEY_RE = re.compile(r"^(\d+\.\d+)\b")
 
 class DispatchError(Exception):
     """A tasks.md defect that must stop dispatch rather than be worked around."""
+
+
+# --- G_HARDENING -------------------------------------------------------------------------------
+#
+# WORKFLOW.md declares `G_HARDENING blocks: [execute]` and nothing enforced it. Two worktrees were
+# launched straight through it before anyone noticed, and the audit that followed (DNA-777) found
+# Orca spawning every agent with --dangerously-skip-permissions. A gate that only exists in prose
+# is not a gate.
+
+HARDENING_RECEIPT = Path(".orca/hardening-receipt.json")
+ADOPTION_GATE = ("H1", "H2", "H3", "H4")  # H5 is standing policy, H6-H7 per-session discipline
+RECEIPT_MAX_AGE_DAYS = 90
+# Every one of these is a real default shipped for some agent in Orca's agentDefaultArgs.
+BYPASS_TOKENS = (
+    "dangerously",
+    "yolo",
+    "auto-approve",
+    "bypass",
+    "--unrestricted",
+    "trust-all-tools",
+    "yes-always",
+    "allow-all",
+)
+ORCA_PROFILE = Path.home() / "Library/Application Support/Orca/profiles/local-default/orca-data.json"
+
+
+def live_agent_bypass(agent: str, profile: Path | None = None) -> str | None:
+    """The bypass argument Orca will actually launch `agent` with, if any.
+
+    Checked live rather than trusted from the receipt, because a receipt records what was true
+    when someone looked. This is the setting that silently re-arms every worktree, so it is worth
+    reading at the moment of dispatch. Returns None when it cannot be read at all — absence of
+    the profile is not evidence of safety, but neither is it grounds to block a machine that
+    simply stores its config elsewhere.
+    """
+    # Resolved at call time, not bound as a default: a default argument freezes the module
+    # attribute at import, which makes ORCA_PROFILE impossible to override.
+    profile = profile or ORCA_PROFILE
+    try:
+        settings = json.loads(profile.read_text()).get("settings", {})
+    except (OSError, json.JSONDecodeError, AttributeError):
+        return None
+    args = (settings.get("agentDefaultArgs") or {}).get(agent)
+    if not isinstance(args, str):
+        return None
+    return args if any(token in args for token in BYPASS_TOKENS) else None
+
+
+def hardening_problems(agent: str, today: date, receipt_path: Path | None = None) -> list[str]:
+    """Why G_HARDENING does not currently permit dispatch. Empty means it does."""
+    receipt_path = receipt_path or HARDENING_RECEIPT
+    problems: list[str] = []
+
+    bypass = live_agent_bypass(agent)
+    if bypass:
+        problems.append(
+            f"H4 live: Orca launches `{agent}` with {bypass!r}. Every worktree this releases would "
+            "run unattended with permissions off. Fix agentDefaultArgs before dispatching."
+        )
+
+    try:
+        receipt = json.loads(receipt_path.read_text())
+    except FileNotFoundError:
+        problems.append(
+            f"no G_HARDENING receipt at {receipt_path}. Run the Appendix A checklist and record it — "
+            "the gate is per-workstation, so the file is gitignored and not inherited from anyone else."
+        )
+        return problems
+    except (OSError, json.JSONDecodeError) as exc:
+        problems.append(f"{receipt_path} is unreadable ({exc})")
+        return problems
+
+    audited = receipt.get("audited")
+    try:
+        age = (today - date.fromisoformat(str(audited))).days
+    except (TypeError, ValueError):
+        problems.append(f"receipt has no usable `audited` date (got {audited!r})")
+    else:
+        if age > RECEIPT_MAX_AGE_DAYS:
+            problems.append(f"receipt is {age} days old (limit {RECEIPT_MAX_AGE_DAYS}); re-run the checklist")
+
+    checks = receipt.get("checks") or {}
+    failing = [h for h in ADOPTION_GATE if checks.get(h) != "pass"]
+    if failing:
+        detail = ", ".join(f"{h}={checks.get(h, 'missing')}" for h in failing)
+        problems.append(f"adoption gate not met: {detail}. See {receipt.get('issue', 'the receipt issue')}")
+    return problems
 
 
 def _parse_annotations(text: str) -> dict:
@@ -392,6 +481,14 @@ def main():
         ),
     )
     parser.add_argument(
+        "--skip-hardening",
+        action="store_true",
+        help=(
+            "Release even though G_HARDENING is not satisfied. Prints what was skipped. "
+            "For a deliberate, receipted exception — not for getting past a red gate."
+        ),
+    )
+    parser.add_argument(
         "--all-waves",
         action="store_true",
         help=(
@@ -413,6 +510,27 @@ def main():
     except DispatchError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
+
+    # G_HARDENING blocks execute, and dispatch is what makes execute possible — so this is where
+    # it has to bite. Work orders are still written; only the release is withheld, because the
+    # plan is useful to read while the gate is being closed.
+    hardening = hardening_problems(args.agent, date.today())
+    if hardening and not args.skip_hardening:
+        print(f"G_HARDENING blocks dispatch for `{args.change}`:", file=sys.stderr)
+        for problem in hardening:
+            print(f"  - {problem}", file=sys.stderr)
+        print(
+            "\nAppendix A of docs/process/dispatch-template.md defines the checklist. "
+            "Re-run it, update .orca/hardening-receipt.json, and dispatch again.\n"
+            "--skip-hardening releases anyway and says so — for a deliberate, receipted exception.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    if hardening:
+        print(f"WARNING: releasing with G_HARDENING unmet ({len(hardening)} problem(s)):", file=sys.stderr)
+        for problem in hardening:
+            print(f"  - {problem}", file=sys.stderr)
+        print("", file=sys.stderr)
 
     output_dir = Path(args.output) / args.change
     paths = emit_work_orders(tasks, args.change, output_dir)
