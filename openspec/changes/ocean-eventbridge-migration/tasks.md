@@ -104,27 +104,41 @@ consumers are converted. Each task ships an out-of-order test: deliver the entit
 reverse, assert final state equals in-order final state. Per `event-delivery`, a guard MUST compare
 an event-time field — a processing-time comparison is a review-reject.
 
+Every guard below needs an event-time column, and OCEAN has **one** alembic sequence at
+`infra/postgres/versions/`. Four guard tasks in four worktrees off `main` would each write their
+own `0019` — four files, one revision number, four heads at merge. 3.0 lands that schema change
+once, up front; the guards then rebase onto it and stay parallel. Added 2026-08-02 after 3.2
+raised the collision mid-flight; the original plan declared 3.1–3.5 `parallel: yes` and missed it.
+
+- [ ] 3.0 Add `last_event_at TIMESTAMPTZ NULL` to `interactions`, `device_associations`, `signals`
+      and `slack_messages` in a single migration `0019`. Nullable on purpose: a pre-migration row
+      has no known event time, and `IS NULL OR … < EXCLUDED…` then treats it as overwritable. No
+      `now()` default — a processing-time default is the bug this wave removes. The value stored is
+      the envelope's `timestamp` (`BaseEvent.timestamp`), never `completed_at`.
+      `[model: sonnet | deps: 1.3 | lane: repo_change | wave: 2a]`
+      `serial: alembic_sequence` — the only task in this wave that may touch
+      `infra/postgres/versions/`. Blocks 3.1–3.5.
 - [ ] 3.1 [DNA-738] `graph-projection/src/handlers/outcomes.py:44` and `:103` — replace the unguarded
       `DO UPDATE SET outcome = …` pairs with an event-time sequence guard. Note `completed_at` is
       written as `:now` (processing time) and MUST NOT be the guard column; add an event-time
       column if none exists. This is the audit's worst case: today a completed call can be
       silently rewritten to missed.
-      `[model: opus | deps: 1.3 | lane: repo_change | wave: 2a]`
+      `[model: opus | deps: 3.0 | lane: repo_change | wave: 2a]`
       Model `opus`: concurrency judgement, and the obvious fix is the wrong one.
 - [ ] 3.2 [DNA-739] `graph-projection/src/handlers/interactions.py:36` and `:72` — replace the
       `last_event_id IS DISTINCT FROM` predicate with a sequence guard. Dedup is not ordering.
-      `[model: opus | deps: 1.3 | lane: repo_change | wave: 2a]`
+      `[model: opus | deps: 3.0 | lane: repo_change | wave: 2a]`
 - [ ] 3.3 [DNA-740] `graph-projection/src/handlers/logistics.py:125` (`device_associations`) — same
       dedup-only predicate, same replacement.
-      `[model: opus | deps: 1.3 | lane: repo_change | wave: 2a]`
+      `[model: opus | deps: 3.0 | lane: repo_change | wave: 2a]`
 - [ ] 3.4 [DNA-741] `graph-projection/src/handlers/signals.py:59` — add a guard to the unguarded
       `DO UPDATE SET anomalous = true`. Monotonic in effect today; guarded for uniformity so the
       audit's verdict holds by construction rather than by argument.
-      `[model: sonnet | deps: 1.3 | lane: repo_change | wave: 2a]`
+      `[model: sonnet | deps: 3.0 | lane: repo_change | wave: 2a]`
 - [ ] 3.5 [DNA-742] Add a sequence column to `slack-bot`'s stored message record and guard `chat_update` on
       it, so a stale update is dropped rather than applied. Test: out-of-order ticket lifecycle
       (`created` → `updated` → `resolved`) leaves the same terminal Slack text as in-order.
-      `[model: opus | deps: 1.3 | lane: repo_change | wave: 2a]`
+      `[model: opus | deps: 3.0 | lane: repo_change | wave: 2a]`
       Model `opus`: the effect leaves the system and is not undoable by a later event.
 - [ ] 3.6 [DNA-743] Re-confirm `control-plane`'s ordering verdict per handler in `EVENT_HANDLERS` and record
       the evidence. Any handler found order-dependent gets the 3.1 treatment as a new task under
@@ -144,19 +158,19 @@ Keyed connector publishers (already had the `failed_webhooks` fallback — prese
 - [ ] 4.1 [DNA-744] `services/github-connector/src/producer.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
 - [ ] 4.2 [DNA-745] `services/hubspot-connector/src/producer.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
 - [ ] 4.3 [DNA-746] `services/impilo-connector/src/producer.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
-- [ ] 4.4 [DNA-747] `services/pocar-connector/src/producer.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
+- [x] 4.4 [DNA-747] `services/pocar-connector/src/producer.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
 - [ ] 4.5 [DNA-748] `services/zcc-connector/src/producer.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
 - [ ] 4.6 [DNA-749] `services/mongodb-connector/src/publisher.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
 
 Unkeyed publishers (gain the `failed_webhooks` fallback by inheritance — a strict improvement, not
 scope creep; call it out in the HANDOFF):
 
-- [ ] 4.7 [DNA-750] `services/control-plane/src/producer.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
+- [x] 4.7 [DNA-750] `services/control-plane/src/producer.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
 - [ ] 4.8 [DNA-751] `services/linear-connector/src/producer.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
 - [ ] 4.9 [DNA-752] `services/agent-worker/src/publisher.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
 - [ ] 4.10 [DNA-753] `services/call-simulator/src/publisher.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
 - [ ] 4.11 [DNA-754] `services/sim-driver/src/publisher.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
-- [ ] 4.12 [DNA-755] `services/slack-bot/src/publisher.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
+- [x] 4.12 [DNA-755] `services/slack-bot/src/publisher.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
 - [ ] 4.13 [DNA-756] `services/warehouse-sync/src/main.py` — inline `Producer` used for dead-letter writes.
       Removed rather than converted: its role passes to the queue DLQ in 7.2.
       `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
@@ -189,7 +203,7 @@ shape, Dockerfile, and EKS deployment unchanged. Each records its ordering verdi
 
 ## 6. Wave 3 — infrastructure
 
-- [ ] 6.1 [DNA-764] Delete `infra/terraform/modules/msk-ocean/` and add the EventBridge bus.
+- [x] 6.1 [DNA-764] Delete `infra/terraform/modules/msk-ocean/` and add the EventBridge bus.
       `[model: sonnet | deps: 2.1 | lane: repo_change | wave: 3]`
 - [ ] 6.2 [DNA-765] Add one rule and one SQS queue per consumer, patterns generated from 2.1. Test: each
       rule's pattern matches exactly its consumer's domain set.
