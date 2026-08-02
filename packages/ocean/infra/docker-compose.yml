@@ -1,64 +1,43 @@
+# The local event stack is LocalStack (EventBridge + SQS), not Kafka: the bus, per-consumer
+# rules and queues mirror the deployed topology and are created by `localstack-init` from
+# `ocean_broker.catalog` — the same table the Terraform patterns are generated from.
+x-localstack-env: &localstack-env
+  AWS_ENDPOINT_URL: ${AWS_ENDPOINT_URL:-http://localstack:4566}
+  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
+  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
+  AWS_REGION: ${AWS_REGION:-us-east-1}
+  OCEAN_EVENT_BUS_NAME: ${OCEAN_EVENT_BUS_NAME:-ocean}
+
 services:
-  redpanda:
-    image: docker.redpanda.com/redpandadata/redpanda:v25.3.10
-    command:
-      - redpanda
-      - start
-      - --overprovisioned
-      - --smp
-      - "1"
-      - --memory
-      - 512M
-      - --reserve-memory
-      - 0M
-      - --node-id
-      - "0"
-      - --kafka-addr
-      - PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9092
-      - --advertise-kafka-addr
-      - PLAINTEXT://redpanda:29092,OUTSIDE://localhost:9092
-      - --schema-registry-addr
-      - 0.0.0.0:8081
-      - --pandaproxy-addr
-      - 0.0.0.0:8082
-      - --advertise-pandaproxy-addr
-      - localhost:8082
+  localstack:
+    image: localstack/localstack:4.6
+    environment:
+      SERVICES: events,sqs
+      EAGER_SERVICE_LOADING: "1"
     ports:
-      - "9092:9092"
-      - "8081:8081"
-      - "8082:8082"
-      - "29092:29092"
+      - "4566:4566"
     healthcheck:
-      test: ["CMD", "rpk", "cluster", "info"]
+      test: ["CMD", "curl", "-sf", "http://localhost:4566/_localstack/health"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 20s
 
-  redpanda-console:
-    image: docker.redpanda.com/redpandadata/console:latest
-    entrypoint: /bin/sh
-    command: -c "echo \"$$CONSOLE_CONFIG_FILE\" > /tmp/config.yml; /app/console --config.filepath /tmp/config.yml"
+  # Idempotent bus/rule/queue creation (task 6.5). Re-running against an existing
+  # stack succeeds and leaves the topology unchanged.
+  localstack-init:
+    image: python:3.13-slim
+    command: >
+      bash -c "
+        pip install --quiet /ocean-broker &&
+        python -m ocean_broker.local_topology
+      "
     environment:
-      CONSOLE_CONFIG_FILE: |
-        kafka:
-          brokers: ["redpanda:29092"]
-    ports:
-      - "8085:8080"
-    depends_on:
-      redpanda:
-        condition: service_healthy
-
-  redpanda-init:
-    image: docker.redpanda.com/redpandadata/redpanda:v25.3.10
-    entrypoint: /bin/bash
-    command: -c "/topics.sh"
-    environment:
-      REDPANDA_BROKERS: redpanda:29092
+      <<: *localstack-env
     volumes:
-      - ./redpanda/topics.sh:/topics.sh:ro
+      - ../libs/ocean-broker:/ocean-broker:ro
     depends_on:
-      redpanda:
+      localstack:
         condition: service_healthy
     restart: "no"
 
@@ -67,7 +46,8 @@ services:
       context: ..
       dockerfile: services/warehouse-sync/Dockerfile
     environment:
-      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      <<: *localstack-env
+      SQS_QUEUE_URL: http://localstack:4566/000000000000/ocean-warehouse-sync
       SNOWFLAKE_ACCOUNT: ${SNOWFLAKE_ACCOUNT}
       SNOWFLAKE_USER: ${SNOWFLAKE_USER:-OCEAN_SVC}
       SNOWFLAKE_PRIVATE_KEY_PATH: /snowflake_key.p8
@@ -76,9 +56,7 @@ services:
     ports:
       - "8011:8008"
     depends_on:
-      redpanda:
-        condition: service_healthy
-      redpanda-init:
+      localstack-init:
         condition: service_completed_successfully
     restart: unless-stopped
     profiles:
@@ -150,14 +128,15 @@ services:
       context: ..
       dockerfile: services/event-store/Dockerfile
     environment:
+      <<: *localstack-env
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ocean:changeme@postgres:5432/ocean}
-      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      SQS_QUEUE_URL: http://localstack:4566/000000000000/ocean-event-store
     ports:
       - "8001:8000"
     depends_on:
       hasura:
         condition: service_healthy
-      redpanda-init:
+      localstack-init:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
@@ -190,15 +169,15 @@ services:
       context: ..
       dockerfile: services/pocar-connector/Dockerfile
     environment:
+      <<: *localstack-env
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ocean:changeme@postgres:5432/ocean}
-      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
       POCAR_WEBHOOK_SECRET: ${POCAR_WEBHOOK_SECRET:-dev_secret}
     ports:
       - "8002:8000"
     depends_on:
       hasura:
         condition: service_healthy
-      redpanda-init:
+      localstack-init:
         condition: service_completed_successfully
     restart: unless-stopped
     healthcheck:
@@ -213,14 +192,15 @@ services:
       context: ..
       dockerfile: services/graph-projection/Dockerfile
     environment:
+      <<: *localstack-env
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ocean:changeme@postgres:5432/ocean}
-      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      SQS_QUEUE_URL: http://localstack:4566/000000000000/ocean-graph-projection
     ports:
       - "8003:8000"
     depends_on:
       hasura-init:
         condition: service_completed_successfully
-      redpanda-init:
+      localstack-init:
         condition: service_completed_successfully
     restart: unless-stopped
     healthcheck:
@@ -235,8 +215,9 @@ services:
       context: ..
       dockerfile: services/control-plane/Dockerfile
     environment:
+      <<: *localstack-env
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ocean:changeme@postgres:5432/ocean}
-      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      SQS_QUEUE_URL: http://localstack:4566/000000000000/ocean-control-plane
       IMPILO_API_URL: ${IMPILO_API_URL:-}
       IMPILO_API_KEY: ${IMPILO_API_KEY:-}
       ESCALATION_ENABLED: "${ESCALATION_ENABLED:-true}"
@@ -250,7 +231,7 @@ services:
     depends_on:
       hasura-init:
         condition: service_completed_successfully
-      redpanda-init:
+      localstack-init:
         condition: service_completed_successfully
     restart: unless-stopped
     healthcheck:
@@ -265,8 +246,9 @@ services:
       context: ..
       dockerfile: services/slack-bot/Dockerfile
     environment:
+      <<: *localstack-env
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ocean:changeme@postgres:5432/ocean}
-      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      SQS_QUEUE_URL: http://localstack:4566/000000000000/ocean-slack-bot
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
       SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-}
       OPS_SLACK_CHANNEL: ${OPS_SLACK_CHANNEL:-#care-alerts-ops}
@@ -284,7 +266,7 @@ services:
     depends_on:
       control-plane:
         condition: service_healthy
-      redpanda-init:
+      localstack-init:
         condition: service_completed_successfully
       hasura-init:
         condition: service_completed_successfully
@@ -301,15 +283,15 @@ services:
       context: ..
       dockerfile: services/zcc-connector/Dockerfile
     environment:
+      <<: *localstack-env
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ocean:changeme@postgres:5432/ocean}
-      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
       ZCC_WEBHOOK_SECRET: ${ZCC_WEBHOOK_SECRET:-dev_secret}
     ports:
       - "8006:8000"
     depends_on:
       hasura-init:
         condition: service_completed_successfully
-      redpanda-init:
+      localstack-init:
         condition: service_completed_successfully
     restart: unless-stopped
     healthcheck:
@@ -324,16 +306,18 @@ services:
       context: ..
       dockerfile: services/impilo-connector/Dockerfile
     environment:
+      # SQS_QUEUE_URL here is the inbound Impilo delivery queue, not a bus consumer
+      # queue from `localstack-init` — it stays caller-supplied.
+      <<: *localstack-env
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ocean:changeme@postgres:5432/ocean}
       IMPILO_API_KEY: ${IMPILO_API_KEY:-dev_impilo_key}
       SQS_QUEUE_URL: ${SQS_QUEUE_URL:-}
-      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
     ports:
       - "8007:8000"
     depends_on:
       hasura:
         condition: service_healthy
-      redpanda-init:
+      localstack-init:
         condition: service_completed_successfully
     restart: unless-stopped
     healthcheck:
@@ -348,12 +332,12 @@ services:
       context: ..
       dockerfile: services/linear-connector/Dockerfile
     environment:
-      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      <<: *localstack-env
       LINEAR_WEBHOOK_SECRET: ${LINEAR_WEBHOOK_SECRET:-dev_secret}
     ports:
       - "8008:8000"
     depends_on:
-      redpanda-init:
+      localstack-init:
         condition: service_completed_successfully
     restart: unless-stopped
     healthcheck:
@@ -368,12 +352,12 @@ services:
       context: ..
       dockerfile: services/github-connector/Dockerfile
     environment:
-      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      <<: *localstack-env
       GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-dev_secret}
     ports:
       - "8009:8000"
     depends_on:
-      redpanda-init:
+      localstack-init:
         condition: service_completed_successfully
     restart: unless-stopped
     healthcheck:
@@ -388,12 +372,12 @@ services:
       context: ..
       dockerfile: services/hubspot-connector/Dockerfile
     environment:
-      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      <<: *localstack-env
       HUBSPOT_CLIENT_SECRET: ${HUBSPOT_CLIENT_SECRET:-dev_secret}
     ports:
       - "8010:8000"
     depends_on:
-      redpanda-init:
+      localstack-init:
         condition: service_completed_successfully
     restart: unless-stopped
     healthcheck:
@@ -409,14 +393,13 @@ services:
       context: ..
       dockerfile: services/sim-driver/Dockerfile
     environment:
-      AWS_REGION: ${AWS_REGION:-us-east-1}
-      OCEAN_EVENT_BUS_NAME: ${OCEAN_EVENT_BUS_NAME:-ocean}
+      <<: *localstack-env
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN_SIM:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     ports:
       - "8060:8000"
     depends_on:
-      redpanda-init:
+      localstack-init:
         condition: service_completed_successfully
       slack-bot:
         condition: service_healthy
@@ -434,7 +417,8 @@ services:
       context: ..
       dockerfile: services/agent-worker/Dockerfile
     environment:
-      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      <<: *localstack-env
+      SQS_QUEUE_URL: http://localstack:4566/000000000000/ocean-agent-worker
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       HASURA_URL: http://hasura:8080
       HASURA_ADMIN_SECRET: ${HASURA_GRAPHQL_ADMIN_SECRET:-changeme_admin_secret}
@@ -443,7 +427,7 @@ services:
     ports:
       - "8061:8000"
     depends_on:
-      redpanda-init:
+      localstack-init:
         condition: service_completed_successfully
       control-plane:
         condition: service_healthy
@@ -461,16 +445,15 @@ services:
       context: ..
       dockerfile: services/call-simulator/Dockerfile
     environment:
-      REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
       # Publishing runs over the OCEAN event bus; DATABASE_URL is what makes the publisher's
       # failed_webhooks fallback durable rather than log-only.
-      AWS_REGION: ${AWS_REGION:-us-east-1}
-      OCEAN_EVENT_BUS_NAME: ${OCEAN_EVENT_BUS_NAME:-ocean}
+      <<: *localstack-env
+      SQS_QUEUE_URL: http://localstack:4566/000000000000/ocean-call-simulator
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ocean:changeme@postgres:5432/ocean}
     ports:
       - "8062:8000"
     depends_on:
-      redpanda-init:
+      localstack-init:
         condition: service_completed_successfully
       # failed_webhooks lives in the migrated schema.
       migrate:
