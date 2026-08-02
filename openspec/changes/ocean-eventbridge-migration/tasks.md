@@ -182,7 +182,7 @@ scope creep; call it out in the HANDOFF):
 - [x] 4.13 [DNA-756] `services/warehouse-sync/src/main.py` — inline `Producer` used for dead-letter writes.
       Removed rather than converted: its role passes to the queue DLQ in 7.2.
       `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
-- [ ] 4.14 [DNA-781] Bring the converted services into `task test`. `TESTED_PATHS` is
+- [x] 4.14 [DNA-781] Bring the converted services into `task test`. `TESTED_PATHS` is
       `tests packages/ocean/libs` — ocean's 16 services are excluded (honestly declared, per 1.3
       and DNA-779). Every wave-2b task therefore writes tests that CI never runs: their green
       `task check` is truthful about what it covers and says nothing about the conversion. Until
