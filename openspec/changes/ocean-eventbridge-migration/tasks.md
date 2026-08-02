@@ -227,7 +227,7 @@ shape, Dockerfile, and EKS deployment unchanged. Each records its ordering verdi
 
 - [x] 6.1 [DNA-764] Delete `infra/terraform/modules/msk-ocean/` and add the EventBridge bus.
       `[model: sonnet | deps: 2.1 | lane: repo_change | wave: 3]`
-- [ ] 6.2 [DNA-765] Add one rule and one SQS queue per consumer, patterns generated from 2.1. Test: each
+- [x] 6.2 [DNA-765] Add one rule and one SQS queue per consumer, patterns generated from 2.1. Test: each
       rule's pattern matches exactly its consumer's domain set.
       `[model: sonnet | deps: 6.1 | lane: repo_change | wave: 3]`
 - [ ] 6.3 [DNA-766] Add a DLQ and redrive policy per queue, with dead-letter volume exposed to monitoring
