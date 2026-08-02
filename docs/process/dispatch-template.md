@@ -208,8 +208,36 @@ every worktree afterwards. Orca ships a bypass default for all 24 agent types it
 to be turned off, not an accident to be spotted. A live bypass blocks dispatch even with a clean
 receipt.
 
-`--skip-hardening` releases anyway and prints what was skipped. It exists for a deliberate,
-receipted exception, and for tests that exercise work-order emission rather than release.
+### Accepted exceptions
+
+Some checks cannot pass without giving up something genuinely wanted. H2 asks for a localhost-only
+daemon; the Orca mobile client needs the daemon reachable. There is no configuration that satisfies
+both, so pretending otherwise would mean either a false `pass` or `--skip-hardening` on every
+dispatch — and an exception you take every single time stops being a decision and becomes noise.
+
+A check may therefore be `accepted` instead of `pass`, if the receipt carries a matching entry:
+
+```json
+"checks": {"H2": "accepted"},
+"exceptions": {
+  "H2": {
+    "justification": "why this cannot pass, and what compensates for it",
+    "review_by": "2026-11-02",
+    "accepted_by": "Ford"
+  }
+}
+```
+
+Both fields are load-bearing. An exception with no justification blocks; an exception with no
+`review_by`, or a lapsed one, blocks. **An exception that never expires is a silent failure with
+better manners.**
+
+`accepted` cannot launder the live H4 check. That one is read from Orca's actual settings at
+dispatch time, so no amount of paperwork makes a live bypass releasable.
+
+`--skip-hardening` releases anyway and prints what was skipped. With `accepted` available it
+should be rare — reach for it when the gate itself is wrong, not when a check is inconvenient.
+Tests that exercise work-order emission rather than release also use it.
 
 This was added because the gate had been declared in `WORKFLOW.md` and enforced by nothing: two
 worktrees were released straight through it, and the audit that followed (DNA-777) found every

@@ -142,11 +142,47 @@ def hardening_problems(agent: str, today: date, receipt_path: Path | None = None
         if age > RECEIPT_MAX_AGE_DAYS:
             problems.append(f"receipt is {age} days old (limit {RECEIPT_MAX_AGE_DAYS}); re-run the checklist")
 
+    problems += _adoption_gate_problems(receipt, today)
+    return problems
+
+
+def _adoption_gate_problems(receipt: dict, today: date) -> list[str]:
+    """H1-H4 must each pass, or carry a justified, unexpired exception.
+
+    `accepted` exists because some checks cannot pass without giving up a feature that is
+    genuinely wanted — H2 asks for a localhost-only daemon, and the phone client needs the
+    daemon reachable. The alternative was routing those through `--skip-hardening` on every
+    dispatch, which turns a deliberate exception into background noise nobody reads. An
+    exception here has to name a reason and a date it gets looked at again.
+    """
     checks = receipt.get("checks") or {}
-    failing = [h for h in ADOPTION_GATE if checks.get(h) != "pass"]
-    if failing:
-        detail = ", ".join(f"{h}={checks.get(h, 'missing')}" for h in failing)
-        problems.append(f"adoption gate not met: {detail}. See {receipt.get('issue', 'the receipt issue')}")
+    exceptions = receipt.get("exceptions") or {}
+    issue = receipt.get("issue", "the receipt issue")
+    problems: list[str] = []
+    unmet: list[str] = []
+
+    for check in ADOPTION_GATE:
+        state = checks.get(check, "missing")
+        if state == "pass":
+            continue
+        if state != "accepted":
+            unmet.append(f"{check}={state}")
+            continue
+
+        exception = exceptions.get(check) or {}
+        if not exception.get("justification"):
+            problems.append(f"{check} is 'accepted' but records no justification — say why, or fix it")
+            continue
+        try:
+            review_by = date.fromisoformat(str(exception.get("review_by")))
+        except (TypeError, ValueError):
+            problems.append(f"{check} is 'accepted' but has no usable `review_by` date — an exception must expire")
+            continue
+        if review_by < today:
+            problems.append(f"{check} exception lapsed on {review_by} and needs re-reviewing. See {issue}")
+
+    if unmet:
+        problems.append(f"adoption gate not met: {', '.join(unmet)}. See {issue}")
     return problems
 
 
