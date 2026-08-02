@@ -8,10 +8,10 @@ from contextlib import asynccontextmanager
 
 import structlog
 from fastapi import FastAPI
+from ocean_broker import EventBridgePublisher
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.heartbeat import publish_heartbeat
-from src.producer import RedpandaPublisher
 from src.receiver import router
 
 log = structlog.get_logger()
@@ -25,26 +25,25 @@ async def lifespan(app: FastAPI):
     session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     app.state.session_maker = session_maker
 
-    bootstrap_servers = os.environ.get("REDPANDA_BROKERS", "redpanda:29092")
-    publisher = RedpandaPublisher(
-        bootstrap_servers=bootstrap_servers,
-        db_session_maker=session_maker,
-    )
+    # Region and bus name come from the environment inside the publisher, so the service names
+    # neither. Handing it the session maker is what gives every publish site the failed_webhooks
+    # fallback the connector used to implement itself.
+    publisher = EventBridgePublisher(db_session_maker=session_maker)
     app.state.publisher = publisher
-    log.info("pocar_connector_started", brokers=bootstrap_servers)
+    log.info("pocar_connector_started")
 
     heartbeat_task = asyncio.create_task(publish_heartbeat(publisher, "pocar-connector", "POCAR"))
 
     yield
 
-    # Shutdown — cancel heartbeat before closing publisher
+    # Shutdown — cancel the heartbeat before tearing down its dependencies. The publisher holds
+    # no broker connection to flush, so the engine is the only thing left to close.
     heartbeat_task.cancel()
     try:
         await heartbeat_task
     except asyncio.CancelledError:
         pass
 
-    await publisher.close()
     await engine.dispose()
     log.info("pocar_connector_stopped")
 

@@ -4,11 +4,13 @@ WORKDIR /app
 
 RUN pip install uv --quiet
 
-# Copy ocean-events library first (build context = repo root)
+# Copy the shared libraries first (build context = repo root)
 COPY libs/ocean-events /libs/ocean-events
+COPY libs/ocean-broker /libs/ocean-broker
 
-# Install ocean-events editable so it's available to pocar-connector
-RUN uv pip install --system --no-cache -e /libs/ocean-events
+# Install them editable so they're available to pocar-connector. ocean-broker is the only
+# transport this service has; it pulls boto3 and sqlalchemy[asyncio] in with it.
+RUN uv pip install --system --no-cache -e /libs/ocean-events -e /libs/ocean-broker
 
 # Copy pocar-connector pyproject.toml and install deps
 COPY services/pocar-connector/pyproject.toml .
@@ -19,7 +21,6 @@ RUN uv pip install --system --no-cache \
     uvicorn==0.41.0 \
     "sqlalchemy==2.0.48" \
     asyncpg==0.31.0 \
-    "confluent-kafka==2.13.2" \
     "structlog==25.5.0"
 
 # Copy source code
