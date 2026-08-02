@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+import asyncio
+import json
+from unittest.mock import AsyncMock, Mock, patch
 
+import pytest
 from src.claim import compete_for_claim
-from src.consumer import handle_message
+from src.consumer import handle_message, run_consumer
 from src.personas import Persona
 
 
@@ -328,6 +331,140 @@ class TestResetEndpoint:
         resp = client.post("/reset")
         assert resp.status_code == 200
         assert len(_claimed_tasks) == 0
+
+
+def _eventbridge_sqs_message(envelope: dict, receipt_handle: str = "rh-1") -> dict:
+    """Build the SQS message an EventBridge rule delivers: envelope inside ``detail``."""
+    body = {
+        "version": "0",
+        "id": "eb-msg-001",
+        "detail-type": "tasks",
+        "source": "ocean",
+        "account": "000000000000",
+        "time": "2026-03-08T12:00:00Z",
+        "region": "us-east-1",
+        "detail": envelope,
+    }
+    return {"Body": json.dumps(body), "ReceiptHandle": receipt_handle}
+
+
+def _sqs_client(*receive_results: dict) -> Mock:
+    """Sync boto3-shaped SQS client: yields each receive result, then cancels the loop."""
+    client = Mock()
+    client.receive_message = Mock(side_effect=[*receive_results, asyncio.CancelledError()])
+    client.delete_message = Mock()
+    return client
+
+
+class TestSqsLoop:
+    """run_consumer polls SQS, unwraps the EventBridge body, deletes only after success."""
+
+    async def test_unwraps_detail_and_processes_envelope(self):
+        envelope = _task_created_event()
+        client = _sqs_client({"Messages": [_eventbridge_sqs_message(envelope)]})
+        publisher = AsyncMock()
+        personas = [_make_persona()]
+
+        with (
+            pytest.raises(asyncio.CancelledError),
+            patch("src.consumer.handle_message", new_callable=AsyncMock) as mock_handle,
+        ):
+            await run_consumer(personas, "https://sqs.test/agent-worker", publisher, set(), sqs_client=client)
+
+        mock_handle.assert_awaited_once()
+        assert mock_handle.await_args[0][0] == envelope
+
+    async def test_deletes_after_successful_processing(self):
+        envelope = _task_created_event()
+        client = _sqs_client({"Messages": [_eventbridge_sqs_message(envelope, receipt_handle="rh-ok")]})
+        publisher = AsyncMock()
+
+        with (
+            pytest.raises(asyncio.CancelledError),
+            patch("src.consumer.handle_message", new_callable=AsyncMock),
+        ):
+            await run_consumer([_make_persona()], "https://sqs.test/q", publisher, set(), sqs_client=client)
+
+        client.delete_message.assert_called_once_with(QueueUrl="https://sqs.test/q", ReceiptHandle="rh-ok")
+
+    async def test_failure_leaves_message_for_redelivery(self):
+        envelope = _task_created_event()
+        client = _sqs_client({"Messages": [_eventbridge_sqs_message(envelope)]})
+        publisher = AsyncMock()
+
+        with (
+            pytest.raises(asyncio.CancelledError),
+            patch("src.consumer.handle_message", new_callable=AsyncMock) as mock_handle,
+        ):
+            mock_handle.side_effect = RuntimeError("boom")
+            await run_consumer([_make_persona()], "https://sqs.test/q", publisher, set(), sqs_client=client)
+
+        client.delete_message.assert_not_called()
+
+    async def test_malformed_body_not_deleted(self):
+        client = _sqs_client({"Messages": [{"Body": "not json{{{", "ReceiptHandle": "rh-bad"}]})
+        publisher = AsyncMock()
+
+        with (
+            pytest.raises(asyncio.CancelledError),
+            patch("src.consumer.handle_message", new_callable=AsyncMock) as mock_handle,
+        ):
+            await run_consumer([_make_persona()], "https://sqs.test/q", publisher, set(), sqs_client=client)
+
+        mock_handle.assert_not_awaited()
+        client.delete_message.assert_not_called()
+
+    async def test_bare_envelope_without_detail_is_accepted(self):
+        envelope = _task_created_event()
+        msg = {"Body": json.dumps(envelope), "ReceiptHandle": "rh-2"}
+        client = _sqs_client({"Messages": [msg]})
+        publisher = AsyncMock()
+
+        with (
+            pytest.raises(asyncio.CancelledError),
+            patch("src.consumer.handle_message", new_callable=AsyncMock) as mock_handle,
+        ):
+            await run_consumer([_make_persona()], "https://sqs.test/q", publisher, set(), sqs_client=client)
+
+        assert mock_handle.await_args[0][0] == envelope
+
+    async def test_empty_receive_continues_polling(self):
+        client = _sqs_client({}, {"Messages": []})
+        publisher = AsyncMock()
+
+        with pytest.raises(asyncio.CancelledError):
+            await run_consumer([_make_persona()], "https://sqs.test/q", publisher, set(), sqs_client=client)
+
+        assert client.receive_message.call_count == 3
+
+
+class TestOrderTolerance:
+    """Verdict evidence: one event type, one source — delivery order cannot change final state."""
+
+    async def _run_events(self, events: list[dict]) -> tuple[set, list]:
+        claimed: set[str] = set()
+        publisher = AsyncMock()
+        persona = _make_persona(delay=(0, 0))
+        with (
+            patch("src.consumer.decide_with_fallback", new_callable=AsyncMock) as mock_decide,
+            patch("src.consumer.publish_ai_recommendation", new_callable=AsyncMock),
+            patch("src.consumer.publish_ai_decision", new_callable=AsyncMock),
+            patch("src.consumer.publish_task_completed", new_callable=AsyncMock),
+        ):
+            mock_decide.return_value = ("approve", 1.0)
+            results = [await handle_message(e, [persona], publisher, claimed) for e in events]
+        return claimed, results
+
+    async def test_reverse_delivery_reaches_same_state(self):
+        events = [
+            _task_created_event(entity_id="task-A", correlation_id="corr-A"),
+            _task_created_event(entity_id="task-B", correlation_id="corr-B"),
+        ]
+        claimed_forward, results_forward = await self._run_events(events)
+        claimed_reverse, results_reverse = await self._run_events(list(reversed(events)))
+
+        assert claimed_forward == claimed_reverse == {"task-A", "task-B"}
+        assert results_forward == results_reverse == ["dispatched", "dispatched"]
 
 
 class TestRerunAfterReset:

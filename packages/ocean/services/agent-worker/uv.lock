@@ -9,7 +9,7 @@ source = { editable = "." }
 dependencies = [
     { name = "anthropic" },
     { name = "asyncpg" },
-    { name = "confluent-kafka" },
+    { name = "boto3" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "ocean-broker" },
@@ -24,7 +24,7 @@ dependencies = [
 requires-dist = [
     { name = "anthropic", specifier = ">=0.40.0" },
     { name = "asyncpg", specifier = ">=0.31.0" },
-    { name = "confluent-kafka", specifier = "==2.13.2" },
+    { name = "boto3", specifier = ">=1.42.0" },
     { name = "fastapi", specifier = "==0.135.1" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "ocean-broker", directory = "../../libs/ocean-broker" },
