@@ -32,3 +32,18 @@ output "consumer_rule_arns" {
   description = "Consumer name -> EventBridge rule ARN"
   value       = { for consumer, rule in aws_cloudwatch_event_rule.consumer : consumer => rule.arn }
 }
+
+output "consumer_dlq_urls" {
+  description = "Consumer name -> dead-letter queue URL (where an operator inspects and redrives failed events)"
+  value       = { for consumer, queue in aws_sqs_queue.dlq : consumer => queue.url }
+}
+
+output "consumer_dlq_arns" {
+  description = "Consumer name -> dead-letter queue ARN"
+  value       = { for consumer, queue in aws_sqs_queue.dlq : consumer => queue.arn }
+}
+
+output "consumer_dlq_alarm_arns" {
+  description = "Consumer name -> CloudWatch alarm ARN watching that consumer's DLQ depth"
+  value       = { for consumer, alarm in aws_cloudwatch_metric_alarm.dlq : consumer => alarm.arn }
+}

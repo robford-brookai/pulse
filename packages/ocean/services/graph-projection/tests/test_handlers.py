@@ -66,11 +66,13 @@ async def test_unknown_event_type_skipped(mock_session):
     mock_session.execute.assert_not_called()
 
 
-def test_consumer_group_id_is_graph_projection_worker():
-    """Consumer config declares correct group.id to avoid sharing offsets with event-store-consumer."""
-    from src.consumer import CONSUMER_CONFIG
+def test_no_kafka_consumer_config_remains():
+    """SQS conversion (DNA-761): isolation from event-store now comes from a
+    dedicated queue, not a consumer group. No Kafka config may survive."""
+    import src.consumer as consumer_module
 
-    assert CONSUMER_CONFIG["group.id"] == "graph-projection-worker"
+    assert not hasattr(consumer_module, "CONSUMER_CONFIG")
+    assert not hasattr(consumer_module, "TOPICS")
 
 
 @pytest.mark.asyncio

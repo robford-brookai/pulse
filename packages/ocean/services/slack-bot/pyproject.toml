@@ -7,7 +7,7 @@ dependencies = [
     "uvicorn==0.41.0",
     "sqlalchemy==2.0.48",
     "asyncpg==0.31.0",
-    "confluent-kafka==2.13.2",
+    "boto3>=1.42.0",
     "slack-bolt==1.27.0",
     # slack_bolt.app.async_app imports `from aiohttp import web` unconditionally; without
     # this the AsyncApp import (and so the whole service) dies at startup.

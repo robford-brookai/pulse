@@ -1,24 +1,35 @@
-"""Async Kafka consumer for slack-bot.
+"""SQS consumer for slack-bot.
 
-Reads from ocean.tasks, ocean.ai-ops, ocean.interactions, ocean.ops;
-dispatches events to handlers for alert cards, lifecycle thread updates,
-and simulation bookends.
+Receives EventBridge-delivered events from the slack-bot queue (the former
+ocean.tasks, ocean.ai-ops, ocean.interactions, ocean.ops, ocean.tickets
+topics); dispatches events to handlers for alert cards, lifecycle thread
+updates, and simulation bookends.
 
-Consumer group: slack-bot-worker (receives events independently of other consumers).
-Manual offset commit — offset committed only AFTER successful handler return.
+Ordering verdict: order-dependent, guarded (3.5). The card lifecycle spans
+multiple event types per entity, so the sequence guard in ThreadManager
+(``advance_task_sequence`` / ``advance_ticket_sequence``) compares event
+timestamps and drops stale external updates, and ``ParentMessageNotReady``
+turns an update that overtakes its create into a redelivery instead of a
+drop. This module only converts the transport; the guard is untouched.
+
+Receive → process → delete: a message is deleted only after its handler
+returns, so a failed handler leaves the message for visibility-timeout
+redelivery — the same at-least-once, commit-after-success semantics the
+Kafka loop had. Blocking boto3 calls run in a thread via asyncio.to_thread()
+so the FastAPI event loop stays responsive.
 """
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
+from typing import Any
 from uuid import uuid4
 
 import sqlalchemy as sa
 import structlog
-from confluent_kafka import KafkaError
-from confluent_kafka.aio import AIOConsumer as Consumer
 
 from src.ai_events import publish_ai_event
 from src.ai_summary import generate_summary_with_context
@@ -47,13 +58,13 @@ class ParentMessageNotReady(Exception):
     """
 
 
-TOPICS = ["ocean.tasks", "ocean.ai-ops", "ocean.interactions", "ocean.ops", "ocean.tickets"]
+#: Catalog domains this consumer's EventBridge rule matches — the former
+#: ``ocean.<domain>`` topic subscriptions.
+DOMAINS = ["tasks", "ai-ops", "interactions", "ops", "tickets"]
 
-CONSUMER_CONFIG: dict = {
-    "group.id": "slack-bot-worker",
-    "auto.offset.reset": "earliest",
-    "enable.auto.commit": False,
-}
+SQS_MAX_MESSAGES = 10
+SQS_WAIT_TIME_SECONDS = 20
+SQS_ERROR_BACKOFF_SECONDS = 5
 
 # Priority-based channel routing for alert cards
 CHANNEL_MAP: dict[str, str] = {
@@ -986,48 +997,79 @@ EVENT_HANDLERS: dict = {
 }
 
 
+def _envelope_from_body(body: object) -> dict | None:
+    """Extract the event envelope from a parsed SQS message body.
+
+    An EventBridge rule delivers the envelope whole inside ``detail``. A body
+    with no ``detail`` key is accepted as a bare envelope so local tooling can
+    send straight to the queue.
+    """
+    if not isinstance(body, dict):
+        return None
+    detail = body.get("detail", body)
+    return detail if isinstance(detail, dict) else None
+
+
 async def run_consumer(
     slack_client,
     session_maker,
-    bootstrap_servers: str,
+    queue_url: str,
     hasura_url: str,
     publisher=None,
     thread_manager=None,
+    *,
+    sqs_client: Any = None,
 ) -> None:
-    """Run the slack-bot consumer loop.
+    """Run the slack-bot consumer loop against its SQS queue.
 
-    Polls ocean.tasks, ocean.ai-ops, ocean.interactions, ocean.ops;
-    dispatches to EVENT_HANDLERS, commits only on success.
-    Logs and re-raises on unexpected error — the asyncio.create_task caller
-    in main.py handles restarts.
+    Receives EventBridge-delivered events for the slack-bot domains,
+    dispatches to EVENT_HANDLERS, and deletes a message only after its
+    handler returns. A failed handler — including ``ParentMessageNotReady``
+    from the 3.5 sequence guard — leaves the message for visibility-timeout
+    redelivery; a malformed body is left to ride redelivery into the queue's
+    DLQ. An event type with no handler is deleted, matching the Kafka loop's
+    skip-and-commit.
     """
-    conf = {**CONSUMER_CONFIG, "bootstrap.servers": bootstrap_servers}
-    consumer = Consumer(conf)
-    await consumer.subscribe(TOPICS)
-    log.info("slack_bot_consumer_started", topics=TOPICS, brokers=bootstrap_servers)
+    if sqs_client is None:
+        import boto3
 
-    try:
-        while True:
-            msg = await consumer.poll(timeout=1.0)
-            if msg is None:
-                continue
+        sqs_client = boto3.client("sqs")
 
-            if msg.error():
-                if msg.error().code() == KafkaError._PARTITION_EOF:
-                    continue
-                log.error(
-                    "consumer_error",
-                    error=str(msg.error()),
-                    topic=msg.topic(),
-                    partition=msg.partition(),
-                )
-                continue
+    log.info("slack_bot_consumer_started", queue_url=queue_url, domains=DOMAINS)
+
+    while True:
+        try:
+            response = await asyncio.to_thread(
+                sqs_client.receive_message,
+                QueueUrl=queue_url,
+                MaxNumberOfMessages=SQS_MAX_MESSAGES,
+                WaitTimeSeconds=SQS_WAIT_TIME_SECONDS,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("sqs_receive_failed", queue_url=queue_url)
+            await asyncio.sleep(SQS_ERROR_BACKOFF_SECONDS)
+            continue
+
+        for msg in response.get("Messages", []):
+            receipt_handle = msg.get("ReceiptHandle", "")
 
             try:
-                event_data = json.loads(msg.value())
-                event_type = event_data.get("event_type", "")
-                handler = EVENT_HANDLERS.get(event_type)
-                if handler:
+                body = json.loads(msg["Body"])
+            except (json.JSONDecodeError, KeyError, TypeError):
+                log.warning("sqs_malformed_message", receipt_handle=receipt_handle)
+                continue
+
+            event_data = _envelope_from_body(body)
+            if event_data is None:
+                log.warning("sqs_body_not_an_envelope", receipt_handle=receipt_handle)
+                continue
+
+            event_type = event_data.get("event_type", "")
+            handler = EVENT_HANDLERS.get(event_type)
+            if handler:
+                try:
                     await handler(
                         event_data,
                         slack_client=slack_client,
@@ -1036,19 +1078,25 @@ async def run_consumer(
                         publisher=publisher,
                         thread_manager=thread_manager,
                     )
-                else:
-                    log.debug("event_type_skipped", event_type=event_type)
-                await consumer.commit(message=msg)
-            except Exception:
-                log.exception(
-                    "slack_bot_dispatch_failed_no_commit",
-                    offset=msg.offset(),
-                    topic=msg.topic(),
-                    partition=msg.partition(),
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    log.exception(
+                        "slack_bot_dispatch_failed_no_delete",
+                        receipt_handle=receipt_handle,
+                        event_type=event_type,
+                    )
+                    continue
+            else:
+                log.debug("event_type_skipped", event_type=event_type)
+
+            try:
+                await asyncio.to_thread(
+                    sqs_client.delete_message,
+                    QueueUrl=queue_url,
+                    ReceiptHandle=receipt_handle,
                 )
-    except Exception:
-        log.exception("slack_bot_consumer_fatal")
-        raise
-    finally:
-        await consumer.close()
-        log.info("slack_bot_consumer_closed")
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception("sqs_delete_failed", receipt_handle=receipt_handle)

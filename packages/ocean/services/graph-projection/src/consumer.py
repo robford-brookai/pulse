@@ -1,18 +1,22 @@
-"""Async Kafka consumer for graph projection.
+"""SQS consumer for graph projection.
 
-Reads from all Ocean topics and upserts entity state into the operational graph.
-Uses a separate consumer group (graph-projection-worker) so it receives all events
-independently of the event-store-consumer group.
-Manual offset commit — offset committed only AFTER successful DB upsert.
+Receives EventBridge-delivered OCEAN events from the service's dedicated SQS
+queue and upserts entity state into the operational graph. At-least-once,
+delete-after-success: a message is deleted only after its DB transaction
+commits, a failed message is left to visibility-timeout redelivery, and
+repeated failure reaches the queue's redrive policy and DLQ.
+
+Ordering verdict (design D3): MIXED, made order-tolerant by the event-time
+sequence guards landed in tasks 3.1-3.4. Redelivery after a lost delete is
+absorbed by the same guards and the handlers' dedup predicates.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 
 import structlog
-from confluent_kafka import KafkaError
-from confluent_kafka.aio import AIOConsumer as Consumer
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.handlers.alerts import handle_alert_claimed, handle_alert_created, handle_alert_resolved
@@ -44,25 +48,9 @@ from src.handlers.tickets import (
 
 log = structlog.get_logger()
 
-TOPICS = [
-    "ocean.signals",
-    "ocean.alerts",
-    "ocean.tasks",
-    "ocean.interactions",
-    "ocean.outcomes",
-    "ocean.tickets",
-    "ocean.logistics",
-    "ocean.ai-ops",
-    "ocean.audit",
-    "ocean.ops",
-]
-
-# CRITICAL: separate consumer group from event-store-consumer
-CONSUMER_CONFIG: dict = {
-    "group.id": "graph-projection-worker",
-    "auto.offset.reset": "earliest",
-    "enable.auto.commit": False,
-}
+SQS_MAX_MESSAGES = 10
+SQS_WAIT_TIME_S = 5
+SQS_ERROR_BACKOFF_S = 5
 
 EVENT_HANDLERS: dict = {
     "signal.received": handle_signal_received,
@@ -105,42 +93,84 @@ async def dispatch(event_data: dict, session: AsyncSession) -> None:
     await handler(event_data, session)
 
 
-async def run_consumer(session_maker: async_sessionmaker, bootstrap_servers: str) -> None:
-    """Run the graph projection consumer loop."""
-    conf = {**CONSUMER_CONFIG, "bootstrap.servers": bootstrap_servers}
-    consumer = Consumer(conf)
-    await consumer.subscribe(TOPICS)
-    log.info("graph_consumer_started", topics=TOPICS, brokers=bootstrap_servers)
+def _parse_message(msg: dict) -> tuple[dict, str] | None:
+    """Extract (event envelope, receipt handle) from an EventBridge→SQS message.
+
+    The EventBridge event carries the envelope whole in ``detail``. A message
+    that does not parse is returned as None and left undeleted, so the queue's
+    redrive policy moves it to the DLQ.
+    """
+    receipt = msg["ReceiptHandle"]
+    try:
+        body = json.loads(msg["Body"])
+        detail = body["detail"]
+    except (json.JSONDecodeError, KeyError, TypeError):
+        log.warning("malformed_message", receipt_handle=receipt)
+        return None
+    if not isinstance(detail, dict):
+        log.warning("malformed_message", receipt_handle=receipt)
+        return None
+    return detail, receipt
+
+
+async def run_consumer(
+    session_maker: async_sessionmaker,
+    queue_url: str,
+    *,
+    sqs_client=None,
+) -> None:
+    """Receive → project into the graph → delete, one message at a time.
+
+    A message is deleted only after its transaction commits; a handler failure
+    leaves it for visibility-timeout redelivery. A failed delete is logged, not
+    retried: the redelivered message is absorbed by the handlers' sequence
+    guards and dedup predicates.
+    """
+    owns_client = sqs_client is None
+    if owns_client:
+        import aioboto3
+
+        session = aioboto3.Session()
+        sqs_client = await session.client("sqs").__aenter__()
+    log.info("graph_consumer_started", queue_url=queue_url)
 
     try:
         while True:
-            msg = await consumer.poll(timeout=1.0)
-            if msg is None:
-                continue
-
-            if msg.error():
-                if msg.error().code() == KafkaError._PARTITION_EOF:
-                    continue
-                log.error(
-                    "consumer_error",
-                    error=str(msg.error()),
-                    topic=msg.topic(),
-                    partition=msg.partition(),
-                )
-                continue
-
             try:
-                event_data = json.loads(msg.value())
-                async with session_maker() as session, session.begin():
-                    await dispatch(event_data, session)
-                await consumer.commit(message=msg)
-            except Exception:
-                log.exception(
-                    "projection_failed_no_commit",
-                    offset=msg.offset(),
-                    topic=msg.topic(),
-                    partition=msg.partition(),
+                response = await sqs_client.receive_message(
+                    QueueUrl=queue_url,
+                    MaxNumberOfMessages=SQS_MAX_MESSAGES,
+                    WaitTimeSeconds=SQS_WAIT_TIME_S,
                 )
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception("sqs_receive_failed", queue_url=queue_url)
+                await asyncio.sleep(SQS_ERROR_BACKOFF_S)
+                continue
+
+            for msg in response.get("Messages", []):
+                parsed = _parse_message(msg)
+                if parsed is None:
+                    continue
+                event_data, receipt = parsed
+
+                try:
+                    async with session_maker() as session, session.begin():
+                        await dispatch(event_data, session)
+                except Exception:
+                    log.exception(
+                        "projection_failed_not_deleted",
+                        event_type=event_data.get("event_type"),
+                        receipt_handle=receipt,
+                    )
+                    continue
+
+                try:
+                    await sqs_client.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt)
+                except Exception:
+                    log.exception("sqs_delete_failed", receipt_handle=receipt)
     finally:
-        await consumer.close()
+        if owns_client:
+            await sqs_client.__aexit__(None, None, None)
         log.info("graph_consumer_closed")
