@@ -22,7 +22,7 @@ SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN", "")
 SLACK_SIGNING_SECRET = os.environ.get("SLACK_SIGNING_SECRET", "")
 OPS_SLACK_CHANNEL = os.environ.get("OPS_SLACK_CHANNEL", "#care-alerts-ops")
 HASURA_URL = os.environ.get("HASURA_URL", "http://localhost:8090")
-REDPANDA_BROKERS = os.environ.get("REDPANDA_BROKERS", "localhost:9092")
+SQS_QUEUE_URL = os.environ.get("SQS_QUEUE_URL", "")
 
 
 class MCPApiKeyMiddleware(BaseHTTPMiddleware):
@@ -108,7 +108,7 @@ async def lifespan(app: FastAPI):
         consumer_module.run_consumer(
             slack_client,
             session_maker,
-            REDPANDA_BROKERS,
+            SQS_QUEUE_URL,
             HASURA_URL,
             publisher=publisher,
             thread_manager=thread_manager,
@@ -116,7 +116,7 @@ async def lifespan(app: FastAPI):
     )
     poller_task = asyncio.create_task(poll_connector_health(slack_client, OPS_SLACK_CHANNEL, session_maker))
 
-    log.info("slack_bot_started", brokers=REDPANDA_BROKERS, ops_channel=OPS_SLACK_CHANNEL)
+    log.info("slack_bot_started", queue_url=SQS_QUEUE_URL, ops_channel=OPS_SLACK_CHANNEL)
     yield
 
     consumer_task.cancel()

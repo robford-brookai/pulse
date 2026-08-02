@@ -146,6 +146,48 @@ raised the collision mid-flight; the original plan declared 3.1–3.5 `parallel:
       `[model: opus | deps: 1.3 | lane: repo_change | wave: 2a]`
       Exploratory — `fan_out: exploratory_only` applies here and nowhere else in this change.
 
+3.7–3.9 are the tasks 3.6 was allowed to create. Its evidence is
+`packages/ocean/docs/ordering-verdict-control-plane.md`, backed by 25 tests in
+`services/control-plane/tests/test_ordering_verdicts.py`, three of them `xfail(strict=True)` — one
+per finding, so each of these tasks has a failing test waiting for it. The D3 audit's
+"order-tolerant, per handler" verdict for `control-plane` does not hold.
+
+- [ ] 3.7 `control-plane/src/handlers/tickets.py:167`/`:205` — `handle_ticket_updated` reads the
+      current status and writes the new one with only `is_valid_transition` between them, which is
+      a legality check, not a sequence guard. Reversed `in_progress`/`resolved` leaves a resolved
+      ticket at `in_progress`, silently; `waiting`↔`in_progress` are both legal, so within the
+      working states the terminal status is simply whichever event was processed last. Apply 3.1's
+      treatment. `tickets.updated_at` is `datetime.now()` (Caveat A) and MUST NOT be the guard
+      column — add an event-time column populated from the envelope `timestamp`.
+      **Same task, second defect:** on resolution the handler calls `build_outcome_event(...,
+      timestamp=now.isoformat())` at `:280` — processing time, where the other four outcome relays
+      pass the source event's `timestamp` through untouched. That single line poisons the field
+      3.1's guard compares, for exactly the events that reach `graph-projection` from here. Fix
+      both or neither.
+      `[model: opus | deps: 3.0, 5.4 | lane: repo_change | wave: 2a]`
+      `serial: alembic_sequence` — needs a new revision on the shared sequence.
+- [ ] 3.8 `handle_rma_requested` and `handle_return_status_update` each read a row the event being
+      processed did not write, and `return` when it is missing — after which the consumer commits
+      and the message is gone. That is a lost effect, not a stale write, and no
+      `ticket.rma.failed` is emitted, so nothing downstream observes it. **Not the 3.1 treatment:**
+      a sequence guard does not address a precondition that has not arrived. Leave the message for
+      redelivery — raise, or park it explicitly — without creating a silent infinite retry. Must be
+      designed against the DLQ and redrive behaviour from 6.3, which is why it depends on it.
+      `return.updated` was already live-hazardous under Kafka: it arrives on `ocean.logistics` from
+      a connector while the `returns` row is written by control-plane itself.
+      `[model: opus | deps: 5.4, 6.3 | lane: repo_change | wave: 2a]`
+- [ ] 3.9 Break the `ticket.created` echo cycle. `handle_ticket_created` publishes `ticket.created`,
+      control-plane subscribes to that domain, and `EVENT_HANDLERS["ticket.created"]` routes it
+      straight back into the same handler — minting a fresh `uuid4` and a fresh `human_id` each
+      pass, so one requested ticket becomes an unbounded stream of tickets. Control-plane is the
+      only publisher of `ticket.created`; every other service sends `ticket.create.requested`
+      (`linear-connector/src/normalizer.py:67`, `slack-bot/src/bolt_app.py:789`), so that
+      `EVENT_HANDLERS` key has no legitimate producer and is the mistake it looks like.
+      **This must land before 9.1 provisions the real rules**, or the cycle is encoded into the new
+      transport with a live bus behind it. Not an ordering property — found in the same wiring.
+      `[model: opus | deps: 5.4 | lane: repo_change | wave: 2a]`
+      Blocks 9.1.
+
 ## 4. Wave 2b — publish-site conversions
 
 Thirteen sites, two shapes. A `services/*/src/producer.py` glob finds only 7 of them. One task per
@@ -222,6 +264,43 @@ shape, Dockerfile, and EKS deployment unchanged. Each records its ordering verdi
       `[model: sonnet | deps: 2.2, 3.5 | lane: repo_change | wave: 2c]`
 - [x] 5.7 [DNA-763] `services/warehouse-sync/src/main.py` — inline `AIOConsumer` to SQS receive/delete.
       `[model: sonnet | deps: 2.2, 4.13 | lane: repo_change | wave: 2c]`
+- [ ] 5.8 Subscribe `event-store` to **all eleven** live domains. It takes 9 today — `tickets` and
+      `patient-state` are missing — while its own docstring claims "all Ocean topics". 6.2 found
+      this and correctly mirrored the code rather than widening it, because widening is a decision,
+      not a transcription. **The decision is made: widen it** (Ford, 2026-08-02). An append-only
+      event store that silently omits two domains is not an event store, and `patient-state` is the
+      worst one to lose — 6.2 also found it has no subscriber at all besides `warehouse-sync`.
+      Change `CONSUMER_DOMAINS["event-store"]` to `LIVE_DOMAINS`, regenerate
+      `infra/terraform/generated/event_catalog.auto.tfvars.json`, and widen the consumer's own
+      subscription to match. Correct the docstring, or make it true.
+      Test: `event-store`'s rule pattern matches every live domain, and the generated tfvars
+      round-trips against the table. Assert the two previously-missing domains explicitly by name,
+      so a future narrowing fails loudly rather than silently.
+      `[model: sonnet | deps: 5.1, 6.2 | lane: repo_change | wave: 2c]`
+      `serial: catalog_generated_surfaces` — edits the catalog both producers and rules derive
+      from.
+- [ ] 5.9 Give `warehouse-sync` a MECE test suite. It is the only converted service with **zero**
+      tests, and 5.7 changed real semantics without any: the flush moved from `INSERT` to a `MERGE`
+      on `data:event_id`, making duplicate-safety a property the Kafka loop never had. That
+      property is currently asserted nowhere.
+      Cover, mutually exclusive and collectively exhaustive over the service's behaviour: receive/
+      flush/delete ordering (nothing deleted before Snowflake commits), batch accumulation and the
+      10s window, duplicate redelivery yielding no second row, out-of-order delivery yielding
+      identical table contents, failed-batch redrive, cursor handling on the failure path, and
+      shutdown with a partial batch. State the taxonomy explicitly in the test module so a future
+      reader can see which cell each test occupies and which cells are empty.
+      **Rider — stepwise execution and a run log.** The suite must be runnable a stage at a time
+      rather than all-or-nothing, and must leave a durable record of what it did. Concretely: a
+      pytest marker per MECE category so `-m <category>` runs exactly that stage; ordered stage
+      identifiers so a run can resume from a named stage after a failure; and a per-run log written
+      to a path the invocation names, recording for each stage its identifier, outcome, duration,
+      and the batch/cursor state it observed. The log is the artifact — future runs are meant to be
+      diffed against earlier ones, so keep it stable and free of wall-clock and random identifiers,
+      the same normalisation discipline 8.1 applies.
+      No PHI in the log, and synthetic fixtures only.
+      `[model: opus | deps: 5.7, 4.14 | lane: repo_change | wave: 2c]`
+      Model `opus`: choosing the taxonomy is the work; a suite that is merely a pile of tests
+      satisfies the letter and not the point.
 
 ## 6. Wave 3 — infrastructure
 
@@ -282,7 +361,9 @@ Not dispatched. Open Engine queue (team CCC), operator runbooks with agent-prepa
 G_APPROVAL comment required before each. Run after merge and verification.
 
 - [ ] 9.1 [CCC-16] `terraform apply` — provision bus, rules, queues, DLQs, archive.
-      `[model: sonnet | deps: 6.4, 8.2 | lane: destructive_ops | wave: post-merge]`
+      `[model: sonnet | deps: 3.9, 6.4, 8.2 | lane: destructive_ops | wave: post-merge]`
+      3.9 is a hard gate, not a nicety: until the `ticket.created` echo cycle is broken, applying
+      the control-plane rule encodes an unbounded ticket-minting loop into a live bus.
 - [ ] 9.2 [CCC-17] Tear down MSK Serverless. Gated on 8.2 passing — after this there is no transport
       rollback, only forward recovery via archive replay.
       `[model: sonnet | deps: 9.1, 8.2 | lane: destructive_ops | wave: post-merge]`

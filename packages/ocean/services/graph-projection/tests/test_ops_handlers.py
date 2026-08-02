@@ -123,7 +123,9 @@ async def test_scenario_completed_registered():
     assert "scenario.completed" in EVENT_HANDLERS
 
 
-async def test_ocean_ops_in_topics():
-    from src.consumer import TOPICS
+async def test_ops_event_types_registered():
+    """Ops event types stay registered after the SQS conversion (DNA-761)."""
+    from src.consumer import EVENT_HANDLERS
 
-    assert "ocean.ops" in TOPICS
+    assert "connector.heartbeat" in EVENT_HANDLERS
+    assert "scenario.completed" in EVENT_HANDLERS

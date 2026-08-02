@@ -156,10 +156,10 @@ tasks:
 
   # --- Infra ---
 
-  topics:
-    desc: Create Redpanda topics (idempotent)
+  topology:
+    desc: Create the local bus, rules and queues on LocalStack (idempotent)
     cmds:
-      - bash infra/redpanda/topics.sh
+      - docker compose --env-file .env -f {{.COMPOSE_FILE}} run --rm localstack-init
 
   migrate:
     desc: Run Alembic migrations

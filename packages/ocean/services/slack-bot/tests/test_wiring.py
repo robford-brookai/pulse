@@ -31,7 +31,7 @@ class TestSlackBotWiring:
         with (
             patch.object(main_mod, "SLACK_BOT_TOKEN", "xoxb-test"),
             patch.object(main_mod, "DATABASE_URL", "postgresql+asyncpg://test:test@localhost/test"),
-            patch.object(main_mod, "REDPANDA_BROKERS", "localhost:9092"),
+            patch.object(main_mod, "SQS_QUEUE_URL", "https://sqs.test/slack-bot"),
             patch.object(main_mod, "HASURA_URL", "http://localhost:8090"),
             patch.object(main_mod, "create_async_engine", return_value=mock_engine),
             patch.object(main_mod, "async_sessionmaker", return_value=MagicMock()),
@@ -59,7 +59,7 @@ class TestSlackBotWiring:
         with (
             patch.object(main_mod, "SLACK_BOT_TOKEN", "xoxb-test"),
             patch.object(main_mod, "DATABASE_URL", "postgresql+asyncpg://test:test@localhost/test"),
-            patch.object(main_mod, "REDPANDA_BROKERS", "localhost:9092"),
+            patch.object(main_mod, "SQS_QUEUE_URL", "https://sqs.test/slack-bot"),
             patch.object(main_mod, "HASURA_URL", "http://localhost:8090"),
             patch.object(main_mod, "create_async_engine", return_value=mock_engine),
             patch.object(main_mod, "async_sessionmaker", return_value=MagicMock()),
@@ -87,7 +87,7 @@ class TestSlackBotWiring:
         with (
             patch.object(main_mod, "SLACK_BOT_TOKEN", "xoxb-test"),
             patch.object(main_mod, "DATABASE_URL", "postgresql+asyncpg://test:test@localhost/test"),
-            patch.object(main_mod, "REDPANDA_BROKERS", "localhost:9092"),
+            patch.object(main_mod, "SQS_QUEUE_URL", "https://sqs.test/slack-bot"),
             patch.object(main_mod, "HASURA_URL", "http://localhost:8090"),
             patch.object(main_mod, "create_async_engine", return_value=mock_engine),
             patch.object(main_mod, "async_sessionmaker", return_value=MagicMock()),
@@ -119,7 +119,7 @@ class TestSlackBotWiring:
         with (
             patch.object(main_mod, "SLACK_BOT_TOKEN", "xoxb-test"),
             patch.object(main_mod, "DATABASE_URL", "postgresql+asyncpg://test:test@localhost/test"),
-            patch.object(main_mod, "REDPANDA_BROKERS", "localhost:9092"),
+            patch.object(main_mod, "SQS_QUEUE_URL", "https://sqs.test/slack-bot"),
             patch.object(main_mod, "HASURA_URL", "http://localhost:8090"),
             patch.object(main_mod, "create_async_engine", return_value=mock_engine),
             patch.object(main_mod, "async_sessionmaker", return_value=MagicMock()),
