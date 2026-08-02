@@ -163,23 +163,23 @@ without first confirming it was ever reachable. 4.10 found the mirror of this on
 inheriting the fallback is not free either, since a service with no Postgres wiring at all needs a
 session maker, deps, and compose env added before it has anywhere to dead-letter to.
 
-- [ ] 4.1 [DNA-744] `services/github-connector/src/producer.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
-- [ ] 4.2 [DNA-745] `services/hubspot-connector/src/producer.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
-- [ ] 4.3 [DNA-746] `services/impilo-connector/src/producer.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
+- [x] 4.1 [DNA-744] `services/github-connector/src/producer.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
+- [x] 4.2 [DNA-745] `services/hubspot-connector/src/producer.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
+- [x] 4.3 [DNA-746] `services/impilo-connector/src/producer.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
 - [x] 4.4 [DNA-747] `services/pocar-connector/src/producer.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
-- [ ] 4.5 [DNA-748] `services/zcc-connector/src/producer.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
-- [ ] 4.6 [DNA-749] `services/mongodb-connector/src/publisher.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
+- [x] 4.5 [DNA-748] `services/zcc-connector/src/producer.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
+- [x] 4.6 [DNA-749] `services/mongodb-connector/src/publisher.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
 
 Unkeyed publishers (gain the `failed_webhooks` fallback by inheritance — a strict improvement, not
 scope creep; call it out in the HANDOFF):
 
 - [x] 4.7 [DNA-750] `services/control-plane/src/producer.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
-- [ ] 4.8 [DNA-751] `services/linear-connector/src/producer.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
-- [ ] 4.9 [DNA-752] `services/agent-worker/src/publisher.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
-- [ ] 4.10 [DNA-753] `services/call-simulator/src/publisher.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
-- [ ] 4.11 [DNA-754] `services/sim-driver/src/publisher.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
+- [x] 4.8 [DNA-751] `services/linear-connector/src/producer.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
+- [x] 4.9 [DNA-752] `services/agent-worker/src/publisher.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
+- [x] 4.10 [DNA-753] `services/call-simulator/src/publisher.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
+- [x] 4.11 [DNA-754] `services/sim-driver/src/publisher.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
 - [x] 4.12 [DNA-755] `services/slack-bot/src/publisher.py` `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
-- [ ] 4.13 [DNA-756] `services/warehouse-sync/src/main.py` — inline `Producer` used for dead-letter writes.
+- [x] 4.13 [DNA-756] `services/warehouse-sync/src/main.py` — inline `Producer` used for dead-letter writes.
       Removed rather than converted: its role passes to the queue DLQ in 7.2.
       `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2b]`
 - [ ] 4.14 Bring the converted services into `task test`. `TESTED_PATHS` is
