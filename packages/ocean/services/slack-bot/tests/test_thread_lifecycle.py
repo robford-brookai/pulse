@@ -287,7 +287,7 @@ class TestConsumerHandlers:
             "payload": {"task_id": "task-1", "actor": "Nurse Maria"},
         }
         await handle_task_claimed(event_data, **deps)
-        deps["thread_manager"].update_parent_status.assert_called_once_with("task-1", "CLAIMED")
+        deps["thread_manager"].update_parent_status.assert_called_once_with("task-1", "CLAIMED", event_ts=None)
 
     @pytest.mark.asyncio
     async def test_handle_task_completed_updates_parent_resolved(self, deps):
@@ -299,7 +299,7 @@ class TestConsumerHandlers:
             "payload": {"task_id": "task-1"},
         }
         await handle_task_completed(event_data, **deps)
-        deps["thread_manager"].update_parent_status.assert_called_once_with("task-1", "RESOLVED")
+        deps["thread_manager"].update_parent_status.assert_called_once_with("task-1", "RESOLVED", event_ts=None)
 
     @pytest.mark.asyncio
     async def test_handle_ai_recommendation_extracts_fields(self, deps):
