@@ -18,9 +18,9 @@ log = structlog.get_logger()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    bootstrap_servers = os.environ.get("REDPANDA_BROKERS", "redpanda:29092")
-    log.info("starting_consumer", brokers=bootstrap_servers)
-    task = asyncio.create_task(consumer.run_consumer(writer, bootstrap_servers))
+    queue_url = os.environ["SQS_QUEUE_URL"]
+    log.info("starting_consumer", queue_url=queue_url)
+    task = asyncio.create_task(consumer.run_consumer(writer, queue_url))
     try:
         yield
     finally:

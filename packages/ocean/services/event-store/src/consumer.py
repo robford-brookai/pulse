@@ -1,80 +1,104 @@
-"""Async Kafka consumer for Ocean event backbone.
+"""SQS consumer for the OCEAN event store.
 
-Reads from all Ocean topics and writes to the Postgres event store.
-Uses manual offset commit (enable.auto.commit=False) — offset is committed
-only AFTER the DB write succeeds. This guarantees at-least-once delivery
-with idempotent writes (ON CONFLICT DO NOTHING in writer.py).
+Polls the event-store queue fed by its EventBridge rule and writes every
+event to the Postgres event store. A message is deleted only AFTER the DB
+write succeeds; a failed message is left to visibility-timeout expiry and
+redelivered, then dead-lettered by the queue's redrive policy. This keeps
+the at-least-once, commit-after-success semantics the Kafka loop had.
+
+Ordering verdict: order-tolerant. The store is append-only with
+``ON CONFLICT (event_id) DO NOTHING`` (writer.py), so delivery order cannot
+affect the final state.
+
+Each SQS message body is an EventBridge event: the envelope travels whole
+in ``detail`` and the domain is ``detail-type`` (design D1).
 """
 
 from __future__ import annotations
 
+import asyncio
+import json
+from typing import Any
+
 import structlog
-from confluent_kafka import KafkaError
-from confluent_kafka.aio import AIOConsumer as Consumer
 
 log = structlog.get_logger()
 
-TOPICS = [
-    "ocean.signals",
-    "ocean.alerts",
-    "ocean.tasks",
-    "ocean.interactions",
-    "ocean.outcomes",
-    "ocean.ai-ops",
-    "ocean.audit",
-    "ocean.logistics",
-    "ocean.ops",
-]
+SQS_POLL_RETRY_INTERVAL = 5
+SQS_MAX_MESSAGES = 10
+SQS_WAIT_TIME = 20
 
 
-async def run_consumer(writer, bootstrap_servers: str) -> None:
+async def run_consumer(writer: Any, queue_url: str, *, sqs_client: Any = None) -> None:
     """Run the event store consumer loop.
 
     Args:
         writer: Module with async write_event(bytes, topic) function.
-        bootstrap_servers: Kafka/Redpanda broker address(es).
+        queue_url: SQS queue URL for the event-store consumer.
+        sqs_client: Optional pre-built SQS client (for testing). If None,
+            creates one via aioboto3.
+
+    CancelledError propagates for clean shutdown.
     """
-    conf = {
-        "bootstrap.servers": bootstrap_servers,
-        "group.id": "event-store-consumer",
-        "auto.offset.reset": "earliest",
-        "enable.auto.commit": False,  # CRITICAL: manual commit only after DB write
-    }
-    consumer = Consumer(conf)
-    await consumer.subscribe(TOPICS)
-    log.info("consumer_started", topics=TOPICS, brokers=bootstrap_servers)
+    owns_client = sqs_client is None
+    if owns_client:
+        import aioboto3
+
+        session = aioboto3.Session()
+        sqs_client = await session.client("sqs").__aenter__()
+    log.info("consumer_started", queue_url=queue_url)
 
     try:
         while True:
-            msg = await consumer.poll(timeout=1.0)
-            if msg is None:
-                continue
-
-            if msg.error():
-                if msg.error().code() == KafkaError._PARTITION_EOF:
-                    # Normal — reached end of partition, keep polling
-                    continue
-                log.error(
-                    "consumer_error",
-                    error=str(msg.error()),
-                    topic=msg.topic(),
-                    partition=msg.partition(),
-                )
-                continue
-
             try:
-                await writer.write_event(msg.value(), topic=msg.topic())
-                # Commit only after successful DB write — if write fails, message is redelivered
-                # AIOConsumer.commit is a coroutine; equivalent to asynchronous=False (awaited)
-                await consumer.commit(message=msg)
-            except Exception:
-                log.exception(
-                    "write_failed_no_commit",
-                    offset=msg.offset(),
-                    topic=msg.topic(),
-                    partition=msg.partition(),
+                response = await sqs_client.receive_message(
+                    QueueUrl=queue_url,
+                    MaxNumberOfMessages=SQS_MAX_MESSAGES,
+                    WaitTimeSeconds=SQS_WAIT_TIME,
                 )
-                # Do NOT commit — message will be redelivered on restart
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception("sqs_receive_failed", queue_url=queue_url)
+                await asyncio.sleep(SQS_POLL_RETRY_INTERVAL)
+                continue
+
+            for msg in response.get("Messages", []):
+                try:
+                    body = json.loads(msg["Body"])
+                    envelope = body["detail"]
+                    detail_type = body["detail-type"]
+                except (json.JSONDecodeError, KeyError, TypeError):
+                    # Left undeleted on purpose: redelivery, then the DLQ
+                    # redrive policy retains it for inspection.
+                    log.warning("sqs_malformed_message", receipt_handle=msg.get("ReceiptHandle"))
+                    continue
+
+                try:
+                    await writer.write_event(json.dumps(envelope).encode(), topic=detail_type)
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    log.exception(
+                        "write_failed_no_delete",
+                        receipt_handle=msg["ReceiptHandle"],
+                        detail_type=detail_type,
+                    )
+                    # Do NOT delete — visibility timeout redelivers the message
+                    continue
+
+                # Delete only after successful DB write. A failed delete just
+                # redelivers, and the idempotent write absorbs the duplicate.
+                try:
+                    await sqs_client.delete_message(
+                        QueueUrl=queue_url,
+                        ReceiptHandle=msg["ReceiptHandle"],
+                    )
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    log.exception("sqs_delete_failed", receipt_handle=msg["ReceiptHandle"])
     finally:
-        await consumer.close()
+        if owns_client:
+            await sqs_client.__aexit__(None, None, None)
         log.info("consumer_closed")
