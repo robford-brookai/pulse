@@ -326,7 +326,7 @@ shape, Dockerfile, and EKS deployment unchanged. Each records its ordering verdi
       creation driven by 2.1's table. Test: re-running against an existing stack leaves it
       unchanged.
       `[model: sonnet | deps: 2.1, 6.2 | lane: repo_change | wave: 3]`
-- [ ] 6.6 [DNA-769] Remove `confluent_kafka` from every package manifest, lockfile **and Dockerfile**;
+- [x] 6.6 [DNA-769] Remove `confluent_kafka` from every package manifest, lockfile **and Dockerfile**;
       add the AWS client dependency. Test: no source file outside the shared publisher references a
       bus client.
       **Scope widened 2026-08-02 to Dockerfiles, which are the deployment-breaking half.** 5.6
