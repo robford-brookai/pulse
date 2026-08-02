@@ -312,21 +312,26 @@ def check_projections(workflow: dict, text: str) -> list[str]:
     return errors
 
 
-def check_linear_statuses(workflow: dict) -> list[str]:
-    """Verify the declared status set against the live team. Needs network and Linear auth.
+def check_linear_live(workflow: dict) -> list[str]:
+    """Verify the declared team, project and status set against the live workspace.
 
-    Never part of `task check`: CI has no credentials, and docs/contracts/consumes.md keeps
-    anything that needs them out of that target.
+    Needs network and Linear auth, so never part of `task check`: CI has no credentials, and
+    docs/contracts/consumes.md keeps anything that needs them out of that target.
+
+    The project check earns its place. v2.0.1 pinned a project that did not exist — the status
+    set had been verified against the live team and the project name beside it had not, and the
+    mismatch only surfaced when someone tried to file an issue against it.
     """
     linear = workflow.get("linear") or {}
     team = linear.get("team")
+    project = linear.get("project")
     declared = set(linear.get("statuses") or [])
     if not team:
-        return ["linear.team is not declared, so the live status set cannot be resolved"]
+        return ["linear.team is not declared, so the live workspace cannot be resolved"]
     if not declared:
         return ["linear.statuses is not declared, so there is nothing to verify against the live team"]
 
-    query = "query($t:String!){ team(id:$t){ states{ nodes{ name } } } }"
+    query = "query($t:String!){ team(id:$t){ states{ nodes{ name } } projects{ nodes{ name } } } }"
     try:
         result = subprocess.run(  # noqa: S603
             ["linear", "api", "--query", query, "--var", f"t={team}"],  # noqa: S607
@@ -336,22 +341,22 @@ def check_linear_statuses(workflow: dict) -> list[str]:
             timeout=30,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
-        return [f"could not reach Linear to verify statuses ({exc}). The offline lint still holds."]
+        return [f"could not reach Linear to verify the workspace ({exc}). The offline lint still holds."]
 
     if result.returncode != 0:
         return [f"Linear query failed: {result.stderr.strip() or result.stdout.strip()}"]
 
     try:
-        nodes = json.loads(result.stdout)["data"]["team"]["states"]["nodes"]
+        payload = json.loads(result.stdout)["data"]["team"]
+        live = {n["name"] for n in payload["states"]["nodes"]}
+        projects = {n["name"] for n in payload["projects"]["nodes"]}
     except (json.JSONDecodeError, KeyError, TypeError) as exc:
         return [f"could not parse the Linear response ({exc})"]
 
-    live = {n["name"] for n in nodes}
-    errors = []
-    for stale in sorted(declared - live):
-        errors.append(f"linear.statuses declares {stale!r}, which team {team} no longer has")
-    for added in sorted(live - declared):
-        errors.append(f"team {team} has status {added!r}, which linear.statuses does not declare")
+    errors = [f"linear.statuses declares {s!r}, which team {team} no longer has" for s in sorted(declared - live)]
+    errors += [f"team {team} has status {s!r}, which linear.statuses does not declare" for s in sorted(live - declared)]
+    if project and project not in projects:
+        errors.append(f"linear.project is {project!r}, which team {team} does not have")
     return errors
 
 
@@ -369,7 +374,7 @@ def lint(path: Path, with_linear: bool) -> int:
         errors += check_statuses(workflow)
         errors += check_projections(workflow, text)
         if with_linear:
-            errors += check_linear_statuses(workflow)
+            errors += check_linear_live(workflow)
 
     if errors:
         print(f"{path}: {len(errors)} problem(s)", file=sys.stderr)
