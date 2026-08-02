@@ -32,8 +32,8 @@ async def receive_github_webhook(request: Request) -> dict:
     """Receive a GitHub webhook event.
 
     Validates signature, normalizes PR and push events to Ocean signals,
-    and publishes to ocean.signals. Unsupported events return 200 with
-    status=skipped.
+    and publishes them to the ``signals`` domain on the event bus. Unsupported
+    events return 200 with status=skipped.
     """
     body = await request.body()
     received_sig = request.headers.get("x-hub-signature-256", "")
@@ -53,9 +53,9 @@ async def receive_github_webhook(request: Request) -> dict:
 
     publisher = request.app.state.publisher
     await publisher.publish(
-        topic="ocean.signals",
+        detail_type="signals",
+        event=event,
         key=event["entity_id"],
-        value=json.dumps(event).encode(),
     )
 
     return {"status": "accepted"}
