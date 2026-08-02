@@ -47,7 +47,7 @@ can be dispatched. `task dispatch` must not emit work orders for them.
       `git log --oneline -- packages/ocean | wc -l` is greater than 1 — history preserved, not squashed
       `git log --all --diff-filter=A --name-only | grep -c '/\.env$'` is 0
       The monorepo's own `AGENTS.md`, `CLAUDE.md` and `.gitignore` are unmodified by this commit.
-- [ ] 1.3 [DNA-735] Bring `packages/ocean` under the monorepo's **formatter and linter**, plus uv
+- [x] 1.3 [DNA-735] Bring `packages/ocean` under the monorepo's **formatter and linter**, plus uv
       workspace membership, in a commit separate from 1.2.
       `[model: sonnet | deps: 1.2 | lane: repo_change | wave: 0]`
       `serial: workspace_roots` — edits root tool configuration.
