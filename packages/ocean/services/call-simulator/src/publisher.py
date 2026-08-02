@@ -1,32 +1,39 @@
-"""Redpanda publisher for call-simulator events."""
+"""Publisher wiring for call-simulator.
+
+The service holds no transport code of its own. Addressing and the bus client live in
+:mod:`ocean_broker`; this module names the domain call-simulator emits to and builds the shared
+:class:`~ocean_broker.EventBridgePublisher`, giving it the Postgres session maker its
+``failed_webhooks`` fallback needs.
+"""
 
 from __future__ import annotations
 
-import asyncio
-import json
-import logging
+import os
 
-from confluent_kafka import Producer
+from ocean_broker import EventBridgePublisher
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-log = logging.getLogger(__name__)
+#: The one live OCEAN domain this service publishes to — the former ``ocean.interactions`` topic.
+DOMAIN = "interactions"
 
 
-class RedpandaPublisher:
-    """Async wrapper around confluent_kafka Producer.
+def build_dlq_session_maker(database_url: str | None = None) -> async_sessionmaker[AsyncSession] | None:
+    """Build the session maker backing the ``failed_webhooks`` fallback.
 
-    Runs blocking produce/flush calls in a thread executor to avoid
-    blocking the event loop.
+    Args:
+        database_url: Postgres URL. Defaults to ``DATABASE_URL``.
+
+    Returns:
+        A session maker, or ``None`` when no URL is configured — the publisher then logs a failed
+        publish rather than durably queueing it.
     """
+    database_url = database_url or os.environ.get("DATABASE_URL")
+    if not database_url:
+        return None
+    engine = create_async_engine(database_url, echo=False)
+    return async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
-    def __init__(self, bootstrap_servers: str) -> None:
-        self._producer = Producer({"bootstrap.servers": bootstrap_servers})
 
-    async def publish(self, topic: str, event: dict) -> None:
-        """Serialize event to JSON and produce it to the given topic."""
-        payload = json.dumps(event).encode("utf-8")
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, self._produce_sync, topic, payload)
-
-    def _produce_sync(self, topic: str, payload: bytes) -> None:
-        self._producer.produce(topic, value=payload)
-        self._producer.flush()
+def build_publisher(database_url: str | None = None) -> EventBridgePublisher:
+    """Build the shared EventBridge publisher with call-simulator's DLQ fallback attached."""
+    return EventBridgePublisher(db_session_maker=build_dlq_session_maker(database_url))
