@@ -31,7 +31,6 @@ dev = [
     "tox-uv>=1.33.4",
     "deptry>=0.25.1",
     "mypy>=1.19.1",
-
     "ruff>=0.15.7",
     # Used directly by the tests/scaffold gates. pyyaml is otherwise only a
     # transitive mkdocs dependency; tomllib is stdlib from 3.11 and CI tests 3.10.
@@ -40,6 +39,7 @@ dev = [
     "mkdocs>=1.6.1",
     "mkdocs-material>=9.7.6",
     "mkdocstrings[python]>=1.0.3",
+    "boto3-stubs[events]>=1.42.0",
 ]
 
 [build-system]

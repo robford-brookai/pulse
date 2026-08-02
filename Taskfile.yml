@@ -24,10 +24,11 @@ vars:
   TYPED_PATHS: src packages/ocean/libs/ocean-events/src packages/ocean/libs/ocean-broker/src packages/ocean/libs/ocean-connector-mcp/src
   TESTED_PATHS: tests packages/ocean/libs
   # Coverage covers ocean-events because it is the envelope every consumer depends on, and it is
-  # at 100%. ocean-broker is deliberately absent: task 2.2 replaces it with EventBridgePublisher,
-  # so tests written against it now are thrown away. ocean-connector-mcp is outside this
-  # migration. Both are at 0% today and tracked in DNA-779.
-  COV_PATHS: --cov=src/pkg_pulse --cov=packages/ocean/libs/ocean-events/src
+  # at 100%. ocean-broker joins it at task 2.2: the reason it was excluded — that 2.2 would throw
+  # its tests away — expired when 2.2 landed EventBridgePublisher and the event catalog, which are
+  # what the library now is. Its config.py is the Kafka half, low-covered and deleted by task 9.2.
+  # ocean-connector-mcp is outside this migration, still at 0%, tracked in DNA-779.
+  COV_PATHS: --cov=src/pkg_pulse --cov=packages/ocean/libs/ocean-events/src --cov=packages/ocean/libs/ocean-broker/src
   CHANGE: ""
   VISIBILITY: --private
 
