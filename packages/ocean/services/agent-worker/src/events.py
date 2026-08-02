@@ -10,9 +10,9 @@ import uuid
 from datetime import UTC, datetime
 
 import structlog
+from ocean_broker import EventBridgePublisher
 
 from src.personas import Persona
-from src.publisher import RedpandaPublisher
 
 log = structlog.get_logger()
 
@@ -40,13 +40,13 @@ def build_agent_event(
 
 
 async def publish_ai_recommendation(
-    publisher: RedpandaPublisher,
+    publisher: EventBridgePublisher,
     task_data: dict,
     action: str,
     confidence: float,
     persona: Persona,
 ) -> None:
-    """Publish ai.recommendation.generated to ocean.ai-ops."""
+    """Publish ai.recommendation.generated to the ai-ops domain."""
     try:
         event = build_agent_event(
             event_type="ai.recommendation.generated",
@@ -60,14 +60,14 @@ async def publish_ai_recommendation(
                 "persona_role": persona.role,
             },
         )
-        await publisher.publish("ocean.ai-ops", event)
+        await publisher.publish("ai-ops", event)
         log.info("ai_recommendation_published", entity_id=event["entity_id"])
     except Exception:
         log.exception("publish_ai_recommendation_failed")
 
 
 async def publish_ai_decision(
-    publisher: RedpandaPublisher,
+    publisher: EventBridgePublisher,
     task_data: dict,
     action: str,
     confidence: float,
@@ -75,7 +75,7 @@ async def publish_ai_decision(
     approved: bool,
     alert_context: dict | None = None,
 ) -> None:
-    """Publish ai.output.approved or ai.output.rejected to ocean.ai-ops.
+    """Publish ai.output.approved or ai.output.rejected to the ai-ops domain.
 
     For approved events, includes persona call config for call-simulator consumption.
     """
@@ -107,18 +107,18 @@ async def publish_ai_decision(
             correlation_id=task_data.get("correlation_id", ""),
             payload=payload,
         )
-        await publisher.publish("ocean.ai-ops", event)
+        await publisher.publish("ai-ops", event)
         log.info("ai_decision_published", event_type=event_type, entity_id=event["entity_id"])
     except Exception:
         log.exception("publish_ai_decision_failed")
 
 
 async def publish_task_completed(
-    publisher: RedpandaPublisher,
+    publisher: EventBridgePublisher,
     task_data: dict,
     persona: Persona,
 ) -> None:
-    """Publish task.completed to ocean.tasks."""
+    """Publish task.completed to the tasks domain."""
     try:
         event = build_agent_event(
             event_type="task.completed",
@@ -130,7 +130,7 @@ async def publish_task_completed(
                 "persona_role": persona.role,
             },
         )
-        await publisher.publish("ocean.tasks", event)
+        await publisher.publish("tasks", event)
         log.info("task_completed_published", entity_id=event["entity_id"])
     except Exception:
         log.exception("publish_task_completed_failed")

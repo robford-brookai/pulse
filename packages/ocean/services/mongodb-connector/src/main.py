@@ -17,11 +17,11 @@ import motor.motor_asyncio
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from ocean_broker import EventBridgePublisher
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.leader import LeaderElector
-from src.publisher import EventPublisher
 from src.resume_token import ResumeTokenStore
 from src.transformer import TRANSFORMER_REGISTRY
 from src.watcher_manager import WatcherManager
@@ -64,7 +64,9 @@ async def lifespan(app: FastAPI):
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     # ---- components ----
-    publisher = EventPublisher()
+    # The connector's own Postgres session factory doubles as the publisher's dead-letter
+    # sink: a publish the bus rejects lands in ``failed_webhooks`` instead of being dropped.
+    publisher = EventBridgePublisher(db_session_maker=session_factory)
     token_store = ResumeTokenStore()
     shutdown_event = asyncio.Event()
 
@@ -119,7 +121,6 @@ async def lifespan(app: FastAPI):
     if app.state.manager_started:
         await manager.stop()
     await leader.release()
-    publisher.close()
     mongo_client.close()
     await engine.dispose()
     logger.info("mongodb_connector_stopped")
