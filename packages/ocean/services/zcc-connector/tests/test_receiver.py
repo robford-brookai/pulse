@@ -79,20 +79,20 @@ async def test_url_validation_challenge(client, mock_publisher):
 
 @pytest.mark.asyncio
 async def test_known_event_normalized_and_published(client, mock_publisher):
-    """contact_center.engagement_ended publishes ocean event with event_type='call.completed'."""
+    """contact_center.engagement_ended publishes to the interactions domain as call.completed."""
     body = json.dumps(_make_zcc_event("contact_center.engagement_ended")).encode()
     resp = await _post_webhook(client, body)
     assert resp.status_code == 200
     assert resp.json()["status"] == "accepted"
 
     mock_publisher.publish.assert_called_once()
-    call_kwargs = mock_publisher.publish.call_args
-    topic = call_kwargs.kwargs.get("topic") or call_kwargs.args[0]
-    assert topic == "ocean.interactions"
+    call_kwargs = mock_publisher.publish.call_args.kwargs
+    assert call_kwargs["detail_type"] == "interactions"
 
-    value_bytes = call_kwargs.kwargs.get("value") or call_kwargs.args[2]
-    published = json.loads(value_bytes)
+    published = call_kwargs["event"]
     assert published["event_type"] == "call.completed"
+    # The key survives the transport change; it groups consumer-side sequence guards.
+    assert call_kwargs["key"] == published["entity_id"]
 
 
 @pytest.mark.asyncio

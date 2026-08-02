@@ -6,6 +6,11 @@ Proves:
   3. All 9 collections produce events via WatcherManager (multi-collection)
 
 Requires Docker (MongoDB 7, Redpanda, Postgres via testcontainers).
+
+Skipped since DNA-749: mongodb-connector publishes through the shared ``EventBridgePublisher``,
+so the Redpanda consumers below have nothing to read and ``src.publisher`` no longer exists. The
+body is kept as the shape the replacement must reproduce — it is rewritten against LocalStack in
+task 6.5 and folded into the equivalence harness in 8.1, not repaired here.
 """
 
 from __future__ import annotations
@@ -19,7 +24,10 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-pytestmark = [pytest.mark.integration]
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skip(reason="Kafka path retired for mongodb-connector by DNA-749; LocalStack equivalent lands in 6.5"),
+]
 
 # ---------------------------------------------------------------------------
 # DDL for cdc_resume_tokens (run directly — no Alembic in test context)

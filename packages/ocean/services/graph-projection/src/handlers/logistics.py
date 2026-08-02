@@ -18,6 +18,18 @@ def _parse_ts(ts_str: str) -> datetime:
     return datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
 
 
+def _event_time(event_data: dict) -> datetime:
+    """The envelope timestamp, fixed when the event was produced.
+
+    A sequence guard must compare event time. Every other timestamp on these rows
+    is assigned at processing time, which under unordered delivery encodes arrival
+    order instead of event order. The envelope always carries this field, so a
+    missing or unparseable value is a malformed event: raise and let the consumer
+    redeliver rather than silently guard on nothing.
+    """
+    return _parse_ts(event_data["timestamp"])
+
+
 async def handle_fulfillment_updated(event_data: dict, session) -> None:
     """Project fulfillment.updated -- upsert fulfillments row by order_id."""
     payload = event_data.get("payload", {})
@@ -107,23 +119,34 @@ async def handle_return_updated(event_data: dict, session) -> None:
 
 
 async def handle_device_associated(event_data: dict, session) -> None:
-    """Project device.associated -- upsert device_associations with status='active'."""
+    """Project device.associated -- upsert device_associations with status='active'.
+
+    Guarded on ``last_event_at``. The predicate this replaced compared event ids,
+    which suppresses a duplicate but lets an association that was already
+    superseded by a disassociation resurrect the device when it arrives late.
+    Comparing event time subsumes the dedup it replaced: a redelivered event has
+    the same timestamp, so it too fails the strict comparison.
+    """
     payload = event_data.get("payload", {})
     now = datetime.now(tz=UTC)
 
-    await session.execute(
+    result = await session.execute(
         sa.text(
             "INSERT INTO device_associations "
-            "  (patient_id, device_id, device_name, status, associated_at, last_event_id) "
+            "  (patient_id, device_id, device_name, status, associated_at, "
+            "   last_event_id, last_event_at) "
             "VALUES "
-            "  (:patient_id, :device_id, :device_name, 'active', :associated_at, :event_id) "
+            "  (:patient_id, :device_id, :device_name, 'active', :associated_at, "
+            "   :event_id, :event_at) "
             "ON CONFLICT (patient_id, device_id) DO UPDATE SET "
             "  device_name = EXCLUDED.device_name, "
             "  status = 'active', "
             "  associated_at = EXCLUDED.associated_at, "
             "  removed_at = NULL, "
-            "  last_event_id = EXCLUDED.last_event_id "
-            "WHERE device_associations.last_event_id IS DISTINCT FROM EXCLUDED.last_event_id"
+            "  last_event_id = EXCLUDED.last_event_id, "
+            "  last_event_at = EXCLUDED.last_event_at "
+            "WHERE device_associations.last_event_at IS NULL "
+            "   OR device_associations.last_event_at < EXCLUDED.last_event_at"
         ),
         {
             "patient_id": payload.get("patient_id", ""),
@@ -131,43 +154,73 @@ async def handle_device_associated(event_data: dict, session) -> None:
             "device_name": payload.get("device_name", ""),
             "associated_at": now,
             "event_id": event_data.get("event_id", ""),
+            "event_at": _event_time(event_data),
         },
     )
 
-    log.info(
-        "device_associated_projected",
-        patient_id=payload.get("patient_id"),
-        device_id=payload.get("device_id"),
-    )
+    if result.rowcount == 0:
+        log.info(
+            "device_association_stale",
+            patient_id=payload.get("patient_id"),
+            device_id=payload.get("device_id"),
+            reason="a later event already set this association's state",
+        )
+    else:
+        log.info(
+            "device_associated_projected",
+            patient_id=payload.get("patient_id"),
+            device_id=payload.get("device_id"),
+        )
 
 
 async def handle_device_disassociated(event_data: dict, session) -> None:
-    """Project device.disassociated -- set status='removed' and removed_at."""
+    """Project device.disassociated -- record status='removed' and removed_at.
+
+    An upsert rather than an UPDATE, and guarded on ``last_event_at`` rather than
+    on ``status = 'active'``. Both changes exist for the same reason: when this
+    event is delivered before the association it removes, the old UPDATE matched
+    nothing and the older association then arrived and created an active row, so
+    the entity converged on the wrong terminal state. Writing the removed row here
+    gives the stale association something to lose against.
+    """
     payload = event_data.get("payload", {})
     now = datetime.now(tz=UTC)
 
     result = await session.execute(
         sa.text(
-            "UPDATE device_associations SET "
+            "INSERT INTO device_associations "
+            "  (patient_id, device_id, device_name, status, associated_at, "
+            "   removed_at, last_event_id, last_event_at) "
+            "VALUES "
+            "  (:patient_id, :device_id, :device_name, 'removed', :now, "
+            "   :removed_at, :event_id, :event_at) "
+            "ON CONFLICT (patient_id, device_id) DO UPDATE SET "
             "  status = 'removed', "
-            "  removed_at = :removed_at, "
-            "  last_event_id = :event_id "
-            "WHERE patient_id = :patient_id AND device_id = :device_id AND status = 'active'"
+            "  removed_at = EXCLUDED.removed_at, "
+            "  last_event_id = EXCLUDED.last_event_id, "
+            "  last_event_at = EXCLUDED.last_event_at "
+            "WHERE device_associations.last_event_at IS NULL "
+            "   OR device_associations.last_event_at < EXCLUDED.last_event_at"
         ),
         {
             "patient_id": payload.get("patient_id", ""),
             "device_id": payload.get("device_id", ""),
+            "device_name": payload.get("device_name", ""),
+            # A tombstone written before its association has no observed
+            # association time; the column is NOT NULL, so it takes the clock.
+            "now": now,
             "removed_at": now,
             "event_id": event_data.get("event_id", ""),
+            "event_at": _event_time(event_data),
         },
     )
 
     if result.rowcount == 0:
-        log.warning(
-            "device_disassociation_noop",
+        log.info(
+            "device_disassociation_stale",
             patient_id=payload.get("patient_id"),
             device_id=payload.get("device_id"),
-            reason="no active association found",
+            reason="a later event already set this association's state",
         )
     else:
         log.info(
