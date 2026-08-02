@@ -244,8 +244,13 @@ shape, Dockerfile, and EKS deployment unchanged. Each records its ordering verdi
       `[model: sonnet | deps: 2.1, 6.2 | lane: repo_change | wave: 3]`
 - [ ] 6.6 [DNA-769] Remove `confluent_kafka` from every package manifest and lockfile; add the AWS client
       dependency. Test: no source file outside the shared publisher references a bus client.
-      `[model: sonnet | deps: 4.13, 5.7 | lane: repo_change | wave: 3]`
+      `[model: sonnet | deps: 4.13, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7 | lane: repo_change | wave: 3]`
       `serial: workspace_roots` — touches the workspace lockfile.
+      **Dependency corrected 2026-08-02.** It read `4.13, 5.7`, which the graph considered
+      satisfied while `control-plane`, `graph-projection` and `slack-bot` still imported
+      `confluent_kafka` in their consumers — 5.4, 5.5 and 5.6. Its own stated test could not have
+      passed, and because it is serial it was holding the whole remaining wave behind a task that
+      was not yet runnable. It now depends on all of wave 2c.
 
 ## 7. Wave 4 — warehouse path
 
