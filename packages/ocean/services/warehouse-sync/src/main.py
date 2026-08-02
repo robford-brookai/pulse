@@ -9,7 +9,7 @@ import time
 import snowflake.connector
 import structlog
 import uvicorn
-from confluent_kafka import KafkaError, Producer
+from confluent_kafka import KafkaError
 from confluent_kafka.aio import AIOConsumer as Consumer
 from cryptography.hazmat.primitives import serialization
 from fastapi import FastAPI
@@ -46,29 +46,19 @@ def _connect_snowflake() -> snowflake.connector.SnowflakeConnection:
     )
 
 
-def _make_producer(brokers: str) -> Producer:
-    return Producer({"bootstrap.servers": brokers})
-
-
-def _publish_to_dlq(producer: Producer, messages: list[tuple[bytes, str]]) -> None:
-    for value, topic in messages:
-        producer.produce(
-            "ocean.warehouse-dlq",
-            value=value,
-            headers=[("original_topic", topic.encode())],
-        )
-    producer.flush()
-
-
 async def _flush_batch(
     sf_conn: snowflake.connector.SnowflakeConnection,
-    producer: Producer,
     batch: list[tuple[bytes, str]],
 ) -> None:
+    """Insert a batch into the raw events table.
+
+    Raises on failure. There is no local dead-letter path: the caller must leave
+    the offsets uncommitted so the batch is redelivered.
+    """
     if not batch:
         return
+    cur = sf_conn.cursor()
     try:
-        cur = sf_conn.cursor()
         placeholders = ", ".join(["(%s, %s)"] * len(batch))
         sql = (
             f"INSERT INTO STREAMLINE.OCEAN_RAW.EVENTS (data, _topic) "
@@ -78,16 +68,13 @@ async def _flush_batch(
         for v, t in batch:
             params.extend([v.decode(), t])
         cur.execute(sql, params)
+    finally:
         cur.close()
-        log.info("batch_inserted", count=len(batch))
-    except Exception:
-        log.exception("batch_insert_failed", count=len(batch))
-        _publish_to_dlq(producer, batch)
+    log.info("batch_inserted", count=len(batch))
 
 
 async def _consume_loop(brokers: str) -> None:
     sf_conn = _connect_snowflake()
-    producer = _make_producer(brokers)
 
     conf = {
         "bootstrap.servers": brokers,
@@ -112,29 +99,45 @@ async def _consume_loop(brokers: str) -> None:
                     if msg.error().code() != KafkaError._PARTITION_EOF:
                         log.error("consumer_error", error=str(msg.error()))
                     # Continue regardless (EOF is normal, other errors are logged)
+                # The Redpanda Connect sink still writes this topic until task 7.1
+                # removes it; skip it so its dead letters are not re-ingested.
                 elif msg.topic() != "ocean.warehouse-dlq":
                     batch.append((msg.value(), msg.topic()))
 
             elapsed = time.monotonic() - last_flush
             if len(batch) >= BATCH_SIZE or (batch and elapsed >= BATCH_TIMEOUT_S):
-                await _flush_batch(sf_conn, producer, batch)
+                try:
+                    await _flush_batch(sf_conn, batch)
+                except Exception:
+                    # Nothing to fall back to. Stop without committing: the batch is
+                    # redelivered, and repeated failure reaches the consumer queue's
+                    # redrive threshold and its DLQ (task 7.2).
+                    log.exception("batch_insert_failed", count=len(batch))
+                    raise
                 await consumer.commit()
                 batch.clear()
                 last_flush = time.monotonic()
     finally:
-        if batch:
-            await _flush_batch(sf_conn, producer, batch)
-            await consumer.commit()
         await consumer.close()
         sf_conn.close()
         log.info("consumer_closed")
+
+
+def _log_consumer_exit(task: asyncio.Task) -> None:
+    """Surface a consumer that died. Without this the exception is swallowed."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        log.error("consumer_exited", error=str(exc), exc_info=exc)
 
 
 @app.on_event("startup")
 async def startup() -> None:
     brokers = os.environ.get("REDPANDA_BROKERS", "redpanda:29092")
     log.info("starting_consumer", brokers=brokers)
-    asyncio.create_task(_consume_loop(brokers))
+    task = asyncio.create_task(_consume_loop(brokers))
+    task.add_done_callback(_log_consumer_exit)
 
 
 if __name__ == "__main__":
