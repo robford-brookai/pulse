@@ -131,7 +131,7 @@ class TestClaimCompetition:
         )
         publisher.publish.assert_called_once()
         call_args = publisher.publish.call_args
-        assert call_args[0][0] == "ocean.tasks"
+        assert call_args[0][0] == "tasks"
         published_event = call_args[0][1]
         assert published_event["event_type"] == "task.claimed"
         assert published_event["source_system"] == "agent-worker"

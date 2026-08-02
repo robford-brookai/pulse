@@ -12,11 +12,16 @@ RUN uv pip install --system --no-cache \
     "pydantic>=2.0" \
     "pyyaml>=6.0" \
     "structlog==25.5.0" \
-    "anthropic>=0.49.0"
+    "anthropic>=0.49.0" \
+    "asyncpg>=0.31.0"
 
 # Install ocean-events shared library
 COPY libs/ocean-events /app/ocean-events
 RUN uv pip install --system /app/ocean-events
+
+# Install ocean-broker: the shared EventBridge publisher and event catalog
+COPY libs/ocean-broker /app/ocean-broker
+RUN uv pip install --system /app/ocean-broker
 
 # Copy source code
 COPY services/agent-worker/src ./src
