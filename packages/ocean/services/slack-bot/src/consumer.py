@@ -36,6 +36,17 @@ from src.cards import (
 
 log = structlog.get_logger()
 
+
+class ParentMessageNotReady(Exception):
+    """The parent Slack message for this entity has not been stored yet.
+
+    Raised instead of dropping the event: under unordered delivery an update
+    can overtake the create that posts the card. Leaving the message
+    unacknowledged lets redelivery retry it once the parent exists, which is
+    what makes the terminal card match in-order delivery.
+    """
+
+
 TOPICS = ["ocean.tasks", "ocean.ai-ops", "ocean.interactions", "ocean.ops", "ocean.tickets"]
 
 CONSUMER_CONFIG: dict = {
@@ -118,7 +129,7 @@ async def handle_task_created(
     # Store parent message for thread tracking (Phase 15)
     message_ts = response.get("ts", "") if isinstance(response, dict) else getattr(response, "ts", "")
     if thread_manager and message_ts:
-        await thread_manager.store_parent_message(task_id, channel, message_ts)
+        await thread_manager.store_parent_message(task_id, channel, message_ts, event_ts=event_data.get("timestamp"))
 
     log.info(
         "alert_card_posted",
@@ -212,7 +223,7 @@ async def handle_task_claimed(
     actor = payload.get("persona_id") or event_data.get("actor_id", "unknown")
     if thread_manager:
         await thread_manager.queue_update(task_id, {"type": "claimed", "actor": actor})
-        await thread_manager.update_parent_status(task_id, "CLAIMED")
+        await thread_manager.update_parent_status(task_id, "CLAIMED", event_ts=event_data.get("timestamp"))
     log.info("task_claimed_handled", task_id=task_id, actor=actor)
 
 
@@ -229,7 +240,7 @@ async def handle_task_completed(
     task_id = await _extract_task_id(event_data)
     if thread_manager:
         await thread_manager.queue_update(task_id, {"type": "task_completed"})
-        await thread_manager.update_parent_status(task_id, "RESOLVED")
+        await thread_manager.update_parent_status(task_id, "RESOLVED", event_ts=event_data.get("timestamp"))
     log.info("task_completed_handled", task_id=task_id)
 
 
@@ -425,7 +436,7 @@ async def handle_ticket_created(
 
     message_ts = response.get("ts", "") if isinstance(response, dict) else getattr(response, "ts", "")
     if thread_manager and message_ts:
-        await thread_manager.store_ticket_parent(ticket_id, channel, message_ts)
+        await thread_manager.store_ticket_parent(ticket_id, channel, message_ts, event_ts=event_data.get("timestamp"))
 
     # Cross-post to priority channels
     for xpost_channel in crosspost_channels:
@@ -470,26 +481,33 @@ async def handle_ticket_updated(
     message_ts = await thread_manager.get_ticket_message_ts(ticket_id)
 
     if not channel or not message_ts:
-        log.warning("ticket_parent_not_found", ticket_id=ticket_id)
-        return
+        raise ParentMessageNotReady(f"ticket {ticket_id} has no stored parent message")
 
-    # Build updated card (minimal — we don't have all original fields)
-    blocks = ticket_card(
-        ticket_id=ticket_id,
-        human_id=ticket_id,  # fallback — human_id not in update event
-        category="",
-        priority=priority or "medium",
-        status=new_status,
-        description="",
-        ai_summary="",
-    )
+    if await thread_manager.advance_ticket_sequence(ticket_id, event_data.get("timestamp")):
+        # Build updated card (minimal — we don't have all original fields)
+        blocks = ticket_card(
+            ticket_id=ticket_id,
+            human_id=ticket_id,  # fallback — human_id not in update event
+            category="",
+            priority=priority or "medium",
+            status=new_status,
+            description="",
+            ai_summary="",
+        )
 
-    await slack_client.chat_update(
-        channel=channel,
-        ts=message_ts,
-        blocks=blocks,
-        text=f"Ticket {ticket_id} updated to {new_status}",
-    )
+        await slack_client.chat_update(
+            channel=channel,
+            ts=message_ts,
+            blocks=blocks,
+            text=f"Ticket {ticket_id} updated to {new_status}",
+        )
+    else:
+        log.info(
+            "stale_ticket_update_dropped",
+            ticket_id=ticket_id,
+            status=new_status,
+            event_ts=event_data.get("timestamp"),
+        )
 
     await thread_manager.queue_ticket_update(
         ticket_id,
@@ -521,22 +539,24 @@ async def handle_ticket_resolved(
     message_ts = await thread_manager.get_ticket_message_ts(ticket_id)
 
     if not channel or not message_ts:
-        log.warning("ticket_parent_not_found_for_resolve", ticket_id=ticket_id)
-        return
+        raise ParentMessageNotReady(f"ticket {ticket_id} has no stored parent message")
 
-    resolved_blocks = ticket_resolved_card(
-        ticket_id=ticket_id,
-        human_id=ticket_id,
-        actor_id=payload.get("resolved_by", "system"),
-        duration_str=payload.get("duration", "unknown"),
-    )
+    if await thread_manager.advance_ticket_sequence(ticket_id, event_data.get("timestamp")):
+        resolved_blocks = ticket_resolved_card(
+            ticket_id=ticket_id,
+            human_id=ticket_id,
+            actor_id=payload.get("resolved_by", "system"),
+            duration_str=payload.get("duration", "unknown"),
+        )
 
-    await slack_client.chat_update(
-        channel=channel,
-        ts=message_ts,
-        blocks=resolved_blocks,
-        text=f"Ticket {ticket_id} resolved",
-    )
+        await slack_client.chat_update(
+            channel=channel,
+            ts=message_ts,
+            blocks=resolved_blocks,
+            text=f"Ticket {ticket_id} resolved",
+        )
+    else:
+        log.info("stale_ticket_resolve_dropped", ticket_id=ticket_id, event_ts=event_data.get("timestamp"))
 
     # Post resolution summary as thread reply
     if thread_ts:
@@ -587,7 +607,7 @@ async def handle_rma_created(
 
     # Update parent card with [RMA] badge
     message_ts = await thread_manager.get_ticket_message_ts(ticket_id)
-    if channel and message_ts:
+    if channel and message_ts and await thread_manager.advance_ticket_sequence(ticket_id, event_data.get("timestamp")):
         blocks = ticket_card(
             ticket_id=ticket_id,
             human_id=ticket_id,
@@ -695,7 +715,7 @@ async def handle_rma_status(
 
     # Update parent card RMA status field
     message_ts = await thread_manager.get_ticket_message_ts(ticket_id)
-    if channel and message_ts:
+    if channel and message_ts and await thread_manager.advance_ticket_sequence(ticket_id, event_data.get("timestamp")):
         blocks = ticket_card(
             ticket_id=ticket_id,
             human_id=ticket_id,
@@ -762,7 +782,9 @@ async def handle_delivery_notify(
 
     message_ts = response.get("ts", "") if isinstance(response, dict) else getattr(response, "ts", "")
     if thread_manager and message_ts:
-        await thread_manager.store_parent_message(f"delivery:{order_id}", channel, message_ts)
+        await thread_manager.store_parent_message(
+            f"delivery:{order_id}", channel, message_ts, event_ts=event_data.get("timestamp")
+        )
 
     log.info(
         "delivery_card_posted",
@@ -807,7 +829,7 @@ async def handle_task_escalated(
     thread_ts = await thread_manager.get_thread_ts(task_id)
 
     # Update card in place with [ESCALATED] badge and new priority
-    if channel and message_ts:
+    if channel and message_ts and await thread_manager.advance_task_sequence(task_id, event_data.get("timestamp")):
         blocks = alert_card(
             task_id=task_id,
             patient_hash="",
@@ -888,7 +910,7 @@ async def handle_ticket_escalated(
     thread_ts = await thread_manager.get_ticket_thread_ts(ticket_id)
 
     # Update ticket card in place with [ESCALATED] badge
-    if channel and message_ts:
+    if channel and message_ts and await thread_manager.advance_ticket_sequence(ticket_id, event_data.get("timestamp")):
         blocks = ticket_card(
             ticket_id=ticket_id,
             human_id="",
