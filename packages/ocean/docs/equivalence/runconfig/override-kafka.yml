@@ -1,0 +1,26 @@
+# Compose override for the 8.2 equivalence run, Kafka/Redpanda side.
+# Applied to a scratch clone of the repo at 8ef0d4b (the last all-Kafka
+# commit, before task 6.5 swapped infra/docker-compose.yml to LocalStack).
+# Used as: docker compose -p ocean-kafka -f infra/docker-compose.yml -f docs/equivalence/runconfig/override-kafka.yml ...
+#
+# The pinned AGENTS-pinned.md is additionally copied to packages/ocean/AGENTS.md
+# in the scratch clone before building: at 8ef0d4b that file does not exist
+# (it was lost in the OCEAN absorption and reconstructed by task 4.14), so the
+# agent-worker image cannot build from the old tree without it.
+services:
+  agent-worker:
+    volumes:
+      - ${PINNED_AGENTS_MD:?absolute path to AGENTS-pinned.md}:/app/AGENTS.md:ro
+    environment:
+      ANTHROPIC_API_KEY: ""
+  control-plane:
+    environment:
+      ESCALATION_ENABLED: "false"
+  slack-bot:
+    environment:
+      SLACK_BOT_TOKEN: ""
+      ANTHROPIC_API_KEY: ""
+  sim-driver:
+    environment:
+      SLACK_BOT_TOKEN: ""
+      ANTHROPIC_API_KEY: ""

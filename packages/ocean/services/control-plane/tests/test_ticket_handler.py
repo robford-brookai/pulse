@@ -83,6 +83,22 @@ def _mock_sequence_result(seq_val: int = 1):
     return result
 
 
+def _mock_status_row(status: str | None, last_event_at=None):
+    """Mock result for the `SELECT status, last_event_at FROM tickets` read.
+
+    ``status=None`` models the absent row (the ticket event has not been processed yet).
+    """
+    result = MagicMock()
+    if status is None:
+        result.fetchone.return_value = None
+    else:
+        row = MagicMock()
+        row.status = status
+        row.last_event_at = last_event_at
+        result.fetchone.return_value = row
+    return result
+
+
 # ---------------------------------------------------------------------------
 # handle_ticket_created tests
 # ---------------------------------------------------------------------------
@@ -200,9 +216,7 @@ class TestHandleTicketUpdated:
 
         session = AsyncMock()
         # Mock the SELECT to return current status
-        status_result = MagicMock()
-        status_result.scalar_one_or_none.return_value = "open"
-        session.execute = AsyncMock(return_value=status_result)
+        session.execute = AsyncMock(return_value=_mock_status_row("open"))
         producer = AsyncMock()
         event = _make_ticket_updated_event(new_status="in_progress")
 
@@ -213,18 +227,45 @@ class TestHandleTicketUpdated:
         assert pub_event["event_type"] == "ticket.updated"
 
     @pytest.mark.asyncio
-    async def test_illegal_transition_skips(self):
-        """Illegal transition (resolved->open) does not publish."""
+    async def test_stale_illegal_transition_is_dropped(self):
+        """An illegal transition older than last_event_at is stale: acknowledged, not retried.
+
+        resolved@12:00 already wrote the row; open@11:00 arriving afterwards is rejected by
+        the legality check and its event time is older, so it is dropped silently — raising
+        would spin an already-superseded event into the DLQ.
+        """
+        from datetime import UTC, datetime
+
         from src.handlers.tickets import handle_ticket_updated
 
         session = AsyncMock()
-        status_result = MagicMock()
-        status_result.scalar_one_or_none.return_value = "resolved"
-        session.execute = AsyncMock(return_value=status_result)
+        session.execute = AsyncMock(
+            return_value=_mock_status_row("resolved", last_event_at=datetime(2026, 3, 11, 12, 0, 0, tzinfo=UTC))
+        )
         producer = AsyncMock()
-        event = _make_ticket_updated_event(new_status="open")
+        event = _make_ticket_updated_event(new_status="open")  # event time 11:00
 
         await handle_ticket_updated(event, session, producer=producer)
+
+        producer.publish.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_early_illegal_transition_raises_for_redelivery(self):
+        """A fresh event whose transition is not yet legal is an absent precondition (task 3.8).
+
+        resolved arriving while the ticket is still open means its in_progress has not been
+        processed yet. The handler raises so the consumer leaves the message; 6.3's redrive
+        policy bounds the retries into the per-consumer DLQ.
+        """
+        from src.handlers.tickets import PreconditionNotArrived, handle_ticket_updated
+
+        session = AsyncMock()
+        session.execute = AsyncMock(return_value=_mock_status_row("open", last_event_at=None))
+        producer = AsyncMock()
+        event = _make_ticket_updated_event(new_status="resolved")
+
+        with pytest.raises(PreconditionNotArrived):
+            await handle_ticket_updated(event, session, producer=producer)
 
         producer.publish.assert_not_called()
 
@@ -234,9 +275,7 @@ class TestHandleTicketUpdated:
         from src.handlers.tickets import handle_ticket_updated
 
         session = AsyncMock()
-        status_result = MagicMock()
-        status_result.scalar_one_or_none.return_value = "in_progress"
-        session.execute = AsyncMock(return_value=status_result)
+        session.execute = AsyncMock(return_value=_mock_status_row("in_progress"))
         producer = AsyncMock()
         event = _make_ticket_updated_event(new_status="resolved")
 
@@ -260,9 +299,7 @@ class TestHandleTicketUpdated:
         from src.handlers.tickets import handle_ticket_updated
 
         session = AsyncMock()
-        status_result = MagicMock()
-        status_result.scalar_one_or_none.return_value = "open"
-        session.execute = AsyncMock(return_value=status_result)
+        session.execute = AsyncMock(return_value=_mock_status_row("open"))
         producer = AsyncMock()
         event = _make_ticket_updated_event(new_status="in_progress", priority="critical")
 
@@ -274,19 +311,40 @@ class TestHandleTicketUpdated:
         assert "critical" in priority_params
 
     @pytest.mark.asyncio
-    async def test_ticket_not_found_skips(self):
-        """If ticket doesn't exist (status is None), handler skips."""
-        from src.handlers.tickets import handle_ticket_updated
+    async def test_ticket_not_found_raises_for_redelivery(self):
+        """An update for a ticket row that has not arrived is a lost effect if acknowledged.
+
+        Same precondition class as ticket.rma.requested (task 3.8): raise so the consumer
+        leaves the message for redelivery instead of silently dropping the update.
+        """
+        from src.handlers.tickets import PreconditionNotArrived, handle_ticket_updated
 
         session = AsyncMock()
-        status_result = MagicMock()
-        status_result.scalar_one_or_none.return_value = None
-        session.execute = AsyncMock(return_value=status_result)
+        session.execute = AsyncMock(return_value=_mock_status_row(None))
         producer = AsyncMock()
         event = _make_ticket_updated_event(new_status="in_progress")
 
+        with pytest.raises(PreconditionNotArrived):
+            await handle_ticket_updated(event, session, producer=producer)
+
+        producer.publish.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_bridge_links_on_update_run_before_staleness_return(self):
+        """Bridge links are additive and idempotent, so a stale event still applies them."""
+        from src.handlers.tickets import handle_ticket_updated
+
+        update_result = MagicMock()
+        update_result.rowcount = 0
+        link_result = MagicMock()
+        session = AsyncMock()
+        session.execute = AsyncMock(side_effect=[_mock_status_row("open"), update_result, link_result])
+        producer = AsyncMock()
+        event = _make_ticket_updated_event(new_status="in_progress", task_ids=["task-late"])
+
         await handle_ticket_updated(event, session, producer=producer)
 
+        assert session.execute.call_count == 3
         producer.publish.assert_not_called()
 
     @pytest.mark.asyncio
@@ -295,9 +353,7 @@ class TestHandleTicketUpdated:
         from src.handlers.tickets import handle_ticket_updated
 
         session = AsyncMock()
-        status_result = MagicMock()
-        status_result.scalar_one_or_none.return_value = "open"
-        session.execute = AsyncMock(return_value=status_result)
+        session.execute = AsyncMock(return_value=_mock_status_row("open"))
         producer = AsyncMock()
         event = _make_ticket_updated_event(new_status="in_progress", task_ids=["task-new"])
 
@@ -307,3 +363,108 @@ class TestHandleTicketUpdated:
         all_params = [c[0][1] for c in session.execute.call_args_list if len(c[0]) > 1]
         task_id_params = [p.get("task_id") for p in all_params if "task_id" in p]
         assert "task-new" in task_id_params
+
+
+# ---------------------------------------------------------------------------
+# handle_ticket_updated sequence guard (task 3.7)
+# ---------------------------------------------------------------------------
+
+
+class TestTicketUpdateSequenceGuard:
+    """Event-time sequence guard on the ticket status write, per event-delivery spec.
+
+    The guard compares envelope event time, never `updated_at` (processing time,
+    Caveat A). A stale write updates zero rows and skips every status-dependent
+    side effect: escalation removal and all publishes.
+    """
+
+    def _session(self, current_status="open", update_rowcount=1, extra_results=0):
+        update_result = MagicMock()
+        update_result.rowcount = update_rowcount
+        results = [_mock_status_row(current_status), update_result] + [MagicMock() for _ in range(extra_results)]
+        session = AsyncMock()
+        session.execute = AsyncMock(side_effect=results)
+        return session
+
+    def _update_call(self, session):
+        for call in session.execute.call_args_list:
+            sql = " ".join(str(call[0][0]).split())
+            if sql.startswith("UPDATE tickets SET"):
+                return sql, call[0][1]
+        raise AssertionError("no UPDATE tickets statement was executed")
+
+    @pytest.mark.asyncio
+    async def test_status_write_is_guarded_on_event_time(self):
+        """The UPDATE writes last_event_at from the envelope and guards on it."""
+        from datetime import UTC, datetime
+
+        from src.handlers.tickets import handle_ticket_updated
+
+        session = self._session(extra_results=1)
+        event = _make_ticket_updated_event(new_status="in_progress")
+
+        await handle_ticket_updated(event, session, producer=AsyncMock())
+
+        sql, params = self._update_call(session)
+        assert "last_event_at = :event_at" in sql
+        assert "last_event_at IS NULL OR last_event_at < :event_at" in sql
+        assert "updated_at <" not in sql, "processing time must not be the guard column"
+        assert params["event_at"] == datetime(2026, 3, 11, 11, 0, 0, tzinfo=UTC)
+
+    @pytest.mark.asyncio
+    async def test_stale_update_skips_escalation_and_publish(self):
+        """rowcount 0 means a newer event already wrote the row: no side effects."""
+        from src.handlers.tickets import handle_ticket_updated
+
+        session = self._session(current_status="in_progress", update_rowcount=0)
+        producer = AsyncMock()
+        event = _make_ticket_updated_event(new_status="resolved")
+
+        await handle_ticket_updated(event, session, producer=producer)
+
+        # SELECT status + guarded UPDATE only — no escalation DELETE, no publish
+        assert session.execute.call_count == 2
+        producer.publish.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_fresh_update_publishes(self):
+        """rowcount 1 keeps today's behaviour: escalation removal and publishes run."""
+        from src.handlers.tickets import handle_ticket_updated
+
+        session = self._session(current_status="in_progress", update_rowcount=1, extra_results=1)
+        producer = AsyncMock()
+        event = _make_ticket_updated_event(new_status="resolved")
+
+        await handle_ticket_updated(event, session, producer=producer)
+
+        assert producer.publish.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_missing_timestamp_raises_before_any_write(self):
+        """An event with no event time cannot be ordered; fail for redelivery, never guess."""
+        from src.handlers.tickets import handle_ticket_updated
+
+        session = AsyncMock()
+        event = _make_ticket_updated_event(new_status="in_progress")
+        del event["timestamp"]
+
+        with pytest.raises(ValueError):
+            await handle_ticket_updated(event, session, producer=AsyncMock())
+
+        session.execute.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_outcome_relay_carries_source_event_time(self):
+        """The outcome.recorded envelope and resolved_at carry the source event's
+        timestamp, matching the other four relays — 3.1's guard compares this field."""
+        from src.handlers.tickets import handle_ticket_updated
+
+        session = self._session(current_status="in_progress", update_rowcount=1, extra_results=1)
+        producer = AsyncMock()
+        event = _make_ticket_updated_event(new_status="resolved")
+
+        await handle_ticket_updated(event, session, producer=producer)
+
+        outcome = next(c[0][1] for c in producer.publish.call_args_list if c[0][1]["event_type"] == "outcome.recorded")
+        assert outcome["timestamp"] == event["timestamp"]
+        assert outcome["payload"]["resolved_at"] == event["timestamp"]

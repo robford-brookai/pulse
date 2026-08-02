@@ -27,6 +27,7 @@ from ocean_broker.catalog import (
     consumer_rule_pattern,
     pattern_matches,
     render_tfvars_json,
+    tfvars_path,
 )
 
 #: The seven consumers, transcribed from design D2 rather than imported, so the
@@ -154,6 +155,34 @@ class TestRegistryMatchesTheConsumerSources:
             pytest.skip(f"{consumer} is converted; the catalog registry now owns its domain set")
 
         assert set(CONSUMER_DOMAINS[consumer]) == declared
+
+
+class TestEventStoreSubscribesToEveryLiveDomain:
+    """Task 5.8: the append-only store takes all eleven live domains.
+
+    The Kafka subscription it was transcribed from omitted `tickets` and
+    `patient-state` while its docstring claimed "all Ocean topics". Those two
+    are asserted by name so a future narrowing fails loudly here, not only by
+    set arithmetic.
+    """
+
+    def test_event_store_takes_every_live_domain(self):
+        assert CONSUMER_DOMAINS["event-store"] == LIVE_DOMAINS
+
+    @pytest.mark.parametrize("domain", ["tickets", "patient-state"])
+    def test_previously_missing_domains_by_name(self, domain):
+        assert domain in CONSUMER_DOMAINS["event-store"]
+        assert pattern_matches(consumer_rule_pattern("event-store"), EVENT_SOURCE, domain)
+
+    def test_committed_tfvars_pattern_covers_every_live_domain(self):
+        """Round-trip: the committed artifact, not just the in-memory table."""
+        committed = json.loads(tfvars_path().read_text())
+        pattern = json.loads(committed["consumer_rule_patterns"]["event-store"])
+
+        assert pattern == consumer_rule_pattern("event-store")
+        assert pattern["detail-type"] == sorted(LIVE_DOMAINS)
+        assert "tickets" in pattern["detail-type"]
+        assert "patient-state" in pattern["detail-type"]
 
 
 class TestGeneratedTerraformInput:

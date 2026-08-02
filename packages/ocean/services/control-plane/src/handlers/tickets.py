@@ -27,6 +27,20 @@ from src.rules import (
 
 log = structlog.get_logger()
 
+
+class PreconditionNotArrived(RuntimeError):
+    """An event arrived before the row it depends on was written (task 3.8).
+
+    Raising leaves the SQS message undeleted, so it is redelivered after the
+    visibility timeout instead of being acknowledged with its effect silently
+    lost. The retry is bounded and observable, not infinite: the queue's
+    redrive policy (task 6.3) moves the message to the per-consumer dead-letter
+    queue after ``maxReceiveCount`` receives, where a depth alarm fires on the
+    first message. A sequence guard cannot express this case — the guard drops
+    writes that are *stale*, while this event is *early*.
+    """
+
+
 CATEGORY_PREFIXES: dict[str, str] = {
     "device_issue": "DEV",
     "patient_activation": "ACT",
@@ -37,6 +51,31 @@ CATEGORY_PREFIXES: dict[str, str] = {
 
 def _parse_ts(ts_str: str) -> datetime:
     return datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+
+
+def _event_time(event_data: dict) -> datetime:
+    """Return the envelope's event time as a timezone-aware datetime.
+
+    Raises:
+        ValueError: the envelope carries no timestamp, or one that cannot be
+            parsed. An event with no event time cannot be ordered, and falling
+            back to the clock would silently reintroduce arrival-order
+            semantics — so the handler fails and the message is redelivered or
+            dead-lettered rather than corrupting state.
+    """
+    raw = event_data.get("timestamp")
+    if isinstance(raw, datetime):
+        parsed = raw
+    elif isinstance(raw, str) and raw:
+        try:
+            parsed = _parse_ts(raw)
+        except ValueError as exc:
+            raise ValueError(f"event envelope carries an unparseable timestamp: {raw!r}") from exc
+    else:
+        raise ValueError("event envelope carries no timestamp; the write cannot be ordered")
+
+    # The envelope declares UTC ISO 8601; a naive value is UTC that lost its suffix.
+    return parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed
 
 
 async def handle_ticket_created(event_data: dict, session, producer=None) -> None:
@@ -153,6 +192,27 @@ async def handle_ticket_updated(event_data: dict, session, producer=None) -> Non
 
     Validates transition legality, updates DB, publishes ticket.updated.
     On resolution, also publishes ticket.resolved.
+
+    The status write carries an event-time sequence guard on
+    `tickets.last_event_at` (envelope timestamp, migration 0020): delivery is
+    unordered, so a later-arriving older event must not overwrite state a newer
+    one already wrote. `is_valid_transition` stays as request validation — it
+    rejects illegal transitions, not stale ones. `updated_at` is processing
+    time and deliberately not the guard column. When the guarded write matches
+    zero rows the event is stale: bridge links still apply (additive and
+    idempotent, so convergence needs them), but escalation removal and every
+    publish are skipped — a dropped write must not re-announce the old status.
+
+    A missing ticket row, or a legality rejection of an event *newer* than
+    `last_event_at`, is a precondition that has not arrived (task 3.8): the
+    handler raises PreconditionNotArrived so the message is redelivered rather
+    than acknowledged with the update lost. A legality rejection of an *older*
+    event is stale and dropped, as the guard would have dropped it.
+
+    Raises:
+        PreconditionNotArrived: the ticket row is absent, or the transition is
+            not yet legal and the event is not stale.
+        ValueError: the envelope carries no usable event time.
     """
     payload = event_data.get("payload", {})
     ticket_id = event_data.get("entity_id", "")
@@ -161,35 +221,61 @@ async def handle_ticket_updated(event_data: dict, session, producer=None) -> Non
     waiting_reason = payload.get("waiting_reason")
     task_ids = payload.get("task_ids", [])
     alert_ids = payload.get("alert_ids", [])
+    event_at = _event_time(event_data)
     now = datetime.now(tz=UTC)
 
-    # Fetch current status
+    # Fetch current status and the guard column in one read: the legality check below
+    # needs last_event_at to tell a stale event from an early one.
     result = await session.execute(
-        sa.text("SELECT status FROM tickets WHERE ticket_id = :ticket_id"),
+        sa.text("SELECT status, last_event_at FROM tickets WHERE ticket_id = :ticket_id"),
         {"ticket_id": ticket_id},
     )
-    current_status = result.scalar_one_or_none()
-    if current_status is None:
-        log.warning("ticket_not_found", ticket_id=ticket_id)
-        return
+    row = result.fetchone()
+    if row is None:
+        log.warning("ticket_not_found_awaiting_redelivery", ticket_id=ticket_id)
+        raise PreconditionNotArrived(f"ticket.update.requested for {ticket_id}: ticket row has not arrived")
 
-    # Validate transition
+    current_status = row.status
+    last_event_at = row.last_event_at
+
+    # Validate transition. A rejection has two causes under unordered delivery, told
+    # apart by event time: an event at or before last_event_at is stale (already
+    # superseded — drop it, as the guarded write would), while a fresh one is early —
+    # its precondition state has not arrived, so leave it for redelivery.
     if not is_valid_transition(current_status, new_status):
+        if last_event_at is not None and event_at <= last_event_at:
+            log.info(
+                "stale_ticket_update_dropped",
+                ticket_id=ticket_id,
+                current=current_status,
+                target=new_status,
+                event_at=event_at.isoformat(),
+            )
+            return
         log.warning(
-            "invalid_ticket_transition",
+            "ticket_transition_awaiting_redelivery",
             ticket_id=ticket_id,
             current=current_status,
             target=new_status,
         )
-        return
+        raise PreconditionNotArrived(
+            f"ticket.update.requested for {ticket_id}: {current_status} -> {new_status} "
+            "is not yet legal; the intermediate event has not arrived"
+        )
 
     # Build UPDATE
-    set_clauses = ["status = :new_status", "updated_at = :updated_at", "last_event_id = :event_id"]
+    set_clauses = [
+        "status = :new_status",
+        "updated_at = :updated_at",
+        "last_event_id = :event_id",
+        "last_event_at = :event_at",
+    ]
     params: dict = {
         "ticket_id": ticket_id,
         "new_status": new_status,
         "updated_at": now,
         "event_id": event_data.get("event_id", ""),
+        "event_at": event_at,
     }
 
     if new_priority is not None:
@@ -202,10 +288,15 @@ async def handle_ticket_updated(event_data: dict, session, producer=None) -> Non
     elif new_status != "waiting":
         set_clauses.append("waiting_reason = NULL")
 
-    await session.execute(
-        sa.text(f"UPDATE tickets SET {', '.join(set_clauses)} WHERE ticket_id = :ticket_id"),
+    update_result = await session.execute(
+        sa.text(
+            f"UPDATE tickets SET {', '.join(set_clauses)} "
+            "WHERE ticket_id = :ticket_id "
+            "  AND (last_event_at IS NULL OR last_event_at < :event_at)"
+        ),
         params,
     )
+    stale = update_result.rowcount == 0
 
     # Link new tasks/alerts
     for tid in task_ids:
@@ -227,6 +318,15 @@ async def handle_ticket_updated(event_data: dict, session, producer=None) -> Non
             ),
             {"ticket_id": ticket_id, "alert_id": aid, "linked_at": now},
         )
+
+    if stale:
+        log.info(
+            "stale_ticket_update_dropped",
+            ticket_id=ticket_id,
+            target=new_status,
+            event_at=event_at.isoformat(),
+        )
+        return
 
     # Remove escalation tracking on resolution or in_progress (claimed)
     if new_status in ("resolved", "in_progress"):
@@ -270,14 +370,17 @@ async def handle_ticket_updated(event_data: dict, session, producer=None) -> Non
             }
             await producer.publish("ocean.tickets", resolved_event)
 
-            # Dual-publish outcome.recorded to ocean.outcomes
+            # Dual-publish outcome.recorded to ocean.outcomes. The source event's
+            # timestamp passes through untouched, matching the other four outcome
+            # relays: 3.1's sequence guard in graph-projection compares this field,
+            # and processing time here would poison it (arrival order, Caveat A).
             outcome_event = build_outcome_event(
                 entity_type="ticket",
                 entity_id=ticket_id,
                 resolution_type="resolved",
                 resolved_by=payload.get("actor_id", "system"),
                 correlation_id=event_data.get("correlation_id", ""),
-                timestamp=now.isoformat(),
+                timestamp=event_data.get("timestamp"),
             )
             await producer.publish("ocean.outcomes", outcome_event)
 
@@ -296,6 +399,10 @@ async def handle_rma_requested(event_data: dict, session, producer=None) -> None
     device_associations for order_id and device_id. On success, inserts return
     row with ticket_id and publishes ticket.rma.created. On failure, publishes
     ticket.rma.failed.
+
+    Raises:
+        PreconditionNotArrived: the ticket row this request acts on has not
+            been written yet; the message is left for redelivery (task 3.8).
     """
     payload = event_data.get("payload", {})
     ticket_id = event_data.get("entity_id", "")
@@ -309,8 +416,11 @@ async def handle_rma_requested(event_data: dict, session, producer=None) -> None
     )
     row = result.fetchone()
     if row is None:
-        log.warning("rma_ticket_not_found", ticket_id=ticket_id)
-        return
+        # The ticket event has not been processed yet. Acknowledging here loses the
+        # RMA outright with no ticket.rma.failed for anything downstream to observe;
+        # raise so the message is redelivered (bounded by 6.3's redrive policy).
+        log.warning("rma_ticket_not_found_awaiting_redelivery", ticket_id=ticket_id)
+        raise PreconditionNotArrived(f"ticket.rma.requested for {ticket_id}: ticket row has not arrived")
 
     patient_id = row.patient_id
     category = row.category
@@ -453,6 +563,10 @@ async def handle_return_status_update(event_data: dict, session, producer=None) 
 
     Only processes milestone statuses (label_created, shipped, received, inspected,
     completed). Looks up ticket_id from returns table by return_id.
+
+    Raises:
+        PreconditionNotArrived: no returns row links this return to a ticket
+            yet; the message is left for redelivery (task 3.8).
     """
     payload = event_data.get("payload", {})
     return_id = payload.get("return_id", "") or event_data.get("entity_id", "")
@@ -471,8 +585,12 @@ async def handle_return_status_update(event_data: dict, session, producer=None) 
     ticket_id = result.scalar_one_or_none()
 
     if not ticket_id:
-        log.debug("return_no_ticket_link", return_id=return_id)
-        return
+        # The returns row is written by handle_rma_requested while this event arrives
+        # from a connector — a live race under unordered delivery. Acknowledging loses
+        # the milestone; raise so the message is redelivered (bounded by 6.3's redrive
+        # policy: a return that never gets a ticket link dead-letters observably).
+        log.warning("return_no_ticket_link_awaiting_redelivery", return_id=return_id)
+        raise PreconditionNotArrived(f"return.updated for {return_id}: returns row has not arrived")
 
     log.info("return_milestone", return_id=return_id, status=status, ticket_id=ticket_id)
 

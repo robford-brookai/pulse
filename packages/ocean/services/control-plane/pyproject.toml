@@ -7,7 +7,7 @@ dependencies = [
     "uvicorn==0.41.0",
     "sqlalchemy==2.0.48",
     "asyncpg==0.31.0",
-    "confluent-kafka==2.13.2",
+    "boto3>=1.34",
     "httpx>=0.28",
     "structlog==25.5.0",
     "ocean-events",

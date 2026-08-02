@@ -12,9 +12,11 @@ Three shapes appear here:
 - **`xfail(strict=True)` claims** — the property the spec requires, written in canonical form,
   currently unmet. Each names the follow-up task that makes it pass; when that task lands, strict
   xfail turns the test red until the marker is removed. That is the forcing function.
-- **Characterisation tests** — behaviour that is order-dependent but not fixable with a sequence
-  guard (an event dropped because its precondition row has not arrived yet). They pin what the
-  code does today so the follow-up task changes it deliberately.
+- **Precondition-raise tests** — an event whose precondition row has not arrived is not fixable
+  with a sequence guard. Task 3.8: the handler raises ``PreconditionNotArrived``, the consumer
+  leaves the message for redelivery, and 6.3's redrive policy bounds the retries (per-consumer
+  DLQ, depth alarm) — a park, not a silent infinite retry. These were characterisation tests
+  pinning the silent drop until 3.8 landed.
 
 No broker and no database: the handlers' only state input is what they read back from `session`,
 so a recording session double that models the two columns they actually read is a faithful stand-in
@@ -28,6 +30,7 @@ import re
 import sys
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -49,9 +52,10 @@ ORDER_DEPENDENT = "Order-dependent"
 class _Result:
     """Stands in for a SQLAlchemy Result over the handful of accessors the handlers use."""
 
-    def __init__(self, value: Any = None, row: Any = None) -> None:
+    def __init__(self, value: Any = None, row: Any = None, rowcount: int = 1) -> None:
         self._value = value
         self._row = row
+        self.rowcount = rowcount
 
     def scalar_one_or_none(self) -> Any:
         return self._value
@@ -80,10 +84,25 @@ class RecordingSession:
         self.statements.append((sql, params))
 
         if sql.startswith("UPDATE tickets SET") and "status = :new_status" in sql:
+            # Model the event-time sequence guard the way Postgres evaluates it:
+            # a write whose event time is not strictly newer updates zero rows.
+            guarded = "last_event_at IS NULL OR last_event_at < :event_at" in sql
+            last_event_at = self.rows.get("ticket_last_event_at")
+            if guarded and last_event_at is not None and params["event_at"] <= last_event_at:
+                return _Result(rowcount=0)
             self.rows["ticket_status"] = params["new_status"]
+            if guarded:
+                self.rows["ticket_last_event_at"] = params["event_at"]
             return _Result()
-        if sql.startswith("SELECT status FROM tickets"):
-            return _Result(value=self.rows.get("ticket_status"))
+        if sql.startswith("SELECT status, last_event_at FROM tickets"):
+            if self.rows.get("ticket_status") is None:
+                return _Result(row=None)
+            return _Result(
+                row=SimpleNamespace(
+                    status=self.rows["ticket_status"],
+                    last_event_at=self.rows.get("ticket_last_event_at"),
+                )
+            )
         if sql.startswith("SELECT patient_id, category FROM tickets"):
             return _Result(row=self.rows.get("ticket_row"))
         if sql.startswith("SELECT ticket_id FROM returns"):
@@ -330,7 +349,11 @@ class TestAlertCreatedIsOrderTolerant:
 
 
 class TestTicketCreationIsOrderTolerant:
-    """`ticket.create.requested` / `ticket.created` — each event writes its own row."""
+    """`ticket.create.requested` — each event writes its own row.
+
+    `ticket.created` no longer routes here: task 3.9 removed it from EVENT_HANDLERS because
+    control-plane was consuming its own publish, minting a fresh ticket per pass.
+    """
 
     async def test_no_prior_ticket_state_is_read(self):
         from src.handlers.tickets import handle_ticket_created
@@ -357,45 +380,61 @@ class TestTicketCreationIsOrderTolerant:
 # ---------------------------------------------------------------------------
 
 
-class TestTicketUpdatedIsOrderDependent:
-    """`ticket.update.requested` / `ticket.updated` — reads `status`, writes `status`, no guard."""
+class TestTicketUpdatedIsGuardedOnEventTime:
+    """`ticket.update.requested` — event-time sequence guard, task 3.7.
 
-    async def _drive(self, statuses: list[str]) -> tuple[RecordingSession, RecordingProducer]:
+    `ticket.updated` no longer routes here (task 3.9): only control-plane publishes it, so the
+    key consumed the handler's own output — a bounded echo, dropped on its second pass because
+    the published payload carries `status`, not `new_status`.
+
+    The status write carries a monotonic predicate on `tickets.last_event_at`, populated from
+    the envelope `timestamp` (migration 0020). `is_valid_transition` stays as request
+    validation; ordering protection comes from the guard. Each event below carries the
+    timestamp of its lifecycle position, so "reversed" means the same events delivered
+    backwards — not a different history.
+    """
+
+    async def _drive(self, events: list[tuple[str, str]]) -> tuple[RecordingSession, RecordingProducer]:
         from src.handlers.tickets import handle_ticket_updated
 
         session = RecordingSession(ticket_status="open")
         producer = RecordingProducer()
-        for index, status in enumerate(statuses):
-            event = _event(
-                "ticket.update.requested",
-                "ticket-3-6",
-                f"2026-03-11T1{index}:00:00Z",
-                new_status=status,
-            )
+        for status, timestamp in events:
+            event = _event("ticket.update.requested", "ticket-3-6", timestamp, new_status=status)
             await handle_ticket_updated(event, session, producer=producer)
         return session, producer
 
-    async def test_the_status_write_carries_no_sequence_guard(self):
-        session, _producer = await self._drive(["in_progress"])
-        (sql, _params) = session.sql_matching("UPDATE tickets SET")[0]
-        assert "WHERE ticket_id = :ticket_id" in sql
-        assert "updated_at <" not in sql, "no monotonic predicate on the status write"
+    async def test_the_status_write_carries_an_event_time_sequence_guard(self):
+        session, _producer = await self._drive([("in_progress", "2026-03-11T10:00:00Z")])
+        (sql, params) = session.sql_matching("UPDATE tickets SET")[0]
+        assert "last_event_at IS NULL OR last_event_at < :event_at" in sql
+        assert "updated_at <" not in sql, "processing time must never be the guard column (Caveat A)"
+        assert params["event_at"].isoformat() == "2026-03-11T10:00:00+00:00"
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="order-dependent: needs an event-time sequence guard on the ticket status write (HANDOFF task 3.7)",
-    )
     async def test_reversed_lifecycle_reaches_the_same_terminal_status(self):
-        """`event-delivery`: out-of-order delivery must reach the state in-order delivery reaches."""
-        in_order, _ = await self._drive(["in_progress", "resolved"])
-        reversed_order, _ = await self._drive(["resolved", "in_progress"])
+        """`event-delivery`: out-of-order delivery must reach the state in-order delivery reaches.
+
+        `waiting ↔ in_progress` are both legal, so before 3.7 the terminal status inside the
+        working states was whichever event was processed last. The guard drops the stale one.
+        """
+        lifecycle = [("waiting", "2026-03-11T10:00:00Z"), ("in_progress", "2026-03-11T11:00:00Z")]
+        in_order, _ = await self._drive(lifecycle)
+        reversed_order, _ = await self._drive(list(reversed(lifecycle)))
+        assert in_order.rows["ticket_status"] == "in_progress"
         assert reversed_order.rows["ticket_status"] == in_order.rows["ticket_status"]
+
+    async def test_a_stale_event_publishes_nothing(self):
+        """A dropped write must not re-announce the old status downstream (blast radius: slack-bot)."""
+        lifecycle = [("waiting", "2026-03-11T10:00:00Z"), ("in_progress", "2026-03-11T11:00:00Z")]
+        _, producer = await self._drive(list(reversed(lifecycle)))
+        announced = [event["payload"]["status"] for _topic, event in producer.published]
+        assert announced == ["in_progress"], "the stale `waiting` event must not be published"
 
     async def test_a_late_earlier_event_does_not_overwrite_a_resolved_ticket(self):
         """`resolved` is a sink in VALID_TRANSITIONS, so the terminal state alone is protected.
 
-        This is the one thing the state machine does buy, and it is worth recording: the guard
-        task 3.7 adds is about the working states, not about resurrecting a resolved ticket.
+        Before 3.7 this was the one thing the state machine bought; the guard now enforces the
+        same outcome one layer lower.
         """
         from src.handlers.tickets import handle_ticket_updated
 
@@ -410,21 +449,50 @@ class TestTicketUpdatedIsOrderDependent:
         )
         assert session.rows["ticket_status"] == "resolved"
 
-    async def test_the_transition_check_is_not_a_sequence_guard(self):
-        """It rejects illegal transitions, which is not the same as rejecting stale ones.
+    async def test_an_early_resolved_event_is_redelivered_until_its_precondition_arrives(self):
+        """A `resolved` that outruns its `in_progress` is not lost any more (task 3.8).
 
-        `waiting → in_progress` is legal in both directions, so the state machine offers no
-        protection at all against a reordered pair inside the working states.
+        From `open`, `resolved` is an illegal transition — but the event is *fresh*
+        (newer than `last_event_at`), so the missing state is a precondition that has
+        not arrived, not a stale write. The handler raises ``PreconditionNotArrived``,
+        the consumer leaves the message, and SQS redelivery converges once
+        `in_progress` lands. 6.3's redrive policy bounds the retries.
         """
-        forward, _ = await self._drive(["waiting", "in_progress"])
-        backward, _ = await self._drive(["in_progress", "waiting"])
-        assert forward.rows["ticket_status"] != backward.rows["ticket_status"]
+        from src.handlers.tickets import PreconditionNotArrived, handle_ticket_updated
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="the ticket outcome relay stamps processing time, poisoning the event-time guard in 3.1 "
-        "(HANDOFF task 3.7)",
-    )
+        session = RecordingSession(ticket_status="open")
+        in_progress = _event("ticket.update.requested", "ticket-3-6", "2026-03-11T10:00:00Z", new_status="in_progress")
+        resolved = _event("ticket.update.requested", "ticket-3-6", "2026-03-11T11:00:00Z", new_status="resolved")
+
+        with pytest.raises(PreconditionNotArrived):
+            await handle_ticket_updated(resolved, session)
+        assert session.rows["ticket_status"] == "open", "a raised event must leave the row untouched"
+
+        await handle_ticket_updated(in_progress, session)  # the precondition arrives
+        await handle_ticket_updated(resolved, session)  # SQS redelivers the parked event
+        assert session.rows["ticket_status"] == "resolved", "redelivery reaches the in-order terminal state"
+
+    async def test_a_stale_illegal_event_is_dropped_not_redelivered(self):
+        """The raise is only for *early* events; a stale one must still be acknowledged.
+
+        `in_progress@11:00` arriving after `resolved@12:00` is rejected by the legality
+        check, but its event time is older than `last_event_at` — the guard's own
+        staleness test. Raising here would spin an already-superseded event into the
+        DLQ; it is dropped instead, exactly as the guarded write would have dropped it.
+        """
+        from src.handlers.tickets import handle_ticket_updated
+
+        session = RecordingSession(ticket_status="waiting")
+        await handle_ticket_updated(
+            _event("ticket.update.requested", "ticket-3-6", "2026-03-11T12:00:00Z", new_status="resolved"),
+            session,
+        )
+        await handle_ticket_updated(
+            _event("ticket.update.requested", "ticket-3-6", "2026-03-11T11:00:00Z", new_status="in_progress"),
+            session,
+        )  # no raise: stale, acknowledged and dropped
+        assert session.rows["ticket_status"] == "resolved"
+
     async def test_the_ticket_outcome_relay_carries_event_time(self):
         from src.handlers.tickets import handle_ticket_updated
 
@@ -441,40 +509,59 @@ class TestTicketUpdatedIsOrderDependent:
 
 
 # ---------------------------------------------------------------------------
-# Order-dependent: precondition drops
+# Precondition raises (task 3.8) — formerly the order-dependent precondition drops
 # ---------------------------------------------------------------------------
 
 
-class TestPreconditionDropsAreOrderDependent:
+class TestPreconditionRaisesLeaveTheMessageForRedelivery:
     """`ticket.rma.requested` and `return.updated` read a row another event creates.
 
-    Arriving first, they are dropped and acknowledged. Redelivery never happens, so the effect is
-    lost outright — a sequence guard cannot fix this; parking or retry can. Characterisation:
-    these assertions pin today's behaviour and change when that follow-up lands.
+    Arriving first, they used to be dropped and acknowledged — the effect lost outright, with no
+    `ticket.rma.failed` for anything downstream to observe (Finding 2). A sequence guard cannot
+    fix an absent precondition; task 3.8's treatment is to raise ``PreconditionNotArrived`` so
+    the consumer leaves the message for redelivery. 6.3 bounds the retries: `maxReceiveCount`
+    receives, then the per-consumer DLQ whose depth alarm fires at one message — an explicit,
+    observable park, never a silent infinite retry.
     """
 
-    async def test_rma_request_before_its_ticket_is_dropped_silently(self):
-        from src.handlers.tickets import handle_rma_requested
+    async def test_rma_request_before_its_ticket_raises_and_writes_nothing(self):
+        from src.handlers.tickets import PreconditionNotArrived, handle_rma_requested
 
         session = RecordingSession()  # no ticket_row: the ticket event has not been processed yet
+        producer = RecordingProducer()
+        with pytest.raises(PreconditionNotArrived):
+            await handle_rma_requested(
+                _event("ticket.rma.requested", "ticket-3-6", reason="device failure"), session, producer=producer
+            )
+
+        assert producer.published == [], "nothing may be announced for an effect that did not happen"
+        assert session.mutations() == [], "a redelivered message must find the row as it left it"
+
+    async def test_the_redelivered_rma_request_proceeds_once_its_ticket_exists(self):
+        """Same event, redelivered after the ticket row lands: the handler runs to an
+        observable outcome (here `ticket.rma.failed`, since no fulfillment or device
+        rows exist in the double) instead of vanishing."""
+        from src.handlers.tickets import handle_rma_requested
+
+        session = RecordingSession(ticket_row=SimpleNamespace(patient_id="patient-1", category="device_issue"))
         producer = RecordingProducer()
         await handle_rma_requested(
             _event("ticket.rma.requested", "ticket-3-6", reason="device failure"), session, producer=producer
         )
 
-        assert producer.published == [], "no ticket.rma.failed either — the request vanishes"
-        assert session.mutations() == []
+        assert [event["event_type"] for _topic, event in producer.published] == ["ticket.rma.failed"]
 
-    async def test_return_update_before_its_return_row_is_dropped_silently(self):
-        from src.handlers.tickets import handle_return_status_update
+    async def test_return_update_before_its_return_row_raises(self):
+        from src.handlers.tickets import PreconditionNotArrived, handle_return_status_update
 
         session = RecordingSession()  # no return_ticket_id: the RMA insert has not happened yet
         producer = RecordingProducer()
-        await handle_return_status_update(
-            _event("return.updated", "return-1", return_id="return-1", status="shipped"),
-            session,
-            producer=producer,
-        )
+        with pytest.raises(PreconditionNotArrived):
+            await handle_return_status_update(
+                _event("return.updated", "return-1", return_id="return-1", status="shipped"),
+                session,
+                producer=producer,
+            )
 
         assert producer.published == []
 
@@ -532,12 +619,13 @@ class TestDeliveryNotificationIsOrderTolerant:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="control-plane consumes the ticket.created it publishes, so every ticket creates another (HANDOFF task 3.9)",
-)
 def test_no_handler_re_emits_an_event_type_this_consumer_handles():
-    """A handler that publishes a type its own EVENT_HANDLERS accepts is a self-feeding cycle."""
+    """A handler that publishes a type its own EVENT_HANDLERS accepts is a self-feeding cycle.
+
+    Task 3.9 broke the cycle: control-plane is the only publisher of ``ticket.created`` and
+    ``ticket.updated`` (every other service sends the ``*.requested`` form), so those keys had
+    no legitimate producer and routed control-plane's own output back into its handlers.
+    """
     from src.consumer import EVENT_HANDLERS
 
     source = (Path(__file__).resolve().parents[1] / "src" / "handlers" / "tickets.py").read_text()

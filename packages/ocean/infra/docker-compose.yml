@@ -6,6 +6,10 @@ x-localstack-env: &localstack-env
   AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
   AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
   AWS_REGION: ${AWS_REGION:-us-east-1}
+  # botocore resolves the client region from AWS_DEFAULT_REGION only; AWS_REGION is what
+  # ocean_broker's own code reads. Without this line, localstack-init and every SQS consumer
+  # build region-less clients and die at startup with NoRegionError (task 6.7).
+  AWS_DEFAULT_REGION: ${AWS_REGION:-us-east-1}
   OCEAN_EVENT_BUS_NAME: ${OCEAN_EVENT_BUS_NAME:-ocean}
 
 services:

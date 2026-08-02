@@ -152,7 +152,7 @@ raised the collision mid-flight; the original plan declared 3.1–3.5 `parallel:
 per finding, so each of these tasks has a failing test waiting for it. The D3 audit's
 "order-tolerant, per handler" verdict for `control-plane` does not hold.
 
-- [ ] 3.7 `control-plane/src/handlers/tickets.py:167`/`:205` — `handle_ticket_updated` reads the
+- [x] 3.7 `control-plane/src/handlers/tickets.py:167`/`:205` — `handle_ticket_updated` reads the
       current status and writes the new one with only `is_valid_transition` between them, which is
       a legality check, not a sequence guard. Reversed `in_progress`/`resolved` leaves a resolved
       ticket at `in_progress`, silently; `waiting`↔`in_progress` are both legal, so within the
@@ -166,7 +166,7 @@ per finding, so each of these tasks has a failing test waiting for it. The D3 au
       both or neither.
       `[model: opus | deps: 3.0, 5.4 | lane: repo_change | wave: 3]`
       `serial: alembic_sequence` — needs a new revision on the shared sequence.
-- [ ] 3.8 `handle_rma_requested` and `handle_return_status_update` each read a row the event being
+- [x] 3.8 `handle_rma_requested` and `handle_return_status_update` each read a row the event being
       processed did not write, and `return` when it is missing — after which the consumer commits
       and the message is gone. That is a lost effect, not a stale write, and no
       `ticket.rma.failed` is emitted, so nothing downstream observes it. **Not the 3.1 treatment:**
@@ -175,8 +175,13 @@ per finding, so each of these tasks has a failing test waiting for it. The D3 au
       designed against the DLQ and redrive behaviour from 6.3, which is why it depends on it.
       `return.updated` was already live-hazardous under Kafka: it arrives on `ocean.logistics` from
       a connector while the `returns` row is written by control-plane itself.
+      **Widened by 3.7, 2026-08-02.** A third path belongs here: `handle_ticket_updated` drops an
+      early-arriving `resolved` because the legality check rejects the transition from `open`. 3.7
+      guarded the status write and proved a guard cannot fix that case — it is a precondition that
+      has not arrived, not a stale write, so control-plane's verdict stays Order-dependent until
+      this task lands. 3.7 left it pinned as a characterisation test; make that test pass.
       `[model: opus | deps: 5.4, 6.3 | lane: repo_change | wave: 4]`
-- [ ] 3.9 Break the `ticket.created` echo cycle. `handle_ticket_created` publishes `ticket.created`,
+- [x] 3.9 Break the `ticket.created` echo cycle. `handle_ticket_created` publishes `ticket.created`,
       control-plane subscribes to that domain, and `EVENT_HANDLERS["ticket.created"]` routes it
       straight back into the same handler — minting a fresh `uuid4` and a fresh `human_id` each
       pass, so one requested ticket becomes an unbounded stream of tickets. Control-plane is the
@@ -264,7 +269,7 @@ shape, Dockerfile, and EKS deployment unchanged. Each records its ordering verdi
       `[model: sonnet | deps: 2.2, 3.5 | lane: repo_change | wave: 2c]`
 - [x] 5.7 [DNA-763] `services/warehouse-sync/src/main.py` — inline `AIOConsumer` to SQS receive/delete.
       `[model: sonnet | deps: 2.2, 4.13 | lane: repo_change | wave: 2c]`
-- [ ] 5.8 Subscribe `event-store` to **all eleven** live domains. It takes 9 today — `tickets` and
+- [x] 5.8 Subscribe `event-store` to **all eleven** live domains. It takes 9 today — `tickets` and
       `patient-state` are missing — while its own docstring claims "all Ocean topics". 6.2 found
       this and correctly mirrored the code rather than widening it, because widening is a decision,
       not a transcription. **The decision is made: widen it** (Ford, 2026-08-02). An append-only
@@ -279,7 +284,7 @@ shape, Dockerfile, and EKS deployment unchanged. Each records its ordering verdi
       `[model: sonnet | deps: 5.1, 6.2 | lane: repo_change | wave: 4]`
       `serial: catalog_generated_surfaces` — edits the catalog both producers and rules derive
       from.
-- [ ] 5.9 Give `warehouse-sync` a MECE test suite. It is the only converted service with **zero**
+- [x] 5.9 Give `warehouse-sync` a MECE test suite. It is the only converted service with **zero**
       tests, and 5.7 changed real semantics without any: the flush moved from `INSERT` to a `MERGE`
       on `data:event_id`, making duplicate-safety a property the Kafka loop never had. That
       property is currently asserted nowhere.
@@ -321,7 +326,7 @@ shape, Dockerfile, and EKS deployment unchanged. Each records its ordering verdi
       creation driven by 2.1's table. Test: re-running against an existing stack leaves it
       unchanged.
       `[model: sonnet | deps: 2.1, 6.2 | lane: repo_change | wave: 3]`
-- [ ] 6.6 [DNA-769] Remove `confluent_kafka` from every package manifest, lockfile **and Dockerfile**;
+- [x] 6.6 [DNA-769] Remove `confluent_kafka` from every package manifest, lockfile **and Dockerfile**;
       add the AWS client dependency. Test: no source file outside the shared publisher references a
       bus client.
       **Scope widened 2026-08-02 to Dockerfiles, which are the deployment-breaking half.** 5.6
@@ -341,27 +346,38 @@ shape, Dockerfile, and EKS deployment unchanged. Each records its ordering verdi
       passed, and because it is serial it was holding the whole remaining wave behind a task that
       was not yet runnable. It now depends on all of wave 2c.
 
+- [x] 6.7 Make the LocalStack stack actually run. 8.2 was the first end-to-end execution of the
+      committed local path and found **every SQS consumer dies silently with `NoRegionError`**:
+      `infra/docker-compose.yml` sets `AWS_REGION`, and botocore 1.40 reads `AWS_DEFAULT_REGION`.
+      8.2 worked around it in its own run config to get the comparison done; the durable fix is
+      6.5's territory and was never in its scope.
+      "Silently" is the important word — the consumer process stays up and `/health` keeps
+      answering, so nothing observes that no event is ever consumed. Fix the env var, and add a
+      smoke assertion that a published event actually reaches its consumer through the local stack,
+      so this cannot regress into the same silence.
+      `[model: sonnet | deps: 6.5, 8.2 | lane: repo_change | wave: 5]`
+
 ## 7. Wave 4 — warehouse path
 
 - [x] 7.1 [DNA-770] Delete `infra/redpanda/connect.yaml` and the `ocean.warehouse-dlq` topic; move warehouse
       delivery onto the `warehouse-sync` queue from 6.2.
       `[model: sonnet | deps: 5.7, 6.2 | lane: repo_change | wave: 4]`
-- [ ] 7.2 [DNA-771] Point warehouse dead-lettering at the `warehouse-sync` queue's DLQ. Test: a repeatedly
+- [x] 7.2 [DNA-771] Point warehouse dead-lettering at the `warehouse-sync` queue's DLQ. Test: a repeatedly
       failing event lands there and is observable like any other consumer's.
       `[model: sonnet | deps: 7.1, 6.3 | lane: repo_change | wave: 4]`
-- [ ] 7.3 [DNA-772] Assert warehouse append semantics: out-of-order delivery yields identical table contents,
+- [x] 7.3 [DNA-772] Assert warehouse append semantics: out-of-order delivery yields identical table contents,
       and redelivery creates no duplicate row.
       `[model: sonnet | deps: 7.1 | lane: repo_change | wave: 4]`
 
 ## 8. Wave 4 — equivalence gate
 
-- [ ] 8.1 [DNA-773] Build the equivalence harness: capture graph tables and `audit_log` after a
+- [x] 8.1 [DNA-773] Build the equivalence harness: capture graph tables and `audit_log` after a
       `call-simulator` + `sim-driver` run, normalized for wall-clock and random identifiers, and
       diff two runs.
       `[model: opus | deps: 6.5 | lane: repo_change | wave: 4]`
       Model `opus`: choosing what to normalize is the whole difficulty — normalize too much and the
       gate proves nothing.
-- [ ] 8.2 [DNA-774] Run the harness against the Kafka path and the LocalStack path and record the comparison.
+- [x] 8.2 [DNA-774] Run the harness against the Kafka path and the LocalStack path and record the comparison.
       This result gates 9.2.
       `[model: sonnet | deps: 8.1, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 7.1 | lane: repo_change | wave: 4]`
 
@@ -372,8 +388,10 @@ G_APPROVAL comment required before each. Run after merge and verification.
 
 - [ ] 9.1 [CCC-16] `terraform apply` — provision bus, rules, queues, DLQs, archive.
       `[model: sonnet | deps: 3.9, 6.4, 8.2 | lane: destructive_ops | wave: post-merge]`
-      3.9 is a hard gate, not a nicety: until the `ticket.created` echo cycle is broken, applying
-      the control-plane rule encodes an unbounded ticket-minting loop into a live bus.
+      3.9 was a hard gate, not a nicety: until the `ticket.created` echo cycle was broken, applying
+      the control-plane rule would have encoded an unbounded ticket-minting loop into a live bus.
+      **Released 2026-08-02** — 3.9 landed in #56, removing both self-consumed keys
+      (`ticket.updated` echoed the same way; control-plane is the only publisher of either).
 - [ ] 9.2 [CCC-17] Tear down MSK Serverless. Gated on 8.2 passing — after this there is no transport
       rollback, only forward recovery via archive replay.
       `[model: sonnet | deps: 9.1, 8.2 | lane: destructive_ops | wave: post-merge]`
@@ -383,7 +401,7 @@ G_APPROVAL comment required before each. Run after merge and verification.
 
 ## 10. Wave 4 — documentation
 
-- [ ] 10.1 [DNA-775] Record the absorption as an ADR in `docs/adr/`, and update
+- [x] 10.1 [DNA-775] Record the absorption as an ADR in `docs/adr/`, and update
       `docs/contracts/publishes.md` and `consumes.md` for the transport change.
       `[model: fable | deps: 8.2 | lane: repo_change | wave: 4]`
 - [ ] 10.2 [DNA-776] Tick ADR §10 action items 3 and 6 (DNA-695 extended with the §6.1 absorption steps) and

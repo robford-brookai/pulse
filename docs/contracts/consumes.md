@@ -12,8 +12,26 @@ surface — a Snowflake object, an API, or a released package.
 
 ## This repo
 
-repo-ade consumes four external tools. None is vendored; each is installed independently and
-pinned only where a gate depends on its behaviour.
+### Event transport (runtime)
+
+With the Kafka → EventBridge migration
+([ADR-0002](../adr/ADR-0002-ocean-absorption-and-eventbridge-transport.md)), the absorbed OCEAN
+services in `packages/ocean` consume AWS messaging primitives instead of a broker:
+
+| Dependency | Kind | Source | Breakage risk |
+|---|---|---|---|
+| EventBridge `ocean` bus | AWS managed bus | `boto3` / `aiobotocore`; bus name via `OCEAN_EVENT_BUS_NAME` | PutEvents entry cap (256 KB) rejects oversized envelopes; missing bus name would route to the account `default` bus, so it is never left unset |
+| SQS consumer queues | AWS managed queues | one queue per consumer, URL via `SQS_QUEUE_URL` | standard queues do not preserve order — order-dependent consumers carry a sequence guard keyed on the envelope key |
+| LocalStack | local dev container | `packages/ocean/infra/docker-compose.yml` | local-only stand-in for the two rows above; provides bus, rules, queues, DLQs |
+| Postgres `failed_webhooks` | table (publish DLQ fallback) | ocean's own Postgres | a publisher constructed without a `db_session_maker` logs failures without durably queuing them |
+
+`confluent-kafka` and the Redpanda containers are removed. None of these is reached by
+`task check` — no live network in tests; the LocalStack stack exists for local simulation runs.
+
+### Toolchain
+
+pulse consumes four external tools, inherited from the repo-ade template. None is vendored; each
+is installed independently and pinned only where a gate depends on its behaviour.
 
 | Dependency | Kind | Source | Breakage risk |
 |---|---|---|---|

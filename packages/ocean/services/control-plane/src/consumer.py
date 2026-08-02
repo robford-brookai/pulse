@@ -12,14 +12,19 @@ at-least-once, commit-after-success semantics the Kafka loop had. Blocking
 boto3 calls run in a thread via ``asyncio.to_thread`` so the FastAPI event
 loop — /health and the escalation poller — stays responsive.
 
-Ordering verdict (task 3.6, DNA-743): **mixed, per handler** — see
-``packages/ocean/docs/ordering-verdict-control-plane.md``. Ten of thirteen
-``EVENT_HANDLERS`` keys are order-tolerant; ``ticket.update.requested`` /
-``ticket.updated`` (unguarded status write), ``ticket.rma.requested`` and
-``return.updated`` (silent drop when the precondition row is absent) are
-order-dependent. Their guards are follow-up tasks 3.7-3.9, tracked by the
-``xfail(strict=True)`` claims in ``tests/test_ordering_verdicts.py``; this
-conversion deliberately changes transport only.
+Ordering verdict (task 3.6, DNA-743): **order-tolerant, per handler** — see
+``packages/ocean/docs/ordering-verdict-control-plane.md``. Eight of eleven
+``EVENT_HANDLERS`` keys are natively order-tolerant; ``ticket.update.requested``
+carries an event-time sequence guard (task 3.7), and an event whose
+precondition row has not arrived — ``ticket.rma.requested``, ``return.updated``,
+and a not-yet-legal ticket transition — raises ``PreconditionNotArrived``
+(task 3.8) so this loop leaves the message for redelivery, bounded by the
+queue's redrive policy. ``ticket.created`` and ``ticket.updated`` are deliberately
+absent (task 3.9): control-plane is their only publisher — every other service
+sends the ``*.requested`` form — so routing them here consumed control-plane's
+own output, and for ``ticket.created`` that echo minted a fresh ticket per
+pass. Re-adding either key rebuilds the cycle;
+``tests/test_ordering_verdicts.py`` guards against it.
 """
 
 from __future__ import annotations
@@ -57,9 +62,7 @@ EVENT_HANDLERS: dict = {
     "alert.created": handle_alert_created,
     "connector.heartbeat": handle_connector_heartbeat,
     "ticket.create.requested": handle_ticket_created,
-    "ticket.created": handle_ticket_created,
     "ticket.update.requested": handle_ticket_updated,
-    "ticket.updated": handle_ticket_updated,
     "ticket.rma.requested": handle_rma_requested,
     "return.updated": handle_return_status_update,
     "fulfillment.updated": handle_delivery_notification,

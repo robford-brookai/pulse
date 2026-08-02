@@ -76,20 +76,13 @@ ConsumerName = Literal[
 #: The seven consumers (design D2) and the domain set each one's rule matches,
 #: transcribed from each consumer's Kafka subscription at conversion time.
 #: ``warehouse-sync`` subscribed with the regex ``^ocean\..*``, so it takes every
-#: live domain. Task 6.2's rules and queues fan out over this mapping; edit it,
-#: regenerate, commit — the same discipline as :data:`LIVE_DOMAINS`.
+#: live domain. ``event-store`` takes every live domain by decision (task 5.8):
+#: its Kafka subscription listed nine while its docstring claimed all, and an
+#: append-only event store that omits domains is not an event store. Task 6.2's
+#: rules and queues fan out over this mapping; edit it, regenerate, commit — the
+#: same discipline as :data:`LIVE_DOMAINS`.
 CONSUMER_DOMAINS: Mapping[ConsumerName, tuple[DomainName, ...]] = {
-    "event-store": (
-        "signals",
-        "alerts",
-        "tasks",
-        "interactions",
-        "outcomes",
-        "ai-ops",
-        "audit",
-        "logistics",
-        "ops",
-    ),
+    "event-store": LIVE_DOMAINS,
     "agent-worker": ("tasks",),
     "call-simulator": ("ai-ops",),
     "control-plane": (
