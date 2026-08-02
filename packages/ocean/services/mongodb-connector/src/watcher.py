@@ -1,11 +1,12 @@
 """CollectionWatcher — motor Change Stream loop with backoff and resume tokens.
 
 Watches a single MongoDB collection, transforms each change via a
-``BaseTransformer``, publishes to Kafka via ``EventPublisher``, and
+``BaseTransformer``, publishes through the shared ``EventBridgePublisher``, and
 persists resume tokens in Postgres via ``ResumeTokenStore``.
 
-Resume token is saved *after* a successful publish to guarantee
-at-least-once delivery semantics.
+Resume token is saved *after* the publish returns, which still guarantees
+at-least-once: the shared publisher does not drop a failed envelope, it writes
+it to ``failed_webhooks``, so the event is durable either way.
 """
 
 from __future__ import annotations
@@ -20,9 +21,9 @@ import pymongo.errors
 import structlog
 from bson import json_util
 from motor.motor_asyncio import AsyncIOMotorCollection
+from ocean_broker import EventBridgePublisher
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from src.publisher import EventPublisher
 from src.resume_token import ResumeTokenStore
 from src.transformer import BaseTransformer
 
@@ -39,10 +40,10 @@ class CollectionWatcher:
         *,
         collection: AsyncIOMotorCollection,
         transformer: BaseTransformer,
-        publisher: EventPublisher,
+        publisher: EventBridgePublisher,
         token_store: ResumeTokenStore,
         db_session_factory: async_sessionmaker,
-        topic: str = "ocean.patient-state",
+        domain: str = "patient-state",
         collection_name: str = "alerts",
     ) -> None:
         self._collection = collection
@@ -50,7 +51,7 @@ class CollectionWatcher:
         self._publisher = publisher
         self._token_store = token_store
         self._session_factory = db_session_factory
-        self._topic = topic
+        self._domain = domain
         self._collection_name = collection_name
 
     # ------------------------------------------------------------------
@@ -81,7 +82,8 @@ class CollectionWatcher:
                     await self._clear_resume_token()
                 await asyncio.sleep(delay)
 
-        self._publisher.flush()
+        # No flush: PutEvents is a synchronous call per publish, so there is no producer
+        # buffer that could still hold an unsent event at shutdown.
         logger.info("watcher_stopped", collection=self._collection_name)
 
     # ------------------------------------------------------------------
@@ -129,8 +131,10 @@ class CollectionWatcher:
                     "payload": transformed,
                 }
 
-                # Publish, then persist resume token (at-least-once)
-                self._publisher.publish(self._topic, transformed["patient_id"], event_dict)
+                # Publish, then persist resume token (at-least-once).
+                # A bus failure does not raise here — the shared publisher dead-letters the
+                # envelope to ``failed_webhooks``, so advancing the token loses nothing.
+                await self._publisher.publish(self._domain, event_dict, key=transformed["patient_id"])
 
                 token_dict = _resume_token_to_dict(change["_id"])
                 await self._save_resume_token(token_dict)
