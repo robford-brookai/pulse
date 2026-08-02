@@ -1,11 +1,17 @@
 # WORKFLOW — repo-ade ADE Stack v2
 
-**Status:** v2.0.1 — supersedes v1 WORKFLOW.md | **Owner:** Ford
-**Scope:** The goal workflow for repo-ade-born repos (PULSE first), in three renderings: executable YAML (the source of truth), prose walkthrough, and diagram. The YAML block is parsed by thin glue (the `workflow:*` Taskfile targets) and read directly by agents via `orient()`. **Editing the YAML changes dispatch behavior. The prose and diagram are projections of the YAML and regenerate from it — never edit them independently.** Same doctrine as the state catalog: one generative artifact, multiple emitted surfaces, CI fails on drift.
+**Status:** v2.0.2 — supersedes v1 WORKFLOW.md | **Owner:** Ford
+**Scope:** The goal workflow for repo-ade-born repos (PULSE first), in three renderings: executable YAML (the source of truth), prose walkthrough, and diagram. The YAML block is parsed by `scripts/workflow.py` and read directly by agents via `orient()`. **Editing the YAML changes dispatch behavior. The prose and diagram are projections of the YAML — `task workflow:lint` fails if either names a step or gate the YAML does not define, or omits a step it does.** Same doctrine as the state catalog: one generative artifact, multiple emitted surfaces, CI fails on drift.
 
-> **Not yet implemented.** Three targets this document depends on do not exist in `Taskfile.yml`
-> yet: `workflow:lint`, `workflow:*` (the YAML parser, `scripts/workflow.py`), and `linear:sync`.
-> The steps that call them cannot run until they are built. Everything else is live today:
+> **Projections are checked, not generated.** An earlier revision said the prose and diagram
+> "regenerate from" the YAML. They do not, and should not: §3 is editorial English carrying
+> judgement the YAML does not encode, and generating it would mean either losing that or
+> pretending the YAML holds it. What CI enforces is correspondence — no invented steps or gates,
+> no omitted ones. Edit a projection freely; just do not let it contradict the block.
+
+> **Not yet implemented.** One target this document depends on does not exist in `Taskfile.yml`
+> yet: `linear:sync`. The `sync_linear` step cannot run until it is built — create the parent
+> issue and sub-issues by hand until then. Everything else is live today: `task workflow:lint`,
 > `task dispatch CHANGE=<id>`, `task collect CHANGE=<id>`, `task verify CHANGE=<id>`, and
 > `task spec:archive CHANGE=<id>`.
 
@@ -32,10 +38,10 @@ Out-of-lane work (operational discovery, destructive ops) is executed by the Ope
 
 ```yaml
 ade_workflow:
-  version: 2.0.1
+  version: 2.0.2
   source_of_truth: WORKFLOW.md            # this file, this block
-  renderings: [prose_section_3, diagram_section_4]   # regenerate, never hand-edit
-  parser: scripts/workflow.py             # thin glue (unbuilt); workflow:lint validates schema
+  renderings: [prose_section_3, diagram_section_4]   # checked for correspondence, not generated
+  parser: scripts/workflow.py             # thin glue; `task workflow:lint` validates this block
 
   linear:
     team: DNA
