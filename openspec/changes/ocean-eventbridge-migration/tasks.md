@@ -346,7 +346,7 @@ shape, Dockerfile, and EKS deployment unchanged. Each records its ordering verdi
       passed, and because it is serial it was holding the whole remaining wave behind a task that
       was not yet runnable. It now depends on all of wave 2c.
 
-- [ ] 6.7 Make the LocalStack stack actually run. 8.2 was the first end-to-end execution of the
+- [x] 6.7 Make the LocalStack stack actually run. 8.2 was the first end-to-end execution of the
       committed local path and found **every SQS consumer dies silently with `NoRegionError`**:
       `infra/docker-compose.yml` sets `AWS_REGION`, and botocore 1.40 reads `AWS_DEFAULT_REGION`.
       8.2 worked around it in its own run config to get the comparison done; the durable fix is
@@ -401,7 +401,7 @@ G_APPROVAL comment required before each. Run after merge and verification.
 
 ## 10. Wave 4 — documentation
 
-- [ ] 10.1 [DNA-775] Record the absorption as an ADR in `docs/adr/`, and update
+- [x] 10.1 [DNA-775] Record the absorption as an ADR in `docs/adr/`, and update
       `docs/contracts/publishes.md` and `consumes.md` for the transport change.
       `[model: fable | deps: 8.2 | lane: repo_change | wave: 4]`
 - [ ] 10.2 [DNA-776] Tick ADR §10 action items 3 and 6 (DNA-695 extended with the §6.1 absorption steps) and
