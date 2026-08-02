@@ -6,6 +6,7 @@ Usage:
     uv run python scripts/demo.py --warehouse
     uv run python scripts/demo.py --scenario pilot_demo --warehouse
 """
+
 from __future__ import annotations
 
 import argparse
@@ -220,8 +221,10 @@ async def main() -> None:
 
     print(f"\nTriggering scenario: {args.scenario}")
     meta = await trigger_scenario(args.scenario)
-    print(f"Scenario started: {meta.get('patients', '?')} patients, "
-          f"~{meta.get('estimated_duration_seconds', '?')}s estimated")
+    print(
+        f"Scenario started: {meta.get('patients', '?')} patients, "
+        f"~{meta.get('estimated_duration_seconds', '?')}s estimated"
+    )
 
     await wait_for_completion()
 

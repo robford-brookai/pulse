@@ -1,4 +1,5 @@
 """Test fixtures for event-store — mock consumer and AsyncClient."""
+
 from __future__ import annotations
 
 import asyncio
@@ -39,5 +40,6 @@ async def client(monkeypatch):
 
     with patch("src.consumer.run_consumer", side_effect=_noop_consumer):
         from src.main import app
+
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             yield ac

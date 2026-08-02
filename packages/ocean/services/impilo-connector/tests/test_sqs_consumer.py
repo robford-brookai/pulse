@@ -1,4 +1,5 @@
 """Tests for the SQS consumer module."""
+
 from __future__ import annotations
 
 import asyncio

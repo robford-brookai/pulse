@@ -8,6 +8,7 @@ Verifies:
 - slack-bot consumer.py registers task.escalated and ticket.escalated handlers
 - thread_manager.py has get_channel and get_message_ts for task lookup
 """
+
 from __future__ import annotations
 
 import ast
@@ -64,27 +65,19 @@ class TestEscalationSourceInspection:
 
     def test_consumer_has_task_escalated_handler(self):
         keys = _parse_event_handler_keys(CONSUMER_PATH)
-        assert "task.escalated" in keys, (
-            "EVENT_HANDLERS must contain 'task.escalated' key"
-        )
+        assert "task.escalated" in keys, "EVENT_HANDLERS must contain 'task.escalated' key"
 
     def test_consumer_has_ticket_escalated_handler(self):
         keys = _parse_event_handler_keys(CONSUMER_PATH)
-        assert "ticket.escalated" in keys, (
-            "EVENT_HANDLERS must contain 'ticket.escalated' key"
-        )
+        assert "ticket.escalated" in keys, "EVENT_HANDLERS must contain 'ticket.escalated' key"
 
     def test_thread_manager_has_get_channel(self):
         source = THREAD_MANAGER_PATH.read_text()
-        assert "async def get_channel(" in source, (
-            "ThreadManager must have get_channel(task_id) method"
-        )
+        assert "async def get_channel(" in source, "ThreadManager must have get_channel(task_id) method"
 
     def test_thread_manager_has_get_message_ts(self):
         source = THREAD_MANAGER_PATH.read_text()
-        assert "async def get_message_ts(" in source, (
-            "ThreadManager must have get_message_ts(task_id) method"
-        )
+        assert "async def get_message_ts(" in source, "ThreadManager must have get_message_ts(task_id) method"
 
 
 # ---------------------------------------------------------------------------

@@ -1,17 +1,18 @@
 """stacte-bridge FastAPI app — OCEAN graph search and STACTE integration."""
+
 from __future__ import annotations
 
 import os
 from contextlib import asynccontextmanager
 from typing import Any
 
-import sqlalchemy as sa
 import structlog
 from fastapi import FastAPI, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from src.crud_api import router as crud_router, get_session
-from src.embedder import embed_texts, entity_to_text
+from src.crud_api import get_session
+from src.crud_api import router as crud_router
+from src.embedder import embed_texts
 from src.graph_search import get_entity_neighborhood
 from src.indexer import semantic_search, sync_embeddings
 

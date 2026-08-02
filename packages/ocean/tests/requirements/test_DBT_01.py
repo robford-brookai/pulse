@@ -1,4 +1,5 @@
 """DBT-01: Streamline dbt project has ocean/ model layer with stg, core, and marts sublayers."""
+
 from __future__ import annotations
 
 from pathlib import Path

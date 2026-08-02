@@ -1,16 +1,16 @@
 """Tests for the Impilo payload normalizer."""
+
 from __future__ import annotations
 
 import hashlib
 
 import pytest
-
 from src.normalizer import normalize_impilo_payload
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def make_reading_payload(
     reading_type: str = "weight",
@@ -122,6 +122,7 @@ def make_device_association_removed_payload(
 # Tests
 # ---------------------------------------------------------------------------
 
+
 class TestReadingEvents:
     def test_reading_weight_produces_signal_received(self) -> None:
         event, topic = normalize_impilo_payload(make_reading_payload("weight"))
@@ -181,7 +182,7 @@ class TestPHIProtection:
 class TestIdentityHashing:
     def test_patient_id_is_sha256_hash(self) -> None:
         event, _ = normalize_impilo_payload(make_reading_payload(patient_id=123))
-        expected_hash = hashlib.sha256("impilo:patient:123".encode()).hexdigest()
+        expected_hash = hashlib.sha256(b"impilo:patient:123").hexdigest()
         assert event.payload["patient_id"] == expected_hash
 
     def test_deterministic_event_id(self) -> None:
@@ -210,7 +211,7 @@ class TestFulfillmentEvents:
         assert event.payload["order_items"] == [{"sku": "BP-100", "qty": 1}]
         assert event.payload["devices"] == [{"id": 5001, "name": "BP Monitor"}]
         # patient_id should be hashed
-        expected_hash = hashlib.sha256("impilo:patient:123".encode()).hexdigest()
+        expected_hash = hashlib.sha256(b"impilo:patient:123").hexdigest()
         assert event.payload["patient_id"] == expected_hash
 
 
@@ -278,6 +279,4 @@ class TestReadingPassthrough:
 class TestEdgeCases:
     def test_unknown_event_type_raises(self) -> None:
         with pytest.raises(ValueError):
-            normalize_impilo_payload(
-                {"type": "unknown.thing", "id": 1, "createdAt": "2026-03-06T10:00:00Z"}
-            )
+            normalize_impilo_payload({"type": "unknown.thing", "id": 1, "createdAt": "2026-03-06T10:00:00Z"})

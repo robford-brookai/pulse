@@ -3,15 +3,15 @@
 Requirement: handle_alert_resolved with payload.resolution_type="false_positive"
 publishes outcome.recorded where resolution_type="false_positive", not a separate event type.
 """
+
 from __future__ import annotations
 
 import pytest
-
 from utils import setup_service
 
 setup_service("control-plane")
 
-from src.handlers.outcomes import handle_alert_resolved  # noqa: E402
+from src.handlers.outcomes import handle_alert_resolved
 
 
 @pytest.mark.asyncio

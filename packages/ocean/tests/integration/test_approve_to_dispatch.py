@@ -9,14 +9,14 @@ Verifies AI-04 + AI-05 + ZCC-01 end-to-end with real Postgres:
    - dispatch_zcc_outbound_call was called with correct task_id.
    - publish_ai_event was called with event_type='ai.output.approved' and draft_id.
 """
+
 from __future__ import annotations
 
 import pathlib
 import sys
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
-import pytest_asyncio
 import sqlalchemy as sa
 
 _ROOT = pathlib.Path(__file__).parents[2]
@@ -56,16 +56,15 @@ def _make_bolt_body(draft_id: str, actor_id: str = "U_CARE_COORD") -> dict:
 async def seeded_draft(session_factory):
     """Insert a pending ai_drafts row and return its draft_id."""
     draft_id = "draft-integ-001"
-    async with session_factory() as session:
-        async with session.begin():
-            await session.execute(
-                sa.text(
-                    "INSERT INTO ai_drafts (draft_id, task_id, patient_id, alert_id, status) "
-                    "VALUES (:draft_id, 'task-integ-001', 'pt-integ-001', 'alert-integ-001', 'pending') "
-                    "ON CONFLICT (draft_id) DO UPDATE SET status='pending', actor_id=NULL"
-                ),
-                {"draft_id": draft_id},
-            )
+    async with session_factory() as session, session.begin():
+        await session.execute(
+            sa.text(
+                "INSERT INTO ai_drafts (draft_id, task_id, patient_id, alert_id, status) "
+                "VALUES (:draft_id, 'task-integ-001', 'pt-integ-001', 'alert-integ-001', 'pending') "
+                "ON CONFLICT (draft_id) DO UPDATE SET status='pending', actor_id=NULL"
+            ),
+            {"draft_id": draft_id},
+        )
     return draft_id
 
 
@@ -81,22 +80,24 @@ async def test_approve_updates_db_status_to_approved(session_factory, seeded_dra
     mock_client.chat_postEphemeral = AsyncMock()
     mock_client.chat_update = AsyncMock()
 
-    with patch.object(
-        sys.modules.get("_slack_bot_bolt_app", bolt_app_mod),
-        "dispatch_zcc_outbound_call",
-        new=AsyncMock(return_value={"zcc_engagement_id": "eng-stub"}),
-    ):
-        with patch.object(
+    with (
+        patch.object(
+            sys.modules.get("_slack_bot_bolt_app", bolt_app_mod),
+            "dispatch_zcc_outbound_call",
+            new=AsyncMock(return_value={"zcc_engagement_id": "eng-stub"}),
+        ),
+        patch.object(
             sys.modules.get("_slack_bot_bolt_app", bolt_app_mod),
             "publish_ai_event",
             new=AsyncMock(),
-        ):
-            with patch.dict("os.environ", {"PHI_STORE_URL": ""}):
-                await bolt_app_mod.handle_outreach_approve(
-                    ack=AsyncMock(),
-                    body=_make_bolt_body(seeded_draft, actor_id="U_COORD"),
-                    client=mock_client,
-                )
+        ),
+        patch.dict("os.environ", {"PHI_STORE_URL": ""}),
+    ):
+        await bolt_app_mod.handle_outreach_approve(
+            ack=AsyncMock(),
+            body=_make_bolt_body(seeded_draft, actor_id="U_COORD"),
+            client=mock_client,
+        )
 
     # Verify DB state
     async with session_factory() as session:
@@ -125,12 +126,11 @@ async def test_approve_calls_dispatch_with_task_id(session_factory, seeded_draft
         captured_publish.append({"event_type": event_type, "task_id": task_id, "payload": payload})
 
     # Reset draft to pending
-    async with session_factory() as session:
-        async with session.begin():
-            await session.execute(
-                sa.text("UPDATE ai_drafts SET status='pending', actor_id=NULL WHERE draft_id=:id"),
-                {"id": seeded_draft},
-            )
+    async with session_factory() as session, session.begin():
+        await session.execute(
+            sa.text("UPDATE ai_drafts SET status='pending', actor_id=NULL WHERE draft_id=:id"),
+            {"id": seeded_draft},
+        )
 
     with patch.object(bolt_app_mod, "dispatch_zcc_outbound_call", new=dispatch_mock):
         with patch.object(bolt_app_mod, "publish_ai_event", new=capture_publish):

@@ -1,7 +1,6 @@
 """Tests for GitHub event normalization."""
-from __future__ import annotations
 
-import pytest
+from __future__ import annotations
 
 
 def _make_pr_raw(*, action: str = "opened", merged: bool = False, number: int = 42) -> dict:

@@ -3,10 +3,10 @@
 Source-inspection test: verifies escalation.py contains ESCALATION_THRESHOLDS,
 PRIORITY_UPGRADE import from rules, and env-var reads.
 """
+
 from __future__ import annotations
 
 import pathlib
-
 
 ESCALATION_PY = pathlib.Path("services/control-plane/src/escalation.py")
 RULES_PY = pathlib.Path("services/control-plane/src/rules.py")

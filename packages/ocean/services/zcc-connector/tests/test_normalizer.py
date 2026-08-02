@@ -1,7 +1,6 @@
 """Tests for ZCC normalizer — event type mapping and payload extraction."""
-from __future__ import annotations
 
-import pytest
+from __future__ import annotations
 
 
 def _make_raw(event: str = "contact_center.engagement_ended") -> dict:

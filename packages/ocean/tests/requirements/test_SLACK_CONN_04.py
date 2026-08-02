@@ -7,6 +7,7 @@ Verifies:
 - ThreadManager.store_parent_message persists to slack_messages (mock session)
 - ThreadManager.get_thread_ts retrieves thread_ts by task_id (mock session)
 """
+
 from __future__ import annotations
 
 import importlib
@@ -68,7 +69,9 @@ class TestSlackMessagesMigration:
     def test_creates_slack_messages_table(self, migration_source):
         assert "slack_messages" in migration_source
 
-    @pytest.mark.parametrize("column", ["task_id", "channel", "message_ts", "thread_ts", "status", "created_at", "updated_at"])
+    @pytest.mark.parametrize(
+        "column", ["task_id", "channel", "message_ts", "thread_ts", "status", "created_at", "updated_at"]
+    )
     def test_has_required_column(self, migration_source, column):
         assert column in migration_source, f"Column {column} missing from migration"
 

@@ -1,4 +1,5 @@
 """Graph projection handlers for call lifecycle — started and connected events."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime

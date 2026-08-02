@@ -3,21 +3,23 @@
 Each test mocks AsyncSession so we verify SQL construction and parameter
 passing without touching Postgres.
 """
+
 from __future__ import annotations
 
 import json
+import pathlib
+
+# The module under test lives outside the installed workspace packages,
+# so we add its parent to sys.path.
+import sys
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-# The module under test lives outside the installed workspace packages,
-# so we add its parent to sys.path.
-import sys, pathlib  # noqa: E401
-
 _SRC = pathlib.Path(__file__).resolve().parents[2] / "services" / "mongodb-connector" / "src"
 sys.path.insert(0, str(_SRC))
 
-from resume_token import ResumeTokenStore  # noqa: E402
+from resume_token import ResumeTokenStore
 
 
 @pytest.fixture

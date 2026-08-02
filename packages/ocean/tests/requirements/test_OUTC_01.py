@@ -3,17 +3,15 @@
 Requirement: When control-plane receives task.completed, it publishes
 outcome.recorded with entity_type="task" and resolution_type="resolved".
 """
+
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
-
 import pytest
-
 from utils import setup_service
 
 setup_service("control-plane")
 
-from src.handlers.outcomes import handle_task_completed  # noqa: E402
+from src.handlers.outcomes import handle_task_completed
 
 
 @pytest.mark.asyncio

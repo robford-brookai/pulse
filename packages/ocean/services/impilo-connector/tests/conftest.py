@@ -1,11 +1,12 @@
 """Shared fixtures for impilo-connector tests."""
+
 from __future__ import annotations
+
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
-from unittest.mock import AsyncMock, MagicMock
-
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
 
 @pytest.fixture
@@ -19,14 +20,18 @@ def mock_publisher():
 def mock_session_maker():
     session = AsyncMock()
     session.execute = AsyncMock(return_value=None)
-    session.begin = MagicMock(return_value=AsyncMock(
-        __aenter__=AsyncMock(return_value=None),
-        __aexit__=AsyncMock(return_value=False),
-    ))
-    maker = MagicMock(return_value=AsyncMock(
-        __aenter__=AsyncMock(return_value=session),
-        __aexit__=AsyncMock(return_value=False),
-    ))
+    session.begin = MagicMock(
+        return_value=AsyncMock(
+            __aenter__=AsyncMock(return_value=None),
+            __aexit__=AsyncMock(return_value=False),
+        )
+    )
+    maker = MagicMock(
+        return_value=AsyncMock(
+            __aenter__=AsyncMock(return_value=session),
+            __aexit__=AsyncMock(return_value=False),
+        )
+    )
     return maker
 
 
@@ -37,7 +42,5 @@ async def client(mock_publisher, mock_session_maker, monkeypatch):
 
     app.state.publisher = mock_publisher
     app.state.session_maker = mock_session_maker
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac

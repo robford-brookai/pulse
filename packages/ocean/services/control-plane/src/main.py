@@ -2,6 +2,7 @@
 # This service is safe to build and test locally. Production deploy is blocked until BAA is in place.
 # Track BAA status: [link to Linear/Notion issue]
 """control-plane FastAPI app — health endpoint and consumer background task."""
+
 from __future__ import annotations
 
 import asyncio
@@ -19,9 +20,7 @@ log = structlog.get_logger()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    database_url = os.environ.get(
-        "DATABASE_URL", "postgresql+asyncpg://ocean:changeme@postgres:5432/ocean"
-    )
+    database_url = os.environ.get("DATABASE_URL", "postgresql+asyncpg://ocean:changeme@postgres:5432/ocean")
     engine = create_async_engine(database_url, echo=False)
     session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 

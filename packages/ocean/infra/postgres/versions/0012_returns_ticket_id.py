@@ -4,6 +4,7 @@ Revision ID: 0012
 Revises: 0011
 Create Date: 2026-03-14
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
@@ -16,11 +17,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute(
-        sa.text(
-            "ALTER TABLE returns ADD COLUMN ticket_id TEXT REFERENCES tickets(ticket_id)"
-        )
-    )
+    op.execute(sa.text("ALTER TABLE returns ADD COLUMN ticket_id TEXT REFERENCES tickets(ticket_id)"))
     op.execute(sa.text("CREATE INDEX ix_returns_ticket_id ON returns(ticket_id)"))
 
 

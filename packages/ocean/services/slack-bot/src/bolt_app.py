@@ -1,4 +1,5 @@
 """Slack Bolt action handlers — Claim, Resolve, Outreach Approve/Reject, Ticket Create."""
+
 from __future__ import annotations
 
 import json
@@ -22,8 +23,8 @@ from src.cards import (
     human_gate_overridden_card,
     rejection_confirmed_card,
     resolved_card,
-    snoozed_card,
     snooze_duration_card,
+    snoozed_card,
     ticket_claimed_card,
     ticket_resolved_card,
 )
@@ -79,6 +80,7 @@ bolt_app.command("/ocean")(handle_ocean_command)
 # ---------------------------------------------------------------------------
 # Action handlers — task claim and resolve
 # ---------------------------------------------------------------------------
+
 
 @bolt_app.action("task_claim")
 async def handle_task_claim(ack, body, client) -> None:
@@ -305,6 +307,7 @@ async def handle_snooze_confirm(ack, body, client) -> None:
 # Action handlers — outreach approve and reject (Phase 4)
 # ---------------------------------------------------------------------------
 
+
 @bolt_app.action("outreach_approve")
 async def handle_outreach_approve(ack, body, client) -> None:
     """Handle outreach_approve button press.
@@ -361,6 +364,7 @@ async def handle_outreach_approve(ack, body, client) -> None:
 
     if phi_store_url:
         import httpx as _httpx
+
         async with _httpx.AsyncClient(timeout=10.0) as http:
             phone_resp = await http.get(f"{phi_store_url}/patients/{patient_id}/phone")
             phone_resp.raise_for_status()
@@ -478,6 +482,7 @@ async def handle_outreach_reject(ack, body, client) -> None:
 # Action handlers — human gate confirm and override (Phase 5)
 # ---------------------------------------------------------------------------
 
+
 @bolt_app.action("human_gate_confirm")
 async def handle_human_gate_confirm(ack, body, client) -> None:
     """Handle human_gate_confirm button press from sim-driver human gate.
@@ -551,6 +556,7 @@ async def handle_human_gate_override(ack, body, client) -> None:
 # ---------------------------------------------------------------------------
 # Action handlers — ticket claim, resolve, wait, resume (Phase 17)
 # ---------------------------------------------------------------------------
+
 
 @bolt_app.action("ticket_claim")
 async def handle_ticket_claim(ack, body, client) -> None:
@@ -767,8 +773,8 @@ async def handle_ticket_create_modal(ack, body, client) -> None:
     category = values["category_block"]["category_select"]["selected_option"]["value"]
     description = values["description_block"]["description_input"]["value"]
     priority = values["priority_block"]["priority_select"]["selected_option"]["value"]
-    patient_id = (values["patient_block"]["patient_input"].get("value") or "")
-    related_ticket = (values["related_block"]["related_input"].get("value") or "")
+    patient_id = values["patient_block"]["patient_input"].get("value") or ""
+    related_ticket = values["related_block"]["related_input"].get("value") or ""
 
     # Parse private_metadata for source_message_url
     try:
@@ -880,9 +886,7 @@ async def _lookup_rma_context(ticket_id: str) -> dict:
         # Get order_id from fulfillments
         ful_result = await session.execute(
             sa.text(
-                "SELECT order_id FROM fulfillments "
-                "WHERE patient_id = :patient_id "
-                "ORDER BY created_at DESC LIMIT 1"
+                "SELECT order_id FROM fulfillments WHERE patient_id = :patient_id ORDER BY created_at DESC LIMIT 1"
             ),
             {"patient_id": patient_id},
         )
@@ -891,8 +895,7 @@ async def _lookup_rma_context(ticket_id: str) -> dict:
         # Get device_id from device_associations
         dev_result = await session.execute(
             sa.text(
-                "SELECT device_id FROM device_associations "
-                "WHERE patient_id = :patient_id AND status = 'active' LIMIT 1"
+                "SELECT device_id FROM device_associations WHERE patient_id = :patient_id AND status = 'active' LIMIT 1"
             ),
             {"patient_id": patient_id},
         )

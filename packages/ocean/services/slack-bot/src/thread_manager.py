@@ -134,9 +134,7 @@ class ThreadManager:
     # Ticket-specific methods (Phase 17) — use ticket_id column
     # -----------------------------------------------------------------
 
-    async def store_ticket_parent(
-        self, ticket_id: str, channel: str, message_ts: str
-    ) -> None:
+    async def store_ticket_parent(self, ticket_id: str, channel: str, message_ts: str) -> None:
         """INSERT parent message for a ticket into slack_messages."""
         async with self._session_maker() as session:
             await session.execute(
@@ -159,9 +157,7 @@ class ThreadManager:
         """Look up thread_ts for a ticket_id from slack_messages."""
         async with self._session_maker() as session:
             result = await session.execute(
-                sa.text(
-                    "SELECT thread_ts FROM slack_messages WHERE ticket_id = :ticket_id"
-                ),
+                sa.text("SELECT thread_ts FROM slack_messages WHERE ticket_id = :ticket_id"),
                 {"ticket_id": ticket_id},
             )
             row = result.fetchone()
@@ -171,9 +167,7 @@ class ThreadManager:
         """Look up channel for a ticket_id from slack_messages."""
         async with self._session_maker() as session:
             result = await session.execute(
-                sa.text(
-                    "SELECT channel FROM slack_messages WHERE ticket_id = :ticket_id"
-                ),
+                sa.text("SELECT channel FROM slack_messages WHERE ticket_id = :ticket_id"),
                 {"ticket_id": ticket_id},
             )
             row = result.fetchone()
@@ -183,9 +177,7 @@ class ThreadManager:
         """Look up message_ts for a ticket_id from slack_messages."""
         async with self._session_maker() as session:
             result = await session.execute(
-                sa.text(
-                    "SELECT message_ts FROM slack_messages WHERE ticket_id = :ticket_id"
-                ),
+                sa.text("SELECT message_ts FROM slack_messages WHERE ticket_id = :ticket_id"),
                 {"ticket_id": ticket_id},
             )
             row = result.fetchone()
@@ -200,9 +192,7 @@ class ThreadManager:
 
         if key not in self._timers or self._timers[key].done():
             delay = random.uniform(3.0, 9.0)
-            self._timers[key] = asyncio.create_task(
-                self._flush_ticket_after(ticket_id, delay)
-            )
+            self._timers[key] = asyncio.create_task(self._flush_ticket_after(ticket_id, delay))
 
     async def _flush_ticket_after(self, ticket_id: str, delay: float) -> None:
         """Sleep then flush the batch for ticket_id."""
@@ -212,9 +202,7 @@ class ThreadManager:
         if updates:
             await self._post_ticket_thread_reply(ticket_id, updates)
 
-    async def _post_ticket_thread_reply(
-        self, ticket_id: str, updates: list[dict]
-    ) -> None:
+    async def _post_ticket_thread_reply(self, ticket_id: str, updates: list[dict]) -> None:
         """Post consolidated thread reply for batched ticket updates."""
         from src.cards import lifecycle_update_blocks
 
@@ -254,10 +242,7 @@ class ThreadManager:
                 log.warning("parent_message_not_found_retrying", task_id=task_id)
                 await asyncio.sleep(2)
                 result = await session.execute(
-                    sa.text(
-                        "SELECT channel, message_ts FROM slack_messages"
-                        " WHERE task_id = :task_id"
-                    ),
+                    sa.text("SELECT channel, message_ts FROM slack_messages WHERE task_id = :task_id"),
                     {"task_id": task_id},
                 )
                 row = result.fetchone()
@@ -270,10 +255,7 @@ class ThreadManager:
 
             # Update status in DB
             await session.execute(
-                sa.text(
-                    "UPDATE slack_messages SET status = :status, updated_at = now() "
-                    "WHERE task_id = :task_id"
-                ),
+                sa.text("UPDATE slack_messages SET status = :status, updated_at = now() WHERE task_id = :task_id"),
                 {"status": new_status, "task_id": task_id},
             )
             await session.commit()

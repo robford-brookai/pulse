@@ -7,6 +7,7 @@ Revision ID: 0015
 Revises: 0014
 Create Date: 2026-03-16
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
@@ -47,9 +48,7 @@ def upgrade() -> None:
         )
     )
     # Make interaction_id nullable for task/ticket/alert outcomes
-    op.execute(
-        sa.text("ALTER TABLE outcomes ALTER COLUMN interaction_id DROP NOT NULL")
-    )
+    op.execute(sa.text("ALTER TABLE outcomes ALTER COLUMN interaction_id DROP NOT NULL"))
 
 
 def downgrade() -> None:

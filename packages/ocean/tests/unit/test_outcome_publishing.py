@@ -4,6 +4,7 @@ Verifies services/control-plane/src/handlers/outcomes.py contains
 the expected function signatures and topic references without
 importing the module (avoids heavy service dependencies).
 """
+
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

@@ -4,6 +4,7 @@ Requirement: The stress_test scenario has 50 patients producing 400+ expected
 events, staggered across sim_hours to avoid thundering herd, with
 compression_ratio 1920 for fast execution.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -16,7 +17,8 @@ _SCENARIO_PATH = _SIM_DRIVER / "scenarios" / "stress_test.yaml"
 
 # Import models from sim-driver without polluting sys.path
 _spec = importlib.util.spec_from_file_location(
-    "sim_driver_models", _SIM_DRIVER / "src" / "models.py",
+    "sim_driver_models",
+    _SIM_DRIVER / "src" / "models.py",
 )
 _mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
@@ -58,8 +60,7 @@ def test_minimum_expected_events_above_400():
                 non_anomalous += 1
     min_events = anomalous * 7 + non_anomalous * 1
     assert min_events >= 400, (
-        f"Minimum expected events {min_events} < 400 "
-        f"(anomalous={anomalous}, non_anomalous={non_anomalous})"
+        f"Minimum expected events {min_events} < 400 (anomalous={anomalous}, non_anomalous={non_anomalous})"
     )
 
 
@@ -71,9 +72,7 @@ def test_sim_hours_staggered():
         for signal in patient.signals:
             if signal.anomalous:
                 sim_hours.add(signal.sim_hour)
-    assert len(sim_hours) >= 3, (
-        f"Only {len(sim_hours)} distinct sim_hours: {sorted(sim_hours)}"
-    )
+    assert len(sim_hours) >= 3, f"Only {len(sim_hours)} distinct sim_hours: {sorted(sim_hours)}"
 
 
 def test_compression_ratio_is_1920():

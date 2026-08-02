@@ -5,6 +5,7 @@ Uses a separate consumer group (graph-projection-worker) so it receives all even
 independently of the event-store-consumer group.
 Manual offset commit — offset committed only AFTER successful DB upsert.
 """
+
 from __future__ import annotations
 
 import json

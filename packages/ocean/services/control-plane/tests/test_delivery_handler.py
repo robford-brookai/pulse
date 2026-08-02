@@ -1,4 +1,5 @@
 """Unit tests for delivery notification handler."""
+
 from __future__ import annotations
 
 import os
@@ -141,9 +142,7 @@ class TestHandleDeliveryNotification:
         none_result.scalar_one_or_none.return_value = None
         zero_result = MagicMock()
         zero_result.scalar_one.return_value = 0
-        session.execute = AsyncMock(
-            side_effect=[none_result, zero_result, zero_result]
-        )
+        session.execute = AsyncMock(side_effect=[none_result, zero_result, zero_result])
         producer = AsyncMock()
         event = _make_fulfillment_event(
             devices=[],  # no devices in payload

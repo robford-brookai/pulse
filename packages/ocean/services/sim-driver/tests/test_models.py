@@ -1,9 +1,9 @@
 """Tests for Pydantic scenario models: ScenarioConfig, PatientConfig, SignalConfig."""
+
 from __future__ import annotations
 
 import pytest
 from pydantic import ValidationError
-
 from src.models import PatientConfig, ScenarioConfig, SignalConfig, resolve_source
 
 

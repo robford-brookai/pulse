@@ -1,4 +1,5 @@
 """Connector health poller — alerts ops channel when connectors go silent."""
+
 from __future__ import annotations
 
 import asyncio
@@ -9,8 +10,8 @@ from sqlalchemy import text
 
 log = structlog.get_logger()
 
-SILENCE_THRESHOLD_SECS = 300    # 5 minutes — exact, not configurable
-REPEAT_INTERVAL_SECS = 1800     # 30 minutes — exact, not configurable
+SILENCE_THRESHOLD_SECS = 300  # 5 minutes — exact, not configurable
+REPEAT_INTERVAL_SECS = 1800  # 30 minutes — exact, not configurable
 
 
 async def poll_connector_health(
@@ -49,13 +50,14 @@ async def poll_connector_health(
                 if last_seen.tzinfo is None:
                     last_seen = last_seen.replace(tzinfo=UTC)
 
-                should_alert = last_alerted_at is None or (
-                    now - (
-                        last_alerted_at.replace(tzinfo=UTC)
-                        if last_alerted_at.tzinfo is None
-                        else last_alerted_at
-                    )
-                ).total_seconds() >= REPEAT_INTERVAL_SECS
+                should_alert = (
+                    last_alerted_at is None
+                    or (
+                        now
+                        - (last_alerted_at.replace(tzinfo=UTC) if last_alerted_at.tzinfo is None else last_alerted_at)
+                    ).total_seconds()
+                    >= REPEAT_INTERVAL_SECS
+                )
 
                 if not should_alert:
                     continue
@@ -72,16 +74,11 @@ async def poll_connector_health(
                     text=alert_text,
                 )
 
-                async with session_maker() as session:
-                    async with session.begin():
-                        await session.execute(
-                            text(
-                                "UPDATE connector_health "
-                                "SET last_alerted_at = now() "
-                                "WHERE connector_id = :connector_id"
-                            ),
-                            {"connector_id": connector_id},
-                        )
+                async with session_maker() as session, session.begin():
+                    await session.execute(
+                        text("UPDATE connector_health SET last_alerted_at = now() WHERE connector_id = :connector_id"),
+                        {"connector_id": connector_id},
+                    )
 
                 log.info(
                     "connector_health_alert_sent",

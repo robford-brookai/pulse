@@ -3,6 +3,7 @@
 Verifies that docker-compose.yml and Taskfile.yml both reference
 ESCALATION_ENABLED, and that the sim profile defaults it to false.
 """
+
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -20,16 +21,12 @@ def test_taskfile_exists():
 
 def test_escalation_enabled_in_compose():
     src = COMPOSE.read_text()
-    assert "ESCALATION_ENABLED" in src, (
-        "docker-compose.yml must define ESCALATION_ENABLED for control-plane"
-    )
+    assert "ESCALATION_ENABLED" in src, "docker-compose.yml must define ESCALATION_ENABLED for control-plane"
 
 
 def test_escalation_enabled_in_taskfile():
     src = TASKFILE.read_text()
-    assert "ESCALATION_ENABLED" in src, (
-        "Taskfile.yml must reference ESCALATION_ENABLED"
-    )
+    assert "ESCALATION_ENABLED" in src, "Taskfile.yml must reference ESCALATION_ENABLED"
 
 
 def test_escalation_disabled_in_sim_profile():

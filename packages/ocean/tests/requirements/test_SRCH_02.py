@@ -4,13 +4,12 @@ Source-inspection + unit tests for scripts/demo.py.
 Verifies: sync_embeddings_all exists, calls stacte-bridge /sync for all
 4 entity types, and handles errors gracefully.
 """
+
 from __future__ import annotations
 
 import importlib
 import importlib.util
-import inspect
 import sys
-import textwrap
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -49,18 +48,14 @@ def test_all_entity_types_in_function():
     source = DEMO_SCRIPT_PATH.read_text()
     # Extract just the function body to be precise
     for et in ENTITY_TYPES:
-        assert f'"{et}"' in source or f"'{et}'" in source, (
-            f"Entity type '{et}' not found in demo.py"
-        )
+        assert f'"{et}"' in source or f"'{et}'" in source, f"Entity type '{et}' not found in demo.py"
 
 
 def test_sync_called_in_main():
     """main() must call sync_embeddings_all."""
     source = DEMO_SCRIPT_PATH.read_text()
     # Find main function body — look for the call after wait_for_completion
-    assert "sync_embeddings_all()" in source, (
-        "sync_embeddings_all() not called in demo.py"
-    )
+    assert "sync_embeddings_all()" in source, "sync_embeddings_all() not called in demo.py"
 
 
 def test_sync_function_accessible_via_spec():

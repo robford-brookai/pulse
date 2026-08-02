@@ -6,10 +6,11 @@
 # PHI whitelist: Only signal_type (categorical), value (numeric), unit (categorical),
 # anomalous (bool) enter the prompt — no free-text fields from the clinical record.
 """AI-powered alert summary generation with Hasura graph context."""
+
 from __future__ import annotations
 
-import structlog
 import httpx
+import structlog
 from anthropic import AsyncAnthropic
 
 log = structlog.get_logger()
@@ -113,9 +114,7 @@ async def generate_summary_with_context(
             signal_lines = []
             for s in signals[:5]:
                 anomalous_flag = " [ANOMALOUS]" if s.get("anomalous") else ""
-                signal_lines.append(
-                    f"  - {s['signal_type']}: {s['value']} {s['unit']}{anomalous_flag}"
-                )
+                signal_lines.append(f"  - {s['signal_type']}: {s['value']} {s['unit']}{anomalous_flag}")
             signal_summary = "\nRecent signals:\n" + "\n".join(signal_lines)
 
         prompt = (

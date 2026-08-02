@@ -1,13 +1,13 @@
 """Tests for event-store consumer module."""
+
 from __future__ import annotations
 
 import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest  # noqa: F401 — used in pytest.raises
+import pytest
 from confluent_kafka import KafkaError
-
 
 SAMPLE_EVENT = {
     "event_id": "evt-001",
@@ -48,6 +48,7 @@ def _make_consumer(messages: list):
 
 async def test_consumer_topics_list():
     from src.consumer import TOPICS
+
     expected = [
         "ocean.signals",
         "ocean.alerts",
@@ -59,7 +60,7 @@ async def test_consumer_topics_list():
         "ocean.logistics",
         "ocean.ops",
     ]
-    assert TOPICS == expected
+    assert expected == TOPICS
 
 
 async def test_run_consumer_calls_writer_on_message():
@@ -70,12 +71,11 @@ async def test_run_consumer_calls_writer_on_message():
 
     with patch("src.consumer.Consumer", return_value=mock_consumer):
         from src.consumer import run_consumer
+
         with pytest.raises(asyncio.CancelledError):
             await run_consumer(mock_writer, "localhost:9092")
 
-    mock_writer.write_event.assert_awaited_once_with(
-        msg.value(), topic=msg.topic()
-    )
+    mock_writer.write_event.assert_awaited_once_with(msg.value(), topic=msg.topic())
 
 
 async def test_run_consumer_commits_after_write():
@@ -86,6 +86,7 @@ async def test_run_consumer_commits_after_write():
 
     with patch("src.consumer.Consumer", return_value=mock_consumer):
         from src.consumer import run_consumer
+
         with pytest.raises(asyncio.CancelledError):
             await run_consumer(mock_writer, "localhost:9092")
 
@@ -100,6 +101,7 @@ async def test_run_consumer_skips_commit_on_write_failure():
 
     with patch("src.consumer.Consumer", return_value=mock_consumer):
         from src.consumer import run_consumer
+
         with pytest.raises(asyncio.CancelledError):
             await run_consumer(mock_writer, "localhost:9092")
 
@@ -116,6 +118,7 @@ async def test_run_consumer_skips_partition_eof():
 
     with patch("src.consumer.Consumer", return_value=mock_consumer):
         from src.consumer import run_consumer
+
         with pytest.raises(asyncio.CancelledError):
             await run_consumer(mock_writer, "localhost:9092")
 

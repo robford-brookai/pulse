@@ -3,6 +3,7 @@ Usage: pytest test/cat5_api_contract.py -v
 Requires: all services running (docker compose up).
 Tests every endpoint for correct status code and JSON shape.
 """
+
 from __future__ import annotations
 
 import json
@@ -14,14 +15,14 @@ import pytest
 
 # Service base URLs — map service name to (host, port)
 SERVICES = {
-    "event-store":      ("localhost", 8001),
-    "pocar-connector":  ("localhost", 8002),
+    "event-store": ("localhost", 8001),
+    "pocar-connector": ("localhost", 8002),
     "graph-projection": ("localhost", 8003),
-    "control-plane":    ("localhost", 8004),
-    "slack-bot":        ("localhost", 8005),
-    "zcc-connector":    ("localhost", 8006),
-    "sim-driver":       ("localhost", 8060),
-    "stacte-bridge":    ("localhost", 8070),
+    "control-plane": ("localhost", 8004),
+    "slack-bot": ("localhost", 8005),
+    "zcc-connector": ("localhost", 8006),
+    "sim-driver": ("localhost", 8060),
+    "stacte-bridge": ("localhost", 8070),
 }
 
 
@@ -29,15 +30,19 @@ SERVICES = {
 # Health endpoints — all 8 services
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("svc,port", [
-    ("event-store",      8001),
-    ("pocar-connector",  8002),
-    ("graph-projection", 8003),
-    ("control-plane",    8004),
-    ("slack-bot",        8005),
-    ("zcc-connector",    8006),
-    ("stacte-bridge",    8070),
-])
+
+@pytest.mark.parametrize(
+    "svc,port",
+    [
+        ("event-store", 8001),
+        ("pocar-connector", 8002),
+        ("graph-projection", 8003),
+        ("control-plane", 8004),
+        ("slack-bot", 8005),
+        ("zcc-connector", 8006),
+        ("stacte-bridge", 8070),
+    ],
+)
 def test_health_endpoint(svc, port):
     t0 = time.time()
     r = httpx.get(f"http://localhost:{port}/health", timeout=5)
@@ -63,6 +68,7 @@ def test_sim_driver_health_includes_active_scenarios():
 # ---------------------------------------------------------------------------
 # sim-driver: POST /simulate
 # ---------------------------------------------------------------------------
+
 
 def test_simulate_valid_scenario_returns_started():
     r = httpx.post(
@@ -98,6 +104,7 @@ def test_simulate_default_scenario_field():
 # stacte-bridge: POST /sync
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize("entity_type", ["alerts", "tasks", "interactions", "outcomes"])
 def test_sync_valid_entity_type(entity_type):
     r = httpx.post(
@@ -123,6 +130,7 @@ def test_sync_invalid_entity_type_returns_400():
 # ---------------------------------------------------------------------------
 # stacte-bridge: GET /search
 # ---------------------------------------------------------------------------
+
 
 def test_search_returns_expected_shape():
     r = httpx.get(
@@ -156,6 +164,7 @@ def test_search_missing_query_returns_422():
 # stacte-bridge: GET /schema
 # ---------------------------------------------------------------------------
 
+
 def test_schema_returns_tables():
     r = httpx.get("http://localhost:8070/schema", timeout=5)
     assert r.status_code == 200
@@ -170,6 +179,7 @@ def test_schema_returns_tables():
 # stacte-bridge: GET /graph/{entity_id}
 # ---------------------------------------------------------------------------
 
+
 def test_graph_unknown_entity_returns_not_found():
     r = httpx.get("http://localhost:8070/graph/nonexistent-id-xyz-000", timeout=5)
     assert r.status_code in (200, 404)
@@ -183,9 +193,11 @@ def test_graph_unknown_entity_returns_not_found():
 # pocar-connector: POST /webhooks/pocar — contract shape
 # ---------------------------------------------------------------------------
 
+
 def test_pocar_webhook_accepted_shape():
     import hashlib
     import hmac as _hmac
+
     secret = os.environ.get("POCAR_WEBHOOK_SECRET", "dev_secret")
     body = json.dumps({
         "alert_id": "test-001",

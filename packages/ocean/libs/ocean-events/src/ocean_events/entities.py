@@ -3,6 +3,7 @@
 These represent graph state — not events. They are used by graph projection
 workers and the control plane to represent current entity state.
 """
+
 from __future__ import annotations
 
 from datetime import datetime

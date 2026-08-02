@@ -9,6 +9,7 @@ Prerequisites:
     - Docker must be available (Redpanda runs via testcontainers).
     - ``ocean.patient-state`` topic auto-creates on Redpanda (default config).
 """
+
 from __future__ import annotations
 
 import json
@@ -17,7 +18,6 @@ from uuid import uuid4
 
 import pytest
 from confluent_kafka import Consumer, Producer
-
 from ocean_broker import build_consumer_config, build_producer_config
 
 pytestmark = pytest.mark.integration

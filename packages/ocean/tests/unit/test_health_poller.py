@@ -2,6 +2,7 @@
 
 Sourced from test/cat7_background_jobs.py.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -9,12 +10,11 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from utils import setup_service
 
 setup_service("slack-bot")
 
-from src.health_poller import poll_connector_health, SILENCE_THRESHOLD_SECS, REPEAT_INTERVAL_SECS  # noqa: E402
+from src.health_poller import REPEAT_INTERVAL_SECS, SILENCE_THRESHOLD_SECS, poll_connector_health
 
 
 def test_silence_threshold_is_300_seconds():
@@ -60,9 +60,8 @@ async def test_poll_posts_alert_for_silent_connector():
         if call_count >= 2:
             raise asyncio.CancelledError()
 
-    with patch("asyncio.sleep", side_effect=fake_sleep):
-        with pytest.raises(asyncio.CancelledError):
-            await poll_connector_health(slack_client, "#ocean-ops", mock_session_maker)
+    with patch("asyncio.sleep", side_effect=fake_sleep), pytest.raises(asyncio.CancelledError):
+        await poll_connector_health(slack_client, "#ocean-ops", mock_session_maker)
 
     slack_client.chat_postMessage.assert_called_once()
     call_kwargs = slack_client.chat_postMessage.call_args.kwargs
@@ -99,9 +98,8 @@ async def test_poll_skips_recently_alerted_connector():
         if call_count >= 2:
             raise asyncio.CancelledError()
 
-    with patch("asyncio.sleep", side_effect=fake_sleep):
-        with pytest.raises(asyncio.CancelledError):
-            await poll_connector_health(slack_client, "#ocean-ops", mock_session_maker)
+    with patch("asyncio.sleep", side_effect=fake_sleep), pytest.raises(asyncio.CancelledError):
+        await poll_connector_health(slack_client, "#ocean-ops", mock_session_maker)
 
     slack_client.chat_postMessage.assert_not_called()
 
@@ -123,9 +121,8 @@ async def test_poll_does_not_crash_on_exception():
         if call_count >= 3:
             raise asyncio.CancelledError()
 
-    with patch("asyncio.sleep", side_effect=fake_sleep):
-        with pytest.raises(asyncio.CancelledError):
-            await poll_connector_health(slack_client, "#ocean-ops", mock_session_maker)
+    with patch("asyncio.sleep", side_effect=fake_sleep), pytest.raises(asyncio.CancelledError):
+        await poll_connector_health(slack_client, "#ocean-ops", mock_session_maker)
 
     # Made it through 2 loop iterations (exception swallowed each time)
     assert call_count == 3

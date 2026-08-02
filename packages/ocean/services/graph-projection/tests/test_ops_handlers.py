@@ -1,4 +1,5 @@
 """Unit tests for graph-projection ops event handlers."""
+
 from __future__ import annotations
 
 import os

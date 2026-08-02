@@ -1,4 +1,5 @@
 """GH-02: GitHub connector normalizes PR events (opened/merged/closed)."""
+
 from pathlib import Path
 
 _ROOT = Path(__file__).parents[2]

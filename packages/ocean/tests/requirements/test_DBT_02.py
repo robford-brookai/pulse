@@ -1,9 +1,19 @@
 """DBT-02: stg_ocean_events extracts typed columns from VARIANT JSON with event_type filtering."""
+
 from __future__ import annotations
 
 from pathlib import Path
 
-STG_FILE = Path(__file__).resolve().parents[2] / ".repos" / "streamline" / "dbt_project" / "models" / "ocean" / "input" / "stg_ocean_events.sql"
+STG_FILE = (
+    Path(__file__).resolve().parents[2]
+    / ".repos"
+    / "streamline"
+    / "dbt_project"
+    / "models"
+    / "ocean"
+    / "input"
+    / "stg_ocean_events.sql"
+)
 
 
 def test_stg_ocean_events_exists():

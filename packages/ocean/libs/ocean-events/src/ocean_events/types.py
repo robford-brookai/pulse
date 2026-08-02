@@ -1,19 +1,39 @@
 """Event and entity type aliases for Ocean events."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Literal
 
 SourceSystem = Literal[
-    "pocar", "zcc", "ocean", "linear", "github", "hubspot", "impilo",
-    "control-plane", "agent-worker", "call-simulator", "sim-driver",
+    "pocar",
+    "zcc",
+    "ocean",
+    "linear",
+    "github",
+    "hubspot",
+    "impilo",
+    "control-plane",
+    "agent-worker",
+    "call-simulator",
+    "sim-driver",
     "mongodb-connector",
 ]
 
 EntityType = Literal[
-    "patient", "alert", "task", "interaction", "outcome", "signal", "ticket",
-    "fulfillment", "return", "device_association",
-    "pull_request", "commit", "contact",
+    "patient",
+    "alert",
+    "task",
+    "interaction",
+    "outcome",
+    "signal",
+    "ticket",
+    "fulfillment",
+    "return",
+    "device_association",
+    "pull_request",
+    "commit",
+    "contact",
     "patient_feature",
 ]
 
@@ -56,6 +76,7 @@ class OutcomeRecorded:
     resolution_type: str  # "resolved" | "false_positive" | "completed" | "missed"
     resolved_by: str
     correlation_id: str
+
 
 # Composite alias for event type strings — dot-namespaced, past-tense
 EventType = Literal[

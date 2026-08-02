@@ -1,4 +1,5 @@
 """SLACK-CONN-03: MCP server with 12 tools, API key middleware, mounted at /mcp."""
+
 from __future__ import annotations
 
 import ast
@@ -53,28 +54,30 @@ class TestMCPServerSourceInspection:
         for node in ast.walk(tree):
             if isinstance(node, ast.AsyncFunctionDef):
                 for dec in node.decorator_list:
-                    if (
-                        isinstance(dec, ast.Call)
-                        and isinstance(dec.func, ast.Attribute)
-                        and dec.func.attr == "tool"
-                    ):
+                    if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Attribute) and dec.func.attr == "tool":
                         tool_funcs.append(node.name)
         expected_prefixes = {"slack_", "ocean_", "sim_"}
         for name in tool_funcs:
             prefix = name.split("_")[0] + "_"
             assert prefix in expected_prefixes, (
-                f"Tool '{name}' doesn't follow domain_action naming "
-                f"(expected prefix in {expected_prefixes})"
+                f"Tool '{name}' doesn't follow domain_action naming (expected prefix in {expected_prefixes})"
             )
 
     def test_expected_tools_present(self):
         source = _read_source(MCP_SERVER_PATH)
         expected = [
-            "slack_send_message", "slack_post_card", "slack_read_channel",
-            "slack_react", "slack_update_message", "slack_list_channels",
-            "ocean_get_task_status", "ocean_get_patient_summary",
-            "ocean_list_open_tasks", "ocean_event_replay",
-            "sim_trigger", "ocean_service_health",
+            "slack_send_message",
+            "slack_post_card",
+            "slack_read_channel",
+            "slack_react",
+            "slack_update_message",
+            "slack_list_channels",
+            "ocean_get_task_status",
+            "ocean_get_patient_summary",
+            "ocean_list_open_tasks",
+            "ocean_event_replay",
+            "sim_trigger",
+            "ocean_service_health",
         ]
         for tool_name in expected:
             assert f"async def {tool_name}" in source, f"Missing tool: {tool_name}"
@@ -101,9 +104,7 @@ class TestMainSourceInspection:
 
     def test_mounts_mcp_app(self):
         source = _read_source(MAIN_PATH)
-        assert re.search(r'mount.*["\']\/mcp["\']', source), (
-            "main.py should mount MCP app at /mcp"
-        )
+        assert re.search(r'mount.*["\']\/mcp["\']', source), "main.py should mount MCP app at /mcp"
 
     def test_middleware_checks_x_api_key(self):
         source = _read_source(MAIN_PATH)

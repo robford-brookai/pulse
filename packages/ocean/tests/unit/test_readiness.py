@@ -3,14 +3,13 @@
 Each test mocks ``app.state`` to simulate different leader / watcher /
 token-freshness states without running the full lifespan.
 """
+
 from __future__ import annotations
 
 import pathlib
 import sys
-from datetime import datetime, timezone, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, MagicMock
 
 # ---------------------------------------------------------------------------
 # Path setup — same pattern as test_watcher_manager.py
@@ -33,15 +32,15 @@ for _mod_name in (
     if _mod_name not in sys.modules:
         sys.modules[_mod_name] = MagicMock()
 
-from contextlib import asynccontextmanager  # noqa: E402
+from contextlib import asynccontextmanager
 
-from fastapi import FastAPI  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 # Import the endpoint functions from main, but build a separate app
 # without the real lifespan (which installs signal handlers that fail
 # outside the main thread).
-from src.main import healthz, readyz, _LATEST_TOKEN_SQL  # noqa: E402
+from src.main import healthz, readyz
 
 
 @asynccontextmanager
@@ -58,6 +57,7 @@ app.get("/readyz")(readyz)
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _configure_state(
     *,

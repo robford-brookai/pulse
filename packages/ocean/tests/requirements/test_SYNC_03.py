@@ -1,4 +1,5 @@
 """SYNC-03: Snowflake DDL provisions OCEAN_RAW/CORE/MARTS schemas with RBAC isolation."""
+
 from pathlib import Path
 
 _ROOT = Path(__file__).parents[2]
@@ -12,8 +13,7 @@ def _ddl() -> str:
 def test_ocean_schemas_created():
     ddl = _ddl()
     for schema in ("OCEAN_RAW", "OCEAN_CORE", "OCEAN_MARTS"):
-        assert f"CREATE SCHEMA IF NOT EXISTS STREAMLINE.{schema}" in ddl, \
-            f"Missing CREATE SCHEMA for {schema}"
+        assert f"CREATE SCHEMA IF NOT EXISTS STREAMLINE.{schema}" in ddl, f"Missing CREATE SCHEMA for {schema}"
 
 
 def test_events_table_created():
@@ -41,7 +41,5 @@ def test_phi_schemas_not_granted_to_analyst():
     analyst_section_start = ddl.find("-- Analyst grants")
     assert analyst_section_start != -1, "DDL missing '-- Analyst grants' comment"
     analyst_section = ddl[analyst_section_start:]
-    assert "ZCC_" not in analyst_section, \
-        "OCEAN_ANALYST must not have grants on ZCC_* schemas"
-    assert "IMPILO_" not in analyst_section, \
-        "OCEAN_ANALYST must not have grants on IMPILO_* schemas"
+    assert "ZCC_" not in analyst_section, "OCEAN_ANALYST must not have grants on ZCC_* schemas"
+    assert "IMPILO_" not in analyst_section, "OCEAN_ANALYST must not have grants on IMPILO_* schemas"

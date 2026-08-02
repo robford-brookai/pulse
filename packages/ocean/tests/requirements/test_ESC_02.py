@@ -3,6 +3,7 @@
 Verifies check_and_escalate publishes events with upgraded priority
 to ocean.tasks / ocean.tickets topics.
 """
+
 from __future__ import annotations
 
 import importlib.util

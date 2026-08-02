@@ -20,6 +20,7 @@ Usage::
     # On shutdown:
     await elector.release()
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -32,9 +33,7 @@ logger = structlog.get_logger(__name__)
 
 # Stable int64 lock ID derived from the service name.
 # md5 → first 8 bytes → signed big-endian int64.
-LOCK_ID: int = int.from_bytes(
-    hashlib.md5(b"mongodb-connector").digest()[:8], "big", signed=True
-)
+LOCK_ID: int = int.from_bytes(hashlib.md5(b"mongodb-connector").digest()[:8], "big", signed=True)
 
 _ACQUIRE_SQL = text("SELECT pg_try_advisory_lock(:lock_id)")
 _RELEASE_SQL = text("SELECT pg_advisory_unlock(:lock_id)")
@@ -78,9 +77,7 @@ class LeaderElector:
             raw_conn = await self._engine.connect()
             # Detach from pool so close() truly closes the DBAPI conn.
             detached = await raw_conn.get_raw_connection()
-            result = await raw_conn.execute(
-                _ACQUIRE_SQL, {"lock_id": LOCK_ID}
-            )
+            result = await raw_conn.execute(_ACQUIRE_SQL, {"lock_id": LOCK_ID})
             acquired = result.scalar()
 
             if acquired:
@@ -95,9 +92,7 @@ class LeaderElector:
                 return False
 
         except Exception as exc:
-            logger.error(
-                "leader_check_failed", lock_id=LOCK_ID, error=str(exc)
-            )
+            logger.error("leader_check_failed", lock_id=LOCK_ID, error=str(exc))
             # Best-effort cleanup of the connection we may have opened.
             if self._conn is not None:
                 try:
@@ -118,14 +113,10 @@ class LeaderElector:
 
         try:
             if self._conn is not None:
-                await self._conn.execute(
-                    _RELEASE_SQL, {"lock_id": LOCK_ID}
-                )
+                await self._conn.execute(_RELEASE_SQL, {"lock_id": LOCK_ID})
                 await self._conn.close()
         except Exception as exc:
-            logger.warning(
-                "leader_release_error", lock_id=LOCK_ID, error=str(exc)
-            )
+            logger.warning("leader_release_error", lock_id=LOCK_ID, error=str(exc))
         finally:
             self._conn = None
             self._is_leader = False

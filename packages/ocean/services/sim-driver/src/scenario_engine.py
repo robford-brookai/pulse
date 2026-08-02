@@ -3,6 +3,7 @@
 Validates YAML against Pydantic ScenarioConfig at load time. Each patient is driven
 by a PatientSimulator that publishes signal.received and alert.created events.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -67,9 +68,7 @@ class ScenarioEngine:
     def expected_event_count(self) -> int:
         """Sum of expected events across all patients."""
         return sum(
-            PatientSimulator(
-                self._config.name, p, self._publisher, self._config.compression_ratio
-            ).expected_event_count
+            PatientSimulator(self._config.name, p, self._publisher, self._config.compression_ratio).expected_event_count
             for p in self._config.patients
         )
 
@@ -110,23 +109,14 @@ class ScenarioEngine:
             },
         )
 
-        patient_tasks = [
-            self._run_patient(p) for p in self._config.patients
-        ]
-        await asyncio.gather(
-            *patient_tasks, return_exceptions=True
-        )
+        patient_tasks = [self._run_patient(p) for p in self._config.patients]
+        await asyncio.gather(*patient_tasks, return_exceptions=True)
 
         elapsed = time.monotonic() - start_time
         self._running = False
 
         # Count events from publisher calls for stats
-        alerts = sum(
-            1
-            for p in self._config.patients
-            for s in p.signals
-            if s.anomalous
-        )
+        alerts = sum(1 for p in self._config.patients for s in p.signals if s.anomalous)
 
         # Publish scenario.completed bookend
         await self._publish_bookend(
@@ -149,9 +139,7 @@ class ScenarioEngine:
     ) -> None:
         """Publish a scenario bookend event to ocean.ops."""
         key = f"sim:{self.scenario_name}:{event_type}"
-        event_id = uuid.UUID(
-            bytes=hashlib.sha256(key.encode()).digest()[:16]
-        )
+        event_id = uuid.UUID(bytes=hashlib.sha256(key.encode()).digest()[:16])
         event = BaseEvent(
             event_id=event_id,
             event_type=event_type,
@@ -164,9 +152,7 @@ class ScenarioEngine:
             actor_id=None,
             payload=payload,
         )
-        await self._publisher.publish(
-            "ocean.ops", event.model_dump(mode="json")
-        )
+        await self._publisher.publish("ocean.ops", event.model_dump(mode="json"))
 
     async def _run_patient(self, patient: PatientConfig) -> None:
         """Drive one patient through their scheduled signal sequence."""

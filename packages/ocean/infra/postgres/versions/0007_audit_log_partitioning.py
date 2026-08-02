@@ -9,6 +9,7 @@ Revision ID: 0007
 Revises: 0006
 Create Date: 2026-03-07
 """
+
 from __future__ import annotations
 
 import datetime
@@ -75,10 +76,7 @@ def upgrade() -> None:
 
     # 4. Create monthly partitions: 1 month back through 12 months forward
     for name, start, end in _partition_boundaries():
-        op.execute(
-            f"CREATE TABLE {name} PARTITION OF audit_log "
-            f"FOR VALUES FROM ('{start}') TO ('{end}');"
-        )
+        op.execute(f"CREATE TABLE {name} PARTITION OF audit_log FOR VALUES FROM ('{start}') TO ('{end}');")
 
     # 5. Create DEFAULT partition for rows outside defined ranges
     op.execute("CREATE TABLE audit_log_default PARTITION OF audit_log DEFAULT;")

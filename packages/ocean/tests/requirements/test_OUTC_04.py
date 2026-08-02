@@ -3,15 +3,15 @@
 Requirement: handle_call_completed and handle_call_missed both publish
 outcome.recorded with entity_type="call".
 """
+
 from __future__ import annotations
 
 import pytest
-
 from utils import setup_service
 
 setup_service("control-plane")
 
-from src.handlers.outcomes import handle_call_completed, handle_call_missed  # noqa: E402
+from src.handlers.outcomes import handle_call_completed, handle_call_missed
 
 
 @pytest.mark.asyncio

@@ -1,4 +1,5 @@
 """Kafka consumer for outreach approval events on ocean.ai-ops."""
+
 from __future__ import annotations
 
 import asyncio

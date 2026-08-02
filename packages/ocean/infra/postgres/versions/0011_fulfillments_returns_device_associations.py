@@ -4,6 +4,7 @@ Revision ID: 0011
 Revises: 0010
 Create Date: 2026-03-13
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
@@ -79,15 +80,9 @@ def upgrade() -> None:
             """
         )
     )
-    op.execute(
-        sa.text("CREATE INDEX ix_device_associations_patient_id ON device_associations(patient_id)")
-    )
-    op.execute(
-        sa.text("CREATE INDEX ix_device_associations_device_id ON device_associations(device_id)")
-    )
-    op.execute(
-        sa.text("CREATE INDEX ix_device_associations_status ON device_associations(status)")
-    )
+    op.execute(sa.text("CREATE INDEX ix_device_associations_patient_id ON device_associations(patient_id)"))
+    op.execute(sa.text("CREATE INDEX ix_device_associations_device_id ON device_associations(device_id)"))
+    op.execute(sa.text("CREATE INDEX ix_device_associations_status ON device_associations(status)"))
 
 
 def downgrade() -> None:

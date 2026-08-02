@@ -1,4 +1,5 @@
 """Unit tests for RMA request handler and return status update handler."""
+
 from __future__ import annotations
 
 import os
@@ -103,16 +104,18 @@ class TestHandleRmaRequested:
         producer = AsyncMock()
         event = _make_rma_requested_event()
 
-        with patch(
-            "src.handlers.tickets.create_rma",
-            new_callable=AsyncMock,
-            return_value={"id": "ret-001", "status": "initiated"},
-        ):
-            with patch.dict(
+        with (
+            patch(
+                "src.handlers.tickets.create_rma",
+                new_callable=AsyncMock,
+                return_value={"id": "ret-001", "status": "initiated"},
+            ),
+            patch.dict(
                 os.environ,
                 {"IMPILO_API_URL": "http://impilo.test", "IMPILO_API_KEY": "key-123"},
-            ):
-                await handle_rma_requested(event, session, producer=producer)
+            ),
+        ):
+            await handle_rma_requested(event, session, producer=producer)
 
         assert producer.publish.called
         pub_event = producer.publish.call_args[0][1]
@@ -124,9 +127,7 @@ class TestHandleRmaRequested:
         from src.handlers.tickets import handle_rma_requested
 
         session = AsyncMock()
-        session.execute = AsyncMock(
-            return_value=_mock_ticket_row(category="clinical_support")
-        )
+        session.execute = AsyncMock(return_value=_mock_ticket_row(category="clinical_support"))
         producer = AsyncMock()
         event = _make_rma_requested_event()
 
@@ -174,16 +175,18 @@ class TestHandleRmaRequested:
         mock_resp = MagicMock()
         mock_resp.status_code = 500
 
-        with patch(
-            "src.handlers.tickets.create_rma",
-            new_callable=AsyncMock,
-            side_effect=httpx.HTTPStatusError("500", request=MagicMock(), response=mock_resp),
-        ):
-            with patch.dict(
+        with (
+            patch(
+                "src.handlers.tickets.create_rma",
+                new_callable=AsyncMock,
+                side_effect=httpx.HTTPStatusError("500", request=MagicMock(), response=mock_resp),
+            ),
+            patch.dict(
                 os.environ,
                 {"IMPILO_API_URL": "http://impilo.test", "IMPILO_API_KEY": "key-123"},
-            ):
-                await handle_rma_requested(event, session, producer=producer)
+            ),
+        ):
+            await handle_rma_requested(event, session, producer=producer)
 
         pub_event = producer.publish.call_args[0][1]
         assert pub_event["event_type"] == "ticket.rma.failed"

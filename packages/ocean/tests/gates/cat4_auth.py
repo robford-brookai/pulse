@@ -4,6 +4,7 @@ Usage: BASE_URL_POCAR=http://localhost:8002 BASE_URL_ZCC=http://localhost:8006 \
        pytest test/cat4_auth.py -v
 Requires: pocar-connector (port 8002) and zcc-connector (port 8006) running.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -16,9 +17,9 @@ import httpx
 import pytest
 
 BASE_URL_POCAR = os.environ.get("BASE_URL_POCAR", "http://localhost:8002")
-BASE_URL_ZCC   = os.environ.get("BASE_URL_ZCC",   "http://localhost:8006")
-POCAR_SECRET   = os.environ.get("POCAR_WEBHOOK_SECRET", "dev_secret")
-ZCC_SECRET     = os.environ.get("ZCC_WEBHOOK_SECRET",   "dev_secret")
+BASE_URL_ZCC = os.environ.get("BASE_URL_ZCC", "http://localhost:8006")
+POCAR_SECRET = os.environ.get("POCAR_WEBHOOK_SECRET", "dev_secret")
+ZCC_SECRET = os.environ.get("ZCC_WEBHOOK_SECRET", "dev_secret")
 
 # Minimal valid POCAR payload
 _POCAR_BODY = json.dumps({
@@ -36,7 +37,7 @@ _ZCC_BODY = json.dumps({
             "engagement_id": "eng-001",
             "duration": 120,
         }
-    }
+    },
 }).encode()
 
 
@@ -53,10 +54,14 @@ def _zcc_sig(body: bytes, ts: str) -> str:
 # Public health endpoints — no auth required
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("url,svc", [
-    (f"{BASE_URL_POCAR}/health", "pocar-connector"),
-    (f"{BASE_URL_ZCC}/health",   "zcc-connector"),
-])
+
+@pytest.mark.parametrize(
+    "url,svc",
+    [
+        (f"{BASE_URL_POCAR}/health", "pocar-connector"),
+        (f"{BASE_URL_ZCC}/health", "zcc-connector"),
+    ],
+)
 def test_health_no_auth_returns_200(url, svc):
     r = httpx.get(url, timeout=5)
     assert r.status_code == 200, f"{svc} /health returned {r.status_code}"
@@ -67,6 +72,7 @@ def test_health_no_auth_returns_200(url, svc):
 # ---------------------------------------------------------------------------
 # POCAR webhook — HMAC-SHA256 (X-Pocar-Signature header)
 # ---------------------------------------------------------------------------
+
 
 def test_pocar_missing_signature_returns_401():
     r = httpx.post(
@@ -122,6 +128,7 @@ def test_pocar_valid_signature_returns_200():
 # ---------------------------------------------------------------------------
 # ZCC webhook — Zoom v0 HMAC-SHA256 (x-zm-signature + x-zm-request-timestamp)
 # ---------------------------------------------------------------------------
+
 
 def test_zcc_missing_signature_returns_401():
     r = httpx.post(

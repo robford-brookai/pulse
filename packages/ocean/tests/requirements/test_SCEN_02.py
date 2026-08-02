@@ -4,6 +4,7 @@ Requirement: The pilot_demo scenario has 50 patients spanning all 3 severity
 levels (CRITICAL, URGENT, HIGH) with both approve-path and escalate-path
 signal types.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -16,7 +17,8 @@ _SCENARIO_PATH = _SIM_DRIVER / "scenarios" / "pilot_demo.yaml"
 
 # Import models from sim-driver without polluting sys.path
 _spec = importlib.util.spec_from_file_location(
-    "sim_driver_models", _SIM_DRIVER / "src" / "models.py",
+    "sim_driver_models",
+    _SIM_DRIVER / "src" / "models.py",
 )
 _mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
@@ -66,9 +68,9 @@ def test_approve_path_signals_exist():
         for signal in patient.signals:
             if not signal.anomalous:
                 continue
-            if signal.severity_hint == "CRITICAL":
-                approve_found = True
-            elif signal.severity_hint == "URGENT" and signal.type in _URGENT_APPROVE_SIGNALS:
+            if signal.severity_hint == "CRITICAL" or (
+                signal.severity_hint == "URGENT" and signal.type in _URGENT_APPROVE_SIGNALS
+            ):
                 approve_found = True
     assert approve_found, "No approve-path signals found"
 
@@ -81,9 +83,9 @@ def test_escalate_path_signals_exist():
         for signal in patient.signals:
             if not signal.anomalous:
                 continue
-            if signal.severity_hint == "HIGH":
-                escalate_found = True
-            elif signal.severity_hint == "URGENT" and signal.type not in _URGENT_APPROVE_SIGNALS:
+            if signal.severity_hint == "HIGH" or (
+                signal.severity_hint == "URGENT" and signal.type not in _URGENT_APPROVE_SIGNALS
+            ):
                 escalate_found = True
     assert escalate_found, "No escalate-path signals found"
 
@@ -91,11 +93,6 @@ def test_escalate_path_signals_exist():
 def test_event_estimate_minimum():
     """Each anomalous signal produces ~8-10 events through the pipeline."""
     scenario = _load_scenario()
-    anomalous_count = sum(
-        1
-        for patient in scenario.patients
-        for signal in patient.signals
-        if signal.anomalous
-    )
+    anomalous_count = sum(1 for patient in scenario.patients for signal in patient.signals if signal.anomalous)
     # 10 patients each with at least one anomalous signal
     assert anomalous_count >= 10, f"Too few anomalous signals: {anomalous_count}"

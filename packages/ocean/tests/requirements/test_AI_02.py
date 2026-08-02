@@ -4,15 +4,14 @@ Requirement: The alert card Block Kit structure includes a signals citation bloc
 (block index 4) that lists the signal types returned by the AI summary, shown as
 "_Context signals: <signal1>, <signal2>_".
 """
-from __future__ import annotations
 
-import pytest
+from __future__ import annotations
 
 from utils import setup_service
 
 setup_service("slack-bot")
 
-from src.cards import alert_card  # noqa: E402
+from src.cards import alert_card
 
 
 def test_alert_card_cited_signals_appear_in_block_4():
