@@ -8,15 +8,15 @@ the consumer contract for Phase 11's agent-worker.
 from __future__ import annotations
 
 import asyncio
-import os
 from contextlib import asynccontextmanager
 
 import httpx
 import structlog
 from fastapi import FastAPI, HTTPException
+from ocean_broker.publisher import EventBridgePublisher
 from pydantic import BaseModel, ValidationError
 
-from src.publisher import RedpandaPublisher
+from src.publisher import build_publisher
 from src.scenario_engine import ScenarioEngine
 
 __version__ = "2.0.0"
@@ -25,15 +25,14 @@ log = structlog.get_logger()
 
 # Track running scenarios to prevent duplicate runs
 _active_scenarios: dict[str, asyncio.Task] = {}
-_publisher: RedpandaPublisher | None = None
+_publisher: EventBridgePublisher | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _publisher
-    brokers = os.environ.get("REDPANDA_BROKERS", "redpanda:29092")
-    _publisher = RedpandaPublisher(bootstrap_servers=brokers)
-    log.info("sim_driver_started", brokers=brokers)
+    _publisher = build_publisher()
+    log.info("sim_driver_started")
 
     yield
 
