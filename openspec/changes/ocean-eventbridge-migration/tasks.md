@@ -118,14 +118,14 @@ raised the collision mid-flight; the original plan declared 3.1–3.5 `parallel:
       `[model: sonnet | deps: 1.3 | lane: repo_change | wave: 2a]`
       `serial: alembic_sequence` — the only task in this wave that may touch
       `infra/postgres/versions/`. Blocks 3.1–3.5.
-- [ ] 3.1 [DNA-738] `graph-projection/src/handlers/outcomes.py:44` and `:103` — replace the unguarded
+- [x] 3.1 [DNA-738] `graph-projection/src/handlers/outcomes.py:44` and `:103` — replace the unguarded
       `DO UPDATE SET outcome = …` pairs with an event-time sequence guard. Note `completed_at` is
       written as `:now` (processing time) and MUST NOT be the guard column; add an event-time
       column if none exists. This is the audit's worst case: today a completed call can be
       silently rewritten to missed.
       `[model: opus | deps: 3.0 | lane: repo_change | wave: 2a]`
       Model `opus`: concurrency judgement, and the obvious fix is the wrong one.
-- [ ] 3.2 [DNA-739] `graph-projection/src/handlers/interactions.py:36` and `:72` — replace the
+- [x] 3.2 [DNA-739] `graph-projection/src/handlers/interactions.py:36` and `:72` — replace the
       `last_event_id IS DISTINCT FROM` predicate with a sequence guard. Dedup is not ordering.
       `[model: opus | deps: 3.0 | lane: repo_change | wave: 2a]`
 - [x] 3.3 [DNA-740] `graph-projection/src/handlers/logistics.py:125` (`device_associations`) — same
@@ -140,7 +140,7 @@ raised the collision mid-flight; the original plan declared 3.1–3.5 `parallel:
       (`created` → `updated` → `resolved`) leaves the same terminal Slack text as in-order.
       `[model: opus | deps: 3.0 | lane: repo_change | wave: 2a]`
       Model `opus`: the effect leaves the system and is not undoable by a later event.
-- [ ] 3.6 [DNA-743] Re-confirm `control-plane`'s ordering verdict per handler in `EVENT_HANDLERS` and record
+- [x] 3.6 [DNA-743] Re-confirm `control-plane`'s ordering verdict per handler in `EVENT_HANDLERS` and record
       the evidence. Any handler found order-dependent gets the 3.1 treatment as a new task under
       this group.
       `[model: opus | deps: 1.3 | lane: repo_change | wave: 2a]`
