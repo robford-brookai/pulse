@@ -386,6 +386,120 @@ class TestAmbiguityWarning:
         assert norm["meta"]["ambiguous_row_groups"] == []
 
 
+class TestMappingAwareCanonicalOrder:
+    """Audit rows referencing already-renamed uuids must sort by those tokens.
+
+    Found by the live 8.2 runs (DNA-774): every call produces audit rows whose
+    entity_id was already renamed via the interactions table, plus a fresh
+    event_id/audit_id seen nowhere else. A sort key that blinds *all*
+    non-universe uuids makes those rows tie, so fresh tokens pair with mapped
+    tokens in capture order — and two runs that differ only in physical row
+    order diff as NOT EQUIVALENT. The key must reuse the tokens the renamer
+    has already assigned (they were assigned in canonical order) and blind
+    only genuinely-unseen uuids.
+    """
+
+    @staticmethod
+    def _snapshot(audit_order: list[int]) -> dict:
+        patients = ["sim-pt-001", "sim-pt-002"]
+        iids = [str(uuid.uuid4()) for _ in patients]
+        eids = [str(uuid.uuid4()) for _ in patients]
+        interactions = [
+            {
+                "interaction_id": iids[i],
+                "task_id": "",
+                "patient_id": patients[i],
+                "interaction_type": "call",
+                "outcome": "completed",
+                "started_at": "2026-08-02T10:00:04+00:00",
+                "completed_at": "2026-08-02T10:00:09+00:00",
+                "last_event_at": "2026-08-02T10:00:04+00:00",
+                "last_event_id": eids[i],
+            }
+            for i in range(len(patients))
+        ]
+        audit = [
+            {
+                "audit_id": str(uuid.uuid4()),
+                "event_id": eids[i],
+                "action_type": "event.ingested",
+                "actor_id": "system",
+                "source_system": "call-simulator",
+                "entity_type": "interaction",
+                "entity_id": iids[i],
+                "timestamp": "2026-08-02T10:00:09.500000+00:00",
+                "detail": {"event_type": "call.completed", "topic": "interactions"},
+                "recorded_at": "2026-08-02T10:00:09.600000+00:00",
+            }
+            for i in audit_order
+        ]
+        return {
+            "meta": {"scenario": "smoke", "label": "run"},
+            "deterministic_ids": sorted(eh.deterministic_ids(SCENARIO)),
+            "tables": {"interactions": interactions, "audit_log": audit},
+        }
+
+    def test_audit_rows_pair_fresh_tokens_with_mapped_tokens_consistently(self):
+        result = eh.diff_snapshots(self._snapshot([0, 1]), self._snapshot([1, 0]))
+        assert result.equivalent, eh.render_report(result)
+
+    def test_rows_distinguished_by_mapped_uuid_are_not_flagged_ambiguous(self):
+        norm = eh.normalize_snapshot(self._snapshot([0, 1]))
+        assert norm["meta"]["ambiguous_row_groups"] == []
+
+
+class TestIgnoreAuditEvent:
+    """Row-level audit_log exclusion for uptime-driven event types.
+
+    Found by the live 8.2 runs: connectors emit connector.heartbeat on a
+    wall-clock interval, so a capture's heartbeat row count measures stack
+    uptime, not transport behavior. The exclusion must apply to the RAW
+    capture before normalization — heartbeat counts differ between sides, and
+    dropping rows after token assignment would shift every token numbered
+    after them in canonical order. Like column ignores, each excluded event
+    type is recorded in the report so the gate stays honest.
+    """
+
+    @staticmethod
+    def _with_heartbeats(count: int) -> dict:
+        snap = run_a()
+        for _ in range(count):
+            snap["tables"]["audit_log"].append({
+                "audit_id": str(uuid.uuid4()),
+                "event_id": str(uuid.uuid4()),
+                "action_type": "event.ingested",
+                "actor_id": "system",
+                "source_system": "impilo-connector",
+                "entity_type": "connector",
+                "entity_id": "impilo-connector",
+                "timestamp": "2026-08-02T10:00:01+00:00",
+                "detail": {"event_type": "connector.heartbeat", "topic": "ops"},
+                "recorded_at": "2026-08-02T10:00:01+00:00",
+            })
+        return snap
+
+    def test_heartbeat_count_difference_fails_without_exclusion(self):
+        result = eh.diff_snapshots(self._with_heartbeats(2), self._with_heartbeats(5))
+        assert not result.equivalent
+
+    def test_heartbeat_count_difference_passes_with_exclusion(self):
+        result = eh.diff_snapshots(
+            self._with_heartbeats(2),
+            self._with_heartbeats(5),
+            ignore_audit_events=["connector.heartbeat"],
+        )
+        assert result.equivalent, eh.render_report(result)
+
+    def test_exclusion_is_recorded_in_report(self):
+        result = eh.diff_snapshots(
+            self._with_heartbeats(1),
+            self._with_heartbeats(1),
+            ignore_audit_events=["connector.heartbeat"],
+        )
+        report = eh.render_report(result)
+        assert "audit_log rows with detail.event_type=connector.heartbeat" in report
+
+
 # --- Capture plumbing (no live DB in tests) ---
 
 
@@ -402,6 +516,14 @@ class TestCapture:
     def test_capture_tables_cover_classification_map(self):
         assert set(eh.CAPTURE_TABLES) == set(eh.COLUMN_CLASSES)
         assert "audit_log" in eh.CAPTURE_TABLES
+
+    def test_pgvector_embedding_columns_classified(self):
+        # Migration 0006 adds an embedding column to these four tables; a live
+        # capture (8.2) includes it in row_to_json, so it must be classified.
+        # PRESERVE: stacte-bridge only populates it on an explicit /sync, so a
+        # sim capture has NULLs — and a transport must not change that.
+        for table in ("alerts", "tasks", "interactions", "outcomes"):
+            assert eh.COLUMN_CLASSES[table].get("embedding") == "preserve"
 
     def test_capture_snapshot_shells_out_per_table(self):
         calls: list[list[str]] = []
