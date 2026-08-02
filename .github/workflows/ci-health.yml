@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out
-        uses: actions/checkout@v4
+        uses: actions/checkout@0000000000000000000000000000000000000000 # v4
 
       - name: Set up the environment (short)
         uses: ./.github/actions/setup-python-env
@@ -18,6 +18,7 @@ jobs:
 
       - name: Run quick health checks
         run: |
+          bash -c <<'BASH'
           set -e
           echo "Checking uv sync with retries"
           tries=0
@@ -38,8 +39,9 @@ jobs:
           for mod in ("pydantic", "uvicorn"):
               try:
                   importlib.import_module(mod)
-                  print(f"{mod} OK")
+                  print(mod + " OK")
               except Exception as e:
-                  print(f"{mod} import failed: {e}")
+                  print(mod + " import failed: " + str(e))
                   sys.exit(1)
           PY
+          BASH
