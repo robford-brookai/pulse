@@ -64,6 +64,9 @@ ocean-connector-mcp = { workspace = true }
 
 [tool.mypy]
 files = ["src"]
+# ocean-events models are pydantic; without the plugin mypy misreads model_config and
+# reports 23 spurious arg-type errors on a single __init_subclass__ line.
+plugins = ["pydantic.mypy"]
 disallow_untyped_defs = true
 disallow_any_unimported = true
 no_implicit_optional = true
@@ -71,6 +74,13 @@ check_untyped_defs = true
 warn_return_any = true
 warn_unused_ignores = true
 show_error_codes = true
+
+[[tool.mypy.overrides]]
+# Third-party MSK IAM signer ships no py.typed marker and has no stubs on PyPI. Per-module and
+# narrow rather than a blanket ignore — and it disappears entirely with the Kafka teardown
+# (task 9.2), so this override should be deleted then.
+module = "aws_msk_iam_sasl_signer.*"
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

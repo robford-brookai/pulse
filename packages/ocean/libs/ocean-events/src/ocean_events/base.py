@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, model_validator
@@ -63,7 +64,7 @@ class BaseEvent(BaseModel):
     actor_id: str | None  # user ID or system name
     payload: dict  # event-specific metadata, NO PHI
 
-    def __init_subclass__(cls, **kwargs: object) -> None:
+    def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
         # Check own class annotations only (model_fields is not fully populated at this point
         # in Pydantic v2 — it only contains inherited fields, not the subclass's own new fields).

@@ -82,7 +82,7 @@ can be dispatched. `task dispatch` must not emit work orders for them.
 
 ## 2. Wave 1 — the two contracts
 
-- [ ] 2.1 [DNA-736] Establish the topic → `(source, detail-type)` mapping as one generated surface: a source
+- [x] 2.1 [DNA-736] Establish the topic → `(source, detail-type)` mapping as one generated surface: a source
       table for the eleven live domains, emitting both publisher addressing and Terraform rule
       patterns. Test: every live domain has exactly one entry, `warehouse-dlq` has none, and every
       emitted rule pattern round-trips against the table without the local stack running.
