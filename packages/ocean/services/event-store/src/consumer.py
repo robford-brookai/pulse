@@ -1,7 +1,10 @@
 """SQS consumer for the OCEAN event store.
 
 Polls the event-store queue fed by its EventBridge rule and writes every
-event to the Postgres event store. A message is deleted only AFTER the DB
+event to the Postgres event store. The rule matches all eleven live domains
+(``CONSUMER_DOMAINS["event-store"]`` is ``LIVE_DOMAINS``, task 5.8) — the
+Kafka-era subscription claimed "all Ocean topics" but listed only nine,
+silently omitting ``tickets`` and ``patient-state``. A message is deleted only AFTER the DB
 write succeeds; a failed message is left to visibility-timeout expiry and
 redelivered, then dead-lettered by the queue's redrive policy. This keeps
 the at-least-once, commit-after-success semantics the Kafka loop had.
