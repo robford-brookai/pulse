@@ -63,7 +63,7 @@ async def lifespan(app: FastAPI):
     from src import consumer as consumer_module
     from src.bolt_app import bolt_handler, set_hasura_secret, set_publisher, set_session_maker
     from src.health_poller import poll_connector_health
-    from src.publisher import RedpandaPublisher
+    from src.publisher import EventPublisher
     from src.slash_commands import set_slash_deps
     from src.thread_manager import ThreadManager
 
@@ -79,7 +79,9 @@ async def lifespan(app: FastAPI):
     # Wire bolt_app dependencies (BUG 2 fix)
     if session_maker is not None:
         set_session_maker(session_maker)
-    publisher = RedpandaPublisher(REDPANDA_BROKERS)
+    # The session maker doubles as the publisher's `failed_webhooks` fallback: without it a
+    # bus failure is logged and the event is gone.
+    publisher = EventPublisher(db_session_maker=session_maker)
     set_publisher(publisher)
 
     hasura_secret = os.environ.get("HASURA_GRAPHQL_ADMIN_SECRET", "")
