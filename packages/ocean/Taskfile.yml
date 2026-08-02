@@ -30,7 +30,7 @@ tasks:
   test:services:
     desc: Run tests for all services with test directories
     cmds:
-      - for: [sim-driver, event-store, control-plane, graph-projection, slack-bot, pocar-connector, impilo-connector, zcc-connector, linear-connector, github-connector, hubspot-connector, stacte-bridge]
+      - for: [sim-driver, event-store, control-plane, graph-projection, slack-bot, pocar-connector, impilo-connector, zcc-connector, linear-connector, github-connector, hubspot-connector, stacte-bridge, call-simulator]
         cmd: |
           if [ -d "services/{{.ITEM}}/tests" ]; then
             echo "=== {{.ITEM}} ===" && cd services/{{.ITEM}} && python -m pytest tests/ -x -q && cd ../..
