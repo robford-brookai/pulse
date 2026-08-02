@@ -8,15 +8,15 @@ RUN pip install uv --quiet
 RUN uv pip install --system --no-cache \
     fastapi==0.135.1 \
     uvicorn==0.41.0 \
-    "confluent-kafka==2.13.2" \
     "httpx>=0.28.0" \
     "pydantic>=2.0" \
     "pyyaml>=6.0" \
     "structlog==25.5.0"
 
-# Install ocean-events shared library
+# Install ocean-events and ocean-broker shared libraries
 COPY libs/ocean-events /app/ocean-events
-RUN uv pip install --system /app/ocean-events
+COPY libs/ocean-broker /app/ocean-broker
+RUN uv pip install --system /app/ocean-events /app/ocean-broker
 
 # Copy source code and scenarios
 COPY services/sim-driver/src ./src
