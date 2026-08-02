@@ -82,21 +82,13 @@ jobs:
 
       - name: Aggregate diagnostics
         id: aggregate
-        run: |
-          set -e
-          fail_count=0
-          for id in ci310 ci311 ci312 ci313 ci314; do
-            outcome=${{ steps[id].outcome }}
-            echo "$id -> $outcome"
-            if [ "${{ steps[id].outcome }}" != "success" ]; then
-              fail_count=$((fail_count+1))
-            fi
-          done
-          if [ "$fail_count" -eq 0 ]; then
-            echo "healthy=true" >> $GITHUB_OUTPUT
-          else
-            echo "healthy=false" >> $GITHUB_OUTPUT
-          fi
+        env:
+          ci310: ${{ steps.ci310.outcome }}
+          ci311: ${{ steps.ci311.outcome }}
+          ci312: ${{ steps.ci312.outcome }}
+          ci313: ${{ steps.ci313.outcome }}
+          ci314: ${{ steps.ci314.outcome }}
+        run: bash .github/scripts/aggregate_diagnostics.sh
         shell: bash
 
   rerun:
