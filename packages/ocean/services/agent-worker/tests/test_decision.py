@@ -230,7 +230,7 @@ class TestPublishAiRecommendation:
 
         publisher.publish.assert_called_once()
         call_args = publisher.publish.call_args
-        assert call_args[0][0] == "ocean.ai-ops"
+        assert call_args[0][0] == "ai-ops"
         event = call_args[0][1]
         assert event["event_type"] == "ai.recommendation.generated"
         assert event["payload"]["action"] == "approve"
@@ -256,7 +256,7 @@ class TestPublishAiDecision:
         await publish_ai_decision(publisher, task_data, "approve", 0.9, persona, approved=True)
 
         call_args = publisher.publish.call_args
-        assert call_args[0][0] == "ocean.ai-ops"
+        assert call_args[0][0] == "ai-ops"
         event = call_args[0][1]
         assert event["event_type"] == "ai.output.approved"
         payload = event["payload"]
@@ -306,7 +306,7 @@ class TestPublishTaskCompleted:
         await publish_task_completed(publisher, task_data, persona)
 
         call_args = publisher.publish.call_args
-        assert call_args[0][0] == "ocean.tasks"
+        assert call_args[0][0] == "tasks"
         event = call_args[0][1]
         assert event["event_type"] == "task.completed"
         assert event["source_system"] == "agent-worker"
