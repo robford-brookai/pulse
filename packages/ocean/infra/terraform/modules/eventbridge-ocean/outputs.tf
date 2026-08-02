@@ -8,6 +8,11 @@ output "event_bus_arn" {
   value       = aws_cloudwatch_event_bus.ocean.arn
 }
 
+output "archive_name" {
+  description = "Name of the bus archive (the value passed to start-replay when re-driving a consumer)"
+  value       = aws_cloudwatch_event_archive.ocean.name
+}
+
 output "publisher_policy_arn" {
   description = "ARN of the IAM policy granting events:PutEvents on this bus"
   value       = aws_iam_policy.publisher.arn
