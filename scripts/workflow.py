@@ -8,7 +8,7 @@ mermaid diagram as projections of it. Nothing read that block until this script 
 
 Usage:
     python scripts/workflow.py lint              # offline structural checks
-    python scripts/workflow.py lint --linear     # additionally verify statuses against live Linear
+    python scripts/workflow.py lint --linear     # additionally check team, project and statuses live
     python scripts/workflow.py show              # dump the parsed block as JSON
 
 The offline half is CI-safe: no network, no credentials, no npm globals. That split is deliberate.

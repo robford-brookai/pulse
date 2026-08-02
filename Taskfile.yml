@@ -106,6 +106,7 @@ tasks:
       - task: lint
       - task: typecheck
       - task: test
+      - task: workflow:lint
       - task: docs:build
 
   pre-commit:
@@ -117,6 +118,7 @@ tasks:
     desc: Full local gate — check plus drift and spec validation (needs CHANGE)
     cmds:
       - task: check
+      - task: workflow:lint:linear
       - task: lore:drift
       - task: spec:validate
 
@@ -185,6 +187,21 @@ tasks:
     desc: Parse OpenSpec tasks.md and emit work-order files (needs CHANGE)
     cmds:
       - uv run python scripts/dispatch_tasks.py --change {{.CHANGE}}
+
+  workflow:lint:
+    desc: Validate WORKFLOW.md's executable YAML block (offline; part of `check`)
+    cmds:
+      - uv run python scripts/workflow.py lint
+
+  workflow:lint:linear:
+    desc: workflow:lint plus live Linear team/project/status checks (needs Linear auth)
+    cmds:
+      - uv run python scripts/workflow.py lint --linear
+
+  workflow:show:
+    desc: Dump WORKFLOW.md's parsed workflow block as JSON
+    cmds:
+      - uv run python scripts/workflow.py show
 
   sync-docs:
     desc: Run drift checks and print doc-updater instructions (needs CHANGE)
