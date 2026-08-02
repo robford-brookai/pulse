@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 import sqlalchemy as sa
 import structlog
 
+from src.handlers.sequence import event_time, sequence_guard
+
 log = structlog.get_logger()
 
 _OUTCOME_NS = uuid.NAMESPACE_URL
@@ -21,8 +23,10 @@ def _outcome_id(engagement_id: str, outcome_type: str) -> str:
 async def handle_call_completed(event_data: dict, session) -> None:
     """Project call.completed — upsert Interaction with outcome='completed' + insert Outcome.
 
-    Interaction upsert uses INSERT ON CONFLICT DO UPDATE (not raw UPDATE) so
-    late-arriving call.started events cannot overwrite the 'completed' status.
+    The interaction upsert is guarded on event time: a call.missed that was
+    produced earlier but arrives later must not rewrite a completed call to
+    missed. `completed_at` is processing time and is deliberately not the guard
+    column — see `handlers/sequence.py`.
     """
     payload = event_data.get("payload", {})
     engagement_id = event_data.get("entity_id", "")
@@ -30,28 +34,31 @@ async def handle_call_completed(event_data: dict, session) -> None:
     patient_id = payload.get("patient_id", "")
     event_id = event_data.get("event_id", "")
     disposition = payload.get("disposition", "")
+    event_at = event_time(event_data)
     now = datetime.now(tz=UTC)
     outcome_id = _outcome_id(engagement_id, "call_completed")
 
-    # Upsert interaction — set outcome='completed', completed_at=now
+    # Upsert interaction — set outcome='completed', unless a newer event already wrote the row
     await session.execute(
         sa.text(
             "INSERT INTO interactions "
             "    (interaction_id, task_id, patient_id, interaction_type, outcome, "
-            "     started_at, completed_at, last_event_id) "
+            "     started_at, completed_at, last_event_at, last_event_id) "
             "VALUES "
             "    (:interaction_id, :task_id, :patient_id, 'call', 'completed', "
-            "     :now, :now, :event_id) "
+            "     :now, :now, :event_at, :event_id) "
             "ON CONFLICT (interaction_id) DO UPDATE SET "
             "    outcome = 'completed', "
             "    completed_at = EXCLUDED.completed_at, "
-            "    last_event_id = EXCLUDED.last_event_id"
+            "    last_event_at = EXCLUDED.last_event_at, "
+            "    last_event_id = EXCLUDED.last_event_id " + sequence_guard("interactions")
         ),
         {
             "interaction_id": engagement_id,
             "task_id": task_id,
             "patient_id": patient_id,
             "now": now,
+            "event_at": event_at,
             "event_id": event_id,
         },
     )
@@ -83,34 +90,40 @@ async def handle_call_missed(event_data: dict, session) -> None:
     """Project call.missed — upsert Interaction with outcome='missed' + insert Outcome.
 
     Resolution status is 'no_contact' — no agent answered the call.
+
+    Guarded on event time for the same reason as call.completed: this is the
+    write that, unguarded, silently rewrote a completed call to missed.
     """
     payload = event_data.get("payload", {})
     engagement_id = event_data.get("entity_id", "")
     task_id = payload.get("task_id") or ""
     patient_id = payload.get("patient_id", "")
     event_id = event_data.get("event_id", "")
+    event_at = event_time(event_data)
     now = datetime.now(tz=UTC)
     outcome_id = _outcome_id(engagement_id, "call_missed")
 
-    # Upsert interaction — set outcome='missed', completed_at=now
+    # Upsert interaction — set outcome='missed', unless a newer event already wrote the row
     await session.execute(
         sa.text(
             "INSERT INTO interactions "
             "    (interaction_id, task_id, patient_id, interaction_type, outcome, "
-            "     started_at, completed_at, last_event_id) "
+            "     started_at, completed_at, last_event_at, last_event_id) "
             "VALUES "
             "    (:interaction_id, :task_id, :patient_id, 'call', 'missed', "
-            "     :now, :now, :event_id) "
+            "     :now, :now, :event_at, :event_id) "
             "ON CONFLICT (interaction_id) DO UPDATE SET "
             "    outcome = 'missed', "
             "    completed_at = EXCLUDED.completed_at, "
-            "    last_event_id = EXCLUDED.last_event_id"
+            "    last_event_at = EXCLUDED.last_event_at, "
+            "    last_event_id = EXCLUDED.last_event_id " + sequence_guard("interactions")
         ),
         {
             "interaction_id": engagement_id,
             "task_id": task_id,
             "patient_id": patient_id,
             "now": now,
+            "event_at": event_at,
             "event_id": event_id,
         },
     )
