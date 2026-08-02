@@ -462,10 +462,18 @@ services:
       dockerfile: services/call-simulator/Dockerfile
     environment:
       REDPANDA_BROKERS: ${REDPANDA_BROKERS:-redpanda:29092}
+      # Publishing runs over the OCEAN event bus; DATABASE_URL is what makes the publisher's
+      # failed_webhooks fallback durable rather than log-only.
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      OCEAN_EVENT_BUS_NAME: ${OCEAN_EVENT_BUS_NAME:-ocean}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ocean:changeme@postgres:5432/ocean}
     ports:
       - "8062:8000"
     depends_on:
       redpanda-init:
+        condition: service_completed_successfully
+      # failed_webhooks lives in the migrated schema.
+      migrate:
         condition: service_completed_successfully
     restart: unless-stopped
     healthcheck:
