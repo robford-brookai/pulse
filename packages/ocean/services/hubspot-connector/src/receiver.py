@@ -84,10 +84,11 @@ async def receive_hubspot_webhook(request: Request) -> dict:
         if event is None:
             continue
 
+        # `signals` is the domain, which is the EventBridge detail-type — never the event_type.
         await publisher.publish(
-            topic="ocean.signals",
+            detail_type="signals",
+            event=event,
             key=event["entity_id"],
-            value=json.dumps(event).encode(),
         )
         accepted += 1
 
