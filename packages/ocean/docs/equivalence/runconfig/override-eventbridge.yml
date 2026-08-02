@@ -6,45 +6,25 @@
 # - Disables control-plane escalation: it fires on wall-clock timeouts, which
 #   the gate does not compare, and a slow run would otherwise grow
 #   task_escalation_state rows the other run lacks.
+#
+# The 8.2 run additionally had to set AWS_DEFAULT_REGION on every consumer:
+# botocore resolves the region from that variable, not AWS_REGION, and the
+# compose env then set only AWS_REGION, so every SQS consumer died silently
+# at startup with NoRegionError. Task 6.7 moved that fix into the compose
+# x-localstack-env anchor, so this override no longer carries it.
 services:
-  # botocore (1.40.x) resolves the client region from AWS_DEFAULT_REGION,
-  # not AWS_REGION, and the compose env only sets AWS_REGION. Publishers
-  # survive because ocean_broker passes region_name explicitly, but
-  # localstack-init and EVERY SQS consumer build region-less clients and die
-  # at startup with NoRegionError -- silently, because consumers run as
-  # fire-and-forget asyncio tasks. Without these lines nothing consumes and
-  # the graph stays empty. Reported via HANDOFF.md rather than editing the
-  # owned compose file.
-  localstack-init:
-    environment:
-      AWS_DEFAULT_REGION: us-east-1
-  event-store:
-    environment:
-      AWS_DEFAULT_REGION: us-east-1
-  graph-projection:
-    environment:
-      AWS_DEFAULT_REGION: us-east-1
-  call-simulator:
-    environment:
-      AWS_DEFAULT_REGION: us-east-1
-  impilo-connector:
-    environment:
-      AWS_DEFAULT_REGION: us-east-1
   agent-worker:
     volumes:
       - ${PINNED_AGENTS_MD:?absolute path to AGENTS-pinned.md}:/app/AGENTS.md:ro
     environment:
       ANTHROPIC_API_KEY: ""
-      AWS_DEFAULT_REGION: us-east-1
   control-plane:
     environment:
       ESCALATION_ENABLED: "false"
-      AWS_DEFAULT_REGION: us-east-1
   slack-bot:
     environment:
       SLACK_BOT_TOKEN: ""
       ANTHROPIC_API_KEY: ""
-      AWS_DEFAULT_REGION: us-east-1
   sim-driver:
     environment:
       SLACK_BOT_TOKEN: ""
