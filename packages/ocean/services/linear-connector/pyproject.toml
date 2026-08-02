@@ -5,8 +5,12 @@ requires-python = ">=3.13"
 dependencies = [
     "fastapi==0.135.1",
     "uvicorn==0.41.0",
-    "confluent-kafka==2.13.2",
     "structlog==25.5.0",
+    # Postgres backs the publisher's failed_webhooks fallback, new to this connector.
+    "asyncpg>=0.29",
+    "sqlalchemy[asyncio]>=2.0",
+    # The shared publisher. Its own boto3 dependency is the only bus client this service sees.
+    "ocean-broker",
 ]
 
 [build-system]
@@ -15,6 +19,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
