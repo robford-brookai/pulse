@@ -31,7 +31,7 @@ async def receive_impilo_webhook(request: Request) -> dict:
     """Receive an Impilo device/patient webhook.
 
     Validates Impilo-API-Key header, normalises payload to a canonical OceanEvent,
-    publishes to the correct Redpanda topic, and writes an audit_log row on success.
+    publishes to the event's domain on the bus, and writes an audit_log row on success.
     """
     api_key = request.headers.get("Impilo-API-Key", "")
     _validate_api_key(api_key)
@@ -41,16 +41,16 @@ async def receive_impilo_webhook(request: Request) -> dict:
     log.debug("impilo_webhook_received", event_type=raw.get("type"), keys=list(raw.keys()))
 
     try:
-        event, topic = normalize_impilo_payload(raw)
+        event, domain = normalize_impilo_payload(raw)
     except ValueError as exc:
         log.warning("impilo_normalize_failed", error=str(exc), event_type=raw.get("type"))
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     publisher = request.app.state.publisher
     await publisher.publish(
-        topic=topic,
+        detail_type=domain,
+        event=event.model_dump(mode="json"),
         key=str(event.event_id),
-        value=json.dumps(event.model_dump(mode="json")).encode(),
     )
 
     # Audit log -- only on successful publish
