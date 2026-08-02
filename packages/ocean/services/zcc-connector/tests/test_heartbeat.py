@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import sys
 from unittest.mock import AsyncMock, patch
@@ -15,7 +14,7 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_publish_heartbeat_calls_publisher_with_correct_args():
-    """publish_heartbeat calls publisher.publish with topic=ocean.ops, key=zcc-connector, and heartbeat event."""
+    """publish_heartbeat calls publisher.publish with detail_type=ops, key=zcc-connector, and heartbeat event."""
     from src.heartbeat import publish_heartbeat
 
     publisher = AsyncMock()
@@ -34,9 +33,9 @@ async def test_publish_heartbeat_calls_publisher_with_correct_args():
 
     publisher.publish.assert_called_once()
     call_kwargs = publisher.publish.call_args[1]
-    assert call_kwargs["topic"] == "ocean.ops"
+    assert call_kwargs["detail_type"] == "ops"
     assert call_kwargs["key"] == "zcc-connector"
-    event = json.loads(call_kwargs["value"])
+    event = call_kwargs["event"]
     assert event["event_type"] == "connector.heartbeat"
     assert event["source_system"] == "zcc-connector"
     assert event["payload"]["connector_name"] == "Zoom Contact Center"

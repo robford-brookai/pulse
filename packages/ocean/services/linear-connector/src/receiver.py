@@ -33,7 +33,7 @@ async def receive_linear_webhook(request: Request) -> dict:
     """Receive a Linear webhook event.
 
     Validates signature, checks for 'ocean' label, normalizes to Ocean
-    ticket event, and publishes to ocean.tickets. Issues without the
+    ticket event, and publishes to the 'tickets' domain. Issues without the
     'ocean' label are silently skipped (200 with status=skipped).
     """
     body = await request.body()
@@ -61,6 +61,9 @@ async def receive_linear_webhook(request: Request) -> dict:
         return {"status": "skipped"}
 
     publisher = request.app.state.publisher
-    await publisher.publish("ocean.tickets", event)
+    # "tickets" is the domain, which is the EventBridge detail-type — not the envelope's
+    # event_type, and no longer the "ocean." topic prefix. A publish failure dead-letters to
+    # failed_webhooks inside the publisher and does not raise, so the webhook still returns 200.
+    await publisher.publish("tickets", event)
 
     return {"status": "accepted"}

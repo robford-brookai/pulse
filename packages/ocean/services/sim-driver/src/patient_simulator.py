@@ -29,6 +29,7 @@ from ocean_events.base import BaseEvent
 
 from src.clock import sim_sleep
 from src.models import PatientConfig, SignalConfig, resolve_source
+from src.publisher import DOMAIN_ALERTS, DOMAIN_SIGNALS
 
 log = structlog.get_logger()
 
@@ -68,8 +69,8 @@ class PatientSimulator:
         """Iterate signals in sim_hour order. For each signal:
 
         1. sim_sleep for delay since last signal
-        2. Build signal.received BaseEvent, serialize, publish to ocean.signals
-        3. If anomalous, build alert.created BaseEvent, serialize, publish to ocean.alerts
+        2. Build signal.received BaseEvent, publish to the "signals" domain
+        3. If anomalous, build alert.created BaseEvent, publish to the "alerts" domain
         """
         prev_hour = 0.0
         for idx, signal in enumerate(self._patient.signals):
@@ -79,7 +80,7 @@ class PatientSimulator:
 
             # Publish signal.received for every signal
             signal_event = self._build_signal_event(signal, idx)
-            await self._publisher.publish("ocean.signals", signal_event.model_dump(mode="json"))
+            await self._publisher.publish(DOMAIN_SIGNALS, signal_event.model_dump(mode="json"))
             log.info(
                 f"[SIM] Patient {self._patient.patient_id}: {signal.type} reading"
                 f" {signal.value} {signal.unit}"
@@ -90,7 +91,7 @@ class PatientSimulator:
             # Publish alert.created only for anomalous signals
             if signal.anomalous:
                 alert_event = self._build_alert_event(signal, idx)
-                await self._publisher.publish("ocean.alerts", alert_event.model_dump(mode="json"))
+                await self._publisher.publish(DOMAIN_ALERTS, alert_event.model_dump(mode="json"))
                 severity = self._resolve_severity(signal)
                 log.info(f"[SIM] Patient {self._patient.patient_id}: ALERT {signal.type}_anomaly severity={severity}")
 
