@@ -6,7 +6,14 @@ import os
 import sys
 from unittest.mock import AsyncMock
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+# Every test here is async. Ocean's own pytest config sets asyncio_mode=auto, but that config
+# applies only when pytest's rootdir is packages/ocean; run from the repo root, these tests
+# collect and then fail as unsupported coroutines. The marker holds either way.
+pytestmark = pytest.mark.asyncio
 
 
 # ---------------------------------------------------------------------------
