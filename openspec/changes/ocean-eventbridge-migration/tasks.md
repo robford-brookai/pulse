@@ -17,19 +17,36 @@ can be dispatched. `task dispatch` must not emit work orders for them.
 
 ## 1. Wave 0 — absorption
 
-- [ ] 1.1 [CCC-15] Rotate every credential in the source repo's tracked `.env`, and record the rotation as
+- [x] 1.1 [CCC-15] Rotate every credential in the source repo's tracked `.env`, and record the rotation as
       the import precondition. Blocks 1.2.
       `[model: sonnet | deps: — | lane: destructive_ops | wave: 0]`
       Out of lane: touches live credentials, no reviewable diff.
 - [ ] 1.2 [DNA-734] Import `robford-brookai/ocean` at `7bc9d2c` to `packages/ocean` via `git-filter-repo`
       with the ADR §6.1 path allowlist and `--to-subdirectory-filter`. Pure move — no file content
-      changes in this commit. Verify: no `.repos/`, `.planning/`, `.gsd/`, `.claude/`, `.vscode/`,
-      `.bg-shell/`, `logs/`, `.env`, `agents.md`, `CLAUDE.md`, or `.gitignore` under
-      `packages/ocean`; `git log -- packages/ocean` returns source history, not one squashed commit.
+      changes in this commit.
       `[model: opus | deps: 1.1 | lane: repo_change | wave: 0]`
       `serial: workspace_roots` — creates a workspace package and edits the root workspace manifest.
       Model `opus`: history correctness is weakly verifiable by test; a wrong rewrite is expensive
       to detect and expensive to undo.
+      **This task writes no application code, so "tests first" does not apply to it** — the
+      generic requirement is satisfied by the post-conditions below, which are the whole
+      verification. Do not invent unit tests for a git operation.
+      **Source:** `~/Repos/ocean`, which matches remote `main` at `7bc9d2c` and is authoritative
+      (ADR §9.2). Do NOT use `~/Repos/brookai/ocean` — that clone is abandoned. The credential
+      rotation this depends on (1.1) is complete.
+      Run against a scratch clone, never the source working tree:
+      `git clone ~/Repos/ocean /tmp/ocean-import && cd /tmp/ocean-import`
+      `git filter-repo --path services/ --path libs/ --path infra/ --path tests/`
+      `  --path scripts/ --path docs/ --path .github/ --path pyproject.toml --path uv.lock`
+      `  --path Taskfile.yml --path pyrightconfig.json --path main.py --path README.md`
+      `  --path .python-version --path .markdownlint.json --to-subdirectory-filter packages/ocean`
+      Then graft the rewritten history into this repo and commit the move alone.
+      Post-conditions, all of which must hold before the commit stands:
+      `git ls-files packages/ocean | grep -cE '^packages/ocean/\.(repos|planning|gsd|claude|vscode|bg-shell)/'` is 0
+      `git ls-files packages/ocean | grep -cE '(^|/)(\.env|agents\.md|CLAUDE\.md|\.gitignore|logs/)$'` is 0
+      `git log --oneline -- packages/ocean | wc -l` is greater than 1 — history preserved, not squashed
+      `git log --all --diff-filter=A --name-only | grep -c '/\.env$'` is 0
+      The monorepo's own `AGENTS.md`, `CLAUDE.md` and `.gitignore` are unmodified by this commit.
 - [ ] 1.3 [DNA-735] Conform `packages/ocean` to the monorepo toolchain (ruff, mypy, pytest, workspace
       membership) in a commit separate from 1.2. Green `task check` with the package included.
       `[model: sonnet | deps: 1.2 | lane: repo_change | wave: 0]`

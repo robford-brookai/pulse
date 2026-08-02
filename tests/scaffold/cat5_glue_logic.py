@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from ._scaffold import load_script
+from ._scaffold import ROOT, load_script
 
 dispatch = load_script("dispatch_tasks.py")
 collect = load_script("collect_handoffs.py")
@@ -320,3 +320,314 @@ def test_summarize_handoffs_references_every_file(tmp_path: Path) -> None:
 
 def test_summarize_handoffs_documents_the_empty_case() -> None:
     assert collect.summarize_handoffs([], "add-auth") == ("No HANDOFF.md files found for change 'add-auth'.")
+
+
+# --- workflow.py: WORKFLOW.md's block is the source of truth, so something must read it --------
+#
+# The block sat in WORKFLOW.md for two revisions declaring itself "parsed by thin glue" while
+# being invalid YAML. Nothing parsed it, so nothing noticed. These tests are the standing check
+# that it stays parseable and internally consistent.
+
+workflow = load_script("workflow.py")
+
+MINIMAL = """\
+# W
+
+**Status:** v1.0.0
+
+```yaml
+ade_workflow:
+  version: 1.0.0
+  linear:
+    team: DNA
+    project: "P"
+    statuses: [Todo, In Progress, Done]
+    status_ownership:
+      unstarted: sync
+  state_resolution:
+    order:
+      - "any sub-issue status in [Todo, In Progress]": step=execute
+  gates:
+    G_ONE:
+      blocks: [execute]
+  lanes:
+    repo_change:
+      description: default
+    destructive_ops:
+      excluded_steps: [execute]
+  routing:
+    tiers: [sonnet, opus]
+    default: {model: sonnet, max_tier: opus}
+  steps:
+    - id: execute
+      actor: agent(sonnet)
+      gate: G_ONE
+      linear_status: In Progress -> Done
+      next: done
+    - id: done
+      actor: human
+```
+
+```mermaid
+flowchart TB
+  E[execute<br/>gate: G_ONE] --> D[done]
+```
+"""
+
+
+def _workflow_md(tmp_path: Path, text: str) -> Path:
+    p = tmp_path / "WORKFLOW.md"
+    p.write_text(text)
+    return p
+
+
+def test_the_repos_own_workflow_block_parses() -> None:
+    """The regression: `edit_protocol` held a `key: value` line that made the block invalid YAML."""
+    block, _ = workflow.load(ROOT / "WORKFLOW.md")
+    assert block["steps"], "WORKFLOW.md declares no steps"
+
+
+def test_the_repos_own_workflow_block_is_clean() -> None:
+    """`task check` runs this; asserting it here names the failure instead of just exiting 1."""
+    block, text = workflow.load(ROOT / "WORKFLOW.md")
+    errors = workflow.check_structure(block) + workflow.check_statuses(block) + workflow.check_projections(block, text)
+    assert errors == [], "WORKFLOW.md has drifted:\n  - " + "\n  - ".join(errors)
+
+
+def test_minimal_fixture_is_clean(tmp_path: Path) -> None:
+    block, text = workflow.load(_workflow_md(tmp_path, MINIMAL))
+    assert workflow.check_structure(block) == []
+    assert workflow.check_statuses(block) == []
+    assert workflow.check_projections(block, text) == []
+
+
+def test_load_rejects_a_document_with_no_workflow_block(tmp_path: Path) -> None:
+    with pytest.raises(workflow.WorkflowError, match="source of truth is missing"):
+        workflow.load(_workflow_md(tmp_path, "# W\n\nno yaml here\n"))
+
+
+def test_load_rejects_invalid_yaml(tmp_path: Path) -> None:
+    """Exactly the shape that broke it: a plain-scalar list item containing `key: value`."""
+    broken = MINIMAL.replace(
+        "  version: 1.0.0", "  version: 1.0.0\n  notes:\n    - a thing: with a colon\n      and a continuation line"
+    )
+    with pytest.raises(workflow.WorkflowError, match="not valid YAML"):
+        workflow.load(_workflow_md(tmp_path, broken))
+
+
+def test_next_must_reference_a_real_step(tmp_path: Path) -> None:
+    block, _ = workflow.load(_workflow_md(tmp_path, MINIMAL.replace("next: done", "next: collect_when_wave_done")))
+    errors = workflow.check_structure(block)
+    assert any("collect_when_wave_done" in e for e in errors)
+
+
+def test_lane_excluded_steps_must_reference_a_real_step(tmp_path: Path) -> None:
+    """The live bug: `excluded_steps: [execute_in_orca]` named a step that never existed."""
+    block, _ = workflow.load(
+        _workflow_md(tmp_path, MINIMAL.replace("excluded_steps: [execute]", "excluded_steps: [execute_in_orca]"))
+    )
+    errors = workflow.check_structure(block)
+    assert any("execute_in_orca" in e for e in errors)
+
+
+def test_gate_reference_must_exist(tmp_path: Path) -> None:
+    block, _ = workflow.load(_workflow_md(tmp_path, MINIMAL.replace("gate: G_ONE", "gate: G_MISSING")))
+    assert any("G_MISSING" in e for e in workflow.check_structure(block))
+
+
+def test_gate_blocks_must_reference_a_real_step(tmp_path: Path) -> None:
+    block, _ = workflow.load(_workflow_md(tmp_path, MINIMAL.replace("blocks: [execute]", "blocks: [nope]")))
+    assert any("nope" in e for e in workflow.check_structure(block))
+
+
+def test_duplicate_step_ids_are_rejected(tmp_path: Path) -> None:
+    block, _ = workflow.load(_workflow_md(tmp_path, MINIMAL.replace("    - id: done", "    - id: execute")))
+    assert any("duplicate step ids" in e for e in workflow.check_structure(block))
+
+
+def test_actor_tier_must_be_a_declared_tier(tmp_path: Path) -> None:
+    block, _ = workflow.load(_workflow_md(tmp_path, MINIMAL.replace("actor: agent(sonnet)", "actor: agent(haiku)")))
+    assert any("haiku" in e for e in workflow.check_structure(block))
+
+
+def test_status_must_be_one_the_yaml_declares(tmp_path: Path) -> None:
+    block, _ = workflow.load(_workflow_md(tmp_path, MINIMAL.replace("In Progress -> Done", "In Progress -> Shipped")))
+    assert any("Shipped" in e for e in workflow.check_statuses(block))
+
+
+def test_undeclared_status_set_is_itself_an_error(tmp_path: Path) -> None:
+    block, _ = workflow.load(_workflow_md(tmp_path, MINIMAL.replace("    statuses: [Todo, In Progress, Done]\n", "")))
+    assert any("linear.statuses is not declared" in e for e in workflow.check_statuses(block))
+
+
+def test_diagram_may_not_omit_a_step(tmp_path: Path) -> None:
+    block, text = workflow.load(_workflow_md(tmp_path, MINIMAL.replace("--> D[done]", "--> D[finished]")))
+    assert any("omits step 'done'" in e for e in workflow.check_projections(block, text))
+
+
+def test_diagram_may_not_invent_a_gate(tmp_path: Path) -> None:
+    block, text = workflow.load(
+        _workflow_md(tmp_path, MINIMAL.replace("E[execute<br/>gate: G_ONE]", "E[execute<br/>gate: G_GHOST]"))
+    )
+    assert any("G_GHOST" in e for e in workflow.check_projections(block, text))
+
+
+def test_header_version_must_match_the_yaml(tmp_path: Path) -> None:
+    block, text = workflow.load(_workflow_md(tmp_path, MINIMAL.replace("**Status:** v1.0.0", "**Status:** v9.9.9")))
+    assert any("stale" in e for e in workflow.check_projections(block, text))
+
+
+def test_live_linear_check_skips_rather_than_fails_when_the_client_is_absent(tmp_path: Path) -> None:
+    """A gate that fails because a machine lacks an optional tool teaches people to ignore it.
+
+    `workflow:lint:linear` runs inside `task verify`, and the Linear CLI is optional per
+    docs/contracts/consumes.md — so an absent client must skip loudly, not break the gate.
+    """
+    block, _ = workflow.load(_workflow_md(tmp_path, MINIMAL))
+    with pytest.raises(workflow.LinearUnavailable, match=r"unavailable|failed|parse"):
+        workflow.check_linear_live(block)
+
+
+def test_lint_exits_zero_when_the_live_check_is_skipped(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    path = _workflow_md(tmp_path, MINIMAL)
+    assert workflow.lint(path, with_linear=True) == 0
+    captured = capsys.readouterr()
+    assert "SKIPPED" in captured.err, "a skipped live check must say so"
+    assert "SKIPPED" in captured.out, "the summary must not claim the live check ran"
+
+
+# --- linear_sync: the repo is the record, Linear is a one-directional projection ---------------
+#
+# The status rules are the load-bearing part. Sync owns the unstarted band and nothing else; a
+# sync that writes `In Progress` steals a band from the agents that own it, and the damage reads
+# as an agent misbehaving rather than a tool overreaching.
+
+linear_sync = load_script("linear_sync.py")
+
+SYNC_TASKS_MD = """\
+# Tasks
+
+## 1. Group
+
+- [ ] 1.1 Rotate credentials  `[lane: destructive_ops]`
+- [ ] 1.2 Import `robford-brookai/ocean` at `7bc9d2c`  `[lane: repo_change]`
+- [ ] 1.3 Plain task  `[lane: repo_change]`
+"""
+
+
+def _synced(tmp_path: Path) -> tuple[list[dict], list[dict]]:
+    tasks = _parse(tmp_path, SYNC_TASKS_MD)
+    orders = tmp_path / "wo" / "c"
+    orders.mkdir(parents=True)
+    for task in tasks:
+        (orders / f"{task['task_id']}.md").write_text(f"body for {task['key']}\n")
+    return tasks, linear_sync.desired_subissues("c", tasks, tmp_path / "wo")
+
+
+def test_out_of_lane_tasks_are_not_synced(tmp_path: Path) -> None:
+    """destructive_ops runs on the Open Engine queue, which has its own status vocabulary."""
+    _, desired = _synced(tmp_path)
+    assert [d["key"] for d in desired] == ["1.2", "1.3"]
+
+
+def test_issue_title_keeps_inline_code_and_does_not_repeat_the_key(tmp_path: Path) -> None:
+    """Splitting the title at the first backtick truncated it to one word."""
+    _, desired = _synced(tmp_path)
+    title = next(d["title"] for d in desired if d["key"] == "1.2")
+    assert title == "1.2 Import `robford-brookai/ocean` at `7bc9d2c`"
+    assert not title.startswith("1.2 1.2")
+
+
+def test_description_is_the_work_order_body(tmp_path: Path) -> None:
+    _, desired = _synced(tmp_path)
+    assert desired[0]["description"] == "body for 1.2\n"
+
+
+def test_sync_refuses_when_the_work_order_is_missing(tmp_path: Path) -> None:
+    tasks = _parse(tmp_path, SYNC_TASKS_MD)
+    with pytest.raises(linear_sync.SyncError, match="task dispatch"):
+        linear_sync.desired_subissues("c", tasks, tmp_path / "absent")
+
+
+def test_plan_creates_parent_and_children_on_an_empty_workspace(tmp_path: Path) -> None:
+    _, desired = _synced(tmp_path)
+    ops = linear_sync.plan(desired, {}, parent_exists=False, change="c")
+    assert [o["kind"] for o in ops] == ["create_parent", "create_sub", "create_sub"]
+
+
+def test_plan_is_a_no_op_when_linear_already_matches(tmp_path: Path) -> None:
+    _, desired = _synced(tmp_path)
+    existing = {
+        d["key"]: {"identifier": f"DNA-{i}", "title": d["title"], "description": d["description"], "status": "Todo"}
+        for i, d in enumerate(desired)
+    }
+    assert linear_sync.plan(desired, existing, parent_exists=True, change="c") == []
+
+
+def test_plan_updates_a_sub_issue_whose_description_drifted(tmp_path: Path) -> None:
+    """A sub-issue edited by hand in Linear is drift; the file wins."""
+    _, desired = _synced(tmp_path)
+    existing = {
+        desired[0]["key"]: {
+            "identifier": "DNA-1",
+            "title": desired[0]["title"],
+            "description": "someone edited this in the UI",
+            "status": "Todo",
+        }
+    }
+    ops = linear_sync.plan(desired, existing, parent_exists=True, change="c")
+    assert {"kind": "update_sub", "key": "1.2", "id": "DNA-1"} in ops
+
+
+def test_plan_heals_triage_but_touches_no_other_status(tmp_path: Path) -> None:
+    _, desired = _synced(tmp_path)
+
+    def existing_with(status: str) -> dict:
+        return {
+            desired[0]["key"]: {
+                "identifier": "DNA-1",
+                "title": desired[0]["title"],
+                "description": desired[0]["description"],
+                "status": status,
+            }
+        }
+
+    healed = linear_sync.plan(desired, existing_with("Triage"), parent_exists=True, change="c")
+    assert any(o["kind"] == "heal_status" for o in healed)
+
+    for owned in ("In Progress", "Blocked", "In Review", "Done", "Canceled"):
+        ops = linear_sync.plan(desired, existing_with(owned), parent_exists=True, change="c")
+        assert not any(o["kind"] == "heal_status" for o in ops), f"sync tried to move a {owned} issue"
+
+
+def test_plan_reports_orphans_without_deleting_them(tmp_path: Path) -> None:
+    """A task removed from tasks.md leaves an issue behind; say so, do not silently close it."""
+    _, desired = _synced(tmp_path)
+    existing = {"9.9": {"identifier": "DNA-99", "title": "9.9 gone", "description": "", "status": "Todo"}}
+    ops = linear_sync.plan(desired, existing, parent_exists=True, change="c")
+    orphans = [o for o in ops if o["kind"] == "orphan"]
+    assert [o["key"] for o in orphans] == ["9.9"]
+
+
+def test_status_guard_rejects_a_write_outside_the_unstarted_band() -> None:
+    statuses = ["Triage", "Todo", "In Progress", "Done"]
+    linear_sync.assert_status_writes_are_legal([{"kind": "create_sub", "state": "Todo"}], statuses)
+    with pytest.raises(linear_sync.SyncError, match="does not own"):
+        linear_sync.assert_status_writes_are_legal([{"kind": "create_sub", "state": "In Progress"}], statuses)
+
+
+def test_target_comes_from_workflow_md_not_the_api_key(tmp_path: Path) -> None:
+    block, _ = workflow.load(_workflow_md(tmp_path, MINIMAL))
+    assert linear_sync._target(block) == ("DNA", "P")
+
+
+def test_target_refuses_when_no_team_is_declared(tmp_path: Path) -> None:
+    with pytest.raises(linear_sync.SyncError, match="no team"):
+        linear_sync._target({"linear": {"project": "P"}})
+
+
+def test_apply_without_a_key_is_an_error_not_a_silent_no_op(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("LINEAR_API_KEY", raising=False)
+    assert linear_sync._api_key(require=False) == ""
+    with pytest.raises(linear_sync.SyncError, match="LINEAR_API_KEY"):
+        linear_sync._api_key(require=True)
