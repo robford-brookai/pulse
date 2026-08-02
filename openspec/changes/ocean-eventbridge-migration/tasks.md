@@ -203,14 +203,14 @@ Seven consumers. A `services/*/src/consumer.py` glob finds only 6; `warehouse-sy
 `AIOConsumer`. Each task swaps subscribe/poll/commit for receive/process/delete, leaving process
 shape, Dockerfile, and EKS deployment unchanged. Each records its ordering verdict in the HANDOFF.
 
-- [ ] 5.1 [DNA-757] `services/event-store/src/consumer.py` — verdict order-tolerant (append-only,
+- [x] 5.1 [DNA-757] `services/event-store/src/consumer.py` — verdict order-tolerant (append-only,
       `ON CONFLICT (event_id) DO NOTHING`).
       `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2c]`
-- [ ] 5.2 [DNA-758] `services/agent-worker/src/consumer.py` — verdict order-tolerant (single event type, one
+- [x] 5.2 [DNA-758] `services/agent-worker/src/consumer.py` — verdict order-tolerant (single event type, one
       source). Its cross-replica `claimed_tasks` duplicate hazard predates this change; note it in
       the HANDOFF, do not fix it here.
       `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2c]`
-- [ ] 5.3 [DNA-759] `services/call-simulator/src/consumer.py` — verdict order-tolerant (single topic, single
+- [x] 5.3 [DNA-759] `services/call-simulator/src/consumer.py` — verdict order-tolerant (single topic, single
       dispatch per approval).
       `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2c]`
 - [ ] 5.4 [DNA-760] `services/control-plane/src/consumer.py` — verdict per 3.6.
@@ -220,7 +220,7 @@ shape, Dockerfile, and EKS deployment unchanged. Each records its ordering verdi
       `[model: sonnet | deps: 2.2, 3.1, 3.2, 3.3, 3.4 | lane: repo_change | wave: 2c]`
 - [ ] 5.6 [DNA-762] `services/slack-bot/src/consumer.py` — convert only; guard landed in 3.5.
       `[model: sonnet | deps: 2.2, 3.5 | lane: repo_change | wave: 2c]`
-- [ ] 5.7 [DNA-763] `services/warehouse-sync/src/main.py` — inline `AIOConsumer` to SQS receive/delete.
+- [x] 5.7 [DNA-763] `services/warehouse-sync/src/main.py` — inline `AIOConsumer` to SQS receive/delete.
       `[model: sonnet | deps: 2.2, 4.13 | lane: repo_change | wave: 2c]`
 
 ## 6. Wave 3 — infrastructure
@@ -233,7 +233,7 @@ shape, Dockerfile, and EKS deployment unchanged. Each records its ordering verdi
 - [ ] 6.3 [DNA-766] Add a DLQ and redrive policy per queue, with dead-letter volume exposed to monitoring
       per consumer. This is where ADR §1.4's DLQ-with-monitor stops being an assumption.
       `[model: sonnet | deps: 6.2 | lane: repo_change | wave: 3]`
-- [ ] 6.4 [DNA-767] Add the bus archive with retention. This is where ADR §4.6's replay stops being an
+- [x] 6.4 [DNA-767] Add the bus archive with retention. This is where ADR §4.6's replay stops being an
       assumption. Retention value per design Open Questions — any value 30–90 days satisfies the
       spec.
       `[model: sonnet | deps: 6.1 | lane: repo_change | wave: 3]`
