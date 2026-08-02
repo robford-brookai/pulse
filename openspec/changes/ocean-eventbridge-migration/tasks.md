@@ -152,7 +152,7 @@ raised the collision mid-flight; the original plan declared 3.1–3.5 `parallel:
 per finding, so each of these tasks has a failing test waiting for it. The D3 audit's
 "order-tolerant, per handler" verdict for `control-plane` does not hold.
 
-- [ ] 3.7 `control-plane/src/handlers/tickets.py:167`/`:205` — `handle_ticket_updated` reads the
+- [x] 3.7 `control-plane/src/handlers/tickets.py:167`/`:205` — `handle_ticket_updated` reads the
       current status and writes the new one with only `is_valid_transition` between them, which is
       a legality check, not a sequence guard. Reversed `in_progress`/`resolved` leaves a resolved
       ticket at `in_progress`, silently; `waiting`↔`in_progress` are both legal, so within the
@@ -175,6 +175,11 @@ per finding, so each of these tasks has a failing test waiting for it. The D3 au
       designed against the DLQ and redrive behaviour from 6.3, which is why it depends on it.
       `return.updated` was already live-hazardous under Kafka: it arrives on `ocean.logistics` from
       a connector while the `returns` row is written by control-plane itself.
+      **Widened by 3.7, 2026-08-02.** A third path belongs here: `handle_ticket_updated` drops an
+      early-arriving `resolved` because the legality check rejects the transition from `open`. 3.7
+      guarded the status write and proved a guard cannot fix that case — it is a precondition that
+      has not arrived, not a stale write, so control-plane's verdict stays Order-dependent until
+      this task lands. 3.7 left it pinned as a characterisation test; make that test pass.
       `[model: opus | deps: 5.4, 6.3 | lane: repo_change | wave: 4]`
 - [ ] 3.9 Break the `ticket.created` echo cycle. `handle_ticket_created` publishes `ticket.created`,
       control-plane subscribes to that domain, and `EVENT_HANDLERS["ticket.created"]` routes it
