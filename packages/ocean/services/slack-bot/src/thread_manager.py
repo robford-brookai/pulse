@@ -48,7 +48,7 @@ class ThreadManager:
     # -----------------------------------------------------------------
 
     async def _advance_sequence(self, key_column: str, key: str, event_ts) -> bool:
-        """Compare-and-swap slack_messages.last_event_ts; True if this event is the newest.
+        """Compare-and-swap slack_messages.last_event_at; True if this event is the newest.
 
         One statement, so concurrent pollers cannot both decide they are newest.
         A False return means an event with a later event time has already been
@@ -56,7 +56,7 @@ class ThreadManager:
         """
         parsed = parse_event_time(event_ts)
         if parsed is None:
-            # No ordering signal. Apply, and leave last_event_ts alone rather
+            # No ordering signal. Apply, and leave last_event_at alone rather
             # than writing a value that would order by arrival.
             log.warning("sequence_guard_no_event_time", key_column=key_column, key=key)
             return True
@@ -64,9 +64,9 @@ class ThreadManager:
         async with self._session_maker() as session:
             result = await session.execute(
                 sa.text(
-                    "UPDATE slack_messages SET last_event_ts = :event_ts, updated_at = now() "
+                    "UPDATE slack_messages SET last_event_at = :event_ts, updated_at = now() "
                     f"WHERE {key_column} = :key "
-                    "AND (last_event_ts IS NULL OR last_event_ts < :event_ts)"
+                    "AND (last_event_at IS NULL OR last_event_at < :event_ts)"
                 ),
                 {"event_ts": parsed, "key": key},
             )
@@ -86,15 +86,15 @@ class ThreadManager:
         async with self._session_maker() as session:
             await session.execute(
                 sa.text(
-                    "INSERT INTO slack_messages (task_id, channel, message_ts, thread_ts, last_event_ts) "
-                    "VALUES (:task_id, :channel, :message_ts, :thread_ts, :last_event_ts)"
+                    "INSERT INTO slack_messages (task_id, channel, message_ts, thread_ts, last_event_at) "
+                    "VALUES (:task_id, :channel, :message_ts, :thread_ts, :last_event_at)"
                 ),
                 {
                     "task_id": task_id,
                     "channel": channel,
                     "message_ts": message_ts,
                     "thread_ts": message_ts,
-                    "last_event_ts": parse_event_time(event_ts),
+                    "last_event_at": parse_event_time(event_ts),
                 },
             )
             await session.commit()
@@ -197,15 +197,15 @@ class ThreadManager:
             await session.execute(
                 sa.text(
                     "INSERT INTO slack_messages "
-                    "(task_id, ticket_id, channel, message_ts, thread_ts, last_event_ts) "
-                    "VALUES ('', :ticket_id, :channel, :message_ts, :thread_ts, :last_event_ts)"
+                    "(task_id, ticket_id, channel, message_ts, thread_ts, last_event_at) "
+                    "VALUES ('', :ticket_id, :channel, :message_ts, :thread_ts, :last_event_at)"
                 ),
                 {
                     "ticket_id": ticket_id,
                     "channel": channel,
                     "message_ts": message_ts,
                     "thread_ts": message_ts,
-                    "last_event_ts": parse_event_time(event_ts),
+                    "last_event_at": parse_event_time(event_ts),
                 },
             )
             await session.commit()

@@ -86,7 +86,7 @@ class TestAdvanceSequence:
         await tm.advance_ticket_sequence("tkt-1", "2026-03-13T10:00:00Z")
 
         sql = _executed_sql(session)
-        assert "last_event_ts < :event_ts" in sql
+        assert "last_event_at < :event_ts" in sql
 
     async def test_never_compares_processing_time(self, mock_slack_client):
         """A guard comparing a processing-time value re-encodes the bug it fixes."""
@@ -177,7 +177,7 @@ class FakeThreadManager:
             "channel": channel,
             "message_ts": message_ts,
             "thread_ts": message_ts,
-            "last_event_ts": self._parse(event_ts) if event_ts else None,
+            "last_event_at": self._parse(event_ts) if event_ts else None,
         }
 
     async def get_ticket_channel(self, ticket_id):
@@ -197,10 +197,10 @@ class FakeThreadManager:
         if row is None or not event_ts:
             return True
         incoming = self._parse(event_ts)
-        stored = row["last_event_ts"]
+        stored = row["last_event_at"]
         if stored is not None and stored >= incoming:
             return False
-        row["last_event_ts"] = incoming
+        row["last_event_at"] = incoming
         return True
 
     async def queue_ticket_update(self, ticket_id, update) -> None:
