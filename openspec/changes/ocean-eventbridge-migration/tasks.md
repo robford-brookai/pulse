@@ -63,7 +63,7 @@ can be dispatched. `task dispatch` must not emit work orders for them.
       does. This is a review-reject.
       Done when: `task lint` checks every Python file under `packages/ocean` and passes; the
       typecheck and test targets state plainly that ocean is out of scope and why.
-- [ ] 1.4 [DNA-779] Bring `packages/ocean` under **mypy and pytest**.
+- [x] 1.4 [DNA-779] Bring `packages/ocean` under **mypy and pytest**.
       `[model: opus | deps: 1.3 | lane: repo_change | wave: 0]`
       `serial: workspace_roots` — edits root tool configuration.
       Split from 1.3 because this is real work, not configuration. Ocean's tests need Postgres and
