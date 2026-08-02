@@ -6,6 +6,7 @@ scripts/collect_handoffs.py — on hand-built fixtures.
 Usage: uv run pytest tests/scaffold/cat5_glue_logic.py -v
 """
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -631,3 +632,76 @@ def test_apply_without_a_key_is_an_error_not_a_silent_no_op(monkeypatch: pytest.
     assert linear_sync._api_key(require=False) == ""
     with pytest.raises(linear_sync.SyncError, match="LINEAR_API_KEY"):
         linear_sync._api_key(require=True)
+
+
+# --- collect_handoffs: a missing receipt must be loud ------------------------------------------
+#
+# task-002 imported 193 commits of ocean history and stopped without a HANDOFF.md. collect
+# skipped it silently, so a worktree that had done real work looked identical to one that had
+# not started. AGENTS.md requires the receipt; nothing enforced it.
+
+
+def _git(*args: str, cwd: Path) -> None:
+    subprocess.run(  # noqa: S603
+        ["git", "-c", "user.email=g@test.invalid", "-c", "user.name=G", *args],  # noqa: S607
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+    )
+
+
+def _repo_with_worktree(tmp_path: Path, *, commit_in_worktree: bool, handoff: bool) -> tuple[Path, Path]:
+    """A real git repo plus a linked worktree — the delinquency check reads git, not the filesystem."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git("init", "-q", "-b", "main", cwd=repo)
+    (repo / "seed.txt").write_text("seed\n")
+    _git("add", "-A", cwd=repo)
+    _git("commit", "-qm", "base", cwd=repo)
+
+    wt = tmp_path / "wt"
+    _git("worktree", "add", "-q", "-b", "task", str(wt), cwd=repo)
+    if commit_in_worktree:
+        (wt / "work.txt").write_text("did the work\n")
+        _git("add", "-A", cwd=wt)
+        _git("commit", "-qm", "the work", cwd=wt)
+    if handoff:
+        (wt / "HANDOFF.md").write_text("# HANDOFF\n")
+    return repo, wt
+
+
+def test_commits_without_a_handoff_are_delinquent(tmp_path: Path) -> None:
+    repo, wt = _repo_with_worktree(tmp_path, commit_in_worktree=True, handoff=False)
+    found = collect.delinquent_worktrees([wt], "main", repo)
+    assert [(p.name, n) for p, n in found] == [("wt", 1)]
+
+
+def test_a_worktree_that_has_not_started_is_not_delinquent(tmp_path: Path) -> None:
+    """No commits and no HANDOFF is 'not started', which is the case the old code conflated."""
+    repo, wt = _repo_with_worktree(tmp_path, commit_in_worktree=False, handoff=False)
+    assert collect.delinquent_worktrees([wt], "main", repo) == []
+
+
+def test_commits_with_a_handoff_are_fine(tmp_path: Path) -> None:
+    repo, wt = _repo_with_worktree(tmp_path, commit_in_worktree=True, handoff=True)
+    assert collect.delinquent_worktrees([wt], "main", repo) == []
+
+
+def test_the_repo_root_is_never_its_own_delinquent(tmp_path: Path) -> None:
+    """`git worktree list` includes the main worktree, which never carries a HANDOFF."""
+    repo, _ = _repo_with_worktree(tmp_path, commit_in_worktree=False, handoff=False)
+    assert collect.delinquent_worktrees([repo], "main", repo) == []
+
+
+def test_an_uninspectable_directory_is_not_reported_as_delinquent(tmp_path: Path) -> None:
+    """Cannot-tell must not become an accusation — this is what keeps the cat9 fixtures working."""
+    plain = tmp_path / "not-a-worktree"
+    plain.mkdir()
+    assert collect.commits_ahead(plain, "main") is None
+    assert collect.delinquent_worktrees([plain], "main", tmp_path) == []
+
+
+def test_commits_ahead_survives_an_unresolvable_base_ref(tmp_path: Path) -> None:
+    repo, wt = _repo_with_worktree(tmp_path, commit_in_worktree=True, handoff=False)
+    assert collect.commits_ahead(wt, "origin/nonexistent") is None
+    assert collect.delinquent_worktrees([wt], "origin/nonexistent", repo) == []

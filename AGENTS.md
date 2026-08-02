@@ -34,6 +34,12 @@ This project uses a four-component stack:
 
 At the end of your session, create `HANDOFF.md` in the worktree root.
 
+**This is enforced.** `task collect` fails if a worktree has commits and no `HANDOFF.md`. A
+worktree with no commits and no receipt is simply one that has not started; commits without a
+receipt is work that happened and left no record of what was done or whether the spec held, which
+also makes it invisible to `doc_update`. Write one even when there is nothing to report — "no
+spec updates, no drift" is a complete and useful receipt.
+
 Include only spec-relevant updates:
 
 - Requirements that need adding, modifying, or removing

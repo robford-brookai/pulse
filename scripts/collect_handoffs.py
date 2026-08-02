@@ -44,6 +44,50 @@ def find_worktrees() -> list[Path]:
     return worktrees
 
 
+def commits_ahead(wt: Path, base_ref: str) -> int | None:
+    """How many commits this worktree has that the base does not.
+
+    Returns None when that cannot be determined — the path is not a git worktree, or the base ref
+    does not resolve. "Cannot tell" is deliberately not "zero": a worktree we cannot inspect must
+    never be reported as delinquent on the strength of a failed git call.
+    """
+    try:
+        result = subprocess.run(  # noqa: S603
+            ["git", "-C", str(wt), "rev-list", "--count", f"{base_ref}..HEAD"],  # noqa: S607
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return None
+    if result.returncode != 0:
+        return None
+    try:
+        return int(result.stdout.strip())
+    except ValueError:
+        return None
+
+
+def delinquent_worktrees(worktrees: list[Path], base_ref: str, repo_root: Path) -> list[tuple[Path, int]]:
+    """Worktrees that committed work and left no receipt.
+
+    `AGENTS.md` requires a HANDOFF.md from every worktree, and nothing enforced it. A worktree
+    with commits and no HANDOFF looked exactly like one that had not started yet, so a task could
+    finish, produce a commit, and vanish from the record without anyone noticing.
+
+    The distinction is commits: no commits and no HANDOFF is simply not started. Commits and no
+    HANDOFF is a missing receipt, and that is a failure.
+    """
+    delinquent = []
+    for wt in worktrees:
+        if wt.resolve() == repo_root.resolve() or (wt / "HANDOFF.md").exists():
+            continue
+        ahead = commits_ahead(wt, base_ref)
+        if ahead:
+            delinquent.append((wt, ahead))
+    return delinquent
+
+
 def collect_handoffs(worktrees: list[Path], change: str, output_dir: Path) -> list[Path]:
     """Find HANDOFF.md in each worktree and copy to output_dir."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -110,6 +154,19 @@ def main():
         default=os.environ.get("ORCA_WORKTREES_DIR"),
         help="Directory containing Orca worktrees (default: auto-detect via git)",
     )
+    parser.add_argument(
+        "--base-ref",
+        default="origin/main",
+        help="Ref a worktree's commits are counted against (default: origin/main)",
+    )
+    parser.add_argument(
+        "--allow-missing-handoff",
+        action="store_true",
+        help=(
+            "Report worktrees that committed work without a HANDOFF.md, but do not fail. "
+            "For collecting mid-wave, when tasks are legitimately still running."
+        ),
+    )
     args = parser.parse_args()
 
     if args.worktrees_dir:
@@ -132,9 +189,28 @@ def main():
         summary_path = Path(args.output) / args.change / "SUMMARY.md"
         summary_path.write_text(summary)
         print(f"\nSummary written to {summary_path}")
-        print(f"\nNext step: task sync-docs CHANGE={args.change}")
     else:
         print("\nNo HANDOFF.md files found in any worktree.")
+
+    delinquent = delinquent_worktrees(worktrees, args.base_ref, Path.cwd())
+    if delinquent:
+        print(
+            f"\n{len(delinquent)} worktree(s) committed work and left no HANDOFF.md:",
+            file=sys.stderr,
+        )
+        for wt, ahead in delinquent:
+            print(f"  {wt.name}: {ahead} commit(s) ahead of {args.base_ref}, no receipt", file=sys.stderr)
+        print(
+            "\nAGENTS.md requires a HANDOFF.md from every worktree. Without one there is no record "
+            "of what was done or whether the spec held, and the work is invisible to doc_update.\n"
+            "Write the missing receipt, or pass --allow-missing-handoff if the task is still running.",
+            file=sys.stderr,
+        )
+        if not args.allow_missing_handoff:
+            sys.exit(1)
+
+    if handoffs:
+        print(f"\nNext step: task sync-docs CHANGE={args.change}")
 
 
 if __name__ == "__main__":
