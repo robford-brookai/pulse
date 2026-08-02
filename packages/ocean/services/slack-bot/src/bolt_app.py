@@ -34,7 +34,7 @@ from src.zcc_dispatch import dispatch_zcc_outbound_call, get_zcc_oauth_token
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import async_sessionmaker
 
-    from src.publisher import RedpandaPublisher
+    from src.publisher import EventPublisher
 
 log = structlog.get_logger()
 
@@ -43,7 +43,7 @@ log = structlog.get_logger()
 # ---------------------------------------------------------------------------
 
 _session_maker: async_sessionmaker | None = None
-_publisher: RedpandaPublisher | None = None
+_publisher: EventPublisher | None = None
 _hasura_secret: str | None = None
 
 
@@ -52,7 +52,7 @@ def set_session_maker(sm: async_sessionmaker) -> None:
     _session_maker = sm
 
 
-def set_publisher(p: RedpandaPublisher) -> None:
+def set_publisher(p: EventPublisher) -> None:
     global _publisher
     _publisher = p
 
