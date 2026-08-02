@@ -1,0 +1,82 @@
+name: Auto Heal CI
+
+on:
+  workflow_run:
+    workflows: ["Main"]
+    types: [completed]
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    outputs:
+      healthy: ${{ steps.health.outputs.healthy }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up environment
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: '3.12'
+          uv-version: '0.10.12'
+
+      - id: health
+        name: Run diagnostics
+        run: |
+          set -e
+          echo "Starting diagnostics"
+          tries=0
+          until [ $tries -ge 3 ]; do
+            uv sync --all-packages --frozen && break
+            tries=$((tries+1))
+            echo "uv sync failed, retrying ($tries/3)..."
+            sleep $((tries * 5))
+          done
+          if [ $tries -ge 3 ]; then
+            echo "healthy=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "Checking imports"
+          python - <<'PY'
+          import importlib, sys
+          ok = True
+          for mod in ("pydantic", "uvicorn"):
+              try:
+                  importlib.import_module(mod)
+              except Exception:
+                  ok = False
+          if not ok:
+              raise SystemExit(1)
+          PY
+
+          echo "healthy=true" >> $GITHUB_OUTPUT
+        shell: bash
+
+  rerun:
+    needs: diagnose
+    runs-on: ubuntu-latest
+    if: ${{ needs.diagnose.outputs.healthy == 'true' && github.event.workflow_run.conclusion == 'failure' }}
+    steps:
+      - name: Re-run failed workflow
+        uses: peter-evans/re-run-workflow@v2
+        with:
+          run_id: ${{ github.event.workflow_run.id }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  notify:
+    needs: diagnose
+    runs-on: ubuntu-latest
+    if: ${{ needs.diagnose.outputs.healthy != 'true' && github.event.workflow_run.conclusion == 'failure' }}
+    steps:
+      - name: Open issue for human attention
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `CI auto-heal diagnostic failed for run ${context.payload.workflow_run.id}`,
+              body: `Auto-heal diagnostic failed for workflow run: ${context.payload.workflow_run.html_url}\n\nPlease inspect and resolve.`
+            })
