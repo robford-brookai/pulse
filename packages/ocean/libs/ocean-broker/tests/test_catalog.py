@@ -44,7 +44,9 @@ DESIGN_D1_DOMAINS = {
     "logistics",
 }
 
-_REPO_OCEAN = Path(__file__).resolve().parents[2]
+#: `packages/ocean`, from `packages/ocean/libs/ocean-broker/tests/` — the same root
+#: `catalog._PACKAGE_ROOT` resolves to, reached from this file's own depth.
+_REPO_OCEAN = Path(__file__).resolve().parents[3]
 
 
 class TestSourceTable:

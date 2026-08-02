@@ -214,6 +214,24 @@ class TestEventBridgePublisher:
         await publisher.publish(detail_type="signals", event=envelope, key="key")
 
     @pytest.mark.asyncio
+    async def test_dlq_write_failing_does_not_raise_either(
+        self, publisher, mock_eventbridge_client, mock_db_session_maker
+    ):
+        """A DLQ that is itself down must not turn a publish failure into a caller exception.
+
+        The event is lost at this point, and nothing can prevent that — but a connector must not
+        also lose the webhook it was in the middle of acknowledging.
+        """
+        publisher._db_session_maker = mock_db_session_maker
+        mock_db_session_maker._test_session.execute.side_effect = RuntimeError("postgres is down")
+        mock_eventbridge_client.put_events.return_value = {
+            "FailedEntryCount": 1,
+            "Entries": [{"ErrorCode": "500", "ErrorMessage": "Service error"}],
+        }
+
+        await publisher.publish(detail_type="signals", event={"event_type": "test.event"}, key="k")
+
+    @pytest.mark.asyncio
     async def test_success_does_not_touch_the_dlq(self, publisher, mock_eventbridge_client, mock_db_session_maker):
         """A successful publish must not write to failed_webhooks."""
         publisher._db_session_maker = mock_db_session_maker
