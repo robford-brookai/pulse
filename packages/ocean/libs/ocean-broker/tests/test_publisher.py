@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from ocean_broker.catalog import LIVE_DOMAINS, address_for, pattern_matches, rule_pattern
-from ocean_broker.publisher import EventBridgePublisher
+from ocean_broker.publisher import MAX_ENTRY_BYTES, EventBridgePublisher
 
 
 class TestEventBridgePublisher:
@@ -314,3 +314,115 @@ class TestEventBridgePublisher:
         }
 
         await publisher.publish(detail_type="signals", event={"event_type": "test.event"}, key="k")
+
+
+class TestEventBusTargeting:
+    """The bus must be named explicitly on every entry.
+
+    Omitting ``EventBusName`` sends the event to the account's ``default`` bus. PutEvents accepts
+    it, ``FailedEntryCount`` stays 0, and the event is simply gone — the per-consumer rules from
+    task 6.2 live on the ``ocean`` bus and never see it. It would have surfaced at the LocalStack
+    equivalence gate as "no consumer receives anything", which is an expensive place to learn it.
+    """
+
+    @pytest.fixture
+    def client(self):
+        c = MagicMock()
+        c.put_events = MagicMock(return_value={"FailedEntryCount": 0})
+        return c
+
+    def _publisher(self, client, **kwargs):
+        with patch("ocean_broker.publisher.boto3") as mock_boto3:
+            mock_boto3.client.return_value = client
+            pub = EventBridgePublisher(region="us-east-1", **kwargs)
+            pub._client = client
+            return pub
+
+    @pytest.mark.asyncio
+    async def test_entry_names_the_bus(self, client):
+        pub = self._publisher(client, event_bus_name="ocean-prod")
+        await pub.publish("alerts", {"event_id": "e1"})
+        entry = client.put_events.call_args.kwargs["Entries"][0]
+        assert entry["EventBusName"] == "ocean-prod"
+
+    @pytest.mark.asyncio
+    async def test_bus_defaults_to_ocean_not_aws_default(self, client, monkeypatch):
+        monkeypatch.delenv("OCEAN_EVENT_BUS_NAME", raising=False)
+        pub = self._publisher(client)
+        await pub.publish("alerts", {"event_id": "e1"})
+        entry = client.put_events.call_args.kwargs["Entries"][0]
+        assert entry["EventBusName"] == "ocean"
+        assert entry["EventBusName"] != "default"
+
+    @pytest.mark.asyncio
+    async def test_bus_is_configurable_by_environment(self, client, monkeypatch):
+        monkeypatch.setenv("OCEAN_EVENT_BUS_NAME", "ocean-staging")
+        pub = self._publisher(client)
+        await pub.publish("alerts", {"event_id": "e1"})
+        assert client.put_events.call_args.kwargs["Entries"][0]["EventBusName"] == "ocean-staging"
+
+    @pytest.mark.asyncio
+    async def test_every_entry_carries_a_bus(self, client):
+        """Not just the first — a regression here would be silent for whichever call missed it."""
+        pub = self._publisher(client)
+        for domain in ("alerts", "tasks", "signals"):
+            await pub.publish(domain, {"event_id": "e1"})
+        for call in client.put_events.call_args_list:
+            assert "EventBusName" in call.kwargs["Entries"][0]
+
+
+class TestEntrySizeLimit:
+    """PutEvents caps one entry at 256 KB, counted across the whole entry, not just detail."""
+
+    @pytest.fixture
+    def mock_db_session_maker(self):
+        session = AsyncMock()
+        session.execute = AsyncMock()
+        begin = AsyncMock()
+        begin.__aenter__ = AsyncMock(return_value=None)
+        begin.__aexit__ = AsyncMock(return_value=None)
+        session.begin = MagicMock(return_value=begin)
+
+        class Ctx:
+            async def __aenter__(self_inner):
+                return session
+
+            async def __aexit__(self_inner, *_):
+                pass
+
+        maker = MagicMock(side_effect=lambda: Ctx())
+        maker._test_session = session
+        return maker
+
+    @pytest.fixture
+    def client(self):
+        c = MagicMock()
+        c.put_events = MagicMock(return_value={"FailedEntryCount": 0})
+        return c
+
+    def _publisher(self, client, maker=None):
+        with patch("ocean_broker.publisher.boto3") as mock_boto3:
+            mock_boto3.client.return_value = client
+            pub = EventBridgePublisher(region="us-east-1", db_session_maker=maker)
+            pub._client = client
+            return pub
+
+    @pytest.mark.asyncio
+    async def test_oversized_entry_is_not_sent(self, client):
+        pub = self._publisher(client)
+        await pub.publish("alerts", {"event_id": "e1", "blob": "x" * (MAX_ENTRY_BYTES + 1)})
+        assert client.put_events.call_count == 0, "an entry known to exceed the limit should never be sent"
+
+    @pytest.mark.asyncio
+    async def test_oversized_entry_dead_letters_with_a_legible_reason(self, client, mock_db_session_maker):
+        pub = self._publisher(client, maker=mock_db_session_maker)
+        await pub.publish("alerts", {"event_id": "e1", "blob": "x" * (MAX_ENTRY_BYTES + 1)})
+        params = mock_db_session_maker._test_session.execute.call_args.args[1]
+        assert "over the" in params["error"]
+        assert str(MAX_ENTRY_BYTES) in params["error"]
+
+    @pytest.mark.asyncio
+    async def test_an_entry_under_the_limit_is_sent(self, client):
+        pub = self._publisher(client)
+        await pub.publish("alerts", {"event_id": "e1", "blob": "x" * 1000})
+        assert client.put_events.call_count == 1

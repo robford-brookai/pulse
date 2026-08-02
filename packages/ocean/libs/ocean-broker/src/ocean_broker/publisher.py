@@ -11,7 +11,7 @@ import json
 import os
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 import boto3
 import sqlalchemy as sa
@@ -23,6 +23,11 @@ from ocean_broker.catalog import address_for
 log = structlog.get_logger()
 
 _DEFAULT_REGION = "us-east-1"
+_DEFAULT_EVENT_BUS = "ocean"
+#: PutEvents caps one entry at 256 KB, counting the whole entry rather than just ``detail``.
+#: Checked before the call so an oversized envelope dead-letters with a legible reason instead of
+#: a generic API rejection.
+MAX_ENTRY_BYTES = 256 * 1024
 
 
 class EventBridgePublisher:
@@ -32,6 +37,7 @@ class EventBridgePublisher:
         self,
         region: str | None = None,
         db_session_maker: async_sessionmaker[AsyncSession] | None = None,
+        event_bus_name: str | None = None,
     ) -> None:
         """Initialize EventBridge publisher.
 
@@ -39,10 +45,16 @@ class EventBridgePublisher:
             region: AWS region for EventBridge. Defaults to ``AWS_REGION``, then ``us-east-1``.
             db_session_maker: Optional async SQLAlchemy session maker for DLQ fallback. Without
                 one, a failed publish is logged but not durably queued.
+            event_bus_name: Bus to publish to. Defaults to ``OCEAN_EVENT_BUS_NAME``, then
+                ``ocean``. Never left unset: omitting ``EventBusName`` from a PutEvents entry
+                sends the event to the account's ``default`` bus, where the per-consumer rules
+                from task 6.2 do not exist, so every event would be accepted and then silently
+                go nowhere.
         """
         region = region or os.environ.get("AWS_REGION", _DEFAULT_REGION)
         self._region = region
         self._db_session_maker = db_session_maker
+        self._event_bus_name = event_bus_name or os.environ.get("OCEAN_EVENT_BUS_NAME", _DEFAULT_EVENT_BUS)
         self._client = boto3.client("events", region_name=region)
 
     async def publish(self, detail_type: str, event: dict[str, Any], key: str | None = None) -> None:
@@ -68,16 +80,21 @@ class EventBridgePublisher:
         if key is not None:
             envelope["key"] = key
 
-        try:
-            response = self._client.put_events(
-                Entries=[
-                    {
-                        "Source": address.source,
-                        "DetailType": address.detail_type,
-                        "Detail": json.dumps(envelope),
-                    }
-                ]
+        request_entry = {
+            "Source": address.source,
+            "DetailType": address.detail_type,
+            "Detail": json.dumps(envelope),
+            "EventBusName": self._event_bus_name,
+        }
+        size = len(json.dumps(request_entry).encode())
+        if size > MAX_ENTRY_BYTES:
+            await self._handle_failure(
+                detail_type, key, envelope, f"entry is {size} bytes, over the {MAX_ENTRY_BYTES}-byte limit"
             )
+            return
+
+        try:
+            response = self._client.put_events(Entries=[cast("Any", request_entry)])
         except Exception as exc:
             await self._handle_failure(detail_type, key, envelope, str(exc))
             return
