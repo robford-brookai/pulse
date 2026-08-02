@@ -125,40 +125,40 @@ def make_device_association_removed_payload(
 
 class TestReadingEvents:
     def test_reading_weight_produces_signal_received(self) -> None:
-        event, topic = normalize_impilo_payload(make_reading_payload("weight"))
+        event, domain = normalize_impilo_payload(make_reading_payload("weight"))
         assert event.event_type == "signal.received"
         assert event.source_system == "impilo"
         assert event.entity_type == "signal"
         assert event.payload["signal_type"] == "weight"
-        assert topic == "ocean.signals"
+        assert domain == "signals"
 
     def test_reading_blood_pressure_preserves_subtype(self) -> None:
-        event, topic = normalize_impilo_payload(make_reading_payload("blood_pressure"))
+        event, domain = normalize_impilo_payload(make_reading_payload("blood_pressure"))
         assert event.payload["signal_type"] == "blood_pressure"
-        assert topic == "ocean.signals"
+        assert domain == "signals"
 
 
 class TestPatientEvents:
     def test_patient_created_produces_patient_enrolled(self) -> None:
-        event, topic = normalize_impilo_payload(make_patient_payload())
+        event, domain = normalize_impilo_payload(make_patient_payload())
         assert event.event_type == "patient.enrolled"
         assert event.entity_type == "patient"
-        assert topic == "ocean.signals"
+        assert domain == "signals"
 
 
 class TestDeviceEvents:
     def test_device_inactive_produces_signal_missing(self) -> None:
-        event, topic = normalize_impilo_payload(make_device_payload(status="inactive"))
+        event, domain = normalize_impilo_payload(make_device_payload(status="inactive"))
         assert event.event_type == "signal.missing"
         assert event.payload["signal_type"] == "device_offline"
-        assert topic == "ocean.signals"
+        assert domain == "signals"
 
 
 class TestLogisticsEvents:
     def test_order_created_maps_to_logistics(self) -> None:
-        event, topic = normalize_impilo_payload(make_order_payload())
+        event, domain = normalize_impilo_payload(make_order_payload())
         assert event.event_type == "order.created"
-        assert topic == "ocean.logistics"
+        assert domain == "logistics"
 
 
 class TestPHIProtection:
@@ -192,14 +192,14 @@ class TestIdentityHashing:
 
 
 class TestFulfillmentEvents:
-    """order.statusFull -> fulfillment.updated on ocean.logistics."""
+    """order.statusFull -> fulfillment.updated on the logistics domain."""
 
     def test_order_status_full_produces_fulfillment_updated(self) -> None:
         raw = make_order_status_full_payload()
-        event, topic = normalize_impilo_payload(raw)
+        event, domain = normalize_impilo_payload(raw)
         assert event.event_type == "fulfillment.updated"
         assert event.entity_type == "fulfillment"
-        assert topic == "ocean.logistics"
+        assert domain == "logistics"
 
     def test_order_status_full_payload_fields(self) -> None:
         raw = make_order_status_full_payload()
@@ -216,14 +216,14 @@ class TestFulfillmentEvents:
 
 
 class TestReturnEvents:
-    """return.statusFull -> return.updated on ocean.logistics."""
+    """return.statusFull -> return.updated on the logistics domain."""
 
     def test_return_status_full_produces_return_updated(self) -> None:
         raw = make_return_status_full_payload()
-        event, topic = normalize_impilo_payload(raw)
+        event, domain = normalize_impilo_payload(raw)
         assert event.event_type == "return.updated"
         assert event.entity_type == "return"
-        assert topic == "ocean.logistics"
+        assert domain == "logistics"
 
     def test_return_status_full_payload_fields(self) -> None:
         raw = make_return_status_full_payload()
@@ -241,10 +241,10 @@ class TestDeviceAssociationEvents:
 
     def test_device_association_created_produces_device_associated(self) -> None:
         raw = make_device_association_created_payload()
-        event, topic = normalize_impilo_payload(raw)
+        event, domain = normalize_impilo_payload(raw)
         assert event.event_type == "device.associated"
         assert event.entity_type == "device_association"
-        assert topic == "ocean.logistics"
+        assert domain == "logistics"
 
     def test_device_association_created_payload_fields(self) -> None:
         raw = make_device_association_created_payload()
@@ -255,10 +255,10 @@ class TestDeviceAssociationEvents:
 
     def test_device_association_removed_produces_device_disassociated(self) -> None:
         raw = make_device_association_removed_payload()
-        event, topic = normalize_impilo_payload(raw)
+        event, domain = normalize_impilo_payload(raw)
         assert event.event_type == "device.disassociated"
         assert event.entity_type == "device_association"
-        assert topic == "ocean.logistics"
+        assert domain == "logistics"
 
     def test_device_association_removed_has_no_order_id(self) -> None:
         raw = make_device_association_removed_payload()

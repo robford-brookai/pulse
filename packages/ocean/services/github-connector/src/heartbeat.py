@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -38,9 +37,9 @@ async def publish_heartbeat(
         }
         try:
             await publisher.publish(
-                topic="ocean.ops",
+                detail_type="ops",
+                event=event,
                 key=connector_id,
-                value=json.dumps(event).encode(),
             )
             log.debug("heartbeat_published", connector_id=connector_id)
         except Exception:

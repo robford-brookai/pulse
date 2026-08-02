@@ -8,9 +8,9 @@ import random
 from datetime import UTC, datetime
 
 import structlog
+from ocean_broker import EventBridgePublisher
 
 from src.personas import Persona
-from src.publisher import RedpandaPublisher
 
 log = structlog.get_logger()
 
@@ -18,7 +18,7 @@ log = structlog.get_logger()
 async def compete_for_claim(
     task_event: dict,
     personas: list[Persona],
-    publisher: RedpandaPublisher,
+    publisher: EventBridgePublisher,
     claimed_tasks: set[str],
     compression_ratio: float = 960,
 ) -> Persona | None:
@@ -85,7 +85,7 @@ async def compete_for_claim(
             },
         }
 
-        await publisher.publish("ocean.tasks", claimed_event)
+        await publisher.publish("tasks", claimed_event)
         log.info(
             "task_claimed",
             persona=persona.id,

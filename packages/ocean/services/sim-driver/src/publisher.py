@@ -1,32 +1,43 @@
-"""Redpanda publisher for sim-driver synthetic events."""
+"""EventBridge publisher wiring for sim-driver synthetic events.
+
+sim-driver holds no transport code of its own: it builds the shared
+:class:`ocean_broker.publisher.EventBridgePublisher` and hands it to the scenario engine.
+Addressing comes from the event catalog, so the domains below are catalog names
+(``signals``), never the retired ``ocean.<domain>`` topic strings.
+"""
 
 from __future__ import annotations
 
-import asyncio
-import json
-import logging
+import os
 
-from confluent_kafka import Producer
+from ocean_broker.publisher import EventBridgePublisher
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-log = logging.getLogger(__name__)
+#: The three domains sim-driver publishes to. Named here so a typo is one broken import
+#: rather than a KeyError raised at the first publish of a scenario run.
+DOMAIN_SIGNALS = "signals"
+DOMAIN_ALERTS = "alerts"
+DOMAIN_OPS = "ops"
 
 
-class RedpandaPublisher:
-    """Async wrapper around confluent_kafka Producer.
+def build_publisher(database_url: str | None = None) -> EventBridgePublisher:
+    """Build the EventBridge publisher for this service.
 
-    Runs blocking produce/flush calls in a thread executor to avoid
-    blocking the event loop.
+    Args:
+        database_url: Async Postgres URL backing the ``failed_webhooks`` dead-letter table.
+            Defaults to ``DATABASE_URL``. sim-driver ships without a database, in which case
+            a failed publish is logged and dropped — the same events are reproducible by
+            re-running the scenario, so there is nothing to recover.
+
+    Returns:
+        The shared publisher, with the DLQ fallback wired when a database is configured.
     """
+    database_url = database_url or os.environ.get("DATABASE_URL")
+    session_maker = _build_session_maker(database_url) if database_url else None
+    return EventBridgePublisher(db_session_maker=session_maker)
 
-    def __init__(self, bootstrap_servers: str) -> None:
-        self._producer = Producer({"bootstrap.servers": bootstrap_servers})
 
-    async def publish(self, topic: str, event: dict) -> None:
-        """Serialize event to JSON and produce it to the given topic."""
-        payload = json.dumps(event).encode("utf-8")
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, self._produce_sync, topic, payload)
-
-    def _produce_sync(self, topic: str, payload: bytes) -> None:
-        self._producer.produce(topic, value=payload)
-        self._producer.flush()
+def _build_session_maker(database_url: str) -> async_sessionmaker[AsyncSession]:
+    """Build an async session maker for the dead-letter table."""
+    engine = create_async_engine(database_url, echo=False)
+    return async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)

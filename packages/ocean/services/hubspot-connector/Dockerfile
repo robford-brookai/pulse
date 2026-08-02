@@ -5,15 +5,18 @@ WORKDIR /app
 RUN pip install uv --quiet
 
 COPY libs/ocean-events /libs/ocean-events
+COPY libs/ocean-broker /libs/ocean-broker
 
 RUN uv pip install --system --no-cache -e /libs/ocean-events
+RUN uv pip install --system --no-cache -e /libs/ocean-broker
 
 COPY services/hubspot-connector/pyproject.toml .
 
 RUN uv pip install --system --no-cache \
     fastapi==0.135.1 \
     uvicorn==0.41.0 \
-    "confluent-kafka==2.13.2" \
+    "sqlalchemy==2.0.48" \
+    "asyncpg==0.31.0" \
     "structlog==25.5.0"
 
 COPY services/hubspot-connector/src ./src
