@@ -1,31 +1,22 @@
 """EventBridge publish adapter for slack-bot outbound events.
 
 No transport lives here: :class:`ocean_broker.EventBridgePublisher` owns the bus call, the
-catalog addressing, and the ``failed_webhooks`` fallback. This module only translates the
-legacy ``ocean.<domain>`` topic names the call sites still pass into the domain the shared
-publisher addresses by, so every payload construction site stays untouched.
+catalog addressing, and the ``failed_webhooks`` fallback. Call sites still name their
+destination by the legacy ``ocean.<domain>`` topic; the shared ``domain_for_topic`` from
+``ocean_broker.catalog`` translates that (re-exported here for the tests), so every payload
+construction site stays untouched.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from ocean_broker import EventBridgePublisher
+from ocean_broker import EventBridgePublisher, domain_for_topic
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-_TOPIC_PREFIX = "ocean."
-
-
-def domain_for_topic(topic: str) -> str:
-    """Return the bus domain for a former Kafka topic name.
-
-    A bare domain passes through unchanged, so a caller that has already been converted
-    needs no special case here. Validation belongs to the catalog, not to this function:
-    an unknown domain raises from ``address_for`` at publish time.
-    """
-    return topic.removeprefix(_TOPIC_PREFIX)
+__all__ = ["EventPublisher", "domain_for_topic"]
 
 
 class EventPublisher:

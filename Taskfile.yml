@@ -21,11 +21,12 @@ vars:
   # carry 217 mypy errors. Stated here rather than implied, so what CI verifies is readable
   # from this file.
   TYPED_PATHS: src packages/ocean/libs/ocean-events/src packages/ocean/libs/ocean-broker/src packages/ocean/libs/ocean-connector-mcp/src
-  # Tests reach ocean's libs, plus graph-projection: its tests import `from src.X`, which used to
-  # resolve only with pytest run from inside the service, and now resolves from anywhere because
-  # that service's tests/conftest.py states the path (task 3.4, DNA-741). The sequence guards in
-  # wave 2a are only a gate if CI runs them. The other 15 services still need the same treatment.
-  TESTED_PATHS: tests packages/ocean/libs packages/ocean/services/graph-projection/tests
+  # Tests reach ocean's libs here; the 14 service suites run in test:services, one pytest
+  # process per service (task 4.14, DNA-781). They cannot join this list: every service ships a
+  # top-level `src` package and imports itself as `from src.X`, and one interpreter cannot hold
+  # sixteen different `src` packages in sys.modules. graph-projection moved from this list into
+  # the loop with the rest. tests/test_taskfile_test_coverage.py pins this arrangement.
+  TESTED_PATHS: tests packages/ocean/libs
   # Coverage covers ocean-events because it is the envelope every consumer depends on, and it is
   # at 100%. ocean-broker joins it at task 2.2: the reason it was excluded — that 2.2 would throw
   # its tests away — expired when 2.2 landed EventBridgePublisher and the event catalog, which are
@@ -105,9 +106,29 @@ tasks:
   # --- 4. Test ---
 
   test:
-    desc: Run tests with coverage (ocean libs covered; its 16 services are not — DNA-779)
+    desc: Run tests with coverage, then every ocean service suite (DNA-781)
     cmds:
       - uv run pytest {{.TESTED_PATHS}} --import-mode=importlib {{.COV_PATHS}} --cov-report=term-missing
+      - task: test:services
+
+  test:services:
+    desc: Run each ocean service's tests, one pytest process per service
+    # One process per service because each ships a top-level `src` package imported as
+    # `from src.X` — the suites cannot share an interpreter (see TESTED_PATHS note). Services
+    # stay outside the coverage floor (DNA-779). Every failing suite is reported, not just the
+    # first. mongodb-connector and warehouse-sync have no tests directory to run — a gap in
+    # those services, tracked by tests/test_taskfile_test_coverage.py.
+    cmds:
+      - |
+        failed=""
+        for dir in packages/ocean/services/*/tests; do
+          echo "=== ${dir%/tests}"
+          uv run pytest "$dir" -q || failed="$failed ${dir%/tests}"
+        done
+        if [ -n "$failed" ]; then
+          echo "FAILED service suites:$failed" >&2
+          exit 1
+        fi
 
   test:all:
     desc: Run tests including the slow scaffold gates

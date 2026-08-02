@@ -116,6 +116,10 @@ CONSUMER_DOMAINS: Mapping[ConsumerName, tuple[DomainName, ...]] = {
     "warehouse-sync": LIVE_DOMAINS,
 }
 
+#: The namespace every retired Kafka topic carried: `ocean.<domain>`. Only
+#: :func:`domain_for_topic` should need it.
+TOPIC_PREFIX = "ocean."
+
 #: Path of the generated Terraform input, relative to the ``packages/ocean`` root.
 TFVARS_RELATIVE_PATH = Path("infra") / "terraform" / "generated" / "event_catalog.auto.tfvars.json"
 
@@ -155,6 +159,24 @@ def address_for(domain: str) -> EventBridgeAddress:
         return _ADDRESSES[domain]
     except KeyError:
         raise KeyError(f"{domain!r} is not a live OCEAN domain; expected one of {sorted(LIVE_DOMAINS)}") from None
+
+
+def domain_for_topic(topic: str) -> str:
+    """Translate a former Kafka topic name to its catalog domain.
+
+    Accepts either form — ``ocean.tasks`` or ``tasks`` — because legacy call sites
+    use the prefixed name and the catalog keys on the bare domain. One shared copy
+    (hoisted from per-service duplicates, task 4.14): every publish site that still
+    names its destination by topic translates here.
+
+    Raises:
+        KeyError: if the result is not a live domain. Resolution happens before the
+            bus is touched, so a retired or misspelled topic fails loudly instead of
+            publishing to an address no rule matches.
+    """
+    domain = topic.removeprefix(TOPIC_PREFIX)
+    address_for(domain)
+    return domain
 
 
 def addressing_table() -> dict[str, EventBridgeAddress]:

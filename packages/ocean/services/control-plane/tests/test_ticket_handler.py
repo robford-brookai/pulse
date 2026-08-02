@@ -230,7 +230,7 @@ class TestHandleTicketUpdated:
 
     @pytest.mark.asyncio
     async def test_resolved_publishes_ticket_resolved(self):
-        """Transition to 'resolved' publishes both ticket.updated and ticket.resolved."""
+        """Transition to 'resolved' publishes ticket.updated, ticket.resolved and outcome.recorded."""
         from src.handlers.tickets import handle_ticket_updated
 
         session = AsyncMock()
@@ -242,10 +242,17 @@ class TestHandleTicketUpdated:
 
         await handle_ticket_updated(event, session, producer=producer)
 
-        assert producer.publish.call_count == 2
+        # Resolution dual-publishes: the ticket pair, plus outcome.recorded to ocean.outcomes
+        # (phase 22 wired every resolution path through build_outcome_event).
+        assert producer.publish.call_count == 3
         event_types = [c[0][1]["event_type"] for c in producer.publish.call_args_list]
         assert "ticket.updated" in event_types
         assert "ticket.resolved" in event_types
+        assert "outcome.recorded" in event_types
+        outcome_topic = next(
+            c[0][0] for c in producer.publish.call_args_list if c[0][1]["event_type"] == "outcome.recorded"
+        )
+        assert outcome_topic == "ocean.outcomes"
 
     @pytest.mark.asyncio
     async def test_priority_change_updates(self):
