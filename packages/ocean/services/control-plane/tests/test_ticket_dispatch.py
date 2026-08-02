@@ -19,3 +19,17 @@ def test_ticket_update_requested_dispatches_to_handler():
 
     assert "ticket.update.requested" in EVENT_HANDLERS
     assert EVENT_HANDLERS["ticket.update.requested"] is handle_ticket_updated
+
+
+def test_self_published_ticket_types_are_not_consumed():
+    """`ticket.created` and `ticket.updated` must not be EVENT_HANDLERS keys (task 3.9).
+
+    Control-plane is the only publisher of both — every other service sends the
+    `*.requested` form — so these keys routed control-plane's own output back into its
+    handlers. For `ticket.created` that echo minted a fresh `uuid4` and `human_id` per
+    pass: one requested ticket became an unbounded stream of tickets.
+    """
+    from src.consumer import EVENT_HANDLERS
+
+    assert "ticket.created" not in EVENT_HANDLERS
+    assert "ticket.updated" not in EVENT_HANDLERS
