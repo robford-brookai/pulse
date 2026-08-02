@@ -171,7 +171,7 @@ fi
 # template never receives a config — `analyze` needs `init` to write one first.
 openlore init --force
 openlore analyze
-uv sync
+uv sync --all-packages
 uv run pre-commit install
 
 # Commit the bootstrap. Keep the existing repo and its origin remote — a
