@@ -1,4 +1,9 @@
-"""EventBridge publisher with Postgres failed_webhooks fallback."""
+"""EventBridge publisher with Postgres ``failed_webhooks`` fallback.
+
+Addressing is never spelled out here: every ``Source``/``DetailType`` pair comes from
+:mod:`ocean_broker.catalog`, the same table the Terraform rule patterns are generated from. That
+is what makes it impossible for this publisher to emit a ``detail-type`` no rule matches.
+"""
 
 from __future__ import annotations
 
@@ -13,28 +18,11 @@ import sqlalchemy as sa
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from ocean_broker.catalog import address_for
+
 log = structlog.get_logger()
 
 _DEFAULT_REGION = "us-east-1"
-
-#: Every former ``ocean.<domain>`` topic addresses as ``(EVENT_SOURCE, <domain>)``.
-#: This is the publisher half of the addressing contract; DNA-736 replaces this
-#: literal with an import from the generated mapping it owns.
-EVENT_SOURCE = "ocean"
-
-LIVE_DOMAINS = {
-    "signals",
-    "alerts",
-    "tasks",
-    "interactions",
-    "outcomes",
-    "patient-state",
-    "tickets",
-    "ai-ops",
-    "audit",
-    "ops",
-    "logistics",
-}
 
 
 class EventBridgePublisher:
@@ -73,10 +61,10 @@ class EventBridgePublisher:
                 guards; it plays no part in routing.
 
         Raises:
-            ValueError: If detail_type is not one of the live domains.
+            KeyError: If detail_type is not a live domain in the event catalog. Raised before the
+                bus is touched — an address no rule matches is a dead publish, not a retryable one.
         """
-        if detail_type not in LIVE_DOMAINS:
-            raise ValueError(f"Unknown detail_type: {detail_type}. Must be one of {LIVE_DOMAINS}")
+        address = address_for(detail_type)
 
         envelope = dict(event)
         if key is not None:
@@ -86,8 +74,8 @@ class EventBridgePublisher:
             response = self._client.put_events(
                 Entries=[
                     {
-                        "Source": EVENT_SOURCE,
-                        "DetailType": detail_type,
+                        "Source": address.source,
+                        "DetailType": address.detail_type,
                         "Detail": json.dumps(envelope),
                     }
                 ]

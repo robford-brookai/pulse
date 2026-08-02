@@ -7,6 +7,7 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from ocean_broker.catalog import LIVE_DOMAINS, address_for, pattern_matches, rule_pattern
 from ocean_broker.publisher import EventBridgePublisher
 
 
@@ -251,9 +252,9 @@ class TestEventBridgePublisher:
         assert json.loads(entry["Detail"]) == envelope
 
     @pytest.mark.asyncio
-    async def test_unknown_domain_is_rejected(self, publisher, mock_eventbridge_client):
-        """A detail-type outside the live domains never reaches the bus."""
-        with pytest.raises(ValueError, match="warehouse-dlq"):
+    async def test_retired_domain_is_rejected(self, publisher, mock_eventbridge_client):
+        """A retired domain never reaches the bus — the catalog has no address for it."""
+        with pytest.raises(KeyError, match="warehouse-dlq"):
             await publisher.publish(detail_type="warehouse-dlq", event={"event_type": "x"})
 
         mock_eventbridge_client.put_events.assert_not_called()
@@ -273,38 +274,40 @@ class TestEventBridgePublisher:
         assert json.loads(params["payload"].decode())["key"] == "k"
 
     @pytest.mark.asyncio
-    async def test_multiple_domains_supported(self, publisher, mock_eventbridge_client):
-        """All 11 live domains should be supported."""
-        domains = [
-            "signals",
-            "alerts",
-            "tasks",
-            "interactions",
-            "outcomes",
-            "patient-state",
-            "tickets",
-            "ai-ops",
-            "audit",
-            "ops",
-            "logistics",
-        ]
+    async def test_every_live_domain_addresses_from_the_catalog(
+        self, publisher, mock_eventbridge_client
+    ):
+        """Each live domain publishes at the address the catalog gives it.
 
-        envelope = {"event_type": "test.event"}
-
-        for domain in domains:
+        The list is not restated here: a domain added to the catalog is covered by this test
+        without an edit, which is the point of there being one table.
+        """
+        for domain in LIVE_DOMAINS:
             mock_eventbridge_client.reset_mock()
-            await publisher.publish(detail_type=domain, event=envelope, key="key")
+            await publisher.publish(detail_type=domain, event={"event_type": "test.event"})
 
-            call_args = mock_eventbridge_client.put_events.call_args
-            entries = (
-                call_args.kwargs["Entries"]
-                if "Entries" in call_args.kwargs
-                else call_args[1]["Entries"]
-            )
-            entry = entries[0]
+            entry = mock_eventbridge_client.put_events.call_args.kwargs["Entries"][0]
+            expected = address_for(domain)
+            assert entry["Source"] == expected.source
+            assert entry["DetailType"] == expected.detail_type
 
-            assert entry["DetailType"] == domain
-            assert entry["Source"] == "ocean"
+    @pytest.mark.asyncio
+    async def test_what_is_published_is_what_the_rules_match(
+        self, publisher, mock_eventbridge_client
+    ):
+        """Every address this publisher emits is caught by the generated rule pattern.
+
+        This is the publisher half of the surface equivalence: the two derived surfaces cannot
+        drift, because both resolve the same table.
+        """
+        pattern = rule_pattern(LIVE_DOMAINS)
+
+        for domain in LIVE_DOMAINS:
+            mock_eventbridge_client.reset_mock()
+            await publisher.publish(detail_type=domain, event={"event_type": "test.event"})
+
+            entry = mock_eventbridge_client.put_events.call_args.kwargs["Entries"][0]
+            assert pattern_matches(pattern, entry["Source"], entry["DetailType"])
 
     @pytest.mark.asyncio
     async def test_no_database_session_maker_no_dlq_write(self, publisher, mock_eventbridge_client):
