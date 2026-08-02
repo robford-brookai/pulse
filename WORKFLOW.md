@@ -152,9 +152,16 @@ ade_workflow:
         tests first, implements, task lint && task test,
         writes HANDOFF.md (Receipt + Spec deltas), one commit, push
       linear_status: In Progress -> In Review
-      next: {verification_pass: collect_when_wave_done,
+      next: {verification_pass: collect,      # collect runs once the whole wave is done
              verification_fail: escalate,
-             design_drift: halt_and_flag}     # per decision table
+             design_drift: halt}              # per decision table
+
+    - id: halt
+      actor: human
+      behavior: design drift stops the worktree and flags for review — never auto-applied.
+                The reviewer either amends the spec (a defect, back to validate) or clears
+                the flag as a misread and lets the task continue
+      next: {spec_defect: validate, cleared: execute}
 
     - id: escalate
       actor: router
