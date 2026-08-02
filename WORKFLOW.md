@@ -38,9 +38,19 @@ ade_workflow:
   parser: scripts/workflow.py             # thin glue (unbuilt); workflow:lint validates schema
 
   linear:
-    team: DNA                              # statuses: Triage, Backlog, Todo, In Progress,
-                                           # Blocked, In Review, Done, Canceled, Duplicate
-    project: "PULSE / Declared-State Funnel"
+    team: DNA
+    project: "Pulse 1.0"                   # verified against the live workspace 2026-08-01;
+                                           # DNA-695 (S0.1 scaffold) lives here
+    statuses:                              # the live DNA set, verified 2026-08-01.
+      - Triage                             # workflow:lint checks every status string used
+      - Backlog                            # below resolves to one of these; `--linear`
+      - Todo                               # checks this list still matches the team.
+      - In Progress
+      - Blocked
+      - In Review
+      - Done
+      - Canceled
+      - Duplicate
     status_ownership:                      # one writer per band
       unstarted: sync                      # Todo (and healing Triage -> Todo)
       started: agents_and_orca             # In Progress, Blocked, In Review
@@ -91,7 +101,7 @@ ade_workflow:
              outside Orca until G_HARDENING; receipts on the Linear sub-issue
       runner: open_engine_queue            # team CCC, open-agent-engine skill,
                                            # receipts per its AGENT token protocol
-      excluded_steps: [execute_in_orca]
+      excluded_steps: [execute]            # runs as a controlled session, not an Orca worktree
     destructive_ops:
       trigger: no reviewable diff exists (force-push, repo archive, prod load)
       route: operator runbook, agent-prepared scripts, G_APPROVAL mandatory
