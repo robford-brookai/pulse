@@ -16,16 +16,20 @@ Record each entry with enough detail that a consumer can depend on it without re
 
 ## This repo
 
-repo-ade is a repository template. It publishes no runtime data surfaces — no Snowflake objects,
-no APIs, no released package. What it publishes is a **repository shape**, consumed by
-`gh repo create --template` rather than by an import:
+pulse publishes the OCEAN event distribution surfaces, absorbed as `packages/ocean`
+([ADR-0002](../adr/ADR-0002-ocean-absorption-and-eventbridge-transport.md)). The transport is
+**EventBridge**: the former `ocean.<domain>` Kafka topics are retired, and a consumer integrates
+by attaching an EventBridge rule and its own SQS queue — never by subscribing to a topic.
 
 | Surface | Kind | Stability | Notes |
 |---|---|---|---|
-| Repository structure | template | stable | committed tree only; see the delivery classes in `CLAUDE.md` |
-| `Taskfile.yml` targets | command contract | stable | `task check` is what CI runs; thin-glue targets take `CHANGE=<name>` |
-| `bootstrap.sh` interface | script | stable | `bootstrap.sh <project-name> <package-name> <description>` |
-| `AGENTS.md` operating contract | convention | stable | binding on agents in Orca worktrees |
+| `ocean` event bus | EventBridge bus | stable | events address as `source = "ocean"`, `detail-type = "<domain>"`; the envelope crosses whole in `detail`, unmodified — `event_type` stays an envelope field, never promoted to `detail-type` |
+| Domain catalog | generated mapping | stable | eleven live domains: `signals`, `alerts`, `tasks`, `interactions`, `outcomes`, `patient-state`, `tickets`, `ai-ops`, `audit`, `ops`, `logistics`; source table is `packages/ocean/libs/ocean-broker/src/ocean_broker/catalog.py`, from which publisher addressing and Terraform rule patterns both generate |
+| `STREAMLINE.OCEAN_RAW.EVENTS` | Snowflake table | stable | grain: one row per envelope `event_id`; `data` is the envelope as VARIANT, `_topic` records the originating domain; append-only — redelivery never updates or duplicates a row |
 
-Generated repos own their copies outright. Improvements to the template do **not** flow
-downstream automatically — a generated repo is a fork in fact, if not in name.
+Retired with the transport change: the `ocean.<domain>` topics, the `ocean.warehouse-dlq` topic
+(each consumer now has its own SQS dead-letter queue), and the Redpanda Connect warehouse sink
+(the warehouse path is an ordinary rule-and-queue consumer).
+
+A new `event_type` within an existing domain needs no rule change; a new **domain** is an
+addition to the catalog table, regenerated and reviewed here.
