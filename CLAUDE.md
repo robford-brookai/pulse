@@ -114,6 +114,9 @@ Constraints these gates enforce, which are easy to break by accident:
 - No live network in tests; CI has no secrets by default.
 - Specs are owned by the doc-updater: write proposed changes to `HANDOFF.md`, per `AGENTS.md`.
 - `docs/adr/` is append-only; a superseded decision gets a status flip and a new ADR.
+- Work reaches `main` by PR. Two exceptions, defined with their conditions under `main_access` in
+  `WORKFLOW.md`: mechanical state updates carrying no reviewable decision, and repairing a red
+  main. Merge with a merge commit, not a squash, whenever a branch carries imported history.
 - Cross-repo integration goes through `docs/contracts/publishes.md` and `consumes.md` — a published
   Snowflake object, API, or released package. Never side-clone another repo into this one.
 - Python 3.10–3.14 are all supported and tested; mypy runs strict (`disallow_untyped_defs`),
