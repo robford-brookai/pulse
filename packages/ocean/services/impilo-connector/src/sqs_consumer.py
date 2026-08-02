@@ -1,7 +1,7 @@
 """SQS consumer background task for Impilo SNS fan-out.
 
 Polls an SQS queue, unwraps SNS envelopes, normalizes Impilo payloads,
-and publishes to Redpanda. Feature-flagged by SQS_QUEUE_URL env var.
+and publishes to the event bus. Feature-flagged by SQS_QUEUE_URL env var.
 """
 
 from __future__ import annotations
@@ -26,10 +26,10 @@ async def sqs_consumer_loop(
     *,
     sqs_client=None,
 ) -> None:
-    """Infinite loop that polls SQS, unwraps SNS envelopes, and publishes to Redpanda.
+    """Infinite loop that polls SQS, unwraps SNS envelopes, and publishes to the bus.
 
     Args:
-        publisher: RedpandaPublisher instance.
+        publisher: EventBridgePublisher instance.
         queue_url: SQS queue URL to poll.
         sqs_client: Optional pre-built SQS client (for testing). If None, creates
             one via aioboto3.
@@ -77,11 +77,11 @@ async def sqs_consumer_loop(
                     payload = body
 
                 try:
-                    event, topic = normalize_impilo_payload(payload)
+                    event, domain = normalize_impilo_payload(payload)
                     await publisher.publish(
-                        topic=topic,
+                        detail_type=domain,
+                        event=event.model_dump(mode="json"),
                         key=str(event.event_id),
-                        value=json.dumps(event.model_dump(mode="json")).encode(),
                     )
                 except Exception:
                     log.exception(
