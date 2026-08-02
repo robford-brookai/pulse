@@ -4,7 +4,6 @@ version = "0.1.0"
 description = "Event transport: EventBridge publisher, plus the Kafka config factory being retired"
 requires-python = ">=3.13"
 dependencies = [
-    "confluent-kafka>=2.13.0",
     "aws-msk-iam-sasl-signer-python>=1.0.0",
     "structlog>=25.5.0",
     "boto3>=1.42.0",

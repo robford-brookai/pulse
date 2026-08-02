@@ -29,7 +29,6 @@ dev = [
     "aiohttp>=3.9",
     "psycopg2-binary>=2.9.10",
     "asyncpg>=0.31.0",
-    "confluent-kafka>=2.13.2",
     "fastapi>=0.135.1",
     "greenlet>=3.3.2",
     "httpx>=0.28.1",
