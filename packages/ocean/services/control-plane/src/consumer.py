@@ -12,12 +12,14 @@ at-least-once, commit-after-success semantics the Kafka loop had. Blocking
 boto3 calls run in a thread via ``asyncio.to_thread`` so the FastAPI event
 loop — /health and the escalation poller — stays responsive.
 
-Ordering verdict (task 3.6, DNA-743): **mixed, per handler** — see
+Ordering verdict (task 3.6, DNA-743): **order-tolerant, per handler** — see
 ``packages/ocean/docs/ordering-verdict-control-plane.md``. Eight of eleven
-``EVENT_HANDLERS`` keys are order-tolerant; ``ticket.update.requested``
-(event-time sequence guard, task 3.7), ``ticket.rma.requested`` and
-``return.updated`` (silent drop when the precondition row is absent, task 3.8)
-are order-dependent. ``ticket.created`` and ``ticket.updated`` are deliberately
+``EVENT_HANDLERS`` keys are natively order-tolerant; ``ticket.update.requested``
+carries an event-time sequence guard (task 3.7), and an event whose
+precondition row has not arrived — ``ticket.rma.requested``, ``return.updated``,
+and a not-yet-legal ticket transition — raises ``PreconditionNotArrived``
+(task 3.8) so this loop leaves the message for redelivery, bounded by the
+queue's redrive policy. ``ticket.created`` and ``ticket.updated`` are deliberately
 absent (task 3.9): control-plane is their only publisher — every other service
 sends the ``*.requested`` form — so routing them here consumed control-plane's
 own output, and for ``ticket.created`` that echo minted a fresh ticket per

@@ -4,11 +4,12 @@ Task 3.6 (DNA-743) of `ocean-eventbridge-migration`. The design audit (D3) recor
 `control-plane` as **order-tolerant, per handler**, with the note "to be re-confirmed per handler
 during conversion". This is that re-confirmation, at the tree as of this commit.
 
-**The audit's verdict does not hold in full.** Eight of eleven `EVENT_HANDLERS` entries are
-order-tolerant. Three are order-dependent, in two different ways, and none of them was fixed by
-the change's original task list. They were proposed as new tasks (3.7–3.9) in the HANDOFF that
-carried this file; 3.7 (sequence guard) and 3.9 (echo-cycle keys removed) have since landed, and
-the table below reflects the tree after both.
+**The audit's verdict did not hold when re-confirmed, and holds again now.** Eight of eleven
+`EVENT_HANDLERS` entries are natively order-tolerant. Three were order-dependent, in two
+different ways, and none of them was fixed by the change's original task list. They were proposed
+as new tasks (3.7–3.9) in the HANDOFF that carried this file; 3.7 (sequence guard), 3.8
+(precondition raise-for-redelivery) and 3.9 (echo-cycle keys removed) have all since landed, and
+the table below reflects the tree after all three.
 
 Every claim below is asserted in
 `services/control-plane/tests/test_ordering_verdicts.py`, so the record cannot drift from the code
@@ -23,9 +24,9 @@ marker turns red until it is removed.
 | `alert.created` | `handle_alert_created` | Order-tolerant | `task_id` is `uuid5(alert_id)`, and the `ON CONFLICT (task_id) DO UPDATE` clause touches only `updated_at` and `last_event_id` — `status`, `priority`, `task_type` and `created_at` are fixed by first arrival. Escalation tracking is `ON CONFLICT … DO NOTHING`. Caveat A. |
 | `connector.heartbeat` | `handle_connector_heartbeat` | Order-tolerant | Order-tolerant by erasure: `last_seen` is written as `now()` at processing time and the event's own timestamp is never read, so a stale heartbeat cannot rewind liveness. The single write is the whole effect. Caveat B. |
 | `ticket.create.requested` | `handle_ticket_created` | Order-tolerant | Reads no ticket state. Each event writes its own row under a fresh `uuid4`, so no two deliveries contend. Caveat C. |
-| `ticket.update.requested` | `handle_ticket_updated` | Order-dependent | **Finding 1 — guard landed (task 3.7).** The status write now carries an event-time guard on `tickets.last_event_at` (migration 0020), which closes the working-state races. What remains is a precondition drop, Finding 2's class: a `resolved` that outruns its `in_progress` is rejected by the legality check and lost. |
-| `ticket.rma.requested` | `handle_rma_requested` | Order-dependent | **Finding 2.** Returns silently when its ticket row is absent; the message is then acknowledged and the RMA is lost. |
-| `return.updated` | `handle_return_status_update` | Order-dependent | **Finding 2.** Same shape: no `returns` row yet means no `ticket.rma.status` is ever emitted for that milestone. |
+| `ticket.update.requested` | `handle_ticket_updated` | Order-tolerant | **Findings 1 and 2 — treated (tasks 3.7, 3.8).** The status write carries an event-time guard on `tickets.last_event_at` (migration 0020), closing the working-state races. A legality rejection of an event newer than `last_event_at` — a `resolved` outrunning its `in_progress` — raises `PreconditionNotArrived` for redelivery; an older one is stale and dropped. A missing ticket row also raises. |
+| `ticket.rma.requested` | `handle_rma_requested` | Order-tolerant | **Finding 2 — treated (task 3.8).** An absent ticket row raises `PreconditionNotArrived`: the message is redelivered instead of acknowledged with the RMA lost, bounded by 6.3's redrive policy into the per-consumer DLQ. |
+| `return.updated` | `handle_return_status_update` | Order-tolerant | **Finding 2 — treated (task 3.8).** Same treatment: a milestone with no `returns` row yet raises for redelivery; a return that never gains a ticket link dead-letters observably rather than vanishing. |
 | `fulfillment.updated` | `handle_delivery_notification` | Order-tolerant | Writes nothing. Publishes `delivery.notify` only when `status == "delivered"`, which is a single terminal transition per order. Caveat D. |
 | `alert.resolved` | `handle_alert_resolved` | Order-tolerant | Pure relay: no read, no write, one `outcome.recorded` whose id is `uuid5(entity_id, resolution_type)`. |
 | `task.completed` | `handle_task_completed` | Order-tolerant | Pure relay, as above. |
@@ -44,11 +45,13 @@ handler in this service wrote within the same delivery.
 is guarded on `tickets.last_event_at`, populated from the envelope `timestamp` (migration 0020);
 a stale write updates zero rows and skips escalation removal and every publish, while bridge
 links still apply (additive and idempotent). `build_outcome_event` now passes the source event's
-`timestamp` through, matching the other four relays. What 3.7 does **not** fix is the
-precondition drop: from `open`, a `resolved` that arrives before its `in_progress` is rejected
-by `is_valid_transition` before the guarded write is attempted, and the resolution is lost —
-Finding 2's class, needing 3.8's park-or-redeliver treatment, which is why the verdict stays
-Order-dependent. The original analysis follows.
+`timestamp` through, matching the other four relays. The residue 3.7 could not fix — from
+`open`, a `resolved` that arrives before its `in_progress` is rejected by `is_valid_transition`
+before the guarded write is attempted — was Finding 2's class, and task 3.8 treated it: the
+handler now reads `last_event_at` alongside `status`, drops a rejected event that is stale
+(older than `last_event_at`, as the guard would have dropped it), and raises
+`PreconditionNotArrived` for a rejected event that is fresh, leaving the message for
+redelivery. The verdict is Order-tolerant. The original analysis follows.
 
 `tickets.py:167` reads the current status, `tickets.py:205` writes the new one. The only thing
 between them is `is_valid_transition`, which is a legality check, not a sequence guard.
@@ -78,7 +81,17 @@ gives task 3.1 an event-time field to guard `graph-projection`'s `outcomes` upse
 path alone poisons that field, so 3.1's guard would compare arrival order for exactly the events
 that reach it from here.
 
-### Finding 2 — two handlers drop an event whose precondition has not arrived (proposed task 3.8)
+### Finding 2 — two handlers drop an event whose precondition has not arrived (task 3.8 — resolved)
+
+**Status: task 3.8 landed the raise-for-redelivery treatment.** All three precondition-drop
+paths — `handle_rma_requested` with no ticket row, `handle_return_status_update` with no
+`returns` row, and `handle_ticket_updated`'s legality rejection of a fresh event (including the
+missing-ticket case) — now raise `PreconditionNotArrived`. The consumer leaves the message for
+visibility-timeout redelivery, and the retry is bounded and observable, not silent or infinite:
+after `maxReceiveCount` receives, the queue's redrive policy (task 6.3) moves the message to the
+per-consumer DLQ, whose depth alarm fires on the first message. A stale legality rejection
+(event time at or before `tickets.last_event_at`) is still dropped — raising there would spin
+every superseded event into the DLQ. The original analysis follows.
 
 `handle_rma_requested` reads the ticket row it was asked to act on; `handle_return_status_update`
 reads the `returns` row linking a return to its ticket. Neither row is written by the event being
@@ -139,9 +152,10 @@ pattern will encode the cycle into the new transport.
 
 ## How this was verified
 
-`services/control-plane/tests/test_ordering_verdicts.py` — 26 tests, all green (Finding 1's
+`services/control-plane/tests/test_ordering_verdicts.py` — 28 tests, all green (Finding 1's
 strict-xfail markers were removed when task 3.7 landed the guard, Finding 3's when task 3.9
-removed the echo keys; Finding 2's residual case is pinned as a passing characterisation test).
+removed the echo keys; Finding 2's characterisation tests were rewritten to assert the
+raise-for-redelivery treatment when task 3.8 landed it).
 The handlers' only state
 input is what they read back from `session`, so the tests drive the real handler functions against
 a recording session double that models the four rows they actually read, and compare final state
