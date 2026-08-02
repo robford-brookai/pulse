@@ -26,10 +26,12 @@ async def lifespan(app: FastAPI):
 
     bootstrap_servers = os.environ.get("REDPANDA_BROKERS", "redpanda:29092")
 
-    from src.producer import RedpandaPublisher
+    from src.producer import ControlPlanePublisher
 
-    publisher = RedpandaPublisher(bootstrap_servers)
-    log.info("control_plane_publisher_created", brokers=bootstrap_servers)
+    # The session maker is what gives this site the `failed_webhooks` fallback it lacked under
+    # Kafka: without it a bus rejection would only be logged.
+    publisher = ControlPlanePublisher(db_session_maker=session_maker)
+    log.info("control_plane_publisher_created")
 
     log.info("starting_control_plane_consumer", brokers=bootstrap_servers)
     asyncio.create_task(consumer.run_consumer(session_maker, bootstrap_servers, publisher=publisher))

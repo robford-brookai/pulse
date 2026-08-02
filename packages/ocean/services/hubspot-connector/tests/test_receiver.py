@@ -179,8 +179,7 @@ class TestPHISafety:
             },
         )
         assert resp.status_code == 200
-        published_value = mock_pub.publish.call_args[1].get("value") or mock_pub.publish.call_args[0][2]
-        event = json.loads(published_value)
+        event = mock_pub.publish.call_args.kwargs["event"]
         assert event["payload"]["property_value"] == "[REDACTED]"
 
     def test_safe_field_passes_through(self, client):
@@ -199,8 +198,7 @@ class TestPHISafety:
             },
         )
         assert resp.status_code == 200
-        published_value = mock_pub.publish.call_args[1].get("value") or mock_pub.publish.call_args[0][2]
-        event = json.loads(published_value)
+        event = mock_pub.publish.call_args.kwargs["event"]
         assert event["payload"]["property_value"] == "customer"
 
 

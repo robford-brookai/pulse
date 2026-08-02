@@ -8,10 +8,10 @@ from contextlib import asynccontextmanager
 
 import structlog
 from fastapi import FastAPI
+from ocean_broker import EventBridgePublisher
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.heartbeat import publish_heartbeat
-from src.producer import RedpandaPublisher
 from src.receiver import router
 from src.sqs_consumer import sqs_consumer_loop
 
@@ -26,13 +26,10 @@ async def lifespan(app: FastAPI):
     session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     app.state.session_maker = session_maker
 
-    bootstrap_servers = os.environ.get("REDPANDA_BROKERS", "redpanda:29092")
-    publisher = RedpandaPublisher(
-        bootstrap_servers=bootstrap_servers,
-        db_session_maker=session_maker,
-    )
+    # Addressing comes from the shared catalog, so there is no bus endpoint to configure here.
+    publisher = EventBridgePublisher(db_session_maker=session_maker)
     app.state.publisher = publisher
-    log.info("impilo_connector_started", brokers=bootstrap_servers)
+    log.info("impilo_connector_started")
 
     heartbeat_task = asyncio.create_task(publish_heartbeat(publisher, "impilo-connector", "Impilo RPM"))
 
@@ -60,7 +57,7 @@ async def lifespan(app: FastAPI):
     except asyncio.CancelledError:
         pass
 
-    await publisher.close()
+    # EventBridgePublisher holds no long-lived connection, so there is nothing to flush or close.
     await engine.dispose()
     log.info("impilo_connector_stopped")
 

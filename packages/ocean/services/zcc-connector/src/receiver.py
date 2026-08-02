@@ -37,8 +37,8 @@ async def receive_zcc_webhook(request: Request) -> dict:
     """Receive a Zoom Contact Center webhook.
 
     Validates Zoom v0 HMAC-SHA256 signature, handles url_validation challenge,
-    normalizes known events to Ocean canonical format, and publishes to
-    ocean.interactions. Unknown events are logged and silently skipped.
+    normalizes known events to Ocean canonical format, and publishes to the
+    interactions domain. Unknown events are logged and silently skipped.
     Always returns HTTP 200 on success (or 401 on signature failure).
     """
     # CRITICAL: read raw bytes FIRST — HMAC is computed on wire bytes before JSON parsing
@@ -69,9 +69,9 @@ async def receive_zcc_webhook(request: Request) -> dict:
 
     publisher = request.app.state.publisher
     await publisher.publish(
-        topic="ocean.interactions",
+        detail_type="interactions",
+        event=ocean_event,
         key=ocean_event["entity_id"] or str(uuid.uuid4()),
-        value=json.dumps(ocean_event).encode(),
     )
 
     return {"status": "accepted"}

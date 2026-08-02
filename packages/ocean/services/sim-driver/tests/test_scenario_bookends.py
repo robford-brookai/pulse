@@ -1,7 +1,7 @@
 """Tests for sim-driver scenario.started and scenario.completed bookend events.
 
 Plan 15-02 Task 2: Verifies ScenarioEngine publishes scenario.started at run
-start and scenario.completed at run end to ocean.ops topic, using BaseEvent
+start and scenario.completed at run end to the "ops" domain, using BaseEvent
 envelope with source_system="sim-driver".
 """
 
@@ -26,7 +26,7 @@ sys.path.insert(
 
 
 class TestScenarioBookendEvents:
-    """ScenarioEngine publishes bookend events to ocean.ops."""
+    """ScenarioEngine publishes bookend events to the "ops" domain."""
 
     @pytest.mark.asyncio
     async def test_publishes_scenario_started_at_run_start(self):
@@ -52,9 +52,9 @@ class TestScenarioBookendEvents:
         started_calls = [
             c
             for c in pub.publish.call_args_list
-            if c[0][0] == "ocean.ops" and c[0][1].get("event_type") == "scenario.started"
+            if c[0][0] == "ops" and c[0][1].get("event_type") == "scenario.started"
         ]
-        assert len(started_calls) == 1, "Expected exactly one scenario.started event on ocean.ops"
+        assert len(started_calls) == 1, "Expected exactly one scenario.started event on the 'ops' domain"
 
     @pytest.mark.asyncio
     async def test_publishes_scenario_completed_at_run_end(self):
@@ -79,9 +79,9 @@ class TestScenarioBookendEvents:
         completed_calls = [
             c
             for c in pub.publish.call_args_list
-            if c[0][0] == "ocean.ops" and c[0][1].get("event_type") == "scenario.completed"
+            if c[0][0] == "ops" and c[0][1].get("event_type") == "scenario.completed"
         ]
-        assert len(completed_calls) == 1, "Expected exactly one scenario.completed event on ocean.ops"
+        assert len(completed_calls) == 1, "Expected exactly one scenario.completed event on the 'ops' domain"
 
     @pytest.mark.asyncio
     async def test_scenario_started_has_required_fields(self):
@@ -106,7 +106,7 @@ class TestScenarioBookendEvents:
         started_event = next(
             c[0][1]
             for c in pub.publish.call_args_list
-            if c[0][0] == "ocean.ops" and c[0][1].get("event_type") == "scenario.started"
+            if c[0][0] == "ops" and c[0][1].get("event_type") == "scenario.started"
         )
         assert started_event["source_system"] == "sim-driver"
         payload = started_event["payload"]
@@ -137,7 +137,7 @@ class TestScenarioBookendEvents:
         completed_event = next(
             c[0][1]
             for c in pub.publish.call_args_list
-            if c[0][0] == "ocean.ops" and c[0][1].get("event_type") == "scenario.completed"
+            if c[0][0] == "ops" and c[0][1].get("event_type") == "scenario.completed"
         )
         assert completed_event["source_system"] == "sim-driver"
         payload = completed_event["payload"]
@@ -167,7 +167,7 @@ class TestScenarioBookendEvents:
             await engine.run()
 
         first_call = pub.publish.call_args_list[0]
-        assert first_call[0][0] == "ocean.ops"
+        assert first_call[0][0] == "ops"
         assert first_call[0][1].get("event_type") == "scenario.started"
 
     @pytest.mark.asyncio
@@ -192,7 +192,7 @@ class TestScenarioBookendEvents:
             await engine.run()
 
         last_call = pub.publish.call_args_list[-1]
-        assert last_call[0][0] == "ocean.ops"
+        assert last_call[0][0] == "ops"
         assert last_call[0][1].get("event_type") == "scenario.completed"
 
     @pytest.mark.asyncio
@@ -219,7 +219,7 @@ class TestScenarioBookendEvents:
         started_event = next(
             c[0][1]
             for c in pub.publish.call_args_list
-            if c[0][0] == "ocean.ops" and c[0][1].get("event_type") == "scenario.started"
+            if c[0][0] == "ops" and c[0][1].get("event_type") == "scenario.started"
         )
         # BaseEvent envelope fields
         assert "event_id" in started_event

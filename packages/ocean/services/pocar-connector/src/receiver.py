@@ -33,8 +33,8 @@ async def receive_pocar_webhook(request: Request) -> dict:
     """Receive a POCAR care alert webhook.
 
     Validates HMAC-SHA256 signature, normalises payload to a canonical OceanEvent,
-    publishes to Redpanda, and writes an audit_log row on success.
-    Always returns HTTP 200 to POCAR — DLQ handles broker failures silently.
+    publishes to the ``alerts`` domain, and writes an audit_log row on success.
+    Always returns HTTP 200 to POCAR — the publisher's DLQ handles bus failures silently.
     """
     # CRITICAL: read raw bytes FIRST (HMAC computed on wire bytes, before JSON parsing)
     body = await request.body()
@@ -48,13 +48,16 @@ async def receive_pocar_webhook(request: Request) -> dict:
     event = normalize_pocar_payload(raw)
 
     publisher = request.app.state.publisher
+    # The envelope crosses the bus whole, as a dict: the publisher owns serialisation, and
+    # `alerts` is the domain, not the envelope's own event_type.
     await publisher.publish(
-        topic="ocean.alerts",
+        detail_type="alerts",
+        event=event.model_dump(mode="json"),
         key=str(event.event_id),
-        value=json.dumps(event.model_dump(mode="json")).encode(),
     )
 
-    # Write audit_log row — only on successful Redpanda publish (DLQ path skips audit)
+    # Write audit_log row — the publish never raises, so a DLQ'd event is still audited as
+    # received, which is what the row records.
     session_maker = request.app.state.session_maker
     async with session_maker() as session, session.begin():
         await session.execute(

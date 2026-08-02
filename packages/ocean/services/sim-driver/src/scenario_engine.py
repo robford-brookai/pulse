@@ -20,6 +20,7 @@ from ocean_events.base import BaseEvent
 from src.clock import sim_sleep  # noqa: F401  — patch target for tests
 from src.models import PatientConfig, ScenarioConfig
 from src.patient_simulator import PatientSimulator
+from src.publisher import DOMAIN_OPS
 
 __version__ = "2.0.0"
 
@@ -137,7 +138,7 @@ class ScenarioEngine:
         event_type: str,
         payload: dict,
     ) -> None:
-        """Publish a scenario bookend event to ocean.ops."""
+        """Publish a scenario bookend event to the "ops" domain."""
         key = f"sim:{self.scenario_name}:{event_type}"
         event_id = uuid.UUID(bytes=hashlib.sha256(key.encode()).digest()[:16])
         event = BaseEvent(
@@ -152,7 +153,7 @@ class ScenarioEngine:
             actor_id=None,
             payload=payload,
         )
-        await self._publisher.publish("ocean.ops", event.model_dump(mode="json"))
+        await self._publisher.publish(DOMAIN_OPS, event.model_dump(mode="json"))
 
     async def _run_patient(self, patient: PatientConfig) -> None:
         """Drive one patient through their scheduled signal sequence."""
