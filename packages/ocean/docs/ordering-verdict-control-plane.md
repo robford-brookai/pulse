@@ -4,9 +4,11 @@ Task 3.6 (DNA-743) of `ocean-eventbridge-migration`. The design audit (D3) recor
 `control-plane` as **order-tolerant, per handler**, with the note "to be re-confirmed per handler
 during conversion". This is that re-confirmation, at the tree as of this commit.
 
-**The audit's verdict does not hold in full.** Eleven of thirteen `EVENT_HANDLERS` entries are
-order-tolerant. Three are order-dependent, in two different ways, and none of them is fixed by the
-change's existing task list. They are proposed as new tasks in the HANDOFF that carries this file.
+**The audit's verdict does not hold in full.** Eight of eleven `EVENT_HANDLERS` entries are
+order-tolerant. Three are order-dependent, in two different ways, and none of them was fixed by
+the change's original task list. They were proposed as new tasks (3.7–3.9) in the HANDOFF that
+carried this file; 3.7 (sequence guard) and 3.9 (echo-cycle keys removed) have since landed, and
+the table below reflects the tree after both.
 
 Every claim below is asserted in
 `services/control-plane/tests/test_ordering_verdicts.py`, so the record cannot drift from the code
@@ -21,9 +23,7 @@ marker turns red until it is removed.
 | `alert.created` | `handle_alert_created` | Order-tolerant | `task_id` is `uuid5(alert_id)`, and the `ON CONFLICT (task_id) DO UPDATE` clause touches only `updated_at` and `last_event_id` — `status`, `priority`, `task_type` and `created_at` are fixed by first arrival. Escalation tracking is `ON CONFLICT … DO NOTHING`. Caveat A. |
 | `connector.heartbeat` | `handle_connector_heartbeat` | Order-tolerant | Order-tolerant by erasure: `last_seen` is written as `now()` at processing time and the event's own timestamp is never read, so a stale heartbeat cannot rewind liveness. The single write is the whole effect. Caveat B. |
 | `ticket.create.requested` | `handle_ticket_created` | Order-tolerant | Reads no ticket state. Each event writes its own row under a fresh `uuid4`, so no two deliveries contend. Caveat C. |
-| `ticket.created` | `handle_ticket_created` | Order-tolerant | Same handler, same reasoning — but this key should not exist at all: see Finding 3. |
 | `ticket.update.requested` | `handle_ticket_updated` | Order-dependent | **Finding 1 — guard landed (task 3.7).** The status write now carries an event-time guard on `tickets.last_event_at` (migration 0020), which closes the working-state races. What remains is a precondition drop, Finding 2's class: a `resolved` that outruns its `in_progress` is rejected by the legality check and lost. |
-| `ticket.updated` | `handle_ticket_updated` | Order-dependent | Same handler. Reached only by control-plane's own echo, which carries no `new_status` and is therefore dropped — but the verdict follows the handler, not the path. |
 | `ticket.rma.requested` | `handle_rma_requested` | Order-dependent | **Finding 2.** Returns silently when its ticket row is absent; the message is then acknowledged and the RMA is lost. |
 | `return.updated` | `handle_return_status_update` | Order-dependent | **Finding 2.** Same shape: no `returns` row yet means no `ticket.rma.status` is ever emitted for that milestone. |
 | `fulfillment.updated` | `handle_delivery_notification` | Order-tolerant | Writes nothing. Publishes `delivery.notify` only when `status == "delivered"`, which is a single terminal transition per order. Caveat D. |
@@ -95,7 +95,14 @@ Under Kafka this was masked by partition ordering only when the two events share
 on the same topic. It was already a live hazard for `return.updated`, which arrives on
 `ocean.logistics` from a connector while the `returns` row is written by control-plane itself.
 
-### Finding 3 — `control-plane` consumes the `ticket.created` it publishes (proposed task 3.9)
+### Finding 3 — `control-plane` consumes the `ticket.created` it publishes (task 3.9 — resolved)
+
+**Status: task 3.9 removed both self-consumed keys.** `ticket.created` and `ticket.updated` are
+no longer in `EVENT_HANDLERS`; control-plane still receives them on its queue (it subscribes to
+the `tickets` domain for the `*.requested` forms) and `dispatch()` skips them as unknown types.
+`test_no_handler_re_emits_an_event_type_this_consumer_handles` now runs green with its strict
+xfail marker removed, and `test_ticket_dispatch.py` pins both keys absent. The original analysis
+follows.
 
 Not an ordering property; found in the same wiring. `handle_ticket_created` publishes
 `ticket.created` to `ocean.tickets`, control-plane subscribes to `ocean.tickets`, and
@@ -132,10 +139,10 @@ pattern will encode the cycle into the new transport.
 
 ## How this was verified
 
-`services/control-plane/tests/test_ordering_verdicts.py` — 26 tests: 25 green, 1
-`xfail(strict=True)` (Finding 3; Findings 1's markers were removed when task 3.7 landed the
-guard, and Finding 2's residual case is pinned as a passing characterisation test). The
-handlers' only state
+`services/control-plane/tests/test_ordering_verdicts.py` — 26 tests, all green (Finding 1's
+strict-xfail markers were removed when task 3.7 landed the guard, Finding 3's when task 3.9
+removed the echo keys; Finding 2's residual case is pinned as a passing characterisation test).
+The handlers' only state
 input is what they read back from `session`, so the tests drive the real handler functions against
 a recording session double that models the four rows they actually read, and compare final state
 and emitted events between in-order and reversed delivery.

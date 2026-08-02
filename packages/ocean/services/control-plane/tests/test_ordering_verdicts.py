@@ -30,8 +30,6 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-import pytest
-
 # Allow importing src package from service root
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -339,7 +337,11 @@ class TestAlertCreatedIsOrderTolerant:
 
 
 class TestTicketCreationIsOrderTolerant:
-    """`ticket.create.requested` / `ticket.created` — each event writes its own row."""
+    """`ticket.create.requested` — each event writes its own row.
+
+    `ticket.created` no longer routes here: task 3.9 removed it from EVENT_HANDLERS because
+    control-plane was consuming its own publish, minting a fresh ticket per pass.
+    """
 
     async def test_no_prior_ticket_state_is_read(self):
         from src.handlers.tickets import handle_ticket_created
@@ -367,7 +369,11 @@ class TestTicketCreationIsOrderTolerant:
 
 
 class TestTicketUpdatedIsGuardedOnEventTime:
-    """`ticket.update.requested` / `ticket.updated` — event-time sequence guard, task 3.7.
+    """`ticket.update.requested` — event-time sequence guard, task 3.7.
+
+    `ticket.updated` no longer routes here (task 3.9): only control-plane publishes it, so the
+    key consumed the handler's own output — a bounded echo, dropped on its second pass because
+    the published payload carries `status`, not `new_status`.
 
     The status write carries a monotonic predicate on `tickets.last_event_at`, populated from
     the envelope `timestamp` (migration 0020). `is_valid_transition` stays as request
@@ -551,12 +557,13 @@ class TestDeliveryNotificationIsOrderTolerant:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="control-plane consumes the ticket.created it publishes, so every ticket creates another (HANDOFF task 3.9)",
-)
 def test_no_handler_re_emits_an_event_type_this_consumer_handles():
-    """A handler that publishes a type its own EVENT_HANDLERS accepts is a self-feeding cycle."""
+    """A handler that publishes a type its own EVENT_HANDLERS accepts is a self-feeding cycle.
+
+    Task 3.9 broke the cycle: control-plane is the only publisher of ``ticket.created`` and
+    ``ticket.updated`` (every other service sends the ``*.requested`` form), so those keys had
+    no legitimate producer and routed control-plane's own output back into its handlers.
+    """
     from src.consumer import EVENT_HANDLERS
 
     source = (Path(__file__).resolve().parents[1] / "src" / "handlers" / "tickets.py").read_text()
