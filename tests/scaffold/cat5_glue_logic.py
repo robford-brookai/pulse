@@ -801,3 +801,59 @@ def test_a_corrupt_receipt_blocks_rather_than_passing(tmp_path: Path, monkeypatc
     monkeypatch.setattr(dispatch, "ORCA_PROFILE", _profile(tmp_path, {}))
     problems = dispatch.hardening_problems("claude", date(2026, 8, 2), _receipt(tmp_path, "{ broken"))
     assert any("unreadable" in p for p in problems)
+
+
+# --- G_HARDENING exceptions --------------------------------------------------------------------
+#
+# Some checks cannot pass without giving up a feature that is genuinely wanted: H2 asks for a
+# localhost-only daemon and the phone client needs it reachable. Without a first-class exception
+# those go through --skip-hardening on every dispatch, which turns a deliberate decision into
+# noise nobody reads.
+
+ACCEPTED = {
+    "audited": "2026-08-02",
+    "issue": "https://linear.app/x/DNA-777",
+    "checks": {"H1": "pass", "H2": "accepted", "H3": "pass", "H4": "pass"},
+    "exceptions": {"H2": {"justification": "phone client needs LAN reach", "review_by": "2026-11-02"}},
+}
+
+
+def test_a_justified_unexpired_exception_permits_dispatch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(dispatch, "ORCA_PROFILE", _profile(tmp_path, {}))
+    assert dispatch.hardening_problems("claude", date(2026, 8, 2), _receipt(tmp_path, ACCEPTED)) == []
+
+
+def test_an_exception_without_a_justification_blocks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(dispatch, "ORCA_PROFILE", _profile(tmp_path, {}))
+    bad = {**ACCEPTED, "exceptions": {"H2": {"review_by": "2026-11-02"}}}
+    problems = dispatch.hardening_problems("claude", date(2026, 8, 2), _receipt(tmp_path, bad))
+    assert any("no justification" in p for p in problems)
+
+
+def test_an_exception_with_no_review_date_blocks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """An exception that never expires is just a silent failure with better manners."""
+    monkeypatch.setattr(dispatch, "ORCA_PROFILE", _profile(tmp_path, {}))
+    bad = {**ACCEPTED, "exceptions": {"H2": {"justification": "because"}}}
+    problems = dispatch.hardening_problems("claude", date(2026, 8, 2), _receipt(tmp_path, bad))
+    assert any("must expire" in p for p in problems)
+
+
+def test_a_lapsed_exception_blocks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(dispatch, "ORCA_PROFILE", _profile(tmp_path, {}))
+    problems = dispatch.hardening_problems("claude", date(2027, 1, 1), _receipt(tmp_path, ACCEPTED))
+    assert any("lapsed" in p for p in problems)
+
+
+def test_accepted_does_not_launder_a_live_bypass(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """H4 is read from the live setting, so an exception cannot talk it into being safe."""
+    monkeypatch.setattr(dispatch, "ORCA_PROFILE", _profile(tmp_path, {"claude": "--yolo"}))
+    receipt = {
+        **ACCEPTED,
+        "checks": {**ACCEPTED["checks"], "H4": "accepted"},
+        "exceptions": {
+            **ACCEPTED["exceptions"],
+            "H4": {"justification": "we like living dangerously", "review_by": "2099-01-01"},
+        },
+    }
+    problems = dispatch.hardening_problems("claude", date(2026, 8, 2), _receipt(tmp_path, receipt))
+    assert any("H4 live" in p for p in problems)
