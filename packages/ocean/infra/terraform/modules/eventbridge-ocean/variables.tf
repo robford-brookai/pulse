@@ -13,6 +13,10 @@ variable "archive_retention_days" {
     condition     = var.archive_retention_days >= 30 && var.archive_retention_days <= 90
     error_message = "archive_retention_days must be between 30 and 90; the archive is a replay window, not the durable record."
   }
+
+variable "consumer_rule_patterns" {
+  description = "Consumer name -> serialised EventBridge event pattern. Generated from ocean_broker.catalog into generated/event_catalog.auto.tfvars.json; never hand-written, deliberately without a fallback value."
+  type        = map(string)
 }
 
 variable "tags" {
