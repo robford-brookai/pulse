@@ -47,6 +47,8 @@ COMMITTED = [
     "pyproject.toml",
     "scripts/dispatch_tasks.py",
     "scripts/collect_handoffs.py",
+    "scripts/workflow.py",
+    "scripts/linear_sync.py",
     "src/pkg_pulse",
     "templates/HANDOFF.md",
     "tests",

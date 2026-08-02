@@ -8,7 +8,7 @@ mermaid diagram as projections of it. Nothing read that block until this script 
 
 Usage:
     python scripts/workflow.py lint              # offline structural checks
-    python scripts/workflow.py lint --linear     # additionally verify statuses against live Linear
+    python scripts/workflow.py lint --linear     # additionally check team, project and statuses live
     python scripts/workflow.py show              # dump the parsed block as JSON
 
 The offline half is CI-safe: no network, no credentials, no npm globals. That split is deliberate.
@@ -312,6 +312,10 @@ def check_projections(workflow: dict, text: str) -> list[str]:
     return errors
 
 
+class LinearUnavailable(Exception):
+    """The Linear client is absent or unreachable, so the live check could not run."""
+
+
 def check_linear_live(workflow: dict) -> list[str]:
     """Verify the declared team, project and status set against the live workspace.
 
@@ -321,6 +325,11 @@ def check_linear_live(workflow: dict) -> list[str]:
     The project check earns its place. v2.0.1 pinned a project that did not exist — the status
     set had been verified against the live team and the project name beside it had not, and the
     mismatch only surfaced when someone tried to file an issue against it.
+
+    Raises LinearUnavailable when the client is missing or unreachable. That is a *skip*, not a
+    failure: the Linear CLI is optional tooling, and failing `task verify` because a machine
+    lacks an optional dependency punishes the wrong thing. A Linear that answers and disagrees
+    is a hard failure.
     """
     linear = workflow.get("linear") or {}
     team = linear.get("team")
@@ -341,17 +350,20 @@ def check_linear_live(workflow: dict) -> list[str]:
             timeout=30,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
-        return [f"could not reach Linear to verify the workspace ({exc}). The offline lint still holds."]
+        msg = f"Linear client unavailable ({exc})"
+        raise LinearUnavailable(msg) from exc
 
     if result.returncode != 0:
-        return [f"Linear query failed: {result.stderr.strip() or result.stdout.strip()}"]
+        msg = f"Linear query failed: {result.stderr.strip() or result.stdout.strip()}"
+        raise LinearUnavailable(msg)
 
     try:
         payload = json.loads(result.stdout)["data"]["team"]
         live = {n["name"] for n in payload["states"]["nodes"]}
         projects = {n["name"] for n in payload["projects"]["nodes"]}
     except (json.JSONDecodeError, KeyError, TypeError) as exc:
-        return [f"could not parse the Linear response ({exc})"]
+        msg = f"could not parse the Linear response ({exc})"
+        raise LinearUnavailable(msg) from exc
 
     errors = [f"linear.statuses declares {s!r}, which team {team} no longer has" for s in sorted(declared - live)]
     errors += [f"team {team} has status {s!r}, which linear.statuses does not declare" for s in sorted(live - declared)]
@@ -368,13 +380,20 @@ def lint(path: Path, with_linear: bool) -> int:
         return 1
 
     errors = check_structure(workflow)
+    linear_scope = ""
     # The later checks index into the same structures, so a malformed block would only produce
     # noise on top of the real failure.
     if not errors:
         errors += check_statuses(workflow)
         errors += check_projections(workflow, text)
         if with_linear:
-            errors += check_linear_live(workflow)
+            try:
+                errors += check_linear_live(workflow)
+                linear_scope = ", live Linear"
+            except LinearUnavailable as exc:
+                # Skipped, and said out loud. Silence here would read as "the live check passed".
+                print(f"SKIPPED live Linear check: {exc}", file=sys.stderr)
+                linear_scope = ", live Linear SKIPPED"
 
     if errors:
         print(f"{path}: {len(errors)} problem(s)", file=sys.stderr)
@@ -384,8 +403,10 @@ def lint(path: Path, with_linear: bool) -> int:
 
     steps = len(workflow.get("steps") or [])
     gates = len(workflow.get("gates") or {})
-    scope = "structure, statuses, projections" + (", live Linear" if with_linear else "")
-    print(f"{path} v{workflow.get('version')} ok — {steps} steps, {gates} gates ({scope})")
+    print(
+        f"{path} v{workflow.get('version')} ok — {steps} steps, {gates} gates "
+        f"(structure, statuses, projections{linear_scope})"
+    )
     return 0
 
 
