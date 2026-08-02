@@ -1,0 +1,20 @@
+name: CI Health Check
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@0000000000000000000000000000000000000000 # v4.0
+
+      - name: Set up the environment (short)
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: '3.12'
+          uv-version: '0.10.12'
+
+      - name: Run quick health checks
+        run: bash .github/scripts/ci_health.sh
