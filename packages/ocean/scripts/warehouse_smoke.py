@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Warehouse smoke test: publish a test event to Redpanda, verify it appears in Snowflake.
+"""Warehouse smoke test: publish a test event to the bus, verify it appears in Snowflake.
+
+Publishes through the shared EventBridge publisher (ocean-broker) — against the
+localstack bus by default — and waits for warehouse-sync to land the event in
+Snowflake.
 
 Usage:
     uv run python scripts/warehouse_smoke.py
@@ -9,7 +13,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
+import asyncio
 import os
 import subprocess
 import sys
@@ -18,12 +22,20 @@ import uuid
 from datetime import datetime, timezone
 
 import snowflake.connector
-from confluent_kafka import Producer
 from cryptography.hazmat.primitives import serialization
+from ocean_broker import EventBridgePublisher
 
 TIMEOUT_SECONDS = 60
 POLL_INTERVAL = 5
-TEST_TOPIC = "ocean.smoke-test"
+#: Catalog domain the smoke event publishes to. warehouse-sync's rule matches
+#: every live domain; `ops` is the operational one.
+TEST_DOMAIN = "ops"
+_LOCALSTACK_DEFAULTS = {
+    "AWS_ENDPOINT_URL": "http://localhost:4566",
+    "AWS_ACCESS_KEY_ID": "test",
+    "AWS_SECRET_ACCESS_KEY": "test",
+    "AWS_REGION": "us-east-1",
+}
 
 
 def _check_warehouse_sync() -> None:
@@ -48,8 +60,8 @@ def _check_warehouse_sync() -> None:
         sys.exit(1)
 
 
-def _publish_test_event(brokers: str) -> str:
-    """Publish a single test event and return its event_id."""
+def _publish_test_event() -> str:
+    """Publish a single test event via the shared publisher, return its event_id."""
     event_id = str(uuid.uuid4())
     event = {
         "event_id": event_id,
@@ -59,10 +71,9 @@ def _publish_test_event(brokers: str) -> str:
         "correlation_id": event_id,
         "data": {"test": True},
     }
-    producer = Producer({"bootstrap.servers": brokers})
-    producer.produce(TEST_TOPIC, value=json.dumps(event).encode())
-    producer.flush(timeout=10)
-    print(f"Published test event {event_id} to {TEST_TOPIC}")
+    publisher = EventBridgePublisher()
+    asyncio.run(publisher.publish(TEST_DOMAIN, event, key=event_id))
+    print(f"Published test event {event_id} to domain '{TEST_DOMAIN}'")
     return event_id
 
 
@@ -121,11 +132,14 @@ def main() -> None:
 
     _check_warehouse_sync()
 
-    brokers = os.environ.get("REDPANDA_BROKERS", "localhost:9092")
+    # The host-side default is the localstack bus the compose stack runs; any
+    # variable already set (e.g. pointing at a real AWS account) wins.
+    for key, value in _LOCALSTACK_DEFAULTS.items():
+        os.environ.setdefault(key, value)
     print(f"Smoke test started at {datetime.now(timezone.utc).isoformat()}")
 
-    event_id = _publish_test_event(brokers)
-    print("Waiting for event to flow: Redpanda -> warehouse-sync -> Snowflake...")
+    event_id = _publish_test_event()
+    print("Waiting for event to flow: EventBridge -> SQS -> warehouse-sync -> Snowflake...")
 
     try:
         count = run_smoke(event_id)

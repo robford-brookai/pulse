@@ -4,11 +4,13 @@ WORKDIR /app
 
 RUN pip install uv --quiet
 
-# Copy ocean-events library first (build context = repo root)
+# Copy shared libraries first (build context = repo root)
 COPY libs/ocean-events /libs/ocean-events
+COPY libs/ocean-broker /libs/ocean-broker
 
-# Install ocean-events editable so it's available to control-plane
-RUN uv pip install --system --no-cache -e /libs/ocean-events
+# Install them editable so they're available to control-plane. ocean-broker is the
+# transport: it brings boto3 and the EventBridge publisher the consumer depends on.
+RUN uv pip install --system --no-cache -e /libs/ocean-events -e /libs/ocean-broker
 
 # Copy control-plane pyproject.toml and install deps
 COPY services/control-plane/pyproject.toml .
@@ -19,7 +21,6 @@ RUN uv pip install --system --no-cache \
     uvicorn==0.41.0 \
     "sqlalchemy==2.0.48" \
     asyncpg==0.31.0 \
-    "confluent-kafka==2.13.2" \
     "structlog==25.5.0" \
     httpx
 

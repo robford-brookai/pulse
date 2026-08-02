@@ -21,6 +21,7 @@ RUN uv pip install --system --no-cache \
     uvicorn==0.41.0 \
     "sqlalchemy==2.0.48" \
     asyncpg==0.31.0 \
+    "aioboto3>=13.0.0" \
     "structlog==25.5.0"
 
 # Copy source code

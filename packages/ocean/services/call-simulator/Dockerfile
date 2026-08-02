@@ -8,7 +8,6 @@ RUN pip install uv --quiet
 RUN uv pip install --system --no-cache \
     fastapi==0.135.1 \
     uvicorn==0.41.0 \
-    "confluent-kafka==2.13.2" \
     "pydantic>=2.0" \
     "structlog==25.5.0" \
     "sqlalchemy[asyncio]>=2.0" \
