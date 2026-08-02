@@ -6,6 +6,7 @@ UNION ALLs all 8 entity tables into a consistent shape:
 
 Uses source inspection — no Docker or live DB required.
 """
+
 from __future__ import annotations
 
 import pathlib
@@ -59,9 +60,7 @@ class TestPatientTimelineView:
     @pytest.mark.parametrize("table", _ENTITY_TABLES)
     def test_union_includes_table(self, migration_source: str, table: str):
         """View must SELECT FROM each entity table."""
-        assert f"FROM {table}" in migration_source, (
-            f"patient_timeline view missing FROM {table}"
-        )
+        assert f"FROM {table}" in migration_source, f"patient_timeline view missing FROM {table}"
 
     def test_union_all_count(self, migration_source: str):
         """View must have 7 UNION ALL clauses (8 tables = 7 unions)."""
@@ -73,9 +72,7 @@ class TestPatientTimelineView:
         """Each required output column must appear as alias in SELECT clauses."""
         # event_type and event_id appear as aliases (AS event_type, AS event_id)
         if column in ("event_type", "event_id", "summary"):
-            assert f"AS {column}" in migration_source, (
-                f"Missing AS {column} alias in view definition"
-            )
+            assert f"AS {column}" in migration_source, f"Missing AS {column} alias in view definition"
         else:
             # patient_id, status, created_at are direct column references
             assert column in migration_source
@@ -93,9 +90,7 @@ class TestPatientTimelineView:
             "'signal'",
         ]
         for event_type in expected_types:
-            assert event_type in migration_source, (
-                f"Missing event_type literal {event_type} in view"
-            )
+            assert event_type in migration_source, f"Missing event_type literal {event_type} in view"
 
     def test_downgrade_drops_view(self, migration_source: str):
         """Downgrade must DROP VIEW IF EXISTS patient_timeline."""

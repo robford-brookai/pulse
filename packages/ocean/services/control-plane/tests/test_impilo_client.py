@@ -1,4 +1,5 @@
 """Unit tests for Impilo API client (RMA creation)."""
+
 from __future__ import annotations
 
 import os
@@ -61,7 +62,6 @@ class TestCreateRmaHappyPath:
 
     @pytest.mark.asyncio
     async def test_posts_correct_payload(self):
-        import httpx
         from src.impilo_client import create_rma
 
         mock_response = MagicMock()
@@ -106,9 +106,7 @@ class TestCreateRmaRetry:
         fail_response = MagicMock()
         fail_response.status_code = 502
         fail_response.raise_for_status = MagicMock(
-            side_effect=httpx.HTTPStatusError(
-                "502", request=MagicMock(), response=fail_response
-            )
+            side_effect=httpx.HTTPStatusError("502", request=MagicMock(), response=fail_response)
         )
 
         success_response = MagicMock()
@@ -143,9 +141,7 @@ class TestCreateRmaRetry:
         fail_response = MagicMock()
         fail_response.status_code = 400
         fail_response.raise_for_status = MagicMock(
-            side_effect=httpx.HTTPStatusError(
-                "400", request=MagicMock(), response=fail_response
-            )
+            side_effect=httpx.HTTPStatusError("400", request=MagicMock(), response=fail_response)
         )
 
         mock_client = AsyncMock()
@@ -174,9 +170,7 @@ class TestCreateRmaRetry:
         fail_response = MagicMock()
         fail_response.status_code = 503
         fail_response.raise_for_status = MagicMock(
-            side_effect=httpx.HTTPStatusError(
-                "503", request=MagicMock(), response=fail_response
-            )
+            side_effect=httpx.HTTPStatusError("503", request=MagicMock(), response=fail_response)
         )
 
         mock_client = AsyncMock()

@@ -1,4 +1,5 @@
 """Tests for refactored ScenarioEngine — Pydantic validation and PatientSimulator wiring."""
+
 from __future__ import annotations
 
 import pathlib
@@ -14,9 +15,7 @@ if str(_SVC) not in sys.path:
     sys.path.insert(0, str(_SVC))
 
 # Ensure ocean-events is importable
-sys.path.insert(
-    0, str(pathlib.Path(__file__).resolve().parents[3] / "libs" / "ocean-events" / "src")
-)
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[3] / "libs" / "ocean-events" / "src"))
 
 from src.models import ScenarioConfig
 from src.scenario_engine import ScenarioEngine, load_scenario
@@ -41,12 +40,9 @@ class TestLoadScenario:
     def test_invalid_scenario_raises(self, tmp_path: pathlib.Path) -> None:
         """A YAML file missing patient_id should raise ValidationError."""
         bad_yaml = tmp_path / "bad.yaml"
-        bad_yaml.write_text(
-            "name: bad\npatients:\n  - clinic_id: x\n    signals: []\n"
-        )
-        with patch("src.scenario_engine._SCENARIOS_DIR", tmp_path):
-            with pytest.raises(ValidationError):
-                load_scenario("bad")
+        bad_yaml.write_text("name: bad\npatients:\n  - clinic_id: x\n    signals: []\n")
+        with patch("src.scenario_engine._SCENARIOS_DIR", tmp_path), pytest.raises(ValidationError):
+            load_scenario("bad")
 
 
 class TestScenarioEngineProperties:
@@ -98,6 +94,7 @@ class TestScenarioEngineRun:
     async def test_run_does_not_import_state_machine(self) -> None:
         """Verify no imports of deleted modules."""
         import src.scenario_engine as mod
+
         source = pathlib.Path(mod.__file__).read_text()
         assert "state_machine" not in source
         assert "agent_runner" not in source

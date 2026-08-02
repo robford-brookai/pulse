@@ -4,6 +4,7 @@ Provides tool registration, ASGI app creation, API key middleware,
 and a default health tool. Each connector inherits from this class
 and registers domain-specific tools via the @connector.tool decorator.
 """
+
 from __future__ import annotations
 
 import os

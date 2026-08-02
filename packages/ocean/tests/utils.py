@@ -5,6 +5,7 @@ setup_service() ensures the correct service directory is at the front of
 sys.path and that any stale `src.*` cache from a previous service is cleared,
 so imports like `from src.X import Y` resolve to the right service.
 """
+
 from __future__ import annotations
 
 import pathlib
@@ -27,9 +28,7 @@ def setup_service(name: str) -> None:
             del sys.modules[key]
 
     # Remove any other service directories that were previously at the front
-    sys.path = [p for p in sys.path if not (
-        p.startswith(str(_ROOT / "services")) and p != svc_path
-    )]
+    sys.path = [p for p in sys.path if not (p.startswith(str(_ROOT / "services")) and p != svc_path)]
 
     # Insert this service at position 0 so it wins any `src` import
     if svc_path in sys.path:

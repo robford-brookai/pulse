@@ -2,6 +2,7 @@
 
 Handles fulfillment, return, and device association lifecycle events.
 """
+
 from __future__ import annotations
 
 import json

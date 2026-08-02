@@ -1,18 +1,19 @@
 """Unit tests for graph-projection ticket event handlers."""
+
 from __future__ import annotations
 
-import sys
 import os
-from unittest.mock import AsyncMock, MagicMock
+import sys
+from unittest.mock import AsyncMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_ticket_created_event(
     ticket_id: str = "ticket-001",
@@ -101,6 +102,7 @@ def mock_session():
 # handle_ticket_created
 # ---------------------------------------------------------------------------
 
+
 class TestHandleTicketCreated:
     @pytest.mark.asyncio
     async def test_inserts_ticket_with_correct_params(self, mock_session):
@@ -160,15 +162,14 @@ class TestHandleTicketCreated:
 # handle_ticket_updated
 # ---------------------------------------------------------------------------
 
+
 class TestHandleTicketUpdated:
     @pytest.mark.asyncio
     async def test_updates_status_and_fields(self, mock_session):
         """handle_ticket_updated updates status, priority, waiting_reason."""
         from src.handlers.tickets import handle_ticket_updated
 
-        event = _make_ticket_updated_event(
-            status="waiting", priority="critical", waiting_reason="external_block"
-        )
+        event = _make_ticket_updated_event(status="waiting", priority="critical", waiting_reason="external_block")
         await handle_ticket_updated(event, mock_session)
 
         assert mock_session.execute.called
@@ -194,6 +195,7 @@ class TestHandleTicketUpdated:
 # handle_ticket_resolved
 # ---------------------------------------------------------------------------
 
+
 class TestHandleTicketResolved:
     @pytest.mark.asyncio
     async def test_sets_status_resolved_and_clears_waiting(self, mock_session):
@@ -212,6 +214,7 @@ class TestHandleTicketResolved:
 # ---------------------------------------------------------------------------
 # Consumer wiring
 # ---------------------------------------------------------------------------
+
 
 def test_ticket_events_registered_in_event_handlers():
     """ticket.created, ticket.updated, ticket.resolved are registered in EVENT_HANDLERS."""

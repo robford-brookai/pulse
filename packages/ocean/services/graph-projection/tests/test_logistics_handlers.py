@@ -1,4 +1,5 @@
 """Unit tests for graph-projection logistics event handlers."""
+
 from __future__ import annotations
 
 import json
@@ -13,6 +14,7 @@ import pytest
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_fulfillment_event(
     order_id: str = "ORD-001",
@@ -126,6 +128,7 @@ def mock_session():
 # handle_fulfillment_updated
 # ---------------------------------------------------------------------------
 
+
 class TestHandleFulfillmentUpdated:
     @pytest.mark.asyncio
     async def test_inserts_fulfillment_with_correct_params(self, mock_session):
@@ -177,6 +180,7 @@ class TestHandleFulfillmentUpdated:
 # handle_return_updated
 # ---------------------------------------------------------------------------
 
+
 class TestHandleReturnUpdated:
     @pytest.mark.asyncio
     async def test_inserts_return_with_correct_params(self, mock_session):
@@ -218,6 +222,7 @@ class TestHandleReturnUpdated:
 # handle_device_associated
 # ---------------------------------------------------------------------------
 
+
 class TestHandleDeviceAssociated:
     @pytest.mark.asyncio
     async def test_inserts_device_association_active(self, mock_session):
@@ -254,6 +259,7 @@ class TestHandleDeviceAssociated:
 # ---------------------------------------------------------------------------
 # handle_device_disassociated
 # ---------------------------------------------------------------------------
+
 
 class TestHandleDeviceDisassociated:
     @pytest.mark.asyncio
@@ -298,6 +304,7 @@ class TestHandleDeviceDisassociated:
 # ---------------------------------------------------------------------------
 # Consumer wiring
 # ---------------------------------------------------------------------------
+
 
 def test_logistics_events_registered_in_event_handlers():
     """All 4 logistics event types are registered in EVENT_HANDLERS."""

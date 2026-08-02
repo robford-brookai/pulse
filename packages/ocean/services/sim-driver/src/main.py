@@ -4,6 +4,7 @@ Publishes source-only events (signal.received, alert.created) via PatientSimulat
 The /simulate response includes enriched metadata and an agent_hook advertising
 the consumer contract for Phase 11's agent-worker.
 """
+
 from __future__ import annotations
 
 import asyncio

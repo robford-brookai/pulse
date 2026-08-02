@@ -4,6 +4,7 @@ Verifies that main.py lifespan:
 - Calls set_session_maker, set_publisher, set_hasura_secret on bolt_app
 - Passes publisher kwarg to consumer.run_consumer
 """
+
 from __future__ import annotations
 
 import os
@@ -27,19 +28,20 @@ class TestSlackBotWiring:
         mock_engine = MagicMock()
         mock_engine.dispose = AsyncMock()
 
-        with patch.object(main_mod, "SLACK_BOT_TOKEN", "xoxb-test"), \
-             patch.object(main_mod, "DATABASE_URL", "postgresql+asyncpg://test:test@localhost/test"), \
-             patch.object(main_mod, "REDPANDA_BROKERS", "localhost:9092"), \
-             patch.object(main_mod, "HASURA_URL", "http://localhost:8090"), \
-             patch.object(main_mod, "create_async_engine", return_value=mock_engine), \
-             patch.object(main_mod, "async_sessionmaker", return_value=MagicMock()), \
-             patch("src.main.asyncio.create_task"), \
-             patch("src.bolt_app.set_session_maker") as mock_set_sm, \
-             patch("src.bolt_app.set_publisher"), \
-             patch("src.bolt_app.set_hasura_secret"), \
-             patch("src.publisher.RedpandaPublisher"), \
-             patch("src.health_poller.poll_connector_health", new_callable=AsyncMock):
-
+        with (
+            patch.object(main_mod, "SLACK_BOT_TOKEN", "xoxb-test"),
+            patch.object(main_mod, "DATABASE_URL", "postgresql+asyncpg://test:test@localhost/test"),
+            patch.object(main_mod, "REDPANDA_BROKERS", "localhost:9092"),
+            patch.object(main_mod, "HASURA_URL", "http://localhost:8090"),
+            patch.object(main_mod, "create_async_engine", return_value=mock_engine),
+            patch.object(main_mod, "async_sessionmaker", return_value=MagicMock()),
+            patch("src.main.asyncio.create_task"),
+            patch("src.bolt_app.set_session_maker") as mock_set_sm,
+            patch("src.bolt_app.set_publisher"),
+            patch("src.bolt_app.set_hasura_secret"),
+            patch("src.publisher.RedpandaPublisher"),
+            patch("src.health_poller.poll_connector_health", new_callable=AsyncMock),
+        ):
             app = MagicMock()
             app.add_api_route = MagicMock()
 
@@ -54,19 +56,20 @@ class TestSlackBotWiring:
         mock_engine = MagicMock()
         mock_engine.dispose = AsyncMock()
 
-        with patch.object(main_mod, "SLACK_BOT_TOKEN", "xoxb-test"), \
-             patch.object(main_mod, "DATABASE_URL", "postgresql+asyncpg://test:test@localhost/test"), \
-             patch.object(main_mod, "REDPANDA_BROKERS", "localhost:9092"), \
-             patch.object(main_mod, "HASURA_URL", "http://localhost:8090"), \
-             patch.object(main_mod, "create_async_engine", return_value=mock_engine), \
-             patch.object(main_mod, "async_sessionmaker", return_value=MagicMock()), \
-             patch("src.main.asyncio.create_task"), \
-             patch("src.bolt_app.set_session_maker"), \
-             patch("src.bolt_app.set_publisher") as mock_set_pub, \
-             patch("src.bolt_app.set_hasura_secret"), \
-             patch("src.publisher.RedpandaPublisher"), \
-             patch("src.health_poller.poll_connector_health", new_callable=AsyncMock):
-
+        with (
+            patch.object(main_mod, "SLACK_BOT_TOKEN", "xoxb-test"),
+            patch.object(main_mod, "DATABASE_URL", "postgresql+asyncpg://test:test@localhost/test"),
+            patch.object(main_mod, "REDPANDA_BROKERS", "localhost:9092"),
+            patch.object(main_mod, "HASURA_URL", "http://localhost:8090"),
+            patch.object(main_mod, "create_async_engine", return_value=mock_engine),
+            patch.object(main_mod, "async_sessionmaker", return_value=MagicMock()),
+            patch("src.main.asyncio.create_task"),
+            patch("src.bolt_app.set_session_maker"),
+            patch("src.bolt_app.set_publisher") as mock_set_pub,
+            patch("src.bolt_app.set_hasura_secret"),
+            patch("src.publisher.RedpandaPublisher"),
+            patch("src.health_poller.poll_connector_health", new_callable=AsyncMock),
+        ):
             app = MagicMock()
             app.add_api_route = MagicMock()
 
@@ -81,20 +84,21 @@ class TestSlackBotWiring:
         mock_engine = MagicMock()
         mock_engine.dispose = AsyncMock()
 
-        with patch.object(main_mod, "SLACK_BOT_TOKEN", "xoxb-test"), \
-             patch.object(main_mod, "DATABASE_URL", "postgresql+asyncpg://test:test@localhost/test"), \
-             patch.object(main_mod, "REDPANDA_BROKERS", "localhost:9092"), \
-             patch.object(main_mod, "HASURA_URL", "http://localhost:8090"), \
-             patch.object(main_mod, "create_async_engine", return_value=mock_engine), \
-             patch.object(main_mod, "async_sessionmaker", return_value=MagicMock()), \
-             patch("src.main.asyncio.create_task"), \
-             patch("src.bolt_app.set_session_maker"), \
-             patch("src.bolt_app.set_publisher"), \
-             patch("src.bolt_app.set_hasura_secret") as mock_set_hs, \
-             patch("src.publisher.RedpandaPublisher"), \
-             patch("src.health_poller.poll_connector_health", new_callable=AsyncMock), \
-             patch.dict(os.environ, {"HASURA_GRAPHQL_ADMIN_SECRET": "test-secret-123"}):
-
+        with (
+            patch.object(main_mod, "SLACK_BOT_TOKEN", "xoxb-test"),
+            patch.object(main_mod, "DATABASE_URL", "postgresql+asyncpg://test:test@localhost/test"),
+            patch.object(main_mod, "REDPANDA_BROKERS", "localhost:9092"),
+            patch.object(main_mod, "HASURA_URL", "http://localhost:8090"),
+            patch.object(main_mod, "create_async_engine", return_value=mock_engine),
+            patch.object(main_mod, "async_sessionmaker", return_value=MagicMock()),
+            patch("src.main.asyncio.create_task"),
+            patch("src.bolt_app.set_session_maker"),
+            patch("src.bolt_app.set_publisher"),
+            patch("src.bolt_app.set_hasura_secret") as mock_set_hs,
+            patch("src.publisher.RedpandaPublisher"),
+            patch("src.health_poller.poll_connector_health", new_callable=AsyncMock),
+            patch.dict(os.environ, {"HASURA_GRAPHQL_ADMIN_SECRET": "test-secret-123"}),
+        ):
             app = MagicMock()
             app.add_api_route = MagicMock()
 
@@ -112,20 +116,21 @@ class TestSlackBotWiring:
 
         import src.consumer as consumer_mod
 
-        with patch.object(main_mod, "SLACK_BOT_TOKEN", "xoxb-test"), \
-             patch.object(main_mod, "DATABASE_URL", "postgresql+asyncpg://test:test@localhost/test"), \
-             patch.object(main_mod, "REDPANDA_BROKERS", "localhost:9092"), \
-             patch.object(main_mod, "HASURA_URL", "http://localhost:8090"), \
-             patch.object(main_mod, "create_async_engine", return_value=mock_engine), \
-             patch.object(main_mod, "async_sessionmaker", return_value=MagicMock()), \
-             patch("src.main.asyncio.create_task"), \
-             patch("src.bolt_app.set_session_maker"), \
-             patch("src.bolt_app.set_publisher"), \
-             patch("src.bolt_app.set_hasura_secret"), \
-             patch("src.publisher.RedpandaPublisher", return_value=mock_publisher), \
-             patch("src.health_poller.poll_connector_health", new_callable=AsyncMock), \
-             patch.object(consumer_mod, "run_consumer", new_callable=AsyncMock) as mock_rc:
-
+        with (
+            patch.object(main_mod, "SLACK_BOT_TOKEN", "xoxb-test"),
+            patch.object(main_mod, "DATABASE_URL", "postgresql+asyncpg://test:test@localhost/test"),
+            patch.object(main_mod, "REDPANDA_BROKERS", "localhost:9092"),
+            patch.object(main_mod, "HASURA_URL", "http://localhost:8090"),
+            patch.object(main_mod, "create_async_engine", return_value=mock_engine),
+            patch.object(main_mod, "async_sessionmaker", return_value=MagicMock()),
+            patch("src.main.asyncio.create_task"),
+            patch("src.bolt_app.set_session_maker"),
+            patch("src.bolt_app.set_publisher"),
+            patch("src.bolt_app.set_hasura_secret"),
+            patch("src.publisher.RedpandaPublisher", return_value=mock_publisher),
+            patch("src.health_poller.poll_connector_health", new_callable=AsyncMock),
+            patch.object(consumer_mod, "run_consumer", new_callable=AsyncMock) as mock_rc,
+        ):
             app = MagicMock()
             app.add_api_route = MagicMock()
 

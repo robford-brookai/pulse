@@ -12,12 +12,6 @@ dependencies = [
     "ty>=0.0.21",
 ]
 
-[tool.uv.workspace]
-members = [
-    "libs/ocean-events",
-    "libs/ocean-broker",
-]
-
 [tool.uv.sources]
 ocean-events = { workspace = true, editable = true }
 ocean-broker = { workspace = true, editable = true }
@@ -47,11 +41,3 @@ testpaths = ["tests"]
 markers = [
     "integration: marks tests requiring Docker (deselect with -m 'not integration')",
 ]
-
-[tool.ruff]
-line-length = 100
-target-version = "py313"
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM"]
-ignore = []

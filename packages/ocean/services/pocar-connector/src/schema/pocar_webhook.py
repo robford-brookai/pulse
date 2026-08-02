@@ -3,6 +3,7 @@
 PLACEHOLDER — validate with Brook engineering before production cutover.
 Fields are inferred from standard RPM care alert patterns.
 """
+
 from __future__ import annotations
 
 from datetime import datetime

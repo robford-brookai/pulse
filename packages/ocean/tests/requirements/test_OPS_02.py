@@ -3,6 +3,7 @@
 Verifies infra/docker-compose.yml defines all expected services with
 healthcheck definitions. No Docker required -- parses YAML only.
 """
+
 from __future__ import annotations
 
 import pathlib

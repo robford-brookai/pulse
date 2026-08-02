@@ -9,6 +9,7 @@ Skip gracefully if Docker is unavailable:
 To run integration tests explicitly:
     python -m pytest tests/integration/ -v -m integration
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -53,8 +54,10 @@ if _OCEAN_BROKER not in sys.path:
 # Docker availability guard
 # ---------------------------------------------------------------------------
 
+
 def _docker_available() -> bool:
     import subprocess
+
     try:
         result = subprocess.run(["docker", "info"], capture_output=True, timeout=5)
         return result.returncode == 0
@@ -71,6 +74,7 @@ _SKIP_NO_DOCKER = pytest.mark.skipif(
 # ---------------------------------------------------------------------------
 # Postgres container + SQLAlchemy session factory
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="session")
 def postgres_container():
@@ -98,7 +102,8 @@ async def async_engine(postgres_container):
     # Create all tables (graph-projection models + ai_drafts table)
     async with engine.begin() as conn:
         # Import models after path is configured
-        from src.models import Base  # noqa: PLC0415
+        from src.models import Base
+
         await conn.run_sync(Base.metadata.create_all)
 
         # Create ai_drafts table (not in ORM models — used by slack-bot raw SQL)
@@ -133,6 +138,7 @@ async def session_factory(async_engine):
 # Redpanda container + Kafka producer/consumer helpers
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="session")
 def redpanda_container():
     """Start a Redpanda container for the test session."""
@@ -157,6 +163,7 @@ def bootstrap_servers(redpanda_container):
 def make_test_producer(bootstrap_servers: str):
     """Create a confluent_kafka Producer for the test broker."""
     from confluent_kafka import Producer
+
     return Producer({"bootstrap.servers": bootstrap_servers})
 
 
@@ -312,9 +319,7 @@ def mongodb_container():
     from testcontainers.core.waiting_utils import wait_for_logs
 
     container = (
-        DockerContainer("mongo:7")
-        .with_exposed_ports(27017)
-        .with_command("mongod --replSet rs0 --bind_ip_all --noauth")
+        DockerContainer("mongo:7").with_exposed_ports(27017).with_command("mongod --replSet rs0 --bind_ip_all --noauth")
     )
     container.start()
     wait_for_logs(container, "Waiting for connections")

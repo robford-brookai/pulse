@@ -1,8 +1,9 @@
 """Tests for /ocean ticket modal and message action — Slack ticket creation intake."""
+
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -192,10 +193,7 @@ class TestMessageAction:
         assert view["callback_id"] == "ticket_create_modal"
 
         # Description block should have initial_value from message text
-        desc_block = next(
-            b for b in view["blocks"]
-            if b.get("block_id") == "description_block"
-        )
+        desc_block = next(b for b in view["blocks"] if b.get("block_id") == "description_block")
         initial_value = desc_block["element"].get("initial_value", "")
         assert "Patient device is offline" in initial_value
 
@@ -205,9 +203,7 @@ class TestMessageAction:
 
         ack = AsyncMock()
         client = AsyncMock()
-        client.chat_getPermalink = AsyncMock(
-            return_value={"permalink": "https://slack.com/archives/C123/p1234567890"}
-        )
+        client.chat_getPermalink = AsyncMock(return_value={"permalink": "https://slack.com/archives/C123/p1234567890"})
         body = {
             "trigger_id": "trigger-xyz",
             "channel": {"id": "C123"},

@@ -3,6 +3,7 @@
 handle_delivery_notification: Enriches fulfilled delivery events with patient
 context from the graph and publishes delivery.notify for slack-bot consumption.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -16,9 +17,7 @@ from src.rules import delivery_channel_for
 log = structlog.get_logger()
 
 
-async def handle_delivery_notification(
-    event_data: dict, session, producer=None
-) -> None:
+async def handle_delivery_notification(event_data: dict, session, producer=None) -> None:
     """Handle fulfillment.updated events where status is 'delivered'.
 
     Enriches with patient context (days since consent, active alerts,
@@ -58,20 +57,14 @@ async def handle_delivery_notification(
 
     # 2. Active alerts count
     alerts_result = await session.execute(
-        sa.text(
-            "SELECT COUNT(*) FROM alerts "
-            "WHERE patient_id = :patient_id AND status != 'resolved'"
-        ),
+        sa.text("SELECT COUNT(*) FROM alerts WHERE patient_id = :patient_id AND status != 'resolved'"),
         {"patient_id": patient_id},
     )
     active_alerts_count = alerts_result.scalar_one()
 
     # 3. Device history count
     device_result = await session.execute(
-        sa.text(
-            "SELECT COUNT(*) FROM device_associations "
-            "WHERE patient_id = :patient_id"
-        ),
+        sa.text("SELECT COUNT(*) FROM device_associations WHERE patient_id = :patient_id"),
         {"patient_id": patient_id},
     )
     device_history_count = device_result.scalar_one()

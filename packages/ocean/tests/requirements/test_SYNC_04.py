@@ -1,4 +1,5 @@
 """SYNC-04: Redpanda Connect config handles channel errors with automatic recovery."""
+
 from pathlib import Path
 
 import yaml
@@ -13,27 +14,20 @@ def _config() -> dict:
 
 def test_fallback_output_present():
     config = _config()
-    assert "fallback" in config["output"], \
-        "connect.yaml output must use 'fallback' for dead-letter recovery"
+    assert "fallback" in config["output"], "connect.yaml output must use 'fallback' for dead-letter recovery"
 
 
 def test_dlq_topic_configured():
     config = _config()
     fallback_outputs = config["output"]["fallback"]
-    topics = [
-        out.get("kafka_franz", {}).get("topic", "")
-        for out in fallback_outputs
-        if "kafka_franz" in out
-    ]
-    assert any("ocean.warehouse-dlq" in t for t in topics), \
-        "DLQ fallback must target ocean.warehouse-dlq"
+    topics = [out.get("kafka_franz", {}).get("topic", "") for out in fallback_outputs if "kafka_franz" in out]
+    assert any("ocean.warehouse-dlq" in t for t in topics), "DLQ fallback must target ocean.warehouse-dlq"
 
 
 def test_consumer_group_set():
     config = _config()
     cg = config["input"]["kafka_franz"]["consumer_group"]
-    assert cg == "warehouse-sync-connect", \
-        f"Expected consumer_group 'warehouse-sync-connect', got '{cg}'"
+    assert cg == "warehouse-sync-connect", f"Expected consumer_group 'warehouse-sync-connect', got '{cg}'"
 
 
 def test_path_unique_across_topics():

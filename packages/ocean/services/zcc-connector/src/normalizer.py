@@ -4,6 +4,7 @@ NOTE: Event name mapping has MEDIUM confidence — based on ZCC API research.
 Log all received event names at INFO level (in receiver.py) so actual names can be
 confirmed against a real ZCC account (Pitfall 1 mitigation from RESEARCH.md).
 """
+
 from __future__ import annotations
 
 import uuid

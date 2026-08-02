@@ -4,6 +4,7 @@ Spawns one ``CollectionWatcher`` per registered MongoDB collection, running
 each as an independent asyncio task.  A single watcher failure is logged but
 does not bring down the others.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -42,9 +43,7 @@ class WatcherManager:
         # Validate every requested collection has a transformer.
         unknown = set(collections) - set(transformer_registry.keys())
         if unknown:
-            raise ValueError(
-                f"Unknown collection(s) with no registered transformer: {sorted(unknown)}"
-            )
+            raise ValueError(f"Unknown collection(s) with no registered transformer: {sorted(unknown)}")
 
         self._db = db
         self._publisher = publisher
@@ -71,9 +70,7 @@ class WatcherManager:
                 topic=self._topic,
                 collection_name=name,
             )
-            task = asyncio.create_task(
-                watcher.watch(shutdown_event), name=f"watcher-{name}"
-            )
+            task = asyncio.create_task(watcher.watch(shutdown_event), name=f"watcher-{name}")
             task.add_done_callback(self._on_task_done)
             self._tasks[name] = task
 
@@ -88,15 +85,11 @@ class WatcherManager:
         for task in self._tasks.values():
             task.cancel()
 
-        results = await asyncio.gather(
-            *self._tasks.values(), return_exceptions=True
-        )
+        results = await asyncio.gather(*self._tasks.values(), return_exceptions=True)
 
         # Log any non-cancellation exceptions that surfaced during shutdown.
         for name, result in zip(self._tasks.keys(), results):
-            if isinstance(result, Exception) and not isinstance(
-                result, asyncio.CancelledError
-            ):
+            if isinstance(result, Exception) and not isinstance(result, asyncio.CancelledError):
                 logger.error(
                     "watcher_task_failed",
                     collection=name,

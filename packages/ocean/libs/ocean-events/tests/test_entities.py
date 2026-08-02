@@ -1,4 +1,5 @@
 """Tests for Ocean entity models and type literals."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -26,10 +27,7 @@ def test_all_entities_importable():
         Task,
     )
 
-    assert all(
-        cls is not None
-        for cls in [Alert, CareTeamMember, Clinic, Interaction, Outcome, Patient, Signal, Task]
-    )
+    assert all(cls is not None for cls in [Alert, CareTeamMember, Clinic, Interaction, Outcome, Patient, Signal, Task])
 
 
 def test_event_type_literals_importable():
@@ -84,9 +82,8 @@ def test_patient_model_validates():
 def test_patient_invalid_status():
     """Patient with invalid enrollment_status raises ValidationError."""
     import pytest
-    from pydantic import ValidationError
-
     from ocean_events.entities import Patient
+    from pydantic import ValidationError
 
     with pytest.raises(ValidationError):
         Patient(patient_id="pt-001", clinic_id="clinic-001", enrollment_status="unknown")
@@ -100,9 +97,8 @@ def test_patient_invalid_status():
 def test_alert_severity_literal():
     """Alert with invalid severity raises ValidationError."""
     import pytest
-    from pydantic import ValidationError
-
     from ocean_events.entities import Alert
+    from pydantic import ValidationError
 
     with pytest.raises(ValidationError):
         Alert(
@@ -143,9 +139,8 @@ def test_alert_valid():
 def test_task_status_literal():
     """Task with invalid status raises ValidationError."""
     import pytest
-    from pydantic import ValidationError
-
     from ocean_events.entities import Task
+    from pydantic import ValidationError
 
     with pytest.raises(ValidationError):
         Task(

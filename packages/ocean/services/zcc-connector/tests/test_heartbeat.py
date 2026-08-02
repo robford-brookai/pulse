@@ -1,10 +1,11 @@
 """Unit tests for ZCC connector heartbeat background task."""
+
 from __future__ import annotations
 
 import asyncio
 import json
-import sys
 import os
+import sys
 from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -59,9 +60,8 @@ async def test_publish_heartbeat_catches_publisher_exceptions():
 
     publisher.publish = AsyncMock(side_effect=publish_side_effect)
 
-    with patch("src.heartbeat.asyncio.sleep", new_callable=AsyncMock):
-        with pytest.raises(asyncio.CancelledError):
-            await publish_heartbeat(publisher, "zcc-connector", "Zoom Contact Center")
+    with patch("src.heartbeat.asyncio.sleep", new_callable=AsyncMock), pytest.raises(asyncio.CancelledError):
+        await publish_heartbeat(publisher, "zcc-connector", "Zoom Contact Center")
 
     # Loop continued past the ConnectionError to make a second call
     assert publisher.publish.call_count == 2

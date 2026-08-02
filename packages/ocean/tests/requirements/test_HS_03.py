@@ -1,4 +1,5 @@
 """HS-03: HubSpot connector redacts PHI fields from event payloads."""
+
 from pathlib import Path
 
 _ROOT = Path(__file__).parents[2]

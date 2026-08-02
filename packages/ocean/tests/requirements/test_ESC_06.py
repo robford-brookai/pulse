@@ -3,6 +3,7 @@
 Verifies check_and_escalate removes escalation state and does not
 publish for items with status in ("claimed", "completed", "resolved", "canceled").
 """
+
 from __future__ import annotations
 
 import importlib.util

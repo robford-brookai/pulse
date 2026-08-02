@@ -1,4 +1,5 @@
 """Tests for VoyageAI embedder — entity text conversion and batch embedding."""
+
 from __future__ import annotations
 
 import pathlib
@@ -12,7 +13,7 @@ if str(_SVC) not in sys.path:
     sys.path.insert(0, str(_SVC))
 
 import src.embedder as _embedder_mod
-from src.embedder import entity_to_text, embed_batch, EMBED_DIMS
+from src.embedder import EMBED_DIMS, embed_batch, entity_to_text
 
 
 def test_alert_entity_to_text():
@@ -77,10 +78,22 @@ def test_outcome_entity_to_text():
 async def test_embed_batch_calls_voyage():
     """embed_batch calls VoyageAI and returns embeddings for each row."""
     rows = [
-        {"alert_id": "a1", "patient_id": "p1", "alert_type": "g_high", "severity": "URGENT",
-         "status": "open", "created_at": "2026-01-01"},
-        {"alert_id": "a2", "patient_id": "p2", "alert_type": "spo2_low", "severity": "CRITICAL",
-         "status": "open", "created_at": "2026-01-01"},
+        {
+            "alert_id": "a1",
+            "patient_id": "p1",
+            "alert_type": "g_high",
+            "severity": "URGENT",
+            "status": "open",
+            "created_at": "2026-01-01",
+        },
+        {
+            "alert_id": "a2",
+            "patient_id": "p2",
+            "alert_type": "spo2_low",
+            "severity": "CRITICAL",
+            "status": "open",
+            "created_at": "2026-01-01",
+        },
     ]
 
     fake_embeddings = [[0.1] * EMBED_DIMS, [0.2] * EMBED_DIMS]
@@ -112,8 +125,16 @@ async def test_embed_batch_empty_returns_empty():
 @pytest.mark.asyncio
 async def test_embed_batch_handles_api_failure():
     """embed_batch returns zero vectors on API failure instead of raising."""
-    rows = [{"alert_id": "a1", "patient_id": "p1", "alert_type": "t", "severity": "HIGH",
-             "status": "open", "created_at": "2026-01-01"}]
+    rows = [
+        {
+            "alert_id": "a1",
+            "patient_id": "p1",
+            "alert_type": "t",
+            "severity": "HIGH",
+            "status": "open",
+            "created_at": "2026-01-01",
+        }
+    ]
 
     with patch.object(_embedder_mod, "_get_client") as mock_get_client:
         mock_client = AsyncMock()

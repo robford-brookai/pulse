@@ -6,6 +6,7 @@ channel_for() and priority_for() provide lookup with safe fallbacks.
 Ticket routing uses category-to-channel and priority-to-crosspost mappings.
 State transitions are validated against VALID_TRANSITIONS.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

@@ -5,6 +5,7 @@ Verifies that:
 - dispatch passes producer kwarg to handlers
 - main.py creates RedpandaPublisher and passes to run_consumer
 """
+
 from __future__ import annotations
 
 import os
@@ -56,6 +57,7 @@ class TestRunConsumerPassesPublisher:
     async def test_run_consumer_passes_publisher_to_dispatch(self):
         """Publisher kwarg is forwarded from run_consumer to dispatch."""
         import json
+
         from src import consumer
 
         publisher = AsyncMock()
@@ -96,8 +98,10 @@ class TestRunConsumerPassesPublisher:
         mock_consumer_instance.commit = AsyncMock()
         mock_consumer_instance.close = AsyncMock()
 
-        with patch("src.consumer.Consumer", return_value=mock_consumer_instance), \
-             patch("src.consumer.dispatch", new_callable=AsyncMock) as mock_dispatch:
+        with (
+            patch("src.consumer.Consumer", return_value=mock_consumer_instance),
+            patch("src.consumer.dispatch", new_callable=AsyncMock) as mock_dispatch,
+        ):
             try:
                 await consumer.run_consumer(session_maker, "localhost:9092", publisher=publisher)
             except KeyboardInterrupt:

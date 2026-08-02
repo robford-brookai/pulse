@@ -4,6 +4,7 @@ All resolution paths (task, ticket, alert, call) funnel through
 build_outcome_event to produce a normalized outcome.recorded event
 on the ocean.outcomes topic.
 """
+
 from __future__ import annotations
 
 import uuid

@@ -5,6 +5,7 @@ Uses a separate consumer group (control-plane-worker) so it receives events
 independently of other consumers.
 Manual offset commit — offset committed only AFTER successful processing.
 """
+
 from __future__ import annotations
 
 import json
@@ -78,7 +79,9 @@ async def dispatch(event_data: dict, session: AsyncSession, producer=None) -> No
 
 
 async def run_consumer(
-    session_maker: async_sessionmaker, bootstrap_servers: str, publisher=None,
+    session_maker: async_sessionmaker,
+    bootstrap_servers: str,
+    publisher=None,
 ) -> None:
     """Run the control-plane consumer loop."""
     conf = {**CONSUMER_CONFIG, "bootstrap.servers": bootstrap_servers}

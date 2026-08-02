@@ -5,6 +5,7 @@ Uses manual offset commit (enable.auto.commit=False) — offset is committed
 only AFTER the DB write succeeds. This guarantees at-least-once delivery
 with idempotent writes (ON CONFLICT DO NOTHING in writer.py).
 """
+
 from __future__ import annotations
 
 import structlog

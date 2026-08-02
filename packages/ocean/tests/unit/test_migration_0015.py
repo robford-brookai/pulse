@@ -3,6 +3,7 @@
 Verifies the migration creates the task_escalation_state table and
 makes interaction_id nullable.
 """
+
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -19,9 +20,7 @@ def test_source_file_exists():
 
 def test_creates_task_escalation_state_table():
     src = _source()
-    assert "task_escalation_state" in src, (
-        "Migration 0015 must create task_escalation_state table"
-    )
+    assert "task_escalation_state" in src, "Migration 0015 must create task_escalation_state table"
 
 
 def test_contains_create_table():
@@ -31,9 +30,7 @@ def test_contains_create_table():
 
 def test_interaction_id_nullable():
     src = _source()
-    assert "interaction_id" in src, (
-        "Migration 0015 must make interaction_id nullable"
-    )
+    assert "interaction_id" in src, "Migration 0015 must make interaction_id nullable"
 
 
 def test_has_upgrade_function():

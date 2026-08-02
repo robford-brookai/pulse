@@ -79,17 +79,15 @@ def alert_card(
 
     # Optional: FP rate warning block (inserted before actions when rate is high)
     if fp_rate is not None and fp_rate >= 0.3:
-        blocks.append(
-            {
-                "type": "context",
-                "elements": [
-                    {
-                        "type": "mrkdwn",
-                        "text": f"⚠️ High false-positive rate ({fp_rate:.0%}) for {alert_type}",
-                    }
-                ],
-            }
-        )
+        blocks.append({
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": f"⚠️ High false-positive rate ({fp_rate:.0%}) for {alert_type}",
+                }
+            ],
+        })
 
     # Actions block
     blocks.append(
@@ -205,9 +203,7 @@ def outreach_draft_card(task_id: str, draft_id: str, draft_text: str) -> list[di
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": (
-                    f"*AI: Outreach Draft*\n_{draft_text}_\n\n_Review and approve before dispatch._"
-                ),
+                "text": (f"*AI: Outreach Draft*\n_{draft_text}_\n\n_Review and approve before dispatch._"),
             },
         },
         {
@@ -352,15 +348,13 @@ def lifecycle_update_blocks(updates: list[dict]) -> list[dict]:
 
         if update_type == "claimed":
             actor = update.get("actor", "Unknown")
-            blocks.append(
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f"*Task Claimed*\nClaimed by `{actor}`",
-                    },
-                }
-            )
+            blocks.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*Task Claimed*\nClaimed by `{actor}`",
+                },
+            })
 
         elif update_type == "ai_recommendation":
             action = update.get("action", "")
@@ -369,24 +363,20 @@ def lifecycle_update_blocks(updates: list[dict]) -> list[dict]:
             text = f"*AI Recommendation*\n*Action:* {action}\n*Confidence:* {confidence}"
             if reasoning:
                 text += f"\n_Reasoning: {reasoning}_"
-            blocks.append(
-                {
-                    "type": "section",
-                    "text": {"type": "mrkdwn", "text": text},
-                }
-            )
+            blocks.append({
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": text},
+            })
 
         elif update_type == "ai_approved":
             actor = update.get("actor", "Unknown")
-            blocks.append(
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f"*AI Output Approved*\nApproved by `{actor}`",
-                    },
-                }
-            )
+            blocks.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*AI Output Approved*\nApproved by `{actor}`",
+                },
+            })
 
         elif update_type == "ai_rejected":
             actor = update.get("actor", "Unknown")
@@ -394,12 +384,10 @@ def lifecycle_update_blocks(updates: list[dict]) -> list[dict]:
             text = f"*AI Output Rejected*\nRejected by `{actor}`"
             if reason:
                 text += f"\n_Reason: {reason}_"
-            blocks.append(
-                {
-                    "type": "section",
-                    "text": {"type": "mrkdwn", "text": text},
-                }
-            )
+            blocks.append({
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": text},
+            })
 
         elif update_type == "call_outcome":
             outcome = update.get("outcome", "unknown")
@@ -407,31 +395,25 @@ def lifecycle_update_blocks(updates: list[dict]) -> list[dict]:
             text = f"*Call Outcome*\nOutcome: {outcome}"
             if duration is not None:
                 text += f"\nDuration: {duration}s"
-            blocks.append(
-                {
-                    "type": "section",
-                    "text": {"type": "mrkdwn", "text": text},
-                }
-            )
+            blocks.append({
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": text},
+            })
 
         elif update_type == "task_completed":
-            blocks.append(
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": "*Task Completed*\nTask has been resolved.",
-                    },
-                }
-            )
+            blocks.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "*Task Completed*\nTask has been resolved.",
+                },
+            })
 
         else:
-            blocks.append(
-                {
-                    "type": "section",
-                    "text": {"type": "mrkdwn", "text": f"*{update_type}*"},
-                }
-            )
+            blocks.append({
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"*{update_type}*"},
+            })
 
     return blocks
 
@@ -473,9 +455,7 @@ _TICKET_BUTTONS: dict[str, list[tuple[str, str, str | None]]] = {
 }
 
 
-def _ticket_action_buttons(
-    ticket_id: str, status: str, category: str | None = None
-) -> list[dict]:
+def _ticket_action_buttons(ticket_id: str, status: str, category: str | None = None) -> list[dict]:
     """Build action button elements for a given ticket status.
 
     When status is in_progress and category is device_issue, appends a
@@ -495,15 +475,13 @@ def _ticket_action_buttons(
         elements.append(btn)
 
     if status == "in_progress" and category == "device_issue":
-        elements.append(
-            {
-                "type": "button",
-                "action_id": "ticket_create_rma",
-                "text": {"type": "plain_text", "text": "Create RMA", "emoji": False},
-                "style": "primary",
-                "value": ticket_id,
-            }
-        )
+        elements.append({
+            "type": "button",
+            "action_id": "ticket_create_rma",
+            "text": {"type": "plain_text", "text": "Create RMA", "emoji": False},
+            "style": "primary",
+            "value": ticket_id,
+        })
 
     return elements
 
@@ -577,13 +555,11 @@ def ticket_card(
 
     elements = _ticket_action_buttons(ticket_id, status, category=category)
     if elements:
-        blocks.append(
-            {
-                "type": "actions",
-                "block_id": f"ticket_actions_{ticket_id}",
-                "elements": elements,
-            }
-        )
+        blocks.append({
+            "type": "actions",
+            "block_id": f"ticket_actions_{ticket_id}",
+            "elements": elements,
+        })
 
     return blocks
 
@@ -621,9 +597,7 @@ def ticket_claimed_card(
     ]
 
 
-def ticket_waiting_card(
-    ticket_id: str, human_id: str, waiting_reason: str
-) -> list[dict]:
+def ticket_waiting_card(ticket_id: str, human_id: str, waiting_reason: str) -> list[dict]:
     """Card shown when a ticket enters waiting state."""
     return [
         {
@@ -648,9 +622,7 @@ def ticket_waiting_card(
     ]
 
 
-def ticket_resolved_card(
-    ticket_id: str, human_id: str, actor_id: str, duration_str: str
-) -> list[dict]:
+def ticket_resolved_card(ticket_id: str, human_id: str, actor_id: str, duration_str: str) -> list[dict]:
     """Card shown when a ticket is resolved — no action buttons."""
     return [
         {
@@ -759,9 +731,7 @@ def delivery_card(
     ]
 
 
-def delivery_claimed_card(
-    order_id: str, patient_id: str, device_type: str, actor_id: str
-) -> list[dict]:
+def delivery_claimed_card(order_id: str, patient_id: str, device_type: str, actor_id: str) -> list[dict]:
     """Card shown after a delivery handoff is claimed."""
     return [
         {
@@ -781,9 +751,7 @@ def delivery_claimed_card(
     ]
 
 
-def delivery_resolved_card(
-    order_id: str, patient_id: str, device_type: str, actor_id: str
-) -> list[dict]:
+def delivery_resolved_card(order_id: str, patient_id: str, device_type: str, actor_id: str) -> list[dict]:
     """Card shown after a delivery handoff is resolved."""
     return [
         {

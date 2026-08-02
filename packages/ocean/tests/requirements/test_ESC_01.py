@@ -3,6 +3,7 @@
 Verifies find_escalation_candidates returns items where
 (now - check_time).total_seconds() > threshold for their priority.
 """
+
 from __future__ import annotations
 
 import importlib.util

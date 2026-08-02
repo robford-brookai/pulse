@@ -1,9 +1,7 @@
 """Tests for BaseEvent PHI guard and envelope validation."""
+
 from __future__ import annotations
 
-import importlib
-import sys
-import textwrap
 import uuid
 from datetime import UTC, datetime
 

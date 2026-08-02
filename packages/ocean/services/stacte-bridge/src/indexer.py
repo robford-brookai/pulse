@@ -3,6 +3,7 @@
 Processes entities WHERE embedding IS NULL in batches, then UPDATEs the
 vector column. Uses voyage-3 via embedder.py.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -40,9 +41,7 @@ async def sync_embeddings(
 
     # Fetch unindexed rows
     result = await session.execute(
-        sa.text(
-            f"SELECT * FROM {table} WHERE embedding IS NULL LIMIT :limit"  # noqa: S608
-        ),
+        sa.text(f"SELECT * FROM {table} WHERE embedding IS NULL LIMIT :limit"),
         {"limit": limit},
     )
     rows = [dict(r._mapping) for r in result.fetchall()]
@@ -61,10 +60,7 @@ async def sync_embeddings(
         # pgvector expects list → str cast via ::vector
         vec_str = "[" + ",".join(str(v) for v in embedding) + "]"
         await session.execute(
-            sa.text(
-                f"UPDATE {table} SET embedding = :vec::vector "  # noqa: S608
-                f"WHERE {pk_col} = :entity_id"
-            ),
+            sa.text(f"UPDATE {table} SET embedding = :vec::vector WHERE {pk_col} = :entity_id"),
             {"vec": vec_str, "entity_id": entity_id},
         )
         updated += 1
@@ -93,7 +89,7 @@ async def semantic_search(
 
     result = await session.execute(
         sa.text(
-            f"SELECT *, (embedding <=> :vec::vector) AS distance "  # noqa: S608
+            f"SELECT *, (embedding <=> :vec::vector) AS distance "
             f"FROM {table} "
             f"WHERE embedding IS NOT NULL "
             f"ORDER BY embedding <=> :vec::vector "

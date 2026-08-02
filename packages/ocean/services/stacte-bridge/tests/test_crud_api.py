@@ -1,4 +1,5 @@
 """Tests for stacte-bridge REST API endpoints."""
+
 from __future__ import annotations
 
 import pathlib

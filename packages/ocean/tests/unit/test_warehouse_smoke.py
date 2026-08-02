@@ -1,4 +1,5 @@
 """Verify warehouse_smoke.py --dry-run exits cleanly."""
+
 from __future__ import annotations
 
 import subprocess

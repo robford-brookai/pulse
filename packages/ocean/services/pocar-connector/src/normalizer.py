@@ -1,4 +1,5 @@
 """POCAR payload normalizer — converts raw webhook dict to canonical OceanEvent."""
+
 from __future__ import annotations
 
 import hashlib
@@ -33,8 +34,7 @@ def _check_no_phi_keys(raw: dict) -> None:
     matched_keys = PHI_FIELD_DENYLIST.intersection(raw.keys())
     if matched_keys:
         raise ValueError(
-            f"PHI field(s) detected in raw payload: {sorted(matched_keys)!r}. "
-            "PHI must not enter the normalizer."
+            f"PHI field(s) detected in raw payload: {sorted(matched_keys)!r}. PHI must not enter the normalizer."
         )
 
 

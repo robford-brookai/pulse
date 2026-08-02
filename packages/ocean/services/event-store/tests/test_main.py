@@ -1,4 +1,5 @@
 """Tests for event-store /health endpoint."""
+
 from __future__ import annotations
 
 

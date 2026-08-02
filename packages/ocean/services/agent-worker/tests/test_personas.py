@@ -1,17 +1,13 @@
 """Tests for persona loading from AGENTS.md."""
+
 from __future__ import annotations
 
 import os
-import textwrap
 
 import pytest
-
 from src.personas import Persona, load_personas
 
-
-AGENTS_MD = os.path.join(
-    os.path.dirname(__file__), os.pardir, os.pardir, os.pardir, "agents.md"
-)
+AGENTS_MD = os.path.join(os.path.dirname(__file__), os.pardir, os.pardir, os.pardir, "agents.md")
 
 
 class TestPersonaModel:
@@ -104,8 +100,9 @@ class TestLoadPersonas:
 
 class TestExtendedTypes:
     def test_source_system_includes_new_values(self):
-        from ocean_events.types import SourceSystem
         from typing import get_args
+
+        from ocean_events.types import SourceSystem
 
         args = get_args(SourceSystem)
         assert "control-plane" in args
@@ -114,8 +111,9 @@ class TestExtendedTypes:
         assert "sim-driver" in args
 
     def test_event_type_includes_new_values(self):
-        from ocean_events.types import EventType
         from typing import get_args
+
+        from ocean_events.types import EventType
 
         args = get_args(EventType)
         assert "ai.recommendation.generated" in args

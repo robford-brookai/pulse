@@ -1,4 +1,5 @@
 """FastAPI router for GitHub webhook ingestion."""
+
 from __future__ import annotations
 
 import hashlib

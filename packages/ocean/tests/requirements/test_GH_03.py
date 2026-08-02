@@ -1,4 +1,5 @@
 """GH-03: GitHub connector normalizes push events to commit.pushed."""
+
 from pathlib import Path
 
 _ROOT = Path(__file__).parents[2]

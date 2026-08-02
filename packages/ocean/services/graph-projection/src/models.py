@@ -1,4 +1,5 @@
 """SQLAlchemy ORM models for the operational graph tables."""
+
 from __future__ import annotations
 
 from sqlalchemy import (
@@ -86,7 +87,9 @@ class Outcome(Base):
     __tablename__ = "outcomes"
 
     outcome_id = Column(Text, primary_key=True)
-    interaction_id = Column(Text, ForeignKey("interactions.interaction_id", name="fk_outcomes_interaction_id"), nullable=False)
+    interaction_id = Column(
+        Text, ForeignKey("interactions.interaction_id", name="fk_outcomes_interaction_id"), nullable=False
+    )
     patient_id = Column(Text, ForeignKey("patients.patient_id", name="fk_outcomes_patient_id"), nullable=False)
     outcome_type = Column(Text, nullable=False)
     resolution_status = Column(Text, nullable=False)
@@ -104,7 +107,9 @@ class Ticket(Base):
     priority = Column(Text, nullable=False)
     status = Column(Text, nullable=False, default="open")
     patient_id = Column(
-        Text, ForeignKey("patients.patient_id", name="fk_tickets_patient_id"), nullable=True,
+        Text,
+        ForeignKey("patients.patient_id", name="fk_tickets_patient_id"),
+        nullable=True,
     )
     description = Column(Text, nullable=False)
     waiting_reason = Column(Text, nullable=True)
@@ -119,10 +124,14 @@ class TicketTask(Base):
     __table_args__ = (PrimaryKeyConstraint("ticket_id", "task_id"),)
 
     ticket_id = Column(
-        Text, ForeignKey("tickets.ticket_id", name="fk_tt_ticket_id"), nullable=False,
+        Text,
+        ForeignKey("tickets.ticket_id", name="fk_tt_ticket_id"),
+        nullable=False,
     )
     task_id = Column(
-        Text, ForeignKey("tasks.task_id", name="fk_tt_task_id"), nullable=False,
+        Text,
+        ForeignKey("tasks.task_id", name="fk_tt_task_id"),
+        nullable=False,
     )
     linked_at = Column(DateTime(timezone=True), nullable=False)
 
@@ -132,10 +141,14 @@ class AlertTask(Base):
     __table_args__ = (PrimaryKeyConstraint("alert_id", "task_id"),)
 
     alert_id = Column(
-        Text, ForeignKey("alerts.alert_id", name="fk_at_alert_id"), nullable=False,
+        Text,
+        ForeignKey("alerts.alert_id", name="fk_at_alert_id"),
+        nullable=False,
     )
     task_id = Column(
-        Text, ForeignKey("tasks.task_id", name="fk_at_task_id"), nullable=False,
+        Text,
+        ForeignKey("tasks.task_id", name="fk_at_task_id"),
+        nullable=False,
     )
     linked_at = Column(DateTime(timezone=True), nullable=False)
 
@@ -145,9 +158,13 @@ class TicketAlert(Base):
     __table_args__ = (PrimaryKeyConstraint("ticket_id", "alert_id"),)
 
     ticket_id = Column(
-        Text, ForeignKey("tickets.ticket_id", name="fk_ta_ticket_id"), nullable=False,
+        Text,
+        ForeignKey("tickets.ticket_id", name="fk_ta_ticket_id"),
+        nullable=False,
     )
     alert_id = Column(
-        Text, ForeignKey("alerts.alert_id", name="fk_ta_alert_id"), nullable=False,
+        Text,
+        ForeignKey("alerts.alert_id", name="fk_ta_alert_id"),
+        nullable=False,
     )
     linked_at = Column(DateTime(timezone=True), nullable=False)

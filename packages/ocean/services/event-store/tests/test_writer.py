@@ -1,9 +1,9 @@
 """Tests for event-store writer module."""
+
 from __future__ import annotations
 
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
-
 
 SAMPLE_EVENT = {
     "event_id": "evt-001",
@@ -41,6 +41,7 @@ async def test_write_event_executes_two_inserts():
     maker, session = _make_session_maker()
     with patch("src.writer._get_session_maker", return_value=maker):
         from src.writer import write_event
+
         await write_event(json.dumps(SAMPLE_EVENT).encode(), topic="ocean.signals")
     assert session.execute.call_count == 2
 
@@ -49,6 +50,7 @@ async def test_write_event_maps_fields_correctly():
     maker, session = _make_session_maker()
     with patch("src.writer._get_session_maker", return_value=maker):
         from src.writer import write_event
+
         await write_event(json.dumps(SAMPLE_EVENT).encode(), topic="ocean.signals")
 
     # First call is the events table insert
@@ -65,6 +67,7 @@ async def test_write_event_audit_log_action_type():
     maker, session = _make_session_maker()
     with patch("src.writer._get_session_maker", return_value=maker):
         from src.writer import write_event
+
         await write_event(json.dumps(SAMPLE_EVENT).encode(), topic="ocean.signals")
 
     second_call_params = session.execute.call_args_list[1][0][1]
@@ -76,6 +79,7 @@ async def test_write_event_actor_id_fallback():
     maker, session = _make_session_maker()
     with patch("src.writer._get_session_maker", return_value=maker):
         from src.writer import write_event
+
         await write_event(json.dumps(event).encode(), topic="ocean.signals")
 
     second_call_params = session.execute.call_args_list[1][0][1]
@@ -91,6 +95,7 @@ async def test_write_event_minimal_payload():
     maker, session = _make_session_maker()
     with patch("src.writer._get_session_maker", return_value=maker):
         from src.writer import write_event
+
         # Should not raise
         await write_event(json.dumps(minimal).encode(), topic="ocean.signals")
     assert session.execute.call_count == 2

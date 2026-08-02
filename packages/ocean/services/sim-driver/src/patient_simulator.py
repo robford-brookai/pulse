@@ -7,6 +7,7 @@ downstream services (control-plane, graph-projection) handle the rest.
 Events use the canonical BaseEvent envelope from ocean-events, making them
 indistinguishable from events published by real connectors (pocar, impilo).
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -23,12 +24,11 @@ try:
 except IndexError:
     pass  # In Docker, ocean-events is pip-installed
 
-from ocean_events.base import BaseEvent  # noqa: E402
+import structlog
+from ocean_events.base import BaseEvent
 
-import structlog  # noqa: E402
-
-from src.clock import sim_sleep  # noqa: E402
-from src.models import PatientConfig, SignalConfig, resolve_source  # noqa: E402
+from src.clock import sim_sleep
+from src.models import PatientConfig, SignalConfig, resolve_source
 
 log = structlog.get_logger()
 
@@ -79,9 +79,7 @@ class PatientSimulator:
 
             # Publish signal.received for every signal
             signal_event = self._build_signal_event(signal, idx)
-            await self._publisher.publish(
-                "ocean.signals", signal_event.model_dump(mode="json")
-            )
+            await self._publisher.publish("ocean.signals", signal_event.model_dump(mode="json"))
             log.info(
                 f"[SIM] Patient {self._patient.patient_id}: {signal.type} reading"
                 f" {signal.value} {signal.unit}"
@@ -92,14 +90,9 @@ class PatientSimulator:
             # Publish alert.created only for anomalous signals
             if signal.anomalous:
                 alert_event = self._build_alert_event(signal, idx)
-                await self._publisher.publish(
-                    "ocean.alerts", alert_event.model_dump(mode="json")
-                )
+                await self._publisher.publish("ocean.alerts", alert_event.model_dump(mode="json"))
                 severity = self._resolve_severity(signal)
-                log.info(
-                    f"[SIM] Patient {self._patient.patient_id}:"
-                    f" ALERT {signal.type}_anomaly severity={severity}"
-                )
+                log.info(f"[SIM] Patient {self._patient.patient_id}: ALERT {signal.type}_anomaly severity={severity}")
 
     def _build_signal_event(self, signal: SignalConfig, idx: int) -> BaseEvent:
         """Construct a signal.received BaseEvent.

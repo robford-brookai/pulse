@@ -3,6 +3,7 @@
 Verifies services/control-plane/src/escalation.py contains
 all expected function signatures without importing the module.
 """
+
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

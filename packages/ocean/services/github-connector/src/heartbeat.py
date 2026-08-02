@@ -1,4 +1,5 @@
 """Heartbeat background task for the GitHub connector."""
+
 from __future__ import annotations
 
 import asyncio

@@ -1,4 +1,5 @@
 """FastAPI router for Linear webhook ingestion."""
+
 from __future__ import annotations
 
 import hashlib
@@ -49,10 +50,7 @@ async def receive_linear_webhook(request: Request) -> dict:
     log.info("linear_event_received", action=action, issue_id=issue_data.get("id"))
 
     # Check for "ocean" label (case-insensitive)
-    has_ocean_label = any(
-        label.get("name", "").lower() == "ocean"
-        for label in labels
-    )
+    has_ocean_label = any(label.get("name", "").lower() == "ocean" for label in labels)
     if not has_ocean_label:
         log.info("linear_event_skipped", reason="no ocean label")
         return {"status": "skipped", "reason": "no ocean label"}

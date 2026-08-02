@@ -1,4 +1,5 @@
 """Graph projection handlers for alert events."""
+
 from __future__ import annotations
 
 import json

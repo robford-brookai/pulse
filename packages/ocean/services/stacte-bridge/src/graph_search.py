@@ -5,6 +5,7 @@ Traverses the patient-centered graph:
 
 Returns a structured neighborhood dict for a given entity ID.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -40,7 +41,7 @@ async def get_entity_neighborhood(
         ("outcome", "outcomes", "outcome_id"),
     ]:
         result = await session.execute(
-            sa.text(f"SELECT * FROM {table} WHERE {pk} = :id"),  # noqa: S608
+            sa.text(f"SELECT * FROM {table} WHERE {pk} = :id"),
             {"id": entity_id},
         )
         row = result.fetchone()
@@ -92,10 +93,7 @@ async def _build_neighborhood(
 
             # Fetch interactions for this patient
             interactions_result = await session.execute(
-                sa.text(
-                    "SELECT * FROM interactions WHERE patient_id = :pid "
-                    "ORDER BY started_at DESC LIMIT 20"
-                ),
+                sa.text("SELECT * FROM interactions WHERE patient_id = :pid ORDER BY started_at DESC LIMIT 20"),
                 {"pid": patient_id},
             )
             interactions = [dict(r._mapping) for r in interactions_result.fetchall()]
@@ -104,14 +102,9 @@ async def _build_neighborhood(
             if hops >= 3:
                 # Fetch outcomes
                 outcomes_result = await session.execute(
-                    sa.text(
-                        "SELECT * FROM outcomes WHERE patient_id = :pid "
-                        "ORDER BY recorded_at DESC LIMIT 20"
-                    ),
+                    sa.text("SELECT * FROM outcomes WHERE patient_id = :pid ORDER BY recorded_at DESC LIMIT 20"),
                     {"pid": patient_id},
                 )
-                neighborhood["related"]["outcomes"] = [
-                    dict(r._mapping) for r in outcomes_result.fetchall()
-                ]
+                neighborhood["related"]["outcomes"] = [dict(r._mapping) for r in outcomes_result.fetchall()]
 
     return neighborhood

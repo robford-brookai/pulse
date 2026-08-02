@@ -3,6 +3,7 @@
 Verifies print_banner output contains patient_timeline query, sim-pt-demo-001,
 and the Hasura console URL.
 """
+
 from __future__ import annotations
 
 import io

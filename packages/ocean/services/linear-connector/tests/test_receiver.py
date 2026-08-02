@@ -1,4 +1,5 @@
 """Tests for Linear webhook receiver — signature verification, ocean label filter."""
+
 from __future__ import annotations
 
 import hashlib
@@ -8,7 +9,6 @@ from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
-
 
 WEBHOOK_SECRET = "test-linear-secret"
 

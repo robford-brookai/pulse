@@ -8,15 +8,15 @@ ocean.interactions. The four event types are:
   - contact_center.engagement_ended    → call.completed
   - contact_center.engagement_missed   → call.missed
 """
+
 from __future__ import annotations
 
 import pytest
-
 from utils import setup_service
 
 setup_service("zcc-connector")
 
-from src.normalizer import normalize_zcc_event, ZCC_TO_OCEAN_EVENT_TYPE  # noqa: E402
+from src.normalizer import ZCC_TO_OCEAN_EVENT_TYPE, normalize_zcc_event
 
 
 def _zcc_payload(zcc_event: str, engagement_id: str = "eng-001", task_id: str = "task-abc") -> dict:
@@ -90,9 +90,7 @@ def test_normalized_event_preserves_task_id(zcc_event: str, _):
     result = normalize_zcc_event(_zcc_payload(zcc_event, task_id="task-corr-999"))
 
     assert result is not None
-    assert result["payload"].get("task_id") == "task-corr-999", (
-        f"task_id not preserved in normalized '{zcc_event}'"
-    )
+    assert result["payload"].get("task_id") == "task-corr-999", f"task_id not preserved in normalized '{zcc_event}'"
 
 
 def test_unknown_zcc_event_returns_none():

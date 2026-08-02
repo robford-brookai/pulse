@@ -1,10 +1,10 @@
 """Unit tests for graph projection call lifecycle handlers (interactions + outcomes)."""
+
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, call
+from unittest.mock import AsyncMock
 
 import pytest
-import sqlalchemy as sa
 
 
 @pytest.fixture
@@ -74,9 +74,7 @@ async def test_handle_call_completed_upserts_interaction_and_inserts_outcome(moc
     """call.completed creates Interaction with outcome='completed' AND Outcome record."""
     from src.handlers.outcomes import handle_call_completed
 
-    await handle_call_completed(
-        _make_call_event("call.completed", disposition="resolved"), mock_session
-    )
+    await handle_call_completed(_make_call_event("call.completed", disposition="resolved"), mock_session)
     # Two executes: interaction upsert + outcome insert
     assert mock_session.execute.call_count == 2
     sql0, params0 = _get_sql_and_params(mock_session, 0)

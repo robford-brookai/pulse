@@ -1,4 +1,5 @@
 """GH-05: GitHub connector publishes heartbeat events on ocean.ops."""
+
 from pathlib import Path
 
 _ROOT = Path(__file__).parents[2]

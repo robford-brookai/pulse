@@ -12,6 +12,7 @@ Revision ID: 0016
 Revises: 0015
 Create Date: 2026-03-17
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa

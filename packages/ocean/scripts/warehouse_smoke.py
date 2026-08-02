@@ -5,6 +5,7 @@ Usage:
     uv run python scripts/warehouse_smoke.py
     uv run python scripts/warehouse_smoke.py --dry-run
 """
+
 from __future__ import annotations
 
 import argparse
@@ -16,11 +17,9 @@ import time
 import uuid
 from datetime import datetime, timezone
 
+import snowflake.connector
 from confluent_kafka import Producer
 from cryptography.hazmat.primitives import serialization
-
-import snowflake.connector
-
 
 TIMEOUT_SECONDS = 60
 POLL_INTERVAL = 5
@@ -30,9 +29,16 @@ TEST_TOPIC = "ocean.smoke-test"
 def _check_warehouse_sync() -> None:
     result = subprocess.run(
         [
-            "docker", "compose", "--env-file", ".env",
-            "-f", "infra/docker-compose.yml", "ps",
-            "--format", "json", "warehouse-sync",
+            "docker",
+            "compose",
+            "--env-file",
+            ".env",
+            "-f",
+            "infra/docker-compose.yml",
+            "ps",
+            "--format",
+            "json",
+            "warehouse-sync",
         ],
         capture_output=True,
         text=True,
@@ -119,7 +125,7 @@ def main() -> None:
     print(f"Smoke test started at {datetime.now(timezone.utc).isoformat()}")
 
     event_id = _publish_test_event(brokers)
-    print(f"Waiting for event to flow: Redpanda -> warehouse-sync -> Snowflake...")
+    print("Waiting for event to flow: Redpanda -> warehouse-sync -> Snowflake...")
 
     try:
         count = run_smoke(event_id)

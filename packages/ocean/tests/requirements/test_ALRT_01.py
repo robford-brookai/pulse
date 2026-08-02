@@ -4,6 +4,7 @@ Source-inspection + unit tests following the test_SRCH_01.py pattern.
 Verifies: migration DDL, event types, snooze button, bolt handlers,
 control-plane snooze guard, and card builder outputs.
 """
+
 from __future__ import annotations
 
 import importlib

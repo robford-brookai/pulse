@@ -1,4 +1,5 @@
 """Redpanda producer with dead-letter queue fallback to Postgres."""
+
 from __future__ import annotations
 
 import uuid
@@ -39,22 +40,21 @@ class RedpandaPublisher:
 
     async def _write_dlq(self, key: str, value: bytes, error: str) -> None:
         """Insert failed webhook into the failed_webhooks dead-letter table."""
-        async with self._db_session_maker() as session:
-            async with session.begin():
-                await session.execute(
-                    sa.text(
-                        "INSERT INTO failed_webhooks (id, key, payload, error, created_at, retry_count) "
-                        "VALUES (:id, :key, :payload, :error, :created_at, :retry_count)"
-                    ),
-                    {
-                        "id": str(uuid.uuid4()),
-                        "key": key,
-                        "payload": value,
-                        "error": error,
-                        "created_at": datetime.now(tz=UTC),
-                        "retry_count": 0,
-                    },
-                )
+        async with self._db_session_maker() as session, session.begin():
+            await session.execute(
+                sa.text(
+                    "INSERT INTO failed_webhooks (id, key, payload, error, created_at, retry_count) "
+                    "VALUES (:id, :key, :payload, :error, :created_at, :retry_count)"
+                ),
+                {
+                    "id": str(uuid.uuid4()),
+                    "key": key,
+                    "payload": value,
+                    "error": error,
+                    "created_at": datetime.now(tz=UTC),
+                    "retry_count": 0,
+                },
+            )
         log.info("dlq_write", key=key, error=error)
 
     async def close(self) -> None:

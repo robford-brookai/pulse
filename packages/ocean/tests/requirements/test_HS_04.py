@@ -1,4 +1,5 @@
 """HS-04: HubSpot connector filters unknown properties to [FILTERED]."""
+
 from pathlib import Path
 
 _ROOT = Path(__file__).parents[2]

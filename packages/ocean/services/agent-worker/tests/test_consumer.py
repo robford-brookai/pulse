@@ -1,13 +1,11 @@
 """Tests for agent-worker consumer, claim competition, and feedback loop guard."""
+
 from __future__ import annotations
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
-import pytest
-
-from src.consumer import handle_message
 from src.claim import compete_for_claim
+from src.consumer import handle_message
 from src.personas import Persona
 
 
@@ -109,7 +107,11 @@ class TestClaimCompetition:
         event = _task_created_event()
 
         winner = await compete_for_claim(
-            event, [alice, carol], publisher, claimed, compression_ratio=100000,
+            event,
+            [alice, carol],
+            publisher,
+            claimed,
+            compression_ratio=100000,
         )
         assert winner is not None
         assert winner.id == "alice"
@@ -121,7 +123,11 @@ class TestClaimCompetition:
         event = _task_created_event(entity_id="task-100", correlation_id="corr-100")
 
         await compete_for_claim(
-            event, [alice], publisher, claimed, compression_ratio=100000,
+            event,
+            [alice],
+            publisher,
+            claimed,
+            compression_ratio=100000,
         )
         publisher.publish.assert_called_once()
         call_args = publisher.publish.call_args
@@ -139,7 +145,11 @@ class TestClaimCompetition:
         event = _task_created_event(entity_id="task-100")
 
         winner = await compete_for_claim(
-            event, [alice], publisher, claimed, compression_ratio=100000,
+            event,
+            [alice],
+            publisher,
+            claimed,
+            compression_ratio=100000,
         )
         assert winner is None
         publisher.publish.assert_not_called()
@@ -151,7 +161,11 @@ class TestClaimCompetition:
         event = _task_created_event()
 
         winner = await compete_for_claim(
-            event, [carol], publisher, claimed, compression_ratio=100000,
+            event,
+            [carol],
+            publisher,
+            claimed,
+            compression_ratio=100000,
         )
         assert winner is None
         publisher.publish.assert_not_called()
@@ -163,7 +177,11 @@ class TestClaimCompetition:
         event = _task_created_event(entity_id="task-200")
 
         await compete_for_claim(
-            event, [alice], publisher, claimed, compression_ratio=100000,
+            event,
+            [alice],
+            publisher,
+            claimed,
+            compression_ratio=100000,
         )
         assert "task-200" in claimed
 
@@ -272,8 +290,8 @@ class TestApprovalEventPayload:
 
 class TestHealthEndpoint:
     async def test_health(self):
-        from src.main import app
         from fastapi.testclient import TestClient
+        from src.main import app
 
         client = TestClient(app)
         resp = client.get("/health")
@@ -287,8 +305,8 @@ class TestResetEndpoint:
     """POST /reset clears _claimed_tasks and returns 200."""
 
     async def test_reset_returns_ok(self):
-        from src.main import app
         from fastapi.testclient import TestClient
+        from src.main import app
 
         client = TestClient(app)
         resp = client.post("/reset")
@@ -298,8 +316,8 @@ class TestResetEndpoint:
         assert data["claimed_tasks_cleared"] is True
 
     async def test_reset_clears_claimed_tasks(self):
-        from src.main import app, _claimed_tasks
         from fastapi.testclient import TestClient
+        from src.main import _claimed_tasks, app
 
         # Add items to _claimed_tasks
         _claimed_tasks.add("task-aaa")
@@ -316,8 +334,8 @@ class TestRerunAfterReset:
     """After claiming, resetting, and re-submitting the same event, it dispatches."""
 
     async def test_rerun_dispatches_after_reset(self):
-        from src.main import app, _claimed_tasks
         from fastapi.testclient import TestClient
+        from src.main import _claimed_tasks, app
 
         # 1. Add entity_id to claimed set (simulating a prior claim)
         _claimed_tasks.add("task-001")

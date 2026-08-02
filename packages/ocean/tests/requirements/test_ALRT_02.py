@@ -6,10 +6,10 @@ Source-inspection + unit tests verifying:
 - alert_card accepts fp_rate param and renders warning when >= 0.3
 - Consumer passes fp_rate through to alert_card
 """
+
 from __future__ import annotations
 
 import importlib.util
-import json
 import sys
 from pathlib import Path
 
@@ -54,7 +54,7 @@ class TestSourceInspection:
         source = CONSUMER_PATH.read_text()
         # Check that fp_rate is extracted from payload AND passed to alert_card
         assert "fp_rate" in source, "fp_rate missing from consumer.py"
-        assert 'fp_rate=fp_rate' in source, "fp_rate not passed to alert_card"
+        assert "fp_rate=fp_rate" in source, "fp_rate not passed to alert_card"
 
     def test_fp_rate_warning_threshold(self):
         """cards.py must use 0.3 as the FP rate warning threshold."""
@@ -64,8 +64,7 @@ class TestSourceInspection:
     def test_fp_rate_cold_start_none(self):
         """alerts.py must check total > 0 to avoid division by zero on cold start."""
         source = ALERTS_PATH.read_text()
-        assert "fp_total > 0" in source or "total > 0" in source, \
-            "Cold start guard (total > 0) missing from alerts.py"
+        assert "fp_total > 0" in source or "total > 0" in source, "Cold start guard (total > 0) missing from alerts.py"
 
 
 # ---------------------------------------------------------------------------

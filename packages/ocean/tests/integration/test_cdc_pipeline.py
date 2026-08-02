@@ -7,6 +7,7 @@ Proves:
 
 Requires Docker (MongoDB 7, Redpanda, Postgres via testcontainers).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -36,6 +37,7 @@ CREATE TABLE IF NOT EXISTS cdc_resume_tokens (
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _consume_one(bootstrap_servers: str, topic: str, group_suffix: str = "", timeout: float = 15.0) -> dict | None:
     """Consume one message from *topic* with a unique consumer group."""
@@ -109,7 +111,6 @@ async def _make_watcher(
     Temporarily swaps ``sys.modules["src"]`` to point at the mongodb-connector
     ``src`` package, avoiding namespace collisions with graph-projection's ``src``.
     """
-    import importlib
     import os
     import pathlib
     import sys
@@ -238,6 +239,7 @@ async def _make_manager(
 # Tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 class TestCDCPipeline:
     """Prove the full CDC pipeline: MongoDB → Watcher → Kafka topic."""
@@ -264,7 +266,10 @@ class TestCDCPipeline:
 
         # Create watcher components
         watcher, shutdown_event, engine, session_factory, mongo_client = await _make_watcher(
-            mongodb_uri, bootstrap_servers, async_pg_url, engine=engine,
+            mongodb_uri,
+            bootstrap_servers,
+            async_pg_url,
+            engine=engine,
         )
 
         # Start watcher as background task
@@ -287,7 +292,11 @@ class TestCDCPipeline:
             # Consume from topic in a thread (confluent-kafka consumer is sync)
             loop = asyncio.get_running_loop()
             event = await loop.run_in_executor(
-                None, _consume_one, bootstrap_servers, "ocean.patient-state", "t1",
+                None,
+                _consume_one,
+                bootstrap_servers,
+                "ocean.patient-state",
+                "t1",
             )
 
             # -- Assertions --
@@ -355,7 +364,10 @@ class TestCDCPipeline:
 
         # ---- Phase 1: Start watcher, insert doc A, consume event A, stop ----
         watcher1, shutdown1, engine, sf1, mongo1 = await _make_watcher(
-            mongodb_uri, bootstrap_servers, async_pg_url, engine=engine,
+            mongodb_uri,
+            bootstrap_servers,
+            async_pg_url,
+            engine=engine,
             topic=_RESUME_TOPIC,
         )
         task1 = asyncio.create_task(watcher1.watch(shutdown1))
@@ -372,7 +384,11 @@ class TestCDCPipeline:
 
         loop = asyncio.get_running_loop()
         event_a = await loop.run_in_executor(
-            None, _consume_one, bootstrap_servers, _RESUME_TOPIC, "resume-a",
+            None,
+            _consume_one,
+            bootstrap_servers,
+            _RESUME_TOPIC,
+            "resume-a",
         )
         assert event_a is not None, "Event A not consumed"
         assert event_a["entity_id"] == "patient-A"
@@ -405,7 +421,10 @@ class TestCDCPipeline:
 
         # ---- Phase 3: Restart watcher, consume event B only ----
         watcher2, shutdown2, engine, sf2, mongo3 = await _make_watcher(
-            mongodb_uri, bootstrap_servers, async_pg_url, engine=engine,
+            mongodb_uri,
+            bootstrap_servers,
+            async_pg_url,
+            engine=engine,
             topic=_RESUME_TOPIC,
         )
         task2 = asyncio.create_task(watcher2.watch(shutdown2))
@@ -417,7 +436,11 @@ class TestCDCPipeline:
             # Phase 1 produced event A; Phase 3 (restarted watcher) should produce
             # ONLY event B (resumed from saved token, not from beginning).
             events = await loop.run_in_executor(
-                None, _consume_all, bootstrap_servers, _RESUME_TOPIC, "resume-all",
+                None,
+                _consume_all,
+                bootstrap_servers,
+                _RESUME_TOPIC,
+                "resume-all",
             )
 
             entity_ids = [e["entity_id"] for e in events]
@@ -467,7 +490,10 @@ class TestCDCPipeline:
 
         # Build manager for all 9 collections
         manager, shutdown_event, engine, mongo_client = await _make_manager(
-            mongodb_uri, bootstrap_servers, async_pg_url, engine=engine,
+            mongodb_uri,
+            bootstrap_servers,
+            async_pg_url,
+            engine=engine,
             topic=_MULTI_TOPIC,
         )
 
@@ -486,7 +512,13 @@ class TestCDCPipeline:
                 "activity": {"persona_id": "p-activity", "lastReadingAt": "2026-01-01T00:00:00Z"},
                 "provider_protocols": {"persona_id": "p-protocols", "adherenceRate": 0.95},
                 "patient_care_plans": {"persona_id": "p-careplans", "problem_list": [{"updated_at": "2026-01-01"}]},
-                "patient_note": {"persona_id": "p-notes", "pendingEmrNotes": 2, "is_interaction": True, "provider": "dr-x", "interaction": True},
+                "patient_note": {
+                    "persona_id": "p-notes",
+                    "pendingEmrNotes": 2,
+                    "is_interaction": True,
+                    "provider": "dr-x",
+                    "interaction": True,
+                },
                 "monitoring_time_raw": {"persona_id": "p-monitoring", "lastPocarOpenedAt": "2026-01-01T00:00:00Z"},
                 "persona": {"personaID": "p-persona", "providerDetails": {"program": "RPM"}},
                 "persona.dashboard_details": {"persona_id": "p-dashboard", "billableMinutesMtd": 25},
@@ -498,7 +530,12 @@ class TestCDCPipeline:
             # Consume all events with a generous timeout for 9 change streams
             loop = asyncio.get_running_loop()
             events = await loop.run_in_executor(
-                None, _consume_all, bootstrap_servers, _MULTI_TOPIC, "multi", 25.0,
+                None,
+                _consume_all,
+                bootstrap_servers,
+                _MULTI_TOPIC,
+                "multi",
+                25.0,
             )
 
             # ---- Assertions ----
@@ -525,9 +562,7 @@ class TestCDCPipeline:
                 payload = evt["payload"]
                 feature_keys = set(payload.get("features", {}).keys())
                 phi_overlap = feature_keys & _PHI_FIELD_NAMES
-                assert phi_overlap == set(), (
-                    f"PHI fields leaked in {payload['collection']} event: {phi_overlap}"
-                )
+                assert phi_overlap == set(), f"PHI fields leaked in {payload['collection']} event: {phi_overlap}"
 
         finally:
             shutdown_event.set()

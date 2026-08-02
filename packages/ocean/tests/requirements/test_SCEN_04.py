@@ -4,6 +4,7 @@ Requirement: The edge_cases scenario includes non-anomalous signals for false
 positive testing, concurrent sim_hours for claim competition, a CRITICAL
 severity for retry-eligible path, and escalation chain signal types.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -16,7 +17,8 @@ _SCENARIO_PATH = _SIM_DRIVER / "scenarios" / "edge_cases.yaml"
 
 # Import models from sim-driver without polluting sys.path
 _spec = importlib.util.spec_from_file_location(
-    "sim_driver_models", _SIM_DRIVER / "src" / "models.py",
+    "sim_driver_models",
+    _SIM_DRIVER / "src" / "models.py",
 )
 _mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
@@ -54,15 +56,14 @@ def test_at_least_three_concurrent_sim_hours():
     """At least 3 patients share the same sim_hour (concurrent claim competition)."""
     scenario = _load_scenario()
     from collections import Counter
+
     hour_counts = Counter()
     for patient in scenario.patients:
         for signal in patient.signals:
             if signal.anomalous:
                 hour_counts[signal.sim_hour] += 1
     max_concurrent = max(hour_counts.values()) if hour_counts else 0
-    assert max_concurrent >= 3, (
-        f"Max concurrent anomalous signals at same sim_hour is {max_concurrent}, need >= 3"
-    )
+    assert max_concurrent >= 3, f"Max concurrent anomalous signals at same sim_hour is {max_concurrent}, need >= 3"
 
 
 def test_has_critical_severity_for_retry():
@@ -82,11 +83,7 @@ def test_has_urgent_non_glucose_spo2_for_escalation():
     found = False
     for patient in scenario.patients:
         for signal in patient.signals:
-            if (
-                signal.anomalous
-                and signal.severity_hint == "URGENT"
-                and signal.type not in ("glucose", "spo2")
-            ):
+            if signal.anomalous and signal.severity_hint == "URGENT" and signal.type not in ("glucose", "spo2"):
                 found = True
                 break
     assert found, "No URGENT non-glucose/spo2 signal found for escalation path"

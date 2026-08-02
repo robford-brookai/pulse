@@ -1,4 +1,5 @@
 """Tests for POCAR normalizer — PHI denylist, idempotency, field mapping."""
+
 from __future__ import annotations
 
 import pytest

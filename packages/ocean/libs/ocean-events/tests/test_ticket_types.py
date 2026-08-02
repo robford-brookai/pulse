@@ -1,4 +1,5 @@
 """Tests for ticket-related types, entity, and priority unification."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -253,7 +254,10 @@ class TestExports:
         )
 
         all_types = [
-            TicketCategory, TicketStatus, TicketPriority,
-            WaitingReason, CATEGORY_PREFIXES,
+            TicketCategory,
+            TicketStatus,
+            TicketPriority,
+            WaitingReason,
+            CATEGORY_PREFIXES,
         ]
         assert all(t is not None for t in all_types)
