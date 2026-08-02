@@ -77,5 +77,10 @@ jobs:
           version: 3.x
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+      # Lockfile guard (DNA-782): the mkdocs 1.x stack is pinned; fail fast if the lock
+      # drifted or resolved a successor fork (properdocs, zensical).
+      - name: Guard the docs dependency lock
+        run: task docs:lock-guard
+
       - name: Check if documentation can be built
         run: task docs:build

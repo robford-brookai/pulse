@@ -147,6 +147,7 @@ tasks:
       - task: typecheck
       - task: test
       - task: workflow:lint
+      - task: docs:lock-guard
       - task: docs:build
 
   pre-commit:
@@ -173,6 +174,15 @@ tasks:
     desc: Build the docs strictly (what CI runs)
     cmds:
       - uv run mkdocs build -s
+
+  docs:lock-guard:
+    desc: Fail if the lock drifted from pyproject or contains mkdocs-successor forks (DNA-782)
+    # MkDocs upstream is fractured — v2 is an incompatible rewrite that may ship under the same
+    # PyPI name, and some plugin releases pull successor forks (properdocs, zensical)
+    # transitively. pyproject.toml caps the majors; this guards the resolved lock.
+    cmds:
+      - uv lock --check
+      - '! grep -Eq ''name = "(properdocs|zensical)"'' uv.lock'
 
   # --- 7. Spec lifecycle (OpenSpec) ---
   # Alphabetical, per the listing convention. Workflow order is init, validate, status, archive.

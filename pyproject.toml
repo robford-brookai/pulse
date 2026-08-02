@@ -36,9 +36,13 @@ dev = [
     # transitive mkdocs dependency; tomllib is stdlib from 3.11 and CI tests 3.10.
     "pyyaml>=6.0",
     "tomli>=2.0; python_version < '3.11'",
-    "mkdocs>=1.6.1",
-    "mkdocs-material>=9.7.6",
-    "mkdocstrings[python]>=1.0.3",
+    # The mkdocs stack is pinned to its 1.x-era majors (DNA-782): mkdocs v2 is a ground-up
+    # rewrite with no plugin system or migration path that may ship to PyPI under the same
+    # name, and some plugin releases pull successor forks (properdocs) transitively.
+    # `task docs:lock-guard` enforces the lock side of this.
+    "mkdocs>=1.6.1,<2.0",
+    "mkdocs-material>=9.7.6,<10",
+    "mkdocstrings[python]>=1.0.3,<2",
     "boto3-stubs[events]>=1.42.0",
 ]
 
