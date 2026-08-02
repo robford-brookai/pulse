@@ -30,10 +30,14 @@ def upgrade() -> None:
             "  snoozed_at TIMESTAMPTZ NOT NULL DEFAULT now(),"
             "  snooze_until TIMESTAMPTZ NOT NULL,"
             "  reason TEXT,"
-            "  active BOOLEAN DEFAULT true,"
-            "  UNIQUE(alert_id) WHERE (active)"  # partial unique index — not a bare UNIQUE
+            "  active BOOLEAN DEFAULT true"
             ")"
         )
+    )
+    # One live snooze per alert. A partial constraint has no inline CREATE TABLE
+    # form in Postgres — it is only ever a separate CREATE UNIQUE INDEX.
+    op.execute(
+        sa.text("CREATE UNIQUE INDEX alert_snoozes_alert_id_active_key ON alert_snoozes (alert_id) WHERE active")
     )
 
 
