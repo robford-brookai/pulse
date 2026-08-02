@@ -185,6 +185,36 @@ Run once per workstation, receipt the results on a Linear issue before any brook
 
 H1–H4 are the adoption gate. H5 is standing policy. H6–H7 are per-session discipline.
 
+**Enforced at dispatch.** `scripts/dispatch_tasks.py` refuses to release work orders unless
+`.orca/hardening-receipt.json` records H1–H4 all `pass` and is under 90 days old. The receipt is
+per-workstation, so `.orca/` is gitignored and the gate is never satisfied by inheriting someone
+else's file. `unverified` blocks exactly as `fail` does — a check nobody could complete is not a
+check that passed.
+
+```json
+{
+  "workstation": "<name>",
+  "audited": "YYYY-MM-DD",
+  "issue": "https://linear.app/.../DNA-777",
+  "checks": {"H1": "pass", "H2": "pass", "H3": "pass", "H4": "pass",
+             "H5": "pass", "H6": "pass", "H7": "pass"}
+}
+```
+
+H4 is additionally checked **live**, against `settings.agentDefaultArgs` in Orca's profile store,
+because a receipt records what was true when someone looked and that one setting silently re-arms
+every worktree afterwards. Orca ships a bypass default for all 24 agent types it knows —
+`--dangerously-skip-permissions`, `--yolo`, `--trust-all-tools` and so on — so this is a default
+to be turned off, not an accident to be spotted. A live bypass blocks dispatch even with a clean
+receipt.
+
+`--skip-hardening` releases anyway and prints what was skipped. It exists for a deliberate,
+receipted exception, and for tests that exercise work-order emission rather than release.
+
+This was added because the gate had been declared in `WORKFLOW.md` and enforced by nothing: two
+worktrees were released straight through it, and the audit that followed (DNA-777) found every
+agent launching with permissions off.
+
 ---
 
 ## Change log

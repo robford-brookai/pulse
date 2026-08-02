@@ -6,7 +6,9 @@ scripts/collect_handoffs.py — on hand-built fixtures.
 Usage: uv run pytest tests/scaffold/cat5_glue_logic.py -v
 """
 
+import json
 import subprocess
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -705,3 +707,97 @@ def test_commits_ahead_survives_an_unresolvable_base_ref(tmp_path: Path) -> None
     repo, wt = _repo_with_worktree(tmp_path, commit_in_worktree=True, handoff=False)
     assert collect.commits_ahead(wt, "origin/nonexistent") is None
     assert collect.delinquent_worktrees([wt], "origin/nonexistent", repo) == []
+
+
+# --- dispatch: G_HARDENING is enforced, not just declared --------------------------------------
+#
+# WORKFLOW.md said `G_HARDENING blocks: [execute]` and nothing checked it. Two worktrees launched
+# straight through, and the audit that followed (DNA-777) found Orca spawning every agent with
+# --dangerously-skip-permissions.
+
+GOOD_RECEIPT = {
+    "audited": "2026-08-02",
+    "issue": "https://linear.app/x/DNA-777",
+    "checks": {"H1": "pass", "H2": "pass", "H3": "pass", "H4": "pass"},
+}
+
+
+def _receipt(tmp_path: Path, payload: dict | str) -> Path:
+    p = tmp_path / "hardening-receipt.json"
+    p.write_text(payload if isinstance(payload, str) else json.dumps(payload))
+    return p
+
+
+def _profile(tmp_path: Path, args: dict) -> Path:
+    p = tmp_path / "orca-data.json"
+    p.write_text(json.dumps({"settings": {"agentDefaultArgs": args}}))
+    return p
+
+
+def test_a_clean_receipt_permits_dispatch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(dispatch, "ORCA_PROFILE", _profile(tmp_path, {"claude": "--verbose"}))
+    assert dispatch.hardening_problems("claude", date(2026, 8, 2), _receipt(tmp_path, GOOD_RECEIPT)) == []
+
+
+def test_a_missing_receipt_blocks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(dispatch, "ORCA_PROFILE", _profile(tmp_path, {}))
+    problems = dispatch.hardening_problems("claude", date(2026, 8, 2), tmp_path / "absent.json")
+    assert any("no G_HARDENING receipt" in p for p in problems)
+
+
+def test_a_failing_adoption_check_blocks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(dispatch, "ORCA_PROFILE", _profile(tmp_path, {}))
+    bad = {**GOOD_RECEIPT, "checks": {**GOOD_RECEIPT["checks"], "H2": "fail", "H3": "unverified"}}
+    problems = dispatch.hardening_problems("claude", date(2026, 8, 2), _receipt(tmp_path, bad))
+    assert any("H2=fail" in p and "H3=unverified" in p for p in problems)
+
+
+def test_unverified_is_not_a_pass(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """H1 and H3 came back 'unverified', which must block exactly as 'fail' does."""
+    monkeypatch.setattr(dispatch, "ORCA_PROFILE", _profile(tmp_path, {}))
+    receipt = {**GOOD_RECEIPT, "checks": {**GOOD_RECEIPT["checks"], "H1": "unverified"}}
+    assert dispatch.hardening_problems("claude", date(2026, 8, 2), _receipt(tmp_path, receipt))
+
+
+def test_a_stale_receipt_blocks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(dispatch, "ORCA_PROFILE", _profile(tmp_path, {}))
+    problems = dispatch.hardening_problems("claude", date(2027, 1, 1), _receipt(tmp_path, GOOD_RECEIPT))
+    assert any("days old" in p for p in problems)
+
+
+def test_a_live_bypass_blocks_even_with_a_clean_receipt(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The receipt records what was true when someone looked. This setting re-arms every worktree."""
+    monkeypatch.setattr(dispatch, "ORCA_PROFILE", _profile(tmp_path, {"claude": "--dangerously-skip-permissions"}))
+    problems = dispatch.hardening_problems("claude", date(2026, 8, 2), _receipt(tmp_path, GOOD_RECEIPT))
+    assert any("H4 live" in p for p in problems)
+
+
+@pytest.mark.parametrize(
+    "arg",
+    [
+        "--yolo",
+        "--auto-approve true",
+        "--dangerously-bypass-approvals-and-sandbox",
+        "--trust-all-tools",
+        "--yes-always",
+        "--dangerously-allow-all",
+        "--unrestricted",
+        "--permission-mode bypassPermissions",
+    ],
+)
+def test_every_shipped_bypass_default_is_recognised(arg: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Orca ships a bypass default for all 24 agent types, not just claude."""
+    monkeypatch.setattr(dispatch, "ORCA_PROFILE", _profile(tmp_path, {"someagent": arg}))
+    assert dispatch.live_agent_bypass("someagent") == arg
+
+
+def test_an_unreadable_profile_is_not_treated_as_safe_or_as_a_bypass(tmp_path: Path) -> None:
+    """Absence of the profile is not evidence of safety, but it is not grounds to block either."""
+    assert dispatch.live_agent_bypass("claude", tmp_path / "nothing.json") is None
+    assert dispatch.live_agent_bypass("claude", _receipt(tmp_path, "not json")) is None
+
+
+def test_a_corrupt_receipt_blocks_rather_than_passing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(dispatch, "ORCA_PROFILE", _profile(tmp_path, {}))
+    problems = dispatch.hardening_problems("claude", date(2026, 8, 2), _receipt(tmp_path, "{ broken"))
+    assert any("unreadable" in p for p in problems)
