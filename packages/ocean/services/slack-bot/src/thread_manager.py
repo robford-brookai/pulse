@@ -9,11 +9,29 @@ from __future__ import annotations
 
 import asyncio
 import random
+from datetime import datetime
 
 import sqlalchemy as sa
 import structlog
 
 log = structlog.get_logger()
+
+
+def parse_event_time(event_ts) -> datetime | None:
+    """Parse an envelope timestamp into a datetime, or None if it is unusable.
+
+    Only event time is accepted. A caller that cannot supply one gets None back
+    and must not substitute a processing-time value: under reordering such a
+    value encodes arrival order and re-encodes the bug the guard exists to fix.
+    """
+    if not event_ts:
+        return None
+    if isinstance(event_ts, datetime):
+        return event_ts
+    try:
+        return datetime.fromisoformat(str(event_ts).replace("Z", "+00:00"))
+    except ValueError:
+        return None
 
 
 class ThreadManager:
@@ -25,19 +43,58 @@ class ThreadManager:
         self._batches: dict[str, list[dict]] = {}
         self._timers: dict[str, asyncio.Task] = {}
 
-    async def store_parent_message(self, task_id: str, channel: str, message_ts: str) -> None:
+    # -----------------------------------------------------------------
+    # Sequence guard (task 3.5) — see infra/postgres/versions/0019
+    # -----------------------------------------------------------------
+
+    async def _advance_sequence(self, key_column: str, key: str, event_ts) -> bool:
+        """Compare-and-swap slack_messages.last_event_ts; True if this event is the newest.
+
+        One statement, so concurrent pollers cannot both decide they are newest.
+        A False return means an event with a later event time has already been
+        applied to this message and the caller's external effect is stale.
+        """
+        parsed = parse_event_time(event_ts)
+        if parsed is None:
+            # No ordering signal. Apply, and leave last_event_ts alone rather
+            # than writing a value that would order by arrival.
+            log.warning("sequence_guard_no_event_time", key_column=key_column, key=key)
+            return True
+
+        async with self._session_maker() as session:
+            result = await session.execute(
+                sa.text(
+                    "UPDATE slack_messages SET last_event_ts = :event_ts, updated_at = now() "
+                    f"WHERE {key_column} = :key "
+                    "AND (last_event_ts IS NULL OR last_event_ts < :event_ts)"
+                ),
+                {"event_ts": parsed, "key": key},
+            )
+            await session.commit()
+        return bool(result.rowcount)
+
+    async def advance_task_sequence(self, task_id: str, event_ts) -> bool:
+        """Sequence guard for a task's stored parent message."""
+        return await self._advance_sequence("task_id", task_id, event_ts)
+
+    async def advance_ticket_sequence(self, ticket_id: str, event_ts) -> bool:
+        """Sequence guard for a ticket's stored parent message."""
+        return await self._advance_sequence("ticket_id", ticket_id, event_ts)
+
+    async def store_parent_message(self, task_id: str, channel: str, message_ts: str, event_ts=None) -> None:
         """INSERT parent message into slack_messages (thread_ts = message_ts)."""
         async with self._session_maker() as session:
             await session.execute(
                 sa.text(
-                    "INSERT INTO slack_messages (task_id, channel, message_ts, thread_ts) "
-                    "VALUES (:task_id, :channel, :message_ts, :thread_ts)"
+                    "INSERT INTO slack_messages (task_id, channel, message_ts, thread_ts, last_event_ts) "
+                    "VALUES (:task_id, :channel, :message_ts, :thread_ts, :last_event_ts)"
                 ),
                 {
                     "task_id": task_id,
                     "channel": channel,
                     "message_ts": message_ts,
                     "thread_ts": message_ts,
+                    "last_event_ts": parse_event_time(event_ts),
                 },
             )
             await session.commit()
@@ -134,20 +191,21 @@ class ThreadManager:
     # Ticket-specific methods (Phase 17) — use ticket_id column
     # -----------------------------------------------------------------
 
-    async def store_ticket_parent(self, ticket_id: str, channel: str, message_ts: str) -> None:
+    async def store_ticket_parent(self, ticket_id: str, channel: str, message_ts: str, event_ts=None) -> None:
         """INSERT parent message for a ticket into slack_messages."""
         async with self._session_maker() as session:
             await session.execute(
                 sa.text(
                     "INSERT INTO slack_messages "
-                    "(task_id, ticket_id, channel, message_ts, thread_ts) "
-                    "VALUES ('', :ticket_id, :channel, :message_ts, :thread_ts)"
+                    "(task_id, ticket_id, channel, message_ts, thread_ts, last_event_ts) "
+                    "VALUES ('', :ticket_id, :channel, :message_ts, :thread_ts, :last_event_ts)"
                 ),
                 {
                     "ticket_id": ticket_id,
                     "channel": channel,
                     "message_ts": message_ts,
                     "thread_ts": message_ts,
+                    "last_event_ts": parse_event_time(event_ts),
                 },
             )
             await session.commit()
@@ -230,8 +288,12 @@ class ThreadManager:
         )
         log.info("ticket_thread_reply_posted", ticket_id=ticket_id, batch_size=len(updates))
 
-    async def update_parent_status(self, task_id: str, new_status: str) -> None:
-        """Update the parent message header with a status prefix."""
+    async def update_parent_status(self, task_id: str, new_status: str, event_ts=None) -> None:
+        """Update the parent message header with a status prefix.
+
+        Guarded on the stored event time: a status carried by an event older
+        than the one already applied is dropped, not written back to Slack.
+        """
         async with self._session_maker() as session:
             result = await session.execute(
                 sa.text("SELECT channel, message_ts FROM slack_messages WHERE task_id = :task_id"),
@@ -253,6 +315,11 @@ class ThreadManager:
             channel = row.channel
             message_ts = row.message_ts
 
+        if not await self.advance_task_sequence(task_id, event_ts):
+            log.info("stale_task_status_dropped", task_id=task_id, status=new_status, event_ts=str(event_ts))
+            return
+
+        async with self._session_maker() as session:
             # Update status in DB
             await session.execute(
                 sa.text("UPDATE slack_messages SET status = :status, updated_at = now() WHERE task_id = :task_id"),
