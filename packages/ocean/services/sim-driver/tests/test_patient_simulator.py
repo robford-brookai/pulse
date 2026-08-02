@@ -53,7 +53,7 @@ class TestEventTypes:
 
         assert pub.publish.call_count == 1
         topic, event = pub.publish.call_args_list[0].args
-        assert topic == "ocean.signals"
+        assert topic == "signals"
         assert event["event_type"] == "signal.received"
 
     @pytest.mark.asyncio
@@ -69,7 +69,7 @@ class TestEventTypes:
         assert pub.publish.call_count == 2
         topics = [call.args[0] for call in pub.publish.call_args_list]
         types = [call.args[1]["event_type"] for call in pub.publish.call_args_list]
-        assert topics == ["ocean.signals", "ocean.alerts"]
+        assert topics == ["signals", "alerts"]
         assert types == ["signal.received", "alert.created"]
 
     @pytest.mark.asyncio
