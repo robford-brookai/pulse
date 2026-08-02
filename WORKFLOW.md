@@ -201,13 +201,15 @@ ade_workflow:
       next: propose
 
   edit_protocol:
-    - workflow changes are changes: edit this YAML via its own OpenSpec change (meta-change),
-      or for single-step tweaks a direct PR touching only WORKFLOW.md
-    - task workflow:lint validates schema, step-id references, gate references,
-      and that every status string in state_resolution and linear_status exists
-      in the linear.team status set
-    - prose and diagram regenerate from YAML; CI fails on rendering drift
-    - step ids are stable identifiers — add/remove steps freely, never repurpose an id
+    - "workflow changes are changes: edit this YAML via its own OpenSpec change
+       (meta-change), or for single-step tweaks a direct PR touching only WORKFLOW.md"
+    - "task workflow:lint validates schema, step-id references, gate references, lane
+       excluded_steps, and that every status string in state_resolution and linear_status
+       is one linear.statuses declares — `--linear` checks that set against the live team"
+    - "prose and diagram are projections: workflow:lint fails if either names a step or gate
+       the YAML does not define, or omits a step it does. The prose is editorial and is not
+       machine-generated — see the note under renderings"
+    - "step ids are stable identifiers — add/remove steps freely, never repurpose an id"
 ```
 
 ## 3. Prose walkthrough (projection of §2)
