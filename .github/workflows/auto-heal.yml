@@ -10,48 +10,143 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'failure' }}
     outputs:
-      healthy: ${{ steps.health.outputs.healthy }}
+      healthy: ${{ steps.aggregate.outputs.healthy }}
     steps:
       - name: Check out
         uses: actions/checkout@v4
 
-      - name: Set up environment
+      - name: Diagnose Python 3.10
+        id: d310
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: '3.10'
+          uv-version: '0.10.12'
+        continue-on-error: true
+
+      - name: Check imports 3.10
+        id: ci310
+        run: |
+          python - <<'PY'
+          import importlib, sys
+          try:
+              importlib.import_module('pydantic')
+              importlib.import_module('uvicorn')
+              print('OK')
+          except Exception as e:
+              print('FAIL', e)
+              exit(1)
+          PY
+        continue-on-error: true
+
+      - name: Diagnose Python 3.11
+        id: d311
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: '3.11'
+          uv-version: '0.10.12'
+        continue-on-error: true
+
+      - name: Check imports 3.11
+        id: ci311
+        run: |
+          python - <<'PY'
+          import importlib, sys
+          try:
+              importlib.import_module('pydantic')
+              importlib.import_module('uvicorn')
+              print('OK')
+          except Exception as e:
+              print('FAIL', e)
+              exit(1)
+          PY
+        continue-on-error: true
+
+      - name: Diagnose Python 3.12
+        id: d312
         uses: ./.github/actions/setup-python-env
         with:
           python-version: '3.12'
           uv-version: '0.10.12'
+        continue-on-error: true
 
-      - id: health
-        name: Run diagnostics
+      - name: Check imports 3.12
+        id: ci312
         run: |
-          set -e
-          echo "Starting diagnostics"
-          tries=0
-          until [ $tries -ge 3 ]; do
-            uv sync --all-packages --frozen && break
-            tries=$((tries+1))
-            echo "uv sync failed, retrying ($tries/3)..."
-            sleep $((tries * 5))
-          done
-          if [ $tries -ge 3 ]; then
-            echo "healthy=false" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          echo "Checking imports"
           python - <<'PY'
           import importlib, sys
-          ok = True
-          for mod in ("pydantic", "uvicorn"):
-              try:
-                  importlib.import_module(mod)
-              except Exception:
-                  ok = False
-          if not ok:
-              raise SystemExit(1)
+          try:
+              importlib.import_module('pydantic')
+              importlib.import_module('uvicorn')
+              print('OK')
+          except Exception as e:
+              print('FAIL', e)
+              exit(1)
           PY
+        continue-on-error: true
 
-          echo "healthy=true" >> $GITHUB_OUTPUT
+      - name: Diagnose Python 3.13
+        id: d313
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: '3.13'
+          uv-version: '0.10.12'
+        continue-on-error: true
+
+      - name: Check imports 3.13
+        id: ci313
+        run: |
+          python - <<'PY'
+          import importlib, sys
+          try:
+              importlib.import_module('pydantic')
+              importlib.import_module('uvicorn')
+              print('OK')
+          except Exception as e:
+              print('FAIL', e)
+              exit(1)
+          PY
+        continue-on-error: true
+
+      - name: Diagnose Python 3.14
+        id: d314
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: '3.14'
+          uv-version: '0.10.12'
+        continue-on-error: true
+
+      - name: Check imports 3.14
+        id: ci314
+        run: |
+          python - <<'PY'
+          import importlib, sys
+          try:
+              importlib.import_module('pydantic')
+              importlib.import_module('uvicorn')
+              print('OK')
+          except Exception as e:
+              print('FAIL', e)
+              exit(1)
+          PY
+        continue-on-error: true
+
+      - name: Aggregate diagnostics
+        id: aggregate
+        run: |
+          set -e
+          fail_count=0
+          for id in ci310 ci311 ci312 ci313 ci314; do
+            outcome=${{ steps[id].outcome }}
+            echo "$id -> $outcome"
+            if [ "${{ steps[id].outcome }}" != "success" ]; then
+              fail_count=$((fail_count+1))
+            fi
+          done
+          if [ "$fail_count" -eq 0 ]; then
+            echo "healthy=true" >> $GITHUB_OUTPUT
+          else
+            echo "healthy=false" >> $GITHUB_OUTPUT
+          fi
         shell: bash
 
   rerun:
