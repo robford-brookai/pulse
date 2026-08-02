@@ -11,7 +11,7 @@ from httpx import ASGITransport, AsyncClient
 
 @pytest.fixture
 def mock_publisher():
-    """AsyncMock publisher that records publish() calls without touching Redpanda."""
+    """AsyncMock publisher that records publish() calls without touching the bus."""
     pub = AsyncMock()
     pub.publish = AsyncMock(return_value=None)
     return pub
