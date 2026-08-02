@@ -494,3 +494,140 @@ def test_lint_exits_zero_when_the_live_check_is_skipped(tmp_path: Path, capsys: 
     captured = capsys.readouterr()
     assert "SKIPPED" in captured.err, "a skipped live check must say so"
     assert "SKIPPED" in captured.out, "the summary must not claim the live check ran"
+
+
+# --- linear_sync: the repo is the record, Linear is a one-directional projection ---------------
+#
+# The status rules are the load-bearing part. Sync owns the unstarted band and nothing else; a
+# sync that writes `In Progress` steals a band from the agents that own it, and the damage reads
+# as an agent misbehaving rather than a tool overreaching.
+
+linear_sync = load_script("linear_sync.py")
+
+SYNC_TASKS_MD = """\
+# Tasks
+
+## 1. Group
+
+- [ ] 1.1 Rotate credentials  `[lane: destructive_ops]`
+- [ ] 1.2 Import `robford-brookai/ocean` at `7bc9d2c`  `[lane: repo_change]`
+- [ ] 1.3 Plain task  `[lane: repo_change]`
+"""
+
+
+def _synced(tmp_path: Path) -> tuple[list[dict], list[dict]]:
+    tasks = _parse(tmp_path, SYNC_TASKS_MD)
+    orders = tmp_path / "wo" / "c"
+    orders.mkdir(parents=True)
+    for task in tasks:
+        (orders / f"{task['task_id']}.md").write_text(f"body for {task['key']}\n")
+    return tasks, linear_sync.desired_subissues("c", tasks, tmp_path / "wo")
+
+
+def test_out_of_lane_tasks_are_not_synced(tmp_path: Path) -> None:
+    """destructive_ops runs on the Open Engine queue, which has its own status vocabulary."""
+    _, desired = _synced(tmp_path)
+    assert [d["key"] for d in desired] == ["1.2", "1.3"]
+
+
+def test_issue_title_keeps_inline_code_and_does_not_repeat_the_key(tmp_path: Path) -> None:
+    """Splitting the title at the first backtick truncated it to one word."""
+    _, desired = _synced(tmp_path)
+    title = next(d["title"] for d in desired if d["key"] == "1.2")
+    assert title == "1.2 Import `robford-brookai/ocean` at `7bc9d2c`"
+    assert not title.startswith("1.2 1.2")
+
+
+def test_description_is_the_work_order_body(tmp_path: Path) -> None:
+    _, desired = _synced(tmp_path)
+    assert desired[0]["description"] == "body for 1.2\n"
+
+
+def test_sync_refuses_when_the_work_order_is_missing(tmp_path: Path) -> None:
+    tasks = _parse(tmp_path, SYNC_TASKS_MD)
+    with pytest.raises(linear_sync.SyncError, match="task dispatch"):
+        linear_sync.desired_subissues("c", tasks, tmp_path / "absent")
+
+
+def test_plan_creates_parent_and_children_on_an_empty_workspace(tmp_path: Path) -> None:
+    _, desired = _synced(tmp_path)
+    ops = linear_sync.plan(desired, {}, parent_exists=False, change="c")
+    assert [o["kind"] for o in ops] == ["create_parent", "create_sub", "create_sub"]
+
+
+def test_plan_is_a_no_op_when_linear_already_matches(tmp_path: Path) -> None:
+    _, desired = _synced(tmp_path)
+    existing = {
+        d["key"]: {"identifier": f"DNA-{i}", "title": d["title"], "description": d["description"], "status": "Todo"}
+        for i, d in enumerate(desired)
+    }
+    assert linear_sync.plan(desired, existing, parent_exists=True, change="c") == []
+
+
+def test_plan_updates_a_sub_issue_whose_description_drifted(tmp_path: Path) -> None:
+    """A sub-issue edited by hand in Linear is drift; the file wins."""
+    _, desired = _synced(tmp_path)
+    existing = {
+        desired[0]["key"]: {
+            "identifier": "DNA-1",
+            "title": desired[0]["title"],
+            "description": "someone edited this in the UI",
+            "status": "Todo",
+        }
+    }
+    ops = linear_sync.plan(desired, existing, parent_exists=True, change="c")
+    assert {"kind": "update_sub", "key": "1.2", "id": "DNA-1"} in ops
+
+
+def test_plan_heals_triage_but_touches_no_other_status(tmp_path: Path) -> None:
+    _, desired = _synced(tmp_path)
+
+    def existing_with(status: str) -> dict:
+        return {
+            desired[0]["key"]: {
+                "identifier": "DNA-1",
+                "title": desired[0]["title"],
+                "description": desired[0]["description"],
+                "status": status,
+            }
+        }
+
+    healed = linear_sync.plan(desired, existing_with("Triage"), parent_exists=True, change="c")
+    assert any(o["kind"] == "heal_status" for o in healed)
+
+    for owned in ("In Progress", "Blocked", "In Review", "Done", "Canceled"):
+        ops = linear_sync.plan(desired, existing_with(owned), parent_exists=True, change="c")
+        assert not any(o["kind"] == "heal_status" for o in ops), f"sync tried to move a {owned} issue"
+
+
+def test_plan_reports_orphans_without_deleting_them(tmp_path: Path) -> None:
+    """A task removed from tasks.md leaves an issue behind; say so, do not silently close it."""
+    _, desired = _synced(tmp_path)
+    existing = {"9.9": {"identifier": "DNA-99", "title": "9.9 gone", "description": "", "status": "Todo"}}
+    ops = linear_sync.plan(desired, existing, parent_exists=True, change="c")
+    orphans = [o for o in ops if o["kind"] == "orphan"]
+    assert [o["key"] for o in orphans] == ["9.9"]
+
+
+def test_status_guard_rejects_a_write_outside_the_unstarted_band() -> None:
+    statuses = ["Triage", "Todo", "In Progress", "Done"]
+    linear_sync.assert_status_writes_are_legal([{"kind": "create_sub", "state": "Todo"}], statuses)
+    with pytest.raises(linear_sync.SyncError, match="does not own"):
+        linear_sync.assert_status_writes_are_legal([{"kind": "create_sub", "state": "In Progress"}], statuses)
+
+
+def test_target_comes_from_workflow_md_not_the_api_key(tmp_path: Path) -> None:
+    block, _ = workflow.load(_workflow_md(tmp_path, MINIMAL))
+    assert linear_sync._target(block) == ("DNA", "P")
+
+
+def test_target_refuses_when_no_team_is_declared(tmp_path: Path) -> None:
+    with pytest.raises(linear_sync.SyncError, match="no team"):
+        linear_sync._target({"linear": {"project": "P"}})
+
+
+def test_apply_without_a_key_is_an_error_not_a_silent_no_op(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("LINEAR_API_KEY", raising=False)
+    assert linear_sync._api_key(require=False) == ""
+    with pytest.raises(linear_sync.SyncError, match="LINEAR_API_KEY"):
+        linear_sync._api_key(require=True)

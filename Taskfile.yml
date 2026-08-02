@@ -188,6 +188,13 @@ tasks:
     cmds:
       - uv run python scripts/dispatch_tasks.py --change {{.CHANGE}}
 
+  linear:sync:
+    desc: Project tasks.md into Linear issues (needs CHANGE; plan only unless APPLY=1)
+    # Dry run by default: this writes to a shared system, and the plan it prints is the plan
+    # it would apply. `task linear:sync CHANGE=x APPLY=1` performs the mutations.
+    cmds:
+      - uv run python scripts/linear_sync.py --change {{.CHANGE}} {{if .APPLY}}--apply{{end}}
+
   workflow:lint:
     desc: Validate WORKFLOW.md's executable YAML block (offline; part of `check`)
     cmds:

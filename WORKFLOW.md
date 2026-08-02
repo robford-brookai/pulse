@@ -9,11 +9,11 @@
 > pretending the YAML holds it. What CI enforces is correspondence — no invented steps or gates,
 > no omitted ones. Edit a projection freely; just do not let it contradict the block.
 
-> **Not yet implemented.** One target this document depends on does not exist in `Taskfile.yml`
-> yet: `linear:sync`. The `sync_linear` step cannot run until it is built — create the parent
-> issue and sub-issues by hand until then. Everything else is live today: `task workflow:lint`,
-> `task dispatch CHANGE=<id>`, `task collect CHANGE=<id>`, `task verify CHANGE=<id>`, and
-> `task spec:archive CHANGE=<id>`.
+> **Every target this document names now exists.** `task workflow:lint`,
+> `task linear:sync CHANGE=<id>`, `task dispatch CHANGE=<id>`, `task collect CHANGE=<id>`,
+> `task verify CHANGE=<id>`, `task spec:archive CHANGE=<id>`. Two need credentials and degrade
+> rather than fail without them: `workflow:lint:linear` skips, and `linear:sync` plans without
+> mutating. `linear:sync` is dry-run by default — pass `APPLY=1` to write.
 
 ---
 
