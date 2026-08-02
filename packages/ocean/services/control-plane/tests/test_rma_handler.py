@@ -123,6 +123,28 @@ class TestHandleRmaRequested:
         assert pub_event["payload"]["return_id"] == "ret-001"
 
     @pytest.mark.asyncio
+    async def test_ticket_not_found_raises_for_redelivery(self):
+        """An RMA request whose ticket row has not arrived must not be acknowledged (task 3.8).
+
+        Returning here loses the RMA outright — the consumer commits, the message is gone,
+        and no ticket.rma.failed is emitted. Raising leaves the message for redelivery;
+        6.3's redrive policy bounds the retries into the per-consumer DLQ.
+        """
+        from src.handlers.tickets import PreconditionNotArrived, handle_rma_requested
+
+        session = AsyncMock()
+        result = MagicMock()
+        result.fetchone.return_value = None
+        session.execute = AsyncMock(return_value=result)
+        producer = AsyncMock()
+        event = _make_rma_requested_event()
+
+        with pytest.raises(PreconditionNotArrived):
+            await handle_rma_requested(event, session, producer=producer)
+
+        producer.publish.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_non_device_issue_rejected(self):
         from src.handlers.tickets import handle_rma_requested
 
@@ -225,15 +247,22 @@ class TestHandleReturnStatusUpdate:
         producer.publish.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_no_ticket_id_skipped(self):
-        from src.handlers.tickets import handle_return_status_update
+    async def test_no_ticket_link_raises_for_redelivery(self):
+        """A milestone update whose `returns` row has not arrived must not be acknowledged.
+
+        The row is written by handle_rma_requested while return.updated arrives from a
+        connector, so the race is live (task 3.8). Raising leaves the message for
+        redelivery; a return that never gets a ticket link dead-letters observably.
+        """
+        from src.handlers.tickets import PreconditionNotArrived, handle_return_status_update
 
         session = AsyncMock()
         session.execute = AsyncMock(return_value=_mock_return_ticket_row(ticket_id=None))
         producer = AsyncMock()
         event = _make_return_updated_event(status="shipped")
 
-        await handle_return_status_update(event, session, producer=producer)
+        with pytest.raises(PreconditionNotArrived):
+            await handle_return_status_update(event, session, producer=producer)
 
         producer.publish.assert_not_called()
 
