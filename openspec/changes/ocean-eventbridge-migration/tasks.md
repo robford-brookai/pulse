@@ -131,7 +131,7 @@ raised the collision mid-flight; the original plan declared 3.1–3.5 `parallel:
 - [x] 3.3 [DNA-740] `graph-projection/src/handlers/logistics.py:125` (`device_associations`) — same
       dedup-only predicate, same replacement.
       `[model: opus | deps: 3.0 | lane: repo_change | wave: 2a]`
-- [ ] 3.4 [DNA-741] `graph-projection/src/handlers/signals.py:59` — add a guard to the unguarded
+- [x] 3.4 [DNA-741] `graph-projection/src/handlers/signals.py:59` — add a guard to the unguarded
       `DO UPDATE SET anomalous = true`. Monotonic in effect today; guarded for uniformity so the
       audit's verdict holds by construction rather than by argument.
       `[model: sonnet | deps: 3.0 | lane: repo_change | wave: 2a]`
@@ -259,7 +259,7 @@ shape, Dockerfile, and EKS deployment unchanged. Each records its ordering verdi
       and redelivery creates no duplicate row.
       `[model: sonnet | deps: 7.1 | lane: repo_change | wave: 4]`
 
-## 8. Equivalence gate
+## 8. Wave 4 — equivalence gate
 
 - [ ] 8.1 [DNA-773] Build the equivalence harness: capture graph tables and `audit_log` after a
       `call-simulator` + `sim-driver` run, normalized for wall-clock and random identifiers, and
@@ -271,7 +271,7 @@ shape, Dockerfile, and EKS deployment unchanged. Each records its ordering verdi
       This result gates 9.2.
       `[model: sonnet | deps: 8.1, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 7.1 | lane: repo_change | wave: 4]`
 
-## 9. Out of lane — destructive ops
+## 9. Post-merge — destructive ops (out of lane)
 
 Not dispatched. Open Engine queue (team CCC), operator runbooks with agent-prepared scripts,
 G_APPROVAL comment required before each. Run after merge and verification.
@@ -285,7 +285,7 @@ G_APPROVAL comment required before each. Run after merge and verification.
       commit and a README pointing at `packages/ocean`.
       `[model: fable | deps: 9.2 | lane: destructive_ops | wave: post-merge]`
 
-## 10. Documentation
+## 10. Wave 4 — documentation
 
 - [ ] 10.1 [DNA-775] Record the absorption as an ADR in `docs/adr/`, and update
       `docs/contracts/publishes.md` and `consumes.md` for the transport change.
