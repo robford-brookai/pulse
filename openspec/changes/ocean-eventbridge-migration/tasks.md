@@ -166,7 +166,7 @@ per finding, so each of these tasks has a failing test waiting for it. The D3 au
       both or neither.
       `[model: opus | deps: 3.0, 5.4 | lane: repo_change | wave: 3]`
       `serial: alembic_sequence` — needs a new revision on the shared sequence.
-- [ ] 3.8 `handle_rma_requested` and `handle_return_status_update` each read a row the event being
+- [x] 3.8 `handle_rma_requested` and `handle_return_status_update` each read a row the event being
       processed did not write, and `return` when it is missing — after which the consumer commits
       and the message is gone. That is a lost effect, not a stale write, and no
       `ticket.rma.failed` is emitted, so nothing downstream observes it. **Not the 3.1 treatment:**
