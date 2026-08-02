@@ -346,6 +346,17 @@ shape, Dockerfile, and EKS deployment unchanged. Each records its ordering verdi
       passed, and because it is serial it was holding the whole remaining wave behind a task that
       was not yet runnable. It now depends on all of wave 2c.
 
+- [ ] 6.7 Make the LocalStack stack actually run. 8.2 was the first end-to-end execution of the
+      committed local path and found **every SQS consumer dies silently with `NoRegionError`**:
+      `infra/docker-compose.yml` sets `AWS_REGION`, and botocore 1.40 reads `AWS_DEFAULT_REGION`.
+      8.2 worked around it in its own run config to get the comparison done; the durable fix is
+      6.5's territory and was never in its scope.
+      "Silently" is the important word — the consumer process stays up and `/health` keeps
+      answering, so nothing observes that no event is ever consumed. Fix the env var, and add a
+      smoke assertion that a published event actually reaches its consumer through the local stack,
+      so this cannot regress into the same silence.
+      `[model: sonnet | deps: 6.5, 8.2 | lane: repo_change | wave: 5]`
+
 ## 7. Wave 4 — warehouse path
 
 - [x] 7.1 [DNA-770] Delete `infra/redpanda/connect.yaml` and the `ocean.warehouse-dlq` topic; move warehouse
@@ -366,7 +377,7 @@ shape, Dockerfile, and EKS deployment unchanged. Each records its ordering verdi
       `[model: opus | deps: 6.5 | lane: repo_change | wave: 4]`
       Model `opus`: choosing what to normalize is the whole difficulty — normalize too much and the
       gate proves nothing.
-- [ ] 8.2 [DNA-774] Run the harness against the Kafka path and the LocalStack path and record the comparison.
+- [x] 8.2 [DNA-774] Run the harness against the Kafka path and the LocalStack path and record the comparison.
       This result gates 9.2.
       `[model: sonnet | deps: 8.1, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 7.1 | lane: repo_change | wave: 4]`
 
