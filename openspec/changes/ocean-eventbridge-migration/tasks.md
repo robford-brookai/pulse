@@ -264,7 +264,7 @@ shape, Dockerfile, and EKS deployment unchanged. Each records its ordering verdi
       `[model: sonnet | deps: 2.2, 3.5 | lane: repo_change | wave: 2c]`
 - [x] 5.7 [DNA-763] `services/warehouse-sync/src/main.py` — inline `AIOConsumer` to SQS receive/delete.
       `[model: sonnet | deps: 2.2, 4.13 | lane: repo_change | wave: 2c]`
-- [ ] 5.8 Subscribe `event-store` to **all eleven** live domains. It takes 9 today — `tickets` and
+- [x] 5.8 Subscribe `event-store` to **all eleven** live domains. It takes 9 today — `tickets` and
       `patient-state` are missing — while its own docstring claims "all Ocean topics". 6.2 found
       this and correctly mirrored the code rather than widening it, because widening is a decision,
       not a transcription. **The decision is made: widen it** (Ford, 2026-08-02). An append-only
