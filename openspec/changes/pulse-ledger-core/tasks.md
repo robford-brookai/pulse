@@ -51,11 +51,11 @@ downstream-facing tests and exercised against a local Postgres in service tests.
       Tests: atomicity (no partial write on injected failure); backdate fold order; reversal
       references and preserves history.
       `[model: opus | deps: 3.1 | lane: repo_change | wave: 2]`
-- [ ] 3.3 [DNA-790] Idempotency: D16 key derivation helper in `pulse_core`, unique constraint handling,
+- [x] 3.3 [DNA-790] Idempotency: D16 key derivation helper in `pulse_core`, unique constraint handling,
       replay returns original event id. Tests: replay-after-timeout yields one event; distinct
       logical_time yields two.
       `[model: sonnet | deps: 3.2 | lane: repo_change | wave: 2]`
-- [ ] 3.4 [DNA-791] Auth and attribution: per-writer bearer credentials → `writer_id` = actor; body-actor
+- [x] 3.4 [DNA-791] Auth and attribution: per-writer bearer credentials → `writer_id` = actor; body-actor
       spoof rejected; HMAC middleware present, Twenty route disabled. Tests: spoof attempt;
       credential names from env, never fixtures.
       `[model: opus | deps: 3.2 | lane: repo_change | wave: 2]`
@@ -67,7 +67,7 @@ downstream-facing tests and exercised against a local Postgres in service tests.
 
 ## 4. Wave 3 — reads, client, distribution
 
-- [ ] 4.1 [DNA-793] Read APIs: current-state enumeration (subject_type × state), identity candidate lookup
+- [x] 4.1 [DNA-793] Read APIs: current-state enumeration (subject_type × state), identity candidate lookup
       with (system, value) uniqueness enforcement, review-queue listing. Tests: month-open
       enumeration case; duplicate attach rejected naming the holder; quarantine pending/drained.
       `[model: sonnet | deps: 3.2 | lane: repo_change | wave: 3]`
@@ -79,7 +79,7 @@ downstream-facing tests and exercised against a local Postgres in service tests.
       `consume(handler)` convention (SQS receive/process/delete, event_id dedupe). Tests: each
       classification mapped; handler safe under redelivery.
       `[model: sonnet | deps: 3.3, 3.5 | lane: repo_change | wave: 3]`
-- [ ] 4.4 [DNA-796] Outbox relay worker through `ocean-broker`'s `EventBridgePublisher`: per-subject
+- [x] 4.4 [DNA-796] Outbox relay worker through `ocean-broker`'s `EventBridgePublisher`: per-subject
       sequence order, 5 attempts → DLQ, lag metric. Tests: order across retry; poison row
       dead-letters and relay continues; no publish without commit.
       `[model: opus | deps: 3.2 | lane: repo_change | wave: 3]`
