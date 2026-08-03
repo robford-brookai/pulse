@@ -117,3 +117,9 @@ Constraints these gates enforce, which are easy to break by accident:
   main. Merge with a merge commit, not a squash, whenever a branch carries imported history.
 - Cross-repo integration goes through `docs/contracts/publishes.md` and `consumes.md` — a published
   Snowflake object, API, or released package. Never side-clone another repo into this one.
+- **Ad-hoc markdown goes in `.planning/`** — status reports, analyses, one-off summaries, as
+  `.planning/reports/YYYY-MM-DD-topic.md`. A loose `STATUS.md` or `NOTES.md` at the repo root is
+  blocked on write by a `PreToolUse` hook, so choosing the path afterwards means redoing the file.
+  The trees that already have a home keep it: `design/` for program and architecture docs, `docs/`
+  for published pages, `openspec/` `work_orders/` `handoffs/` for the ADE workflow, and
+  `HANDOFF.md` at a worktree root.
