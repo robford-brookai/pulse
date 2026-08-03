@@ -18,6 +18,7 @@ rather than string-matched. No Docker, no new dependency.
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
 from datetime import UTC, datetime
 
 import pytest
@@ -143,12 +144,14 @@ async def test_started_at_is_event_time(handler_name, db):
 @pytest.mark.asyncio
 async def test_reverse_delivery_reaches_the_same_state_as_in_order(db):
     """event-delivery: reverse-order delivery yields state identical to in-order delivery."""
-    in_order = sqlite3.connect(":memory:")
-    in_order.execute(_CREATE_INTERACTIONS)
-    for event in (STARTED, CONNECTED):
-        await _deliver(_SqliteSession(in_order), event)
-    expected = _row(in_order)
-    in_order.close()
+    # closing() rather than a bare close() below: if a handler or assertion raises, the
+    # connection still has to go, or the leak reappears only on the failure path — the
+    # hardest version of this bug to see.
+    with closing(sqlite3.connect(":memory:")) as in_order:
+        in_order.execute(_CREATE_INTERACTIONS)
+        for event in (STARTED, CONNECTED):
+            await _deliver(_SqliteSession(in_order), event)
+        expected = _row(in_order)
 
     for event in (CONNECTED, STARTED):
         await _deliver(_SqliteSession(db), event)
