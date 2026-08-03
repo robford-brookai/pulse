@@ -2124,6 +2124,7 @@ source = { editable = "." }
 dev = [
     { name = "boto3-stubs", extra = ["events"] },
     { name = "deptry" },
+    { name = "httpx" },
     { name = "mkdocs" },
     { name = "mkdocs-material" },
     { name = "mkdocstrings", extra = ["python"] },
@@ -2143,6 +2144,7 @@ dev = [
 dev = [
     { name = "boto3-stubs", extras = ["events"], specifier = ">=1.42.0" },
     { name = "deptry", specifier = ">=0.25.1" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "mkdocs", specifier = ">=1.6.1,<2.0" },
     { name = "mkdocs-material", specifier = ">=9.7.6,<10" },
     { name = "mkdocstrings", extras = ["python"], specifier = ">=1.0.3,<2" },
@@ -2178,6 +2180,7 @@ version = "0.1.0"
 source = { editable = "packages/pulse-ledger" }
 dependencies = [
     { name = "alembic" },
+    { name = "fastapi" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pulse-core" },
     { name = "sqlalchemy" },
@@ -2186,6 +2189,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.13" },
+    { name = "fastapi", specifier = ">=0.135.1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "pulse-core", editable = "packages/pulse-core" },
     { name = "sqlalchemy", specifier = ">=2.0" },
