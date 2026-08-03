@@ -13,7 +13,7 @@ downstream-facing tests and exercised against a local Postgres in service tests.
 
 ## 1. Wave 0 — schema and scaffold
 
-- [ ] 1.1 [DNA-785] Scaffold `packages/pulse-ledger` and `packages/pulse-core` as workspace members
+- [x] 1.1 [DNA-785] Scaffold `packages/pulse-ledger` and `packages/pulse-core` as workspace members
       (pyproject, uv workspace roots, ruff/mypy/pytest wiring, `TESTED_PATHS` updated honestly).
       `[model: sonnet | deps: — | lane: repo_change | wave: 0]`
       `serial: workspace_roots` — edits root workspace manifest and `Taskfile.yml`.
