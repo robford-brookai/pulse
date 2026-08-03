@@ -61,6 +61,26 @@ Do NOT include:
 - `openlore drift` runs automatically via pre-commit hook — fix drift before pushing.
 - One task = one commit.
 
+### Shipping
+
+Committing is not finishing. When the task is done and `task check` is green, ship it in the same
+session, without being asked:
+
+1. `git push -u origin <branch>`
+2. `gh pr create --base main` — **ready for review. Never `--draft`.** A draft withholds finished
+   work from the human merge review that is supposed to consume it, and reads as "still working"
+   when nobody is. Draft is only for work you are genuinely stopping mid-task.
+3. `gh pr checks --watch` until every check passes. **Red CI is yours to fix, not the reviewer's
+   to discover.** A green `task check` should mean green CI — if CI fails anyway, that gap is
+   itself the bug, so fix it and note it in `docs/ci-lessons.md`.
+4. Report the PR number and the check results.
+
+Do not merge, and do not push to `main` — `merge` is a human step (`WORKFLOW.md`). You are opening
+the surface review reads, not landing the work.
+
+**A finished task parked at a local commit is an unfinished task.** If something genuinely blocks
+shipping (no remote, an explicit instruction not to open a PR), say so and say where the work is.
+
 ### When to Stop
 
 - If the spec is wrong: stop, write to HANDOFF.md under `## Design Drift`, finish.

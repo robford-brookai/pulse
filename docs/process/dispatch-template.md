@@ -59,7 +59,8 @@ property tests, schema round-trips named in Task, never prose criteria>
 
 ## Done means
 <Terminal state readable from the diff and CI alone.> Plus, always:
-HANDOFF.md written per §5, single commit, worktree pushed.
+HANDOFF.md written per §5, single commit, worktree pushed,
+PR opened against main ready for review (never --draft), CI checks green.
 ```
 
 Field-by-field semantics where they differ from the classic five-field contract:
@@ -68,7 +69,7 @@ Field-by-field semantics where they differ from the classic five-field contract:
 - **Task** items are file-level or they are defects. Test artifacts are Task items, not afterthoughts.
 - **Out of scope** does double duty in the parallel world: collision guard against sibling tasks in the same wave, and drift guard against the next change. Both entries cite an ID.
 - **Verification** must pass the tier-adjusted gaming pass (§3). `task lint && task test` is the floor, never the whole gate for anything non-trivial.
-- **Done means** is what the human reads at Phase 8 merge review. If it cannot be confirmed from the diff, CI checks, and HANDOFF alone, it is misfiled Context.
+- **Done means** is what the human reads at Phase 8 merge review. If it cannot be confirmed from the diff, CI checks, and HANDOFF alone, it is misfiled Context. It always terminates at a green, reviewable PR, never a local commit: the reviewer reads a PR, so work that stops before one has not reached the step that consumes it. Draft counts as not-reached — it withholds finished work while reading as still-in-progress.
 
 ## 2. tasks.md declaration conventions
 
