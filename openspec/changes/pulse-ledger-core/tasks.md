@@ -61,8 +61,12 @@ downstream-facing tests and exercised against a local Postgres in service tests.
       `[model: opus | deps: 3.2 | lane: repo_change | wave: 2]`
       Model `opus`: security boundary; PHI-adjacent logging reviewed here.
 - [ ] 3.5 [DNA-792] Backfill mode: `POST /commands:batch`, `backfill_genesis` and `reconstruction_gap`
-      restricted to the backfill actor, evidence_class/epoch stamping. Tests: forward writer
-      rejected on backfill types; gap + genesis sequence commits with reconstructed epoch.
+      restricted to the backfill actor, evidence_class/epoch stamping. Also land `resolution_hold`
+      here: it is the other non-state-bearing fact, holding a subject without moving it, and 4.1
+      found it has no committable form until this vocabulary exists (no `received → received` edge,
+      and `commit_declaration` requires a `to_state`). Tests: forward writer
+      rejected on backfill types; gap + genesis sequence commits with reconstructed epoch;
+      a `resolution_hold` commits without changing the subject's current state.
       `[model: sonnet | deps: 3.3, 3.4 | lane: repo_change | wave: 2]`
 
 ## 4. Wave 3 — reads, client, distribution
