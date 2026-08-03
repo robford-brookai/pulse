@@ -9,9 +9,11 @@ from __future__ import annotations
 import pytest
 from pulse_core.generated import CATALOG_VERSION
 from pulse_ledger.validation import (
+    INITIAL_STATES,
     CatalogVersionMismatchError,
     IllegalTransitionError,
     require_catalog_version,
+    validate_genesis,
     validate_transition,
 )
 
@@ -86,6 +88,49 @@ def test_unknown_to_state_rejected() -> None:
     with pytest.raises(IllegalTransitionError) as excinfo:
         validate_transition("enrollment", "active", "ascended")
     assert "ascended" in excinfo.value.reason
+
+
+# --- genesis: the states a subject may enter the ledger at (3.2's commit path consumes this) ---
+
+
+def test_entry_states_are_derived_one_per_subject_type() -> None:
+    """A state with no incoming edge is where a subject's history starts."""
+    assert {
+        "billing_episode": frozenset({"open"}),
+        "communication_consent": frozenset({"unset"}),
+        "consent": frozenset({"requested"}),
+        "contract": frozenset({"draft"}),
+        "device": frozenset({"ordered"}),
+        "enrollment": frozenset({"pending_start"}),
+        "referral": frozenset({"received"}),
+    } == INITIAL_STATES
+
+
+def test_genesis_at_an_entry_state_is_legal() -> None:
+    for subject_type, entry_states in INITIAL_STATES.items():
+        for state in entry_states:
+            assert validate_genesis(subject_type, state) == CATALOG_VERSION
+
+
+def test_genesis_part_way_through_the_machine_is_rejected() -> None:
+    with pytest.raises(IllegalTransitionError) as excinfo:
+        validate_genesis("referral", "outreach")
+    assert excinfo.value.from_state is None
+    assert "entry state" in excinfo.value.reason
+    assert "received" in excinfo.value.reason
+    assert excinfo.value.catalog_version == CATALOG_VERSION
+
+
+def test_genesis_rejects_an_unknown_subject_type() -> None:
+    with pytest.raises(IllegalTransitionError) as excinfo:
+        validate_genesis("spaceship", "docked")
+    assert "spaceship" in excinfo.value.reason
+
+
+def test_genesis_rejects_an_unknown_state() -> None:
+    with pytest.raises(IllegalTransitionError) as excinfo:
+        validate_genesis("enrollment", "hibernating")
+    assert "hibernating" in excinfo.value.reason
 
 
 def test_boot_accepts_matching_catalog_version() -> None:
