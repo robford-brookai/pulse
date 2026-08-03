@@ -1,6 +1,6 @@
 # WORKFLOW — repo-ade ADE Stack v2
 
-**Status:** v2.0.4 — supersedes v1 WORKFLOW.md | **Owner:** Ford
+**Status:** v2.0.5 — supersedes v1 WORKFLOW.md | **Owner:** Ford
 **Scope:** The goal workflow for repo-ade-born repos (PULSE first), in three renderings: executable YAML (the source of truth), prose walkthrough, and diagram. The YAML block is parsed by `scripts/workflow.py` and read directly by agents via `orient()`. **Editing the YAML changes dispatch behavior. The prose and diagram are projections of the YAML — `task workflow:lint` fails if either names a step or gate the YAML does not define, or omits a step it does.** Same doctrine as the state catalog: one generative artifact, multiple emitted surfaces, CI fails on drift.
 
 > **Projections are checked, not generated.** An earlier revision said the prose and diagram
@@ -10,7 +10,7 @@
 > no omitted ones. Edit a projection freely; just do not let it contradict the block.
 
 > **Every target this document names now exists.** `task workflow:lint`,
-> `task linear:sync CHANGE=<id>`, `task dispatch CHANGE=<id>`, `task collect CHANGE=<id>`,
+> `task dispatch CHANGE=<id>`, `task linear:sync CHANGE=<id>`, `task collect CHANGE=<id>`,
 > `task verify CHANGE=<id>`, `task spec:archive CHANGE=<id>`. Two need credentials and degrade
 > rather than fail without them: `workflow:lint:linear` skips, and `linear:sync` plans without
 > mutating. `linear:sync` is dry-run by default — pass `APPLY=1` to write.
@@ -25,7 +25,7 @@ One OpenSpec change = one Linear parent issue = one directory of dispatched work
 
 | Grain | Linear | Repo | Orca | Git |
 |---|---|---|---|---|
-| Program | Team **DNA** / project **PULSE / Declared-State Funnel** | — | — | — |
+| Program | Team **DNA** / project **Pulse 1.0** | — | — | — |
 | Change | Parent issue (DNA) | `openspec/changes/<id>/` + `work_orders/<id>/` | — | Feature branches per task, merged per wave |
 | Task | **Sub-issue of the parent** (DNA) | `work_orders/<id>/<task>.md` | One worktree | One commit |
 | Attempt | Sub-issue comment (receipt) | HANDOFF.md Receipt block | Fresh worktree per escalation | — |
@@ -38,7 +38,7 @@ Out-of-lane work (operational discovery, destructive ops) is executed by the Ope
 
 ```yaml
 ade_workflow:
-  version: 2.0.4
+  version: 2.0.5
   source_of_truth: WORKFLOW.md            # this file, this block
   renderings: [prose_section_3, diagram_section_4]   # checked for correspondence, not generated
   parser: scripts/workflow.py             # thin glue; `task workflow:lint` validates this block
@@ -150,11 +150,25 @@ ade_workflow:
       actor: human + agent(fable, review-assist)
       run: openspec validate <id>
       gate: G_MECE
-      next: {pass: sync_linear, fail: propose}   # revise docs, re-validate
+      next: {pass: dispatch, fail: propose}   # revise docs, re-validate
+
+    # dispatch precedes sync_linear: the sub-issue description IS the work-order
+    # body, so the files must exist before Linear can be written. linear_sync.py
+    # enforces this — it hard-errors when work_orders/<id>/ is absent. Ordered the
+    # other way until v2.0.5, which made sync_linear unrunnable at its declared
+    # position; state_resolution had the right order the whole time.
+    - id: dispatch
+      actor: tool + router
+      run: task dispatch CHANGE=<id>
+      behavior: emit work_orders/<id>/<task>.md per dispatch-template v1;
+                release only wave-eligible tasks (deps merged);
+                serial-lane tasks release alone
+      next: sync_linear
 
     - id: sync_linear
       actor: tool
       run: task linear:sync CHANGE=<id>
+      requires: work_orders/<id>/ emitted by dispatch
       behavior: create parent issue if absent (team and project per linear block,
                 passed explicitly on every mutation — never inferred from API-key
                 context); create/update one sub-issue per task, description =
@@ -165,14 +179,6 @@ ade_workflow:
                 started or completed status (In Progress onward is
                 agent/Orca-owned per status_ownership);
                 files canonical, one-directional
-      next: dispatch
-
-    - id: dispatch
-      actor: tool + router
-      run: task dispatch CHANGE=<id>
-      behavior: emit work_orders/<id>/<task>.md per dispatch-template v1;
-                release only wave-eligible tasks (deps merged);
-                serial-lane tasks release alone
       next: execute
 
     - id: execute
@@ -264,7 +270,9 @@ ade_workflow:
 
 A change begins at **propose**: OpenSpec scaffolds the change folder, Fable-tier assistance shapes proposal, design, specs, and tasks. **Validate** runs the tool check plus the extended MECE gate — scenarios cover tasks, tasks are atomic, dependencies explicit, every task carries or defaults its model and parallel flags. Failure loops to propose, and nothing dispatches until G_MECE holds.
 
-**Sync-linear** projects the plan into Linear: one parent issue for the change and one sub-issue per task, all in the DNA team under the PULSE / Declared-State Funnel project, with team and project passed explicitly on every mutation. Sub-issue descriptions are the work-order bodies. Status writes follow the one-writer-per-band rule: sync resolves DNA's Todo state ID once per run and passes it on every create so triage intake can never intercept a new sub-issue, heals only the Triage→Todo edge on updates, and never touches anything from In Progress onward — that band belongs to agents and Orca, and the terminal band belongs to humans at merge and archive. The repo is the record and the sync is one-directional — Linear is where humans watch, comment, and approve, not where specs live. **Dispatch** then emits the work-order files per the dispatch template, releasing tasks in waves as dependencies merge, with serial-lane tasks (generated surfaces, workspace roots) running alone.
+**Dispatch** emits the work-order files per the dispatch template, releasing tasks in waves as dependencies merge, with serial-lane tasks (generated surfaces, workspace roots) running alone. It runs *before* sync — the sub-issue description is the work-order body, so the files have to exist before Linear can be written, and `linear_sync.py` hard-errors when they do not.
+
+**Sync-linear** then projects the plan into Linear: one parent issue for the change and one sub-issue per task, all in the DNA team under the Pulse 1.0 project, with team and project passed explicitly on every mutation. Sub-issue descriptions are the work-order bodies dispatch just wrote. Status writes follow the one-writer-per-band rule: sync resolves DNA's Todo state ID once per run and passes it on every create so triage intake can never intercept a new sub-issue, heals only the Triage→Todo edge on updates, and never touches anything from In Progress onward — that band belongs to agents and Orca, and the terminal band belongs to humans at merge and archive. The repo is the record and the sync is one-directional — Linear is where humans watch, comment, and approve, not where specs live.
 
 **Execute** is one agent per task per worktree, claimed through Orca's Linear panel or the CLI, gated on hardening (and on an approval comment for anything tagged destructive or prod-touching — those actually leave this lane entirely, per the lanes block). The agent orients, writes tests first, implements, verifies, writes a HANDOFF with its receipt, and commits once — then ships that commit without being asked: push, open a PR against main **ready for review, never a draft**, and watch `gh pr checks` to green. Red CI belongs to the agent that made it red, not to the reviewer who finds it. A draft PR is the same failure in a quieter form: it withholds finished work from the review step that is supposed to consume it, and reads as "still working" when nobody is. The task is done when the diff is on a green, reviewable PR — a finished task parked at a local commit is an unfinished task. Verification failure feeds **escalate**: two attempts per tier, fresh worktree per rung, and failure at the ceiling returns the task to validate as a spec defect rather than a bigger-model problem. Design drift halts the worktree and flags for human review. A sub-issue dragged to Blocked parks the change at execute — state resolution reads Blocked as "wave not done," the unblock path is a human comment plus a drag back to In Progress, and escalation never fires on status, only on verification failure.
 
@@ -280,9 +288,9 @@ Two narrow things may reach main without a PR, per `main_access`: mechanical sta
 flowchart TB
   P[propose<br/>fable] --> V{validate<br/>G_MECE}
   V -- fail --> P
-  V -- pass --> SL[sync_linear<br/>team DNA · parent + sub-issues<br/>status writes: unstarted band only]
-  SL --> D[dispatch<br/>router · waves · serial lane]
-  D --> E[execute<br/>1 task = 1 worktree = 1 commit<br/>push + ready PR + green CI<br/>gate: G_HARDENING<br/>Blocked parks here]
+  V -- pass --> D[dispatch<br/>router · waves · serial lane<br/>emits work_orders/]
+  D --> SL[sync_linear<br/>team DNA · parent + sub-issues<br/>description = work-order body<br/>status writes: unstarted band only]
+  SL --> E[execute<br/>1 task = 1 worktree = 1 commit<br/>push + ready PR + green CI<br/>gate: G_HARDENING<br/>Blocked parks here]
   E -- verification fail --> ESC{escalate<br/>fresh worktree,<br/>next tier}
   ESC -- tier available --> E
   ESC -- at max_tier --> V
@@ -309,6 +317,8 @@ flowchart TB
 Sub-issue grain added (Linear parent/sub mapping to change/task, one-directional sync, Orca claims sub-issues). Model routing and the escalation ladder embedded in dispatch and execute. Gates made explicit objects with named blocking edges (hardening, MECE-extended, drift, approval). Lanes formalized so prod-touching and destructive work route out of Orca by rule instead of by memory. State-resolution order added so an agent landing mid-change computes its step deterministically. Edit protocol added: this YAML is the workflow, renderings regenerate, step ids are stable.
 
 ## Change log
+
+**v2.0.5 (2026-08-03):** **`dispatch` and `sync_linear` were ordered backwards**, which made `sync_linear` unrunnable at its declared position. `validate` handed to `sync_linear`, which handed to `dispatch` — but a sub-issue description *is* the dispatched work-order body, so sync cannot run before the files exist, and `scripts/linear_sync.py` enforces exactly that with a hard error: *"no work order at `work_orders/<id>/task-001.md` … run `task dispatch` before syncing."* Following the declared order, the step always failed. Found by dry-running the graph end to end; every other step passed. Two things make this worth recording rather than quietly fixing. First, the step's own `behavior` block already said "description = dispatched work-order body" — the dependency was stated one line above the `next:` edge that contradicted it. Second, **`state_resolution` had the correct order the whole time**: it checks `work_orders/<id>/ absent` → `dispatch` *before* `linear sub-issues out of sync` → `sync_linear`. An agent resolving its position got the right answer while an agent following `next:` edges got a broken one, and no gate compared them. Now `validate → dispatch → sync_linear → execute`, with a `requires:` field on `sync_linear` naming the precondition and a comment on `dispatch` explaining the order. Also fixed two stale references to the pre-v2.0.2 project name "PULSE / Declared-State Funnel" (grain map, prose §Sync-linear) — the real project is Pulse 1.0, which the YAML has pinned since v2.0.2.
 
 **v2.0.4 (2026-08-03):** `execute` now ends at a green, reviewable PR instead of a local commit. Four layers instruct a worktree agent, and they had drifted into disagreement about where a task ends: this block and `docs/process/dispatch-template.md` §Done-means both said "one commit, push," while `scripts/dispatch_tasks.py` — the generator that actually writes every work order — emitted "One commit per task." and stopped, and `AGENTS.md`, the contract the agent actually reads, stopped there too. The two documents nobody executes were right; the two artifacts agents execute were wrong, which is the drift direction that costs the most and shows the least. No layer had ever mentioned opening a PR or checking CI at all — `grep gh pr` across all four returned nothing — so that behavior lived only in whatever harness default each agent happened to boot with, and every agent improvised differently. Task 3.1 (DNA-788) surfaced it: a complete, `task check`-green implementation sat on an unpushed local commit because its work order genuinely ended there, and the agent that did push it opened a draft, withholding finished work from the human `merge` review that is supposed to consume it. Fixed in all four places at once, with the same words in each: push, `gh pr create` **ready — never `--draft`**, `gh pr checks --watch` to green, CI failures owned by the agent that caused them. `merge` stays human and wave-level; the PR is the surface that review reads, not a replacement for it. The generator is the load-bearing fix — a rule in prose that the emitter does not emit reaches no agent.
 
