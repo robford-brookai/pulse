@@ -119,12 +119,20 @@ def test_the_migration_reverses_cleanly(database_url: str, db: psycopg.Connectio
     assert _columns(db, "outbox").keys() >= RELAY_COLUMNS
 
 
-def test_head_is_0002(database_url: str) -> None:
-    """A second migration in this sequence is a sequencing hazard; pin what head is."""
+def test_this_migration_is_reachable_from_a_single_head(database_url: str) -> None:
+    """The sequencing hazard this guards is two heads, not a particular head.
+
+    Pinning `head == "0002"` also fails when a later migration legitimately lands, which is
+    what happened the moment 0003 arrived — a false alarm that says nothing about whether the
+    sequence forked. Assert the invariant instead: one head, and this revision on the path to
+    it. `tests/test_migration_graph.py` holds the same invariant for every alembic tree,
+    including the duplicate-revision-id case alembic itself only warns about.
+    """
     from alembic.script import ScriptDirectory
 
     script = ScriptDirectory.from_config(_alembic_config(database_url))
-    assert script.get_current_head() == "0002", "two heads mean a merge revision is owed"
+    assert len(script.get_heads()) == 1, "two heads mean a merge revision is owed"
+    assert "0002" in {rev.revision for rev in script.walk_revisions()}
 
 
 @pytest.mark.parametrize("column", sorted(RELAY_COLUMNS))
