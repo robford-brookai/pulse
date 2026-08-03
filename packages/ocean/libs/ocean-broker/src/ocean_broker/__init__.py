@@ -12,7 +12,7 @@ from ocean_broker.catalog import (
     pattern_matches,
     rule_pattern,
 )
-from ocean_broker.publisher import EventBridgePublisher
+from ocean_broker.publisher import EventBridgePublisher, FailureMode, PublishFailed
 
 __all__ = [
     "EVENT_SOURCE",
@@ -21,6 +21,8 @@ __all__ = [
     "TOPIC_PREFIX",
     "EventBridgeAddress",
     "EventBridgePublisher",
+    "FailureMode",
+    "PublishFailed",
     "address_for",
     "addressing_table",
     "domain_for_topic",
