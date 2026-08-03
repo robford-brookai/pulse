@@ -41,9 +41,7 @@ task pre-commit   # all hooks
 Single test or gate:
 
 ```bash
-uv run pytest tests/test_foo.py::test_foo
 uv run pytest tests/scaffold/cat5_glue_logic.py
-uv run pytest tests/scaffold -m "slow or not slow"
 bash tests/scaffold/cat2_toolchain.sh      # gates 2, 4, 7 are shell scripts, run directly
 ```
 
@@ -119,5 +117,3 @@ Constraints these gates enforce, which are easy to break by accident:
   main. Merge with a merge commit, not a squash, whenever a branch carries imported history.
 - Cross-repo integration goes through `docs/contracts/publishes.md` and `consumes.md` — a published
   Snowflake object, API, or released package. Never side-clone another repo into this one.
-- Python 3.10–3.14 are all supported and tested; mypy runs strict (`disallow_untyped_defs`),
-  coverage floor is 80%.
