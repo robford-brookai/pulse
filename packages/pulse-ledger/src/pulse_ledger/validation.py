@@ -49,6 +49,24 @@ class CatalogVersionMismatchError(Exception):
         )
 
 
+def validate_subject_type(subject_type: str) -> dict[str, frozenset[str]]:
+    """The catalog's adjacency for one subject type, or a rejection naming the catalog version.
+
+    The floor under the read path as `validate_state_membership` is the floor under the write path:
+    a read filtered on a subject type the catalog does not define is a caller bug, and answering it
+    with an empty result set would let it pass as "no such subjects exist".
+    """
+    adjacency = TRANSITIONS.get(subject_type)
+    if adjacency is None:
+        raise IllegalTransitionError(
+            subject_type,
+            None,
+            "",
+            reason=f"unknown subject_type {subject_type!r}",
+        )
+    return adjacency
+
+
 def validate_transition(subject_type: str, from_state: str, to_state: str) -> str:
     """Validate a declared transition against the generated adjacency.
 
