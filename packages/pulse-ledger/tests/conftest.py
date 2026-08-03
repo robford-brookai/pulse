@@ -21,7 +21,11 @@ from pathlib import Path
 
 import psycopg
 import pytest
+from alembic import command
+from alembic.config import Config
 from psycopg import sql
+
+INFRA_DIR = Path(__file__).resolve().parents[1] / "infra" / "postgres"
 
 _SERVER_BINARIES = ("initdb", "pg_ctl", "postgres")
 
@@ -109,6 +113,21 @@ def pg_database(pg_server: dict[str, str]) -> Iterator[dict[str, str]]:
 def database_url(pg_database: dict[str, str]) -> str:
     """SQLAlchemy URL for the per-test database, socket-only."""
     return f"postgresql+psycopg://{pg_database['user']}@/{pg_database['dbname']}?host={pg_database['host']}"
+
+
+@pytest.fixture
+def ledger_db(database_url: str, db: psycopg.Connection) -> psycopg.Connection:
+    """The per-test database with the `ledger` schema migrated to head.
+
+    For suites that exercise the write path rather than the migration itself. The connection is
+    autocommit, so a transaction only exists where the code under test opens one — which is what
+    makes the atomicity assertions mean something.
+    """
+    cfg = Config(str(INFRA_DIR / "alembic.ini"))
+    cfg.set_main_option("script_location", str(INFRA_DIR))
+    cfg.attributes["database_url"] = database_url
+    command.upgrade(cfg, "head")
+    return db
 
 
 @pytest.fixture
