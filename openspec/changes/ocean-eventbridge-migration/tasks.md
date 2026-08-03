@@ -404,7 +404,7 @@ G_APPROVAL comment required before each. Run after merge and verification.
 - [x] 10.1 [DNA-775] Record the absorption as an ADR in `docs/adr/`, and update
       `docs/contracts/publishes.md` and `consumes.md` for the transport change.
       `[model: fable | deps: 8.2 | lane: repo_change | wave: 4]`
-- [ ] 10.2 [DNA-776] Tick ADR §10 action items 3 and 6 (DNA-695 extended with the §6.1 absorption steps) and
+- [x] 10.2 [DNA-776] Tick ADR §10 action items 3 and 6 (DNA-695 extended with the §6.1 absorption steps) and
       close §9.1 V5 — the shared publisher from 2.2 resolves it.
       `[model: fable | deps: 2.2, 10.1 | lane: repo_change | wave: 4]`
       `serial: openspec_main_specs` — doc-updater owns spec-adjacent files per `AGENTS.md`.
