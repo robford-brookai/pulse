@@ -68,7 +68,8 @@ other than its own (D15). System actors SHALL carry evidence references.
 
 ### Requirement: Command types are generated from the catalog
 
-The command vocabulary (including `declare_verdict`, `open_billing_episode`,
+The command vocabulary (including `declare_transition` — the generic state-transition command
+carrying `to_state` and a coded reason — plus `declare_verdict`, `open_billing_episode`,
 `record_communication_consent`, `resolve_referral`, `mint_person`, `attach_identifier`,
 `merge_person`) SHALL be generated from the state catalog as one of its generated surfaces, and a
 command not present in the generated set SHALL be rejected. Verdict outcomes SHALL be trinary
