@@ -46,7 +46,7 @@ downstream-facing tests and exercised against a local Postgres in service tests.
       catalog reason + version. Tests: one legal/illegal pair per subject type; boot refuses on
       catalog version mismatch.
       `[model: opus | deps: 1.2, 2.1 | lane: repo_change | wave: 2]`
-- [ ] 3.2 [DNA-789] Commit path: event + current_state + outbox in one transaction; server-set
+- [x] 3.2 [DNA-789] Commit path: event + current_state + outbox in one transaction; server-set
       `recorded_at`; `effective_at` canonical with `occurred_at` alias; correction by reversal.
       Tests: atomicity (no partial write on injected failure); backdate fold order; reversal
       references and preserves history.
