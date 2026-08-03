@@ -41,7 +41,7 @@ downstream-facing tests and exercised against a local Postgres in service tests.
 
 ## 3. Wave 2 — the write path
 
-- [ ] 3.1 [DNA-788] Command validation core: legality against the generated adjacency for all six subject
+- [x] 3.1 [DNA-788] Command validation core: legality against the generated adjacency for all six subject
       types (incl. `qualified ⇄ not_qualified` re-entry and reported-freeze), rejection carries
       catalog reason + version. Tests: one legal/illegal pair per subject type; boot refuses on
       catalog version mismatch.
