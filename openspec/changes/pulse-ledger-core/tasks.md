@@ -18,7 +18,7 @@ downstream-facing tests and exercised against a local Postgres in service tests.
       `[model: sonnet | deps: — | lane: repo_change | wave: 0]`
       `serial: workspace_roots` — edits root workspace manifest and `Taskfile.yml`.
       Declared scope must equal executed scope (the 1.3/1.4 lesson from the archived change).
-- [ ] 1.2 [DNA-786] The `ledger` schema, alembic sequence `0001`: `events` (bitemporal, evidence_class,
+- [x] 1.2 [DNA-786] The `ledger` schema, alembic sequence `0001`: `events` (bitemporal, evidence_class,
       epoch, reverses_event_id), `current_state`, `idempotency_keys`, `outbox` (per-subject seq),
       `writer_state`, `review_queue` — per design decision 1. REVOKE UPDATE/DELETE on `events`
       from the service role. Tests: migration up/down; the revoke holds (update attempt fails);
