@@ -35,6 +35,8 @@ dev = [
     # Used directly by the tests/scaffold gates. pyyaml is otherwise only a
     # transitive mkdocs dependency; tomllib is stdlib from 3.11 and CI tests 3.10.
     "pyyaml>=6.0",
+    # Stubs for pulse_core.catalog_gen, which reads the state catalog seed under strict mypy.
+    "types-pyyaml>=6.0",
     "tomli>=2.0; python_version < '3.11'",
     # The mkdocs stack is pinned to its 1.x-era majors (DNA-782): mkdocs v2 is a ground-up
     # rewrite with no plugin system or migration path that may ship to PyPI under the same
