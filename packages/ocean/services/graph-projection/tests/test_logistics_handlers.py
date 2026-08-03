@@ -393,12 +393,28 @@ CREATE TABLE device_associations (
 
 
 class _SqliteSession:
-    """Async session double that runs the handlers' SQL against in-memory SQLite."""
+    """Async session double that runs the handlers' SQL against in-memory SQLite.
+
+    A context manager because the connection it opens has to be closed. Left to the
+    garbage collector it emits `ResourceWarning: unclosed database`, which pytest
+    reports as a session-level `PytestUnraisableExceptionWarning` attributed to
+    whichever test happened to be running when the collector fired — so the warning
+    names an innocent test and the real culprit is invisible.
+    """
 
     def __init__(self) -> None:
         self.conn = sqlite3.connect(":memory:")
         self.conn.row_factory = sqlite3.Row
         self.conn.execute(_DEVICE_ASSOCIATIONS_DDL)
+
+    def close(self) -> None:
+        self.conn.close()
+
+    def __enter__(self) -> _SqliteSession:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self.close()
 
     async def execute(self, stmt, params):
         bound = {k: (v.isoformat() if isinstance(v, datetime) else v) for k, v in params.items()}
@@ -434,10 +450,10 @@ async def _deliver(events: list[dict]) -> list[dict]:
         "device.associated": handle_device_associated,
         "device.disassociated": handle_device_disassociated,
     }
-    session = _SqliteSession()
-    for event in events:
-        await handlers[event["event_type"]](event, session)
-    return session.state()
+    with _SqliteSession() as session:
+        for event in events:
+            await handlers[event["event_type"]](event, session)
+        return session.state()
 
 
 class TestDeviceAssociationOrdering:

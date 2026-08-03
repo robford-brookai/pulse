@@ -102,6 +102,18 @@ addopts = '-m "not slow"'
 # states which gate it is. Without this they match no default pattern and are silently skipped
 # by `task test` and CI, while still passing when run by explicit path.
 python_files = ["test_*.py", "cat[0-9]_*.py"]
+# Leaked OS resources fail the run. Both lines are load-bearing and neither works alone:
+# Python ignores ResourceWarning by default, so the first surfaces it at all; a warning raised
+# during garbage collection cannot propagate, so pytest re-reports it as an unraisable-exception
+# warning, and the second is what turns that into a failure. Verified against the unclosed
+# sqlite3.Connection in graph-projection's handler tests: with only one filter the run stayed
+# green. Its own attribution is unreliable — the warning names whichever test was executing when
+# the collector happened to fire, not the test that leaked — so the message points at the wrong
+# place and the failure is the signal, not the location.
+filterwarnings = [
+    "error::ResourceWarning",
+    "error::pytest.PytestUnraisableExceptionWarning",
+]
 
 [tool.coverage.report]
 # Applies wherever coverage runs (`task test`, tox), not just in CI. The floor is currently
