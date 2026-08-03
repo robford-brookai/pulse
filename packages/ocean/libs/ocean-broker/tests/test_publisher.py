@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from ocean_broker.catalog import LIVE_DOMAINS, address_for, pattern_matches, rule_pattern
-from ocean_broker.publisher import MAX_ENTRY_BYTES, EventBridgePublisher
+from ocean_broker.publisher import MAX_ENTRY_BYTES, EventBridgePublisher, PublishFailed
 
 
 class TestEventBridgePublisher:
@@ -426,3 +426,95 @@ class TestEntrySizeLimit:
         pub = self._publisher(client)
         await pub.publish("alerts", {"event_id": "e1", "blob": "x" * 1000})
         assert client.put_events.call_count == 1
+
+
+class TestFailureMode:
+    """`on_failure` decides who owns a refused entry: this publisher's DLQ, or the caller's.
+
+    Every converted OCEAN publish site is fire-and-forget and takes the default, `"dlq"`. The
+    PULSE ledger relay takes `"raise"`: the transactional outbox is already that event's durable
+    queue, and a second copy in `failed_webhooks` would split one event's record across two stores
+    and hide the failure from the retry and dead-letter policy that owns it.
+    """
+
+    @pytest.fixture
+    def refusing_client(self):
+        c = MagicMock()
+        c.put_events = MagicMock(return_value={"FailedEntryCount": 1, "Entries": [{"ErrorMessage": "Throttled"}]})
+        return c
+
+    @pytest.fixture
+    def accepting_client(self):
+        c = MagicMock()
+        c.put_events = MagicMock(return_value={"FailedEntryCount": 0})
+        return c
+
+    def _publisher(self, client, **kwargs):
+        with patch("ocean_broker.publisher.boto3") as mock_boto3:
+            mock_boto3.client.return_value = client
+            pub = EventBridgePublisher(region="us-east-1", **kwargs)
+            pub._client = client
+            return pub
+
+    @pytest.mark.asyncio
+    async def test_the_default_still_swallows(self, refusing_client):
+        """Unchanged for the thirteen sites that never pass the argument."""
+        pub = self._publisher(refusing_client)
+        await pub.publish("alerts", {"event_id": "e1"})
+
+    @pytest.mark.asyncio
+    async def test_raise_mode_surfaces_the_rejection(self, refusing_client):
+        pub = self._publisher(refusing_client, on_failure="raise")
+        with pytest.raises(PublishFailed) as caught:
+            await pub.publish("alerts", {"event_id": "e1"})
+        assert caught.value.detail_type == "alerts"
+        assert caught.value.reason == "Throttled"
+
+    @pytest.mark.asyncio
+    async def test_raise_mode_surfaces_a_transport_exception(self, refusing_client):
+        refusing_client.put_events = MagicMock(side_effect=ConnectionError("no route to host"))
+        pub = self._publisher(refusing_client, on_failure="raise")
+        with pytest.raises(PublishFailed, match="no route to host"):
+            await pub.publish("alerts", {"event_id": "e1"})
+
+    @pytest.mark.asyncio
+    async def test_raise_mode_surfaces_an_oversized_entry(self, accepting_client):
+        """The size check dead-letters too, and a caller owning its own queue must hear about it."""
+        pub = self._publisher(accepting_client, on_failure="raise")
+        with pytest.raises(PublishFailed, match="over the"):
+            await pub.publish("alerts", {"event_id": "e1", "blob": "x" * (MAX_ENTRY_BYTES + 1)})
+        assert accepting_client.put_events.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_raise_mode_writes_no_second_dlq_copy(self, refusing_client, mock_db_session_maker):
+        """Even with a session maker configured — the raise is the handoff, not a second record."""
+        pub = self._publisher(refusing_client, db_session_maker=mock_db_session_maker, on_failure="raise")
+        with pytest.raises(PublishFailed):
+            await pub.publish("alerts", {"event_id": "e1"})
+        assert mock_db_session_maker._test_session.execute.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_a_success_is_unaffected_by_the_mode(self, accepting_client):
+        pub = self._publisher(accepting_client, on_failure="raise")
+        await pub.publish("alerts", {"event_id": "e1"})
+        assert accepting_client.put_events.call_count == 1
+
+    @pytest.fixture
+    def mock_db_session_maker(self):
+        session = AsyncMock()
+        session.execute = AsyncMock()
+        begin = AsyncMock()
+        begin.__aenter__ = AsyncMock(return_value=None)
+        begin.__aexit__ = AsyncMock(return_value=None)
+        session.begin = MagicMock(return_value=begin)
+
+        class Ctx:
+            async def __aenter__(self_inner):
+                return session
+
+            async def __aexit__(self_inner, *_):
+                pass
+
+        maker = MagicMock(side_effect=lambda: Ctx())
+        maker._test_session = session
+        return maker
