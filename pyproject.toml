@@ -55,6 +55,8 @@ packages = ["src/pkg_pulse"]
 
 [tool.uv.workspace]
 members = [
+    "packages/pulse-ledger",
+    "packages/pulse-core",
     "packages/ocean",
     "packages/ocean/libs/ocean-events",
     "packages/ocean/libs/ocean-broker",
@@ -62,6 +64,8 @@ members = [
 ]
 
 [tool.uv.sources]
+pulse-ledger = { workspace = true }
+pulse-core = { workspace = true }
 ocean-events = { workspace = true }
 ocean-broker = { workspace = true }
 ocean-connector-mcp = { workspace = true }
@@ -152,8 +156,11 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]
 
-# Ocean's tests live at packages/ocean/tests and packages/ocean/*/*/tests, which the "tests/*"
-# pattern above does not reach. Same exemption, same reason: pytest asserts are the point.
+# Package tests live under packages/*, which the "tests/*" pattern above does not reach.
+# Same exemption, same reason: pytest asserts are the point.
+"packages/pulse-ledger/tests/**" = ["S101"]
+"packages/pulse-core/tests/**" = ["S101"]
+
 "packages/ocean/tests/**" = ["S101", "S105", "B017"]
 "packages/ocean/**/tests/**" = ["S101", "S105", "B017"]
 

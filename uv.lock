@@ -16,6 +16,8 @@ members = [
     "ocean-connector-mcp",
     "ocean-events",
     "pulse",
+    "pulse-core",
+    "pulse-ledger",
 ]
 
 [[package]]
@@ -2106,6 +2108,16 @@ dev = [
     { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2.0" },
     { name = "tox-uv", specifier = ">=1.33.4" },
 ]
+
+[[package]]
+name = "pulse-core"
+version = "0.1.0"
+source = { editable = "packages/pulse-core" }
+
+[[package]]
+name = "pulse-ledger"
+version = "0.1.0"
+source = { editable = "packages/pulse-ledger" }
 
 [[package]]
 name = "py-key-value-aio"
