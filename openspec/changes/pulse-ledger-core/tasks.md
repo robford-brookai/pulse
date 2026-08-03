@@ -101,3 +101,12 @@ downstream-facing tests and exercised against a local Postgres in service tests.
       `docs/contracts/publishes.md` for the read/command surfaces.
       `[model: fable | deps: 5.1 | lane: repo_change | wave: 4]`
       `serial: openspec_main_specs` — doc-updater lane, spec-adjacent files.
+- [ ] 5.3 Demo 1 — the Phase 1 breakpoint demo, per the roadmap's demo convention: a runnable
+      script at `scripts/demo/demo1_ledger_core.sh` (or `.py`) plus runbook
+      `docs/runbooks/demo1-ledger-core.md`. Against LocalStack: a legal command commits and
+      lands on the queue; an illegal command rejects with catalog reason + version; a replay
+      returns the original event id (exactly one event); the independent fold equals
+      `current_state` (wraps the 5.1 harness). Script exits nonzero on any failed assertion;
+      receipt (script output) attaches to DNA-784 before archive. Not part of `task check`
+      (needs LocalStack); a smoke-parse test may cover it.
+      `[model: sonnet | deps: 5.1 | lane: repo_change | wave: 4]`
