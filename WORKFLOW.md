@@ -1,6 +1,6 @@
 # WORKFLOW — repo-ade ADE Stack v2
 
-**Status:** v2.0.3 — supersedes v1 WORKFLOW.md | **Owner:** Ford
+**Status:** v2.0.4 — supersedes v1 WORKFLOW.md | **Owner:** Ford
 **Scope:** The goal workflow for repo-ade-born repos (PULSE first), in three renderings: executable YAML (the source of truth), prose walkthrough, and diagram. The YAML block is parsed by `scripts/workflow.py` and read directly by agents via `orient()`. **Editing the YAML changes dispatch behavior. The prose and diagram are projections of the YAML — `task workflow:lint` fails if either names a step or gate the YAML does not define, or omits a step it does.** Same doctrine as the state catalog: one generative artifact, multiple emitted surfaces, CI fails on drift.
 
 > **Projections are checked, not generated.** An earlier revision said the prose and diagram
@@ -38,7 +38,7 @@ Out-of-lane work (operational discovery, destructive ops) is executed by the Ope
 
 ```yaml
 ade_workflow:
-  version: 2.0.3
+  version: 2.0.4
   source_of_truth: WORKFLOW.md            # this file, this block
   renderings: [prose_section_3, diagram_section_4]   # checked for correspondence, not generated
   parser: scripts/workflow.py             # thin glue; `task workflow:lint` validates this block
@@ -183,7 +183,11 @@ ade_workflow:
         orca worktree create <task>          # or claim sub-issue via Orca Linear panel
         agent reads AGENTS.md, calls orient(), reads spec_refs,
         tests first, implements, task lint && task test,
-        writes HANDOFF.md (Receipt + Spec deltas), one commit, push
+        writes HANDOFF.md (Receipt + Spec deltas), one commit, push,
+        gh pr create --base main (ready for review — never --draft),
+        gh pr checks --watch until green; red CI is the agent's to fix, not the
+        reviewer's to discover. Ship without being asked: a finished task that
+        stops at a local commit is an unfinished task
       linear_status: In Progress -> In Review
       next: {verification_pass: collect,      # collect runs once the whole wave is done
              verification_fail: escalate,
@@ -262,7 +266,7 @@ A change begins at **propose**: OpenSpec scaffolds the change folder, Fable-tier
 
 **Sync-linear** projects the plan into Linear: one parent issue for the change and one sub-issue per task, all in the DNA team under the PULSE / Declared-State Funnel project, with team and project passed explicitly on every mutation. Sub-issue descriptions are the work-order bodies. Status writes follow the one-writer-per-band rule: sync resolves DNA's Todo state ID once per run and passes it on every create so triage intake can never intercept a new sub-issue, heals only the Triage→Todo edge on updates, and never touches anything from In Progress onward — that band belongs to agents and Orca, and the terminal band belongs to humans at merge and archive. The repo is the record and the sync is one-directional — Linear is where humans watch, comment, and approve, not where specs live. **Dispatch** then emits the work-order files per the dispatch template, releasing tasks in waves as dependencies merge, with serial-lane tasks (generated surfaces, workspace roots) running alone.
 
-**Execute** is one agent per task per worktree, claimed through Orca's Linear panel or the CLI, gated on hardening (and on an approval comment for anything tagged destructive or prod-touching — those actually leave this lane entirely, per the lanes block). The agent orients, writes tests first, implements, verifies, writes a HANDOFF with its receipt, and commits once. Verification failure feeds **escalate**: two attempts per tier, fresh worktree per rung, and failure at the ceiling returns the task to validate as a spec defect rather than a bigger-model problem. Design drift halts the worktree and flags for human review. A sub-issue dragged to Blocked parks the change at execute — state resolution reads Blocked as "wave not done," the unblock path is a human comment plus a drag back to In Progress, and escalation never fires on status, only on verification failure.
+**Execute** is one agent per task per worktree, claimed through Orca's Linear panel or the CLI, gated on hardening (and on an approval comment for anything tagged destructive or prod-touching — those actually leave this lane entirely, per the lanes block). The agent orients, writes tests first, implements, verifies, writes a HANDOFF with its receipt, and commits once — then ships that commit without being asked: push, open a PR against main **ready for review, never a draft**, and watch `gh pr checks` to green. Red CI belongs to the agent that made it red, not to the reviewer who finds it. A draft PR is the same failure in a quieter form: it withholds finished work from the review step that is supposed to consume it, and reads as "still working" when nobody is. The task is done when the diff is on a green, reviewable PR — a finished task parked at a local commit is an unfinished task. Verification failure feeds **escalate**: two attempts per tier, fresh worktree per rung, and failure at the ceiling returns the task to validate as a spec defect rather than a bigger-model problem. Design drift halts the worktree and flags for human review. A sub-issue dragged to Blocked parks the change at execute — state resolution reads Blocked as "wave not done," the unblock path is a human comment plus a drag back to In Progress, and escalation never fires on status, only on verification failure.
 
 The two out-of-lane routes have a named runner: the Open Engine queue in team CCC, executed under the open-agent-engine skill with its AGENT receipt tokens. Operational discovery (anything reading production data) runs as a single controlled Claude Code session with scoped credentials, receipts on the issue. Destructive ops (anything with no reviewable diff — force-pushes, repo archives, production loads) run as operator runbooks with agent-prepared scripts, where G_APPROVAL maps onto the skill's AGENT HUMAN HOLD gate. The CCC team keeps its Agent-prefixed statuses and the DNA team keeps standard ones, so the two claim surfaces are mutually invisible by construction, and cross-team dependencies ride ordinary Linear issue relations.
 
@@ -278,7 +282,7 @@ flowchart TB
   V -- fail --> P
   V -- pass --> SL[sync_linear<br/>team DNA · parent + sub-issues<br/>status writes: unstarted band only]
   SL --> D[dispatch<br/>router · waves · serial lane]
-  D --> E[execute<br/>1 task = 1 worktree = 1 commit<br/>gate: G_HARDENING<br/>Blocked parks here]
+  D --> E[execute<br/>1 task = 1 worktree = 1 commit<br/>push + ready PR + green CI<br/>gate: G_HARDENING<br/>Blocked parks here]
   E -- verification fail --> ESC{escalate<br/>fresh worktree,<br/>next tier}
   ESC -- tier available --> E
   ESC -- at max_tier --> V
@@ -305,6 +309,8 @@ flowchart TB
 Sub-issue grain added (Linear parent/sub mapping to change/task, one-directional sync, Orca claims sub-issues). Model routing and the escalation ladder embedded in dispatch and execute. Gates made explicit objects with named blocking edges (hardening, MECE-extended, drift, approval). Lanes formalized so prod-touching and destructive work route out of Orca by rule instead of by memory. State-resolution order added so an agent landing mid-change computes its step deterministically. Edit protocol added: this YAML is the workflow, renderings regenerate, step ids are stable.
 
 ## Change log
+
+**v2.0.4 (2026-08-03):** `execute` now ends at a green, reviewable PR instead of a local commit. Four layers instruct a worktree agent, and they had drifted into disagreement about where a task ends: this block and `docs/process/dispatch-template.md` §Done-means both said "one commit, push," while `scripts/dispatch_tasks.py` — the generator that actually writes every work order — emitted "One commit per task." and stopped, and `AGENTS.md`, the contract the agent actually reads, stopped there too. The two documents nobody executes were right; the two artifacts agents execute were wrong, which is the drift direction that costs the most and shows the least. No layer had ever mentioned opening a PR or checking CI at all — `grep gh pr` across all four returned nothing — so that behavior lived only in whatever harness default each agent happened to boot with, and every agent improvised differently. Task 3.1 (DNA-788) surfaced it: a complete, `task check`-green implementation sat on an unpushed local commit because its work order genuinely ended there, and the agent that did push it opened a draft, withholding finished work from the human `merge` review that is supposed to consume it. Fixed in all four places at once, with the same words in each: push, `gh pr create` **ready — never `--draft`**, `gh pr checks --watch` to green, CI failures owned by the agent that caused them. `merge` stays human and wave-level; the PR is the surface that review reads, not a replacement for it. The generator is the load-bearing fix — a rule in prose that the emitter does not emit reaches no agent.
 
 **v2.0.3 (2026-08-01):** Two rules the first real run of this workflow proved were missing. (1) **`main_access`** — a narrow, conditioned exemption from the PR flow for mechanical state updates (checking off a completed task, worktree configuration) and for repairing a red main. Written because the alternative was worse than the bypass: a checkbox flip after each of ~45 tasks is not reviewable content, and routing it through a PR trains people to merge their own PRs unread. The conditions — green `task check`, nothing under `specs/`/`src/`/`design/`, one commit, a message saying why — are what stop it widening, and anything carrying a decision is a PR again. (2) **`merge_method`** on the merge step: squash for ordinary work, merge commit for anything carrying imported history. The repo was configured squash-only, and squashing the 1.2 subtree import would have collapsed 193 preserved commits into one — destroying precisely the audit posture ADR §6.1 exists for, failing the task's own post-condition, and looking completely fine in the diff.
 
