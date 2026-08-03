@@ -21,6 +21,9 @@ catalog_version: appendix-c-v0.7
 subjects:
   referral:
     ownership: ledger
+    # `closed` is reachable from every non-terminal state, not just `outreach`: §5.3's
+    # deceased-closure (and duplicate/clinic_terminated reasons) can end a referral at any
+    # stage. Ratified 2026-08-03 (doc_update, pulse-ledger-core).
     transitions:
       received: [resolved, closed]
       resolved: [screened, closed]
@@ -39,7 +42,10 @@ subjects:
   communication_consent:
     ownership: recorded
     transitions:
-      unset: [opted_in]
+      # unset → opted_out: a patient whose first recorded interaction is STOP must be a legal
+      # recorded transition — the ledger records suppression, never blocks it (D9).
+      # Ratified 2026-08-03 (doc_update, pulse-ledger-core).
+      unset: [opted_in, opted_out]
       opted_in: [opted_out]
       opted_out: [opted_in]
   enrollment:

@@ -28,7 +28,7 @@ TRANSITIONS: dict[str, dict[str, frozenset[str]]] = {
     "communication_consent": {
         "opted_in": frozenset({"opted_out"}),
         "opted_out": frozenset({"opted_in"}),
-        "unset": frozenset({"opted_in"}),
+        "unset": frozenset({"opted_in", "opted_out"}),
     },
     "consent": {
         "expired": frozenset(),
