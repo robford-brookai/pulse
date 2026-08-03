@@ -5,6 +5,9 @@ description = "PULSE ledger service — command API, ledger schema, outbox relay
 requires-python = ">=3.10,<4.0"
 dependencies = [
     "alembic>=1.13",
+    # The command API's HTTP edge (design decision 2). Same major the ocean services already run,
+    # so one FastAPI is resolved for the workspace rather than two.
+    "fastapi>=0.135.1",
     "sqlalchemy>=2.0",
     "psycopg[binary]>=3.2",
     "pulse-core",

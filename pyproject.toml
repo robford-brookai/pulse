@@ -46,6 +46,9 @@ dev = [
     "mkdocs-material>=9.7.6,<10",
     "mkdocstrings[python]>=1.0.3,<2",
     "boto3-stubs[events]>=1.42.0",
+    # Starlette's TestClient transport, used by the ledger command-API suite. It speaks ASGI
+    # in-process — no socket, so the no-live-network posture holds.
+    "httpx>=0.28.1",
 ]
 
 [build-system]
