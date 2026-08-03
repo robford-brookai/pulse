@@ -40,7 +40,9 @@ def _alembic_config(database_url: str) -> Config:
 
 
 def _upgrade(database_url: str) -> None:
-    command.upgrade(_alembic_config(database_url), "head")
+    # Pinned to `0001`, not `head`: this suite asserts the shape of the schema *this* migration
+    # creates, so a later revision adding a table must not make it fail.
+    command.upgrade(_alembic_config(database_url), "0001")
 
 
 def _downgrade(database_url: str) -> None:
