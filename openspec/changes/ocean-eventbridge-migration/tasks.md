@@ -386,16 +386,16 @@ shape, Dockerfile, and EKS deployment unchanged. Each records its ordering verdi
 Not dispatched. Open Engine queue (team CCC), operator runbooks with agent-prepared scripts,
 G_APPROVAL comment required before each. Run after merge and verification.
 
-- [ ] 9.1 [CCC-16] `terraform apply` — provision bus, rules, queues, DLQs, archive.
+- [x] 9.1 [CCC-16] `terraform apply` — provision bus, rules, queues, DLQs, archive.
       `[model: sonnet | deps: 3.9, 6.4, 8.2 | lane: destructive_ops | wave: post-merge]`
       3.9 was a hard gate, not a nicety: until the `ticket.created` echo cycle was broken, applying
       the control-plane rule would have encoded an unbounded ticket-minting loop into a live bus.
       **Released 2026-08-02** — 3.9 landed in #56, removing both self-consumed keys
       (`ticket.updated` echoed the same way; control-plane is the only publisher of either).
-- [ ] 9.2 [CCC-17] Tear down MSK Serverless. Gated on 8.2 passing — after this there is no transport
+- [x] 9.2 [CCC-17] Tear down MSK Serverless. Gated on 8.2 passing — after this there is no transport
       rollback, only forward recovery via archive replay.
       `[model: sonnet | deps: 9.1, 8.2 | lane: destructive_ops | wave: post-merge]`
-- [ ] 9.3 [CCC-18] Archive `robford-brookai/ocean` read-only with ADR §7's supersession notice as its final
+- [x] 9.3 [CCC-18] Archive `robford-brookai/ocean` read-only with ADR §7's supersession notice as its final
       commit and a README pointing at `packages/ocean`.
       `[model: fable | deps: 9.2 | lane: destructive_ops | wave: post-merge]`
 
