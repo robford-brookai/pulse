@@ -3,7 +3,10 @@ name = "pulse-core"
 version = "0.1.0"
 description = "PULSE client SDK — command submission, response classification, consume convention"
 requires-python = ">=3.10,<4.0"
-dependencies = []
+dependencies = [
+    "pydantic>=2.7",
+    "pyyaml>=6.0",
+]
 
 [build-system]
 requires = ["hatchling"]

@@ -1,0 +1,134 @@
+# PULSE state catalog seed — Appendix C machine-readable variant.
+#
+# Source of truth today: design/migration/rpc-object-model-assessment.md, Appendix C (subject
+# taxonomy, v0.7) and §5.2 (state machines / adjacency). This seed exists under the appendix's
+# retirement clause: once S0.2 catalog machinery is authoritative, `state_catalog.yaml` from the
+# catalog release replaces this file and the generator's input path is the only thing that moves.
+#
+# Consumed by `pulse_core.catalog_gen`, which emits `pulse_core/generated/__init__.py`.
+# Regenerate after any edit:  uv run python -m pulse_core.catalog_gen
+#
+# subjects: state-bearing PULSE subjects (adjacency as drawn in §5.2). `ownership: recorded`
+# marks state the ledger records but does not adjudicate (CommunicationConsent, D9).
+# commands: the command vocabulary. `subject_type` pins the command to one subject where the
+# grain determines it; `backfill_only` restricts the type to the backfill actor (enforced by the
+# command API, task 3.5). Field types: str | optional_str | datetime | date | verdict_outcome |
+# json. A `verdict_outcome` field generates the trinary enum plus the
+# mandatory-reason-on-indeterminate validator.
+
+catalog_version: appendix-c-v0.7
+
+subjects:
+  referral:
+    ownership: ledger
+    # `closed` is reachable from every non-terminal state, not just `outreach`: §5.3's
+    # deceased-closure (and duplicate/clinic_terminated reasons) can end a referral at any
+    # stage. Ratified 2026-08-03 (doc_update, pulse-ledger-core).
+    transitions:
+      received: [resolved, closed]
+      resolved: [screened, closed]
+      screened: [outreach, closed]
+      outreach: [converted, closed]
+      converted: []
+      closed: []
+  consent:
+    ownership: ledger
+    transitions:
+      requested: [granted]
+      granted: [revoked, superseded, expired]
+      revoked: []
+      superseded: []
+      expired: []
+  communication_consent:
+    ownership: recorded
+    transitions:
+      # unset → opted_out: a patient whose first recorded interaction is STOP must be a legal
+      # recorded transition — the ledger records suppression, never blocks it (D9).
+      # Ratified 2026-08-03 (doc_update, pulse-ledger-core).
+      unset: [opted_in, opted_out]
+      opted_in: [opted_out]
+      opted_out: [opted_in]
+  enrollment:
+    ownership: ledger
+    transitions:
+      pending_start: [active, ended]
+      active: [on_hold, ended]
+      on_hold: [active, ended]
+      ended: []
+  billing_episode:
+    ownership: ledger
+    transitions:
+      open: [qualified, not_qualified]
+      qualified: [not_qualified, reported]
+      not_qualified: [qualified, reported]
+      reported: [closed]
+      closed: []
+  device:
+    ownership: ledger
+    transitions:
+      ordered: [shipped]
+      shipped: [delivered]
+      delivered: [active]
+      active: [returned, lost]
+      returned: []
+      lost: []
+  contract:
+    ownership: ledger
+    transitions:
+      draft: [active]
+      active: [superseded, terminated]
+      superseded: []
+      terminated: []
+
+commands:
+  declare_transition:
+    fields:
+      to_state: str
+      reason: optional_str
+  declare_verdict:
+    fields:
+      outcome: verdict_outcome
+      reason: optional_str
+      rule_version: str
+      as_of: datetime
+      lineage: json
+  open_billing_episode:
+    subject_type: billing_episode
+    fields:
+      month: date
+  record_communication_consent:
+    subject_type: communication_consent
+    fields:
+      channel: str
+      to_state: str
+      method: optional_str
+      evidence_ref: optional_str
+  resolve_referral:
+    subject_type: referral
+    fields:
+      person_key: str
+      evidence_ref: optional_str
+  mint_person:
+    subject_type: person
+    fields:
+      evidence_ref: optional_str
+  attach_identifier:
+    subject_type: person
+    fields:
+      system: str
+      value: str
+  merge_person:
+    subject_type: person
+    fields:
+      survivor_key: str
+      duplicate_key: str
+      evidence_ref: optional_str
+  backfill_genesis:
+    backfill_only: true
+    fields:
+      state: str
+      as_of: datetime
+  reconstruction_gap:
+    backfill_only: true
+    fields:
+      evidence_summary: json
