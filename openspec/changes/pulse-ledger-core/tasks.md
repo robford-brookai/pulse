@@ -30,7 +30,7 @@ downstream-facing tests and exercised against a local Postgres in service tests.
 
 ## 2. Wave 1 — generated command surface
 
-- [ ] 2.1 [DNA-787] Catalog → command-type generator: transition tables + Pydantic command types
+- [x] 2.1 [DNA-787] Catalog → command-type generator: transition tables + Pydantic command types
       (`pulse_core.generated`), from the Appendix C seed until S0.2's catalog file is
       authoritative; version-pinned to `catalog_version`, trinary verdict enum with
       mandatory-reason-on-indeterminate. Test: generated adjacency round-trips the seed; unknown
