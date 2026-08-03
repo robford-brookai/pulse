@@ -2179,6 +2179,7 @@ source = { editable = "packages/pulse-ledger" }
 dependencies = [
     { name = "alembic" },
     { name = "psycopg", extra = ["binary"] },
+    { name = "pulse-core" },
     { name = "sqlalchemy" },
 ]
 
@@ -2186,6 +2187,7 @@ dependencies = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.13" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
+    { name = "pulse-core", editable = "packages/pulse-core" },
     { name = "sqlalchemy", specifier = ">=2.0" },
 ]
 
