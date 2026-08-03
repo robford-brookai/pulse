@@ -180,13 +180,19 @@ class Declaration:
 
 @dataclass(frozen=True)
 class CommitResult:
-    """What a commit produced, as the API's response is built from."""
+    """What a commit produced, as the API's response is built from.
+
+    `replayed` distinguishes a fresh commit from the answer to a repeated idempotency key, which is
+    the `committed | replayed` half of the client's response classification (decision 6). Only
+    `pulse_ledger.idempotency` sets it: a commit that reaches this module is by definition new.
+    """
 
     event_id: uuid.UUID
     recorded_at: datetime
     rule_version: str
     outbox_seq: int
     state: FoldedState | None
+    replayed: bool = False
 
 
 def _require_aware(value: datetime, name: str) -> None:
@@ -206,8 +212,13 @@ def _lock_subject(conn: psycopg.Connection, subject_type: str, subject_key: str)
     )
 
 
-def _load_events(conn: psycopg.Connection, subject_type: str, subject_key: str) -> list[FoldedEvent]:
-    """Every state-bearing event for one subject, for folding."""
+def load_folded_events(conn: psycopg.Connection, subject_type: str, subject_key: str) -> list[FoldedEvent]:
+    """Every state-bearing event for one subject, for folding.
+
+    Public because the replay path re-derives the state an earlier commit produced from the same
+    history (`pulse_ledger.idempotency`), and two readings of "which events are part of a fold"
+    would be two answers.
+    """
     cursor = conn.execute(
         "SELECT event_id, payload, effective_at, recorded_at, reverses_event_id"
         " FROM ledger.events WHERE subject_type = %s AND subject_key = %s",
@@ -349,7 +360,7 @@ def commit_declaration(
     """
     with conn.transaction():
         _lock_subject(conn, declaration.subject_type, declaration.subject_key)
-        history = _load_events(conn, declaration.subject_type, declaration.subject_key)
+        history = load_folded_events(conn, declaration.subject_type, declaration.subject_key)
         predecessor = state_as_of(history, declaration.effective_at)
         if predecessor is not None:
             # A backdated declaration departs from the state that held when its fact was true,
@@ -446,7 +457,7 @@ def commit_reversal(
         if existing is not None:
             raise AlreadyReversedError(reverses_event_id, existing[0])
 
-        history = _load_events(conn, subject_type, subject_key)
+        history = load_folded_events(conn, subject_type, subject_key)
         event_id = uuid.uuid4()
         recorded_at = _insert_event(
             conn,
