@@ -256,7 +256,7 @@ query($team:String!,$q:String!){
 """
 
 STATES_QUERY = """
-query($team:String!){ team(key:$team){ id states{ nodes{ id name } } projects{ nodes{ id name } } } }
+query($team:String!){ team(id:$team){ id states{ nodes{ id name } } projects{ nodes{ id name } } } }
 """
 
 CREATE_MUTATION = """
