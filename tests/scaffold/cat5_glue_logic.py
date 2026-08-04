@@ -6,10 +6,13 @@ scripts/collect_handoffs.py — on hand-built fixtures.
 Usage: uv run pytest tests/scaffold/cat5_glue_logic.py -v
 """
 
+import io
 import json
 import subprocess
+import urllib.error
 from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -532,6 +535,25 @@ def test_resolve_tasks_md_missing_raises(tmp_path: Path, monkeypatch: pytest.Mon
 
     with pytest.raises(linear_sync.SyncError, match=r"no tasks\.md found"):
         linear_sync.resolve_tasks_md("pulse-ledger-core")
+
+
+def test_linear_client_surfaces_http_error_body() -> None:
+    """A bare `HTTP Error 400: Bad Request` hides the one thing that explains it — Linear's body."""
+    response_body = b'{"errors":[{"message":"Variable \\"$q\\" of required type \\"String!\\" was not provided."}]}'
+    http_error = urllib.error.HTTPError(
+        url="https://api.linear.app/graphql",
+        code=400,
+        msg="Bad Request",
+        hdrs=None,
+        fp=io.BytesIO(response_body),
+    )
+    try:
+        with patch("urllib.request.urlopen", side_effect=http_error):
+            client = linear_sync.LinearClient("fake-key")
+            with pytest.raises(linear_sync.SyncError, match="was not provided"):
+                client.query("query{ x }", {})
+    finally:
+        http_error.close()
 
 
 SYNC_TASKS_MD = """\

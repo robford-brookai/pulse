@@ -119,6 +119,13 @@ class LinearClient:
         try:
             with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310
                 body = json.loads(response.read())
+        except urllib.error.HTTPError as exc:
+            try:
+                detail = exc.read().decode(errors="replace")
+            finally:
+                exc.close()
+            msg = f"Linear request failed: {exc}\n{detail}"
+            raise SyncError(msg) from exc
         except (urllib.error.URLError, TimeoutError) as exc:
             msg = f"Linear request failed: {exc}"
             raise SyncError(msg) from exc
