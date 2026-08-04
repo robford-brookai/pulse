@@ -13,7 +13,7 @@ Snowflake is the analytical and verification layer: complete event history, inde
 
 Twenty Postgres (workspace schema: `domainEvent`, `patient`, `patientProgram`, `provider`, `clinic` tables) → CDC → Snowflake.
 
-- **Tool**: Fivetran or Airbyte, Postgres logical-replication connector, read-only replication user (per data-model access table). Choose whichever is already in the stack; no new tooling for this alone.
+- **Tool**: an SPCS-hosted CDC service following the `streamline` pattern (the proven mdba → Snowflake pipeline), adapted from MongoDB Atlas change streams to Postgres logical replication, with a read-only replication user (per data-model access table). Third-party managed connectors (Fivetran, Airbyte) are excluded: this leg carries PHI once gate C1 clears, and a SaaS connector routes it through vendor infrastructure. Data stays on AWS and Snowflake.
 - **Capture mode**: soft-mutation capture on (updates/deletes recorded, not overwritten) — required by the mutation audit below.
 - **Frequency**: 15-minute sync. Volume (low thousands/day) is negligible at any frequency.
 
@@ -22,10 +22,10 @@ Twenty Postgres (workspace schema: `domainEvent`, `patient`, `patientProgram`, `
 | Source | Path | Freshness |
 |---|---|---|
 | mdba collections (clinic rules, condition/coverage inputs) | `streamline` (proven SPCS pipeline, mdba → sf) | ~seconds |
-| Twenty Postgres (events, entities) | CDC connector | ~15 min |
+| Twenty Postgres (events, entities) | CDC (`streamline`-pattern SPCS service) | ~15 min |
 | Other sources | `py-data` ELT | ~hourly |
 
-Rule of thumb: anything feeding qualification or an operating surface (sig-dash) that already lives in mdba goes on `streamline`; Twenty data rides CDC; `py-data` hourly is acceptable only for non-operational inputs. Sigma queries Snowflake live, so dashboard freshness equals the slowest contributing source — keep sig-dash marts on streamline/CDC-fed tables. If the 15-min CDC leg becomes the bottleneck, shorten connector sync first, streaming CDC second.
+Rule of thumb: anything feeding qualification or an operating surface (sig-dash) that already lives in mdba goes on `streamline`; Twenty data rides CDC; `py-data` hourly is acceptable only for non-operational inputs. Sigma queries Snowflake live, so dashboard freshness equals the slowest contributing source — keep sig-dash marts on streamline/CDC-fed tables. If the 15-min CDC leg becomes the bottleneck, shorten the service's sync interval first, streaming CDC second.
 
 ## Layers
 
@@ -37,7 +37,7 @@ MART_STATE   -- derived state, reconciliation, quality views
 
 ### RAW_TWENTY
 
-Connector-managed mirror of the workspace tables plus CDC metadata columns (`_synced_at`, `_deleted`). Never queried directly by consumers.
+Pipeline-managed mirror of the workspace tables plus CDC metadata columns (`_synced_at`, `_deleted`). Never queried directly by consumers.
 
 ### STG_EVENTS.EVENTS
 
