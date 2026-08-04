@@ -19,9 +19,12 @@ Three rules from WORKFLOW.md's `sync_linear` step, all of which are easy to get 
   block — never inferred from whatever workspace the API key happens to belong to.
 * **stateId is resolved once per run and passed explicitly on create**, so a team's triage intake
   cannot swallow a new sub-issue before anyone sees it.
-* **Sync owns the unstarted band only.** It sets Todo on create and heals Triage -> Todo on
-  update. It never writes In Progress, Blocked, In Review, Done or Canceled: those belong to
-  agents, Orca, and humans at merge, per `linear.status_ownership`.
+* **Sync owns the unstarted band, plus one narrow terminal write.** It sets Todo on create and
+  heals Triage -> Todo on update. It also moves an already-existing sub-issue straight to Done
+  when its task is checked off in tasks.md — sync is the trigger for that transition, immediate
+  with the checkoff rather than deferred to merge/archive. It never writes In Progress, Blocked,
+  In Review or Canceled, and it never touches the *parent* issue's status: that stays humans'
+  at merge/archive, per `linear.status_ownership`.
 
 Out-of-lane tasks (`destructive_ops`, `operational_discovery`) are **not** synced. They run on the
 Open Engine queue in team CCC under its own receipt-token protocol with its own status vocabulary,
@@ -66,9 +69,12 @@ workflow_mod = _sibling("workflow.py")
 
 API_URL = "https://api.linear.app/graphql"
 UNSTARTED = "Todo"
+DONE = "Done"
 TRIAGE = "Triage"
-# Sync may write these and nothing else. Everything from In Progress onward is owned elsewhere.
-SYNC_WRITABLE = frozenset({UNSTARTED})
+# Sync may write these and nothing else. In Progress, Blocked, In Review, Canceled are owned
+# elsewhere; Done is writable only via complete_sub, on an already-existing sub-issue whose
+# task is checked off — never on the parent issue.
+SYNC_WRITABLE = frozenset({UNSTARTED, DONE})
 
 
 class SyncError(Exception):
@@ -147,6 +153,7 @@ def desired_subissues(change: str, tasks: list[dict], work_orders: Path) -> list
             "key": task["key"],
             "title": issue_title(task),
             "description": work_order_body(change, task, work_orders),
+            "done": task["done"],
         }
         for task in tasks
         if task["dispatchable"]
@@ -170,9 +177,25 @@ def plan(desired: list[dict], existing: dict, parent_exists: bool, change: str) 
             continue
         if found.get("description") != item["description"] or found.get("title") != item["title"]:
             operations.append({"kind": "update_sub", "key": item["key"], "id": found["identifier"]})
-        # Sync owns the unstarted band only: heal the triage edge, touch nothing else.
+        # Sync owns the unstarted band: heal the triage edge, touch nothing else in that band.
         if found.get("status") == TRIAGE:
-            operations.append({"kind": "heal_status", "key": item["key"], "id": found["identifier"]})
+            operations.append({
+                "kind": "heal_status",
+                "key": item["key"],
+                "id": found["identifier"],
+                "state": UNSTARTED,
+            })
+        # The one terminal write sync owns: checkoff completes an existing sub-issue immediately,
+        # rather than waiting on merge/archive. Skipped once already Done or Canceled, so re-runs
+        # are a no-op.
+        if item["done"] and found.get("status") not in {DONE, "Canceled"}:
+            operations.append({
+                "kind": "complete_sub",
+                "key": item["key"],
+                "id": found["identifier"],
+                "from_status": found.get("status"),
+                "state": DONE,
+            })
 
     orphans = sorted(set(existing) - {d["key"] for d in desired})
     operations += [{"kind": "orphan", "key": k, "id": existing[k]["identifier"]} for k in orphans]
@@ -182,8 +205,10 @@ def plan(desired: list[dict], existing: dict, parent_exists: bool, change: str) 
 def assert_status_writes_are_legal(operations: list[dict], statuses: list[str]) -> None:
     """Belt and braces on the one rule whose violation is invisible until it has already happened.
 
-    Writing `In Progress` from a sync would silently steal a status band from the agents that own
-    it, and the damage looks like an agent misbehaving rather than a tool overreaching.
+    Writing `In Progress`, `Blocked`, `In Review` or `Canceled` from a sync would silently steal a
+    status band from the agents, Orca, or humans that own it, and the damage looks like an agent
+    misbehaving rather than a tool overreaching. `Done` is legal only via `complete_sub`, which
+    `plan()` only ever produces for an already-existing sub-issue whose task is checked off.
     """
     illegal = [
         op for op in operations if op.get("state") and op["state"] not in SYNC_WRITABLE and op["state"] in statuses
@@ -227,6 +252,9 @@ def fetch_context(client: LinearClient, team: str, project: str) -> dict:
     if UNSTARTED not in states:
         msg = f"team {team} has no {UNSTARTED!r} status; sync cannot place new issues in the unstarted band"
         raise SyncError(msg)
+    if DONE not in states:
+        msg = f"team {team} has no {DONE!r} status; sync cannot complete checked-off sub-issues"
+        raise SyncError(msg)
 
     projects = {n["name"]: n["id"] for n in team_node["projects"]["nodes"]}
     if project and project not in projects:
@@ -236,6 +264,7 @@ def fetch_context(client: LinearClient, team: str, project: str) -> dict:
     return {
         "team_id": team_node["id"],
         "todo_state_id": states[UNSTARTED],
+        "done_state_id": states[DONE],
         "project_id": projects.get(project) if project else None,
         "states": states,
     }
@@ -261,6 +290,20 @@ def fetch_existing(client: LinearClient, team: str, change: str) -> tuple[bool, 
     return True, existing
 
 
+def _render_op(op: dict) -> str:
+    if op["kind"] == "create_parent":
+        return f"  create parent   {op['title']}"
+    if op["kind"] == "create_sub":
+        return f"  create sub      {op['key']:<6} {op['title'][:80]}"
+    if op["kind"] == "update_sub":
+        return f"  update sub      {op['key']:<6} {op['id']} (description drifted from the work order)"
+    if op["kind"] == "heal_status":
+        return f"  heal status     {op['key']:<6} {op['id']} Triage -> {UNSTARTED}"
+    if op["kind"] == "complete_sub":
+        return f"  complete sub    {op['key']:<6} {op['id']} {op['from_status']} -> {DONE} (checked off in tasks.md)"
+    return f"  ORPHAN          {op['key']:<6} {op['id']} — no longer in tasks.md, left alone"
+
+
 def render_plan(operations: list[dict], out_of_lane: list[dict]) -> str:
     lines = []
     if not operations:
@@ -271,17 +314,7 @@ def render_plan(operations: list[dict], out_of_lane: list[dict]) -> str:
             counts[op["kind"]] = counts.get(op["kind"], 0) + 1
         lines.append("Plan: " + ", ".join(f"{v} {k}" for k, v in sorted(counts.items())))
         lines.append("")
-        for op in operations:
-            if op["kind"] == "create_parent":
-                lines.append(f"  create parent   {op['title']}")
-            elif op["kind"] == "create_sub":
-                lines.append(f"  create sub      {op['key']:<6} {op['title'][:80]}")
-            elif op["kind"] == "update_sub":
-                lines.append(f"  update sub      {op['key']:<6} {op['id']} (description drifted from the work order)")
-            elif op["kind"] == "heal_status":
-                lines.append(f"  heal status     {op['key']:<6} {op['id']} Triage -> {UNSTARTED}")
-            elif op["kind"] == "orphan":
-                lines.append(f"  ORPHAN          {op['key']:<6} {op['id']} — no longer in tasks.md, left alone")
+        lines += [_render_op(op) for op in operations]
 
     if out_of_lane:
         lines += ["", f"Not synced — Open Engine queue, team CCC ({len(out_of_lane)}):"]
@@ -339,6 +372,9 @@ def apply_plan(client: LinearClient, operations: list[dict], desired: list[dict]
             applied += 1
         elif op["kind"] == "heal_status":
             client.query(UPDATE_MUTATION, {"id": op["id"], "input": {"stateId": ctx["todo_state_id"]}})
+            applied += 1
+        elif op["kind"] == "complete_sub":
+            client.query(UPDATE_MUTATION, {"id": op["id"], "input": {"stateId": ctx["done_state_id"]}})
             applied += 1
     return applied
 
