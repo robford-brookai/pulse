@@ -1,6 +1,6 @@
 # PULSE program roadmap — waves, phases, stages
 
-Status: provisional · 2026-08-03
+Status: provisional · 2026-08-04 — Phase 1 archived, v1.5 shipped, release ladder added
 
 The dispatchable truth for the active change is
 `openspec/changes/pulse-ledger-core/tasks.md`; this document is the program-level projection over
@@ -23,8 +23,8 @@ Crosswalk:
 | Phase (ADR §6) | S-stages | Delivery vehicle | Waves |
 |---|---|---|---|
 | 0 — Absorption | S0.1 catalog spec, S0.2 catalog machinery | ✅ complete — `ocean-eventbridge-migration` (DNA-733), archived `2026-08-02-ocean-eventbridge-migration`, specs baseline seeded | 0–4 + post-merge ops, all done |
-| 1 — Record | S1.1 ledger schema + command API | **implementation complete — `pulse-ledger-core` (DNA-784)**, all 16 tasks merged; awaiting doc_update → verify → archive | 0–4, all done |
-| 2 — Ingress | S2, plus S1.2 verdict-relay, S1.3 schedules, S1.4 identity | gate cleared — names pinned (5.2); propose `s12`/`s13`/`s14` at S1.1 archive | — |
+| 1 — Record | S1.1 ledger schema + command API | ✅ **complete — `pulse-ledger-core` (DNA-784)**, all 16 tasks merged, archived `2026-08-03-pulse-ledger-core`; specs baseline updated (`command-api`, `ledger-distribution`, `ledger-read`, `ledger-record`) | 0–4, all done |
+| 2 — Ingress | S2, plus S1.2 verdict-relay, S1.3 schedules, S1.4 identity | gate cleared, S1.1 archived — propose `s12`/`s13`/`s14` now | — |
 | 3 — Projections | S3 (incl. migration M1) | queued | — |
 | 4 — Retirement | S4 | queued | — |
 
@@ -231,6 +231,48 @@ byte-identical.
 | BF-D4 | Billy import semantics | BF-5 grain 6 | Ethan |
 | Roles | quarantine reviewer (before genesis P0), compliance owner (before exec session), verdict steward (Luke, confirm), on-call (before P1), enablement lead (Carin, confirm) | as noted | exec session |
 | §8.1 | Object-model confirmation receipts (D2, D8, D9) | hygiene | Tal (+compliance for D9) |
+
+## Release ladder
+
+One GitHub release per phase exit, tagged on the merge commit that closes the phase's exit
+criteria (its **Done means** line above). Phase 0 predates this scheme — it shipped under the
+repo's legacy `v1.x` line (`v1.2`–`v1.4`) before the ADE workflow existed. Phase 1 is the bridge:
+a `.5` bump rather than a new major, because it closed out the `v1.x` line's unfinished business
+(the ledger core) rather than opening new program surface. From Phase 2 on, each phase exit is a
+whole major version — the phases are the program's real architectural increments, and a version
+number should say which one just became true, not which OpenSpec change happened to merge last.
+
+| Version | Phase | Exit criteria (ADR §6 / genesis §4) | Status |
+|---|---|---|---|
+| v1.2–v1.4 | pre-Phase-0 | legacy feature line (Sim Realism, Ticketing, Warehouse Sync) | shipped |
+| **v1.5** | 1 — Record | `pulse-ledger-core` archived, 16/16 tasks | **shipped 2026-08-04** |
+| v2.0 | 2 — Ingress | "Zero direct emits of catalog-state events, checked in CI" + all four sanctioned command sources live (kanban webhook, Customer.io ingress, identity service, verdict relay) + Demo 2 receipt | next — midterm objective |
+| v3.0 | 3 — Projections | Reconciliation clean over one full cycle; projections rebuild from ledger in a drill; M1 retired (no consumer writes `patients.enrollment_status`) | queued |
+| v4.0 | 4 — Retirement | No warehouse model answers patient status by inference; funnel counts read the ledger + verdict chain | queued |
+| v5.0 | Genesis + cutover | Phase 4 exit + genesis acceptance (genesis §4 a–d) + cutover P3 exit (zero POCAR writes 30 days) — **Program done** | longterm objective |
+
+Two tracks run underneath this ladder rather than owning a rung in it, because neither closes on
+a phase boundary:
+
+- **Backfill (BF-0…BF-6)** — BF-3/BF-4 land inside v1.5/v5.0 respectively (the loader shipped in
+  `pulse-ledger-core`; the seed run *is* `genesis-seed-run`), but BF-5 history and BF-6 epoch
+  wiring are explicitly **not** gated by program-done: per grain, indefinitely after cutover. A
+  v5.0 release note should say so explicitly rather than imply history is finished.
+- **Runtime and ops** (`pulse-spcs-deployment`, `environment-matrix`, `observability`) — these
+  gate specific phase milestones (`environment-matrix` gates Demo 3's staging leg and cutover P0)
+  but ship as prerequisites woven into whichever phase needs them, not as their own version.
+
+**Midterm objective: v2.0.** Seven changes, all currently gate-clear or one hop from it
+(`s12-verdict-relay`, `s13-schedules`, `s14-identity`, `catalog-authority`,
+`twenty-kanban-webhook-ingress`, `customerio-consent-ingress`, `producer-ingress-policy`), plus
+the still-open `idempotency_key`/`replayed` HTTP wiring gap (DNA-801) that gates
+`s12-verdict-relay`'s enqueue path — close that first.
+
+**Longterm objective: v5.0 — Program done.** Everything after v2.0 is sequential and gated
+(Phase 3 needs Phase 2 exit + a Twenty dev instance; Phase 4 needs Phase 3 exit; genesis needs
+`s14-identity` merged, the quarantine-reviewer role filled, and `synthea-seed` merged), so v2.0 is
+the only near-term rung; v3.0/v4.0/v5.0 are the standing target the ladder above exists to track
+progress against, not decisions to revisit each time.
 
 ## Program done
 
