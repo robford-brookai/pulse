@@ -71,6 +71,74 @@ services:
       timeout: 5s
       retries: 3
 
+  # PULSE ledger's own store (pulse-ledger-core design decision 1): a separate Postgres from
+  # ocean's, since the `ledger` schema is a distinct service's data, not ocean's. Its alembic
+  # sequence (packages/pulse-ledger/infra/postgres) is deliberately separate from ocean's own
+  # `migrate` below — the collision lane task 4.5's design explicitly avoids.
+  ledger-postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ledger
+      POSTGRES_USER: ledger
+      POSTGRES_PASSWORD: ${LEDGER_POSTGRES_PASSWORD:-changeme}
+    ports:
+      - "5434:5432"
+    volumes:
+      - ledger_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ledger"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Idempotent by alembic's own contract: re-running against a database already at head is a no-op.
+  ledger-migrate:
+    image: python:3.13-slim
+    working_dir: /migrations
+    command: >
+      bash -c "
+        pip install --quiet alembic 'psycopg[binary]' sqlalchemy &&
+        alembic upgrade head
+      "
+    environment:
+      # `+psycopg` (v3), matching pulse-ledger's own runtime dependency — env.py's SQLAlchemy
+      # engine otherwise defaults a bare `postgresql://` DSN to psycopg2, which isn't installed.
+      DATABASE_URL: postgresql+psycopg://ledger:${LEDGER_POSTGRES_PASSWORD:-changeme}@ledger-postgres:5432/ledger
+    volumes:
+      - ../../pulse-ledger/infra/postgres:/migrations:ro
+    depends_on:
+      ledger-postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # The outbox relay (task 4.4) run as a long-lived loop (pulse_ledger.relay_worker, task 4.5).
+  # Publishes onto this same bus, so any consumer already subscribed to the `patient-state`
+  # domain (event-store, warehouse-sync — ocean_broker.catalog.CONSUMER_DOMAINS) observes a
+  # committed ledger event with no topology change of its own.
+  ledger-relay:
+    image: python:3.13-slim
+    command: >
+      bash -c "
+        pip install --quiet /pulse-core /ocean-broker /pulse-ledger &&
+        python -m pulse_ledger.relay_worker
+      "
+    environment:
+      <<: *localstack-env
+      # Plain `postgresql://` — psycopg.connect (v3) parses a libpq URI directly and does not
+      # understand the `+driver` suffix SQLAlchemy dialects use.
+      DATABASE_URL: postgresql://ledger:${LEDGER_POSTGRES_PASSWORD:-changeme}@ledger-postgres:5432/ledger
+    volumes:
+      - ../../pulse-core:/pulse-core:ro
+      - ../../pulse-ledger:/pulse-ledger:ro
+      - ../libs/ocean-broker:/ocean-broker:ro
+    depends_on:
+      ledger-migrate:
+        condition: service_completed_successfully
+      localstack-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
   postgres:
     image: pgvector/pgvector:pg16
     environment:
@@ -492,3 +560,4 @@ services:
 
 volumes:
   postgres_data:
+  ledger_postgres_data:

@@ -99,8 +99,13 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 # Scaffold gates 7 and 9 spin up a git sandbox and a fresh-clone `uv sync`.
 # They are excluded from the default run; `task test:all` includes them.
-markers = ["slow: sandbox and fresh-clone gates, excluded from the default run"]
-addopts = '-m "not slow"'
+# `integration` (task 4.5) needs Docker (LocalStack via testcontainers) and no live network in
+# CI by default (see Conventions in CLAUDE.md); `task test:integration` runs it explicitly.
+markers = [
+    "slow: sandbox and fresh-clone gates, excluded from the default run",
+    "integration: needs Docker, excluded from the default run",
+]
+addopts = '-m "not slow and not integration"'
 # The scaffold gates are named cat1_structure.py .. cat9_golden_workflow.py so the filename
 # states which gate it is. Without this they match no default pattern and are silently skipped
 # by `task test` and CI, while still passing when run by explicit path.
