@@ -81,6 +81,27 @@ class SyncError(Exception):
     """The sync cannot proceed."""
 
 
+def resolve_tasks_md(change: str) -> Path:
+    """Find a change's tasks.md whether it's active or already archived.
+
+    `openspec archive` moves tasks.md to `openspec/changes/archive/<date>-<change>/`, but the
+    Linear-side identity of the change (parent issue title, `[CHANGE] <change>`) never changes —
+    so callers must keep passing the plain change name, never the archive path, or sync creates
+    a duplicate parent instead of finding the existing one.
+    """
+    active = Path("openspec/changes") / change / "tasks.md"
+    if active.exists():
+        return active
+    matches = sorted(Path("openspec/changes/archive").glob(f"*-{change}/tasks.md"))
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        msg = f"multiple archived tasks.md match `{change}`: {[str(m) for m in matches]}"
+        raise SyncError(msg)
+    msg = f"no tasks.md found for `{change}` (checked {active} and openspec/changes/archive/*-{change}/)"
+    raise SyncError(msg)
+
+
 class LinearClient:
     """Minimal GraphQL client. stdlib only, so this adds no dependency to the workspace."""
 
@@ -410,7 +431,7 @@ def main() -> int:
 
     try:
         team, project = _target(workflow_mod.load()[0])
-        tasks = dispatch_tasks.parse_tasks(Path("openspec/changes") / args.change / "tasks.md")
+        tasks = dispatch_tasks.parse_tasks(resolve_tasks_md(args.change))
         dispatch_tasks.validate(tasks)
         desired = desired_subissues(args.change, tasks, args.work_orders)
         out_of_lane = [t for t in tasks if not t["dispatchable"]]

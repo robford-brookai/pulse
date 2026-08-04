@@ -507,6 +507,33 @@ def test_lint_exits_zero_when_the_live_check_is_skipped(tmp_path: Path, capsys: 
 
 linear_sync = load_script("linear_sync.py")
 
+
+def test_resolve_tasks_md_finds_active_change(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    active = tmp_path / "openspec/changes/pulse-ledger-core"
+    active.mkdir(parents=True)
+    (active / "tasks.md").write_text("- [x] 1.1 Done\n")
+    monkeypatch.chdir(tmp_path)
+
+    assert linear_sync.resolve_tasks_md("pulse-ledger-core").resolve() == (active / "tasks.md").resolve()
+
+
+def test_resolve_tasks_md_falls_back_to_archive(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    archived = tmp_path / "openspec/changes/archive/2026-08-03-pulse-ledger-core"
+    archived.mkdir(parents=True)
+    (archived / "tasks.md").write_text("- [x] 1.1 Done\n")
+    monkeypatch.chdir(tmp_path)
+
+    assert linear_sync.resolve_tasks_md("pulse-ledger-core").resolve() == (archived / "tasks.md").resolve()
+
+
+def test_resolve_tasks_md_missing_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / "openspec/changes/archive").mkdir(parents=True)
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(linear_sync.SyncError, match=r"no tasks\.md found"):
+        linear_sync.resolve_tasks_md("pulse-ledger-core")
+
+
 SYNC_TASKS_MD = """\
 # Tasks
 
