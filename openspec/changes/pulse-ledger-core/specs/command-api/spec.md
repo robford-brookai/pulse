@@ -59,12 +59,20 @@ Each internal writer SHALL authenticate with its own credential, and the API SHA
 event's `actor` from the credential — a writer SHALL NOT be able to declare events as any identity
 other than its own (D15). System actors SHALL carry evidence references.
 
+A command body SHALL NOT carry `actor_type`, `actor_id`, `actor_authority`, or `producer` at all,
+even when the value agrees with the credential. One rule to state and one rule to test, with no
+value-comparison edge cases.
+
 #### Scenario: A writer cannot spoof another actor
 
 - **GIVEN** a request authenticated as `verdict-relay`
 - **WHEN** its body claims actor `reconciliation`
-- **THEN** the command is rejected or committed with actor `verdict-relay`, per a single documented
-  behavior — never committed as `reconciliation`
+- **THEN** the command is rejected, and no event is written
+
+The scenario previously permitted either rejection or a silent correction to `verdict-relay`. Task
+3.4 chose rejection: overwriting a body-supplied actor makes a misconfigured producer
+indistinguishable from a correct one forever, because the ledger records the corrected value and the
+writer never learns. Rejection is the only behaviour a writer can notice.
 
 ### Requirement: Command types are generated from the catalog
 

@@ -44,9 +44,29 @@ See proposal.md — Why. Constraints that shape the design:
    nullable, `payload` JSONB), `current_state` (one row per subject, updated in-transaction),
    `idempotency_keys` (key PK → event_id, kept forever per D16), `outbox` (event_id, subject_key,
    per-subject `seq`, attempts, published_at), `writer_state` (writer_id, cursor JSONB),
-   `review_queue` (subject ref, hold fact ref, candidate set, pending flag). Alembic sequence
-   separate from ocean's (`packages/pulse-ledger/infra/postgres/`), avoiding the 3.0-style
-   collision lane entirely.
+   `review_queue` (subject ref, hold fact ref, candidate set, pending flag, and
+   `resolution_event_id` — a row leaves the queue only by naming the resolution that drained it).
+
+   Two further tables serve the identity lookups `ledger-read` requires, added by migration 0003:
+   `external_identifiers` (PK `(system, value)` — the uniqueness rule *is* the primary key, so an
+   identifier resolves to at most one person by construction; append-only for the service role, and
+   rebinding is a `merge_person` declaration rather than an UPDATE) and `person_match_keys` (the
+   composite the deterministic matcher falls back to, stored as a **sha256 digest only** — the
+   readable composite is last name + DOB + sex + first-initial, which is PHI, and a `[0-9a-f]{64}`
+   check constraint is what keeps it out of the ledger by construction). Eight tables, not six.
+
+   `external_identifiers` is a **registry, not a state-bearing subject**: `person` is absent from the
+   catalog's `TRANSITIONS` and from `events.subject_type`'s check constraint, so an attachment is a
+   registry row carrying its actor attribution, not a ledger event. This matches the object model
+   (`design/migration/rpc-object-model-assessment.md`: ExternalIdentifier is a registry child,
+   state-bearing: no). Making every attachment an event instead would require adding `person` as a
+   subject type in both the catalog and the check constraint — a spec-level decision, not an
+   implementation one, and deliberately not taken here.
+
+   Alembic sequence separate from ocean's (`packages/pulse-ledger/infra/postgres/`), avoiding the
+   3.0-style collision lane entirely. Within this sequence, revision ids are unique and single-headed
+   by gate: `tests/test_migration_graph.py` holds that invariant, because alembic itself only warns
+   on a duplicate revision id and then silently drops one of the two migrations.
    *Alternative rejected:* events in Snowflake directly — write-path latency (p99 < 500 ms) and
    transactional co-commit rule it out; Snowflake stays the verification/analytics layer.
 2. **Transport: HTTP + JSON service (`packages/pulse-ledger`), client SDK `packages/pulse-core`

@@ -61,3 +61,26 @@ queue only by a declared resolution from the reviewer role.
 - **WHEN** the review queue is read
 - **THEN** the referral appears as pending with its candidate set, and after a reviewer declares
   the resolution it no longer appears
+
+#### Scenario: A resolved review names the resolution that drained it
+
+- **GIVEN** a pending review
+- **WHEN** it is drained by the quarantine reviewer
+- **THEN** the row records the declared resolution's event id, and a row that has left the queue
+  while naming no resolution is refused by the store
+
+#### Scenario: A subject is pending at most once
+
+- **GIVEN** a subject with a pending review
+- **WHEN** it is quarantined again
+- **THEN** the second quarantine is refused and names the existing review, so a retry cannot
+  double-enqueue the same referral
+
+Candidate sets hold pseudonymous person keys only — never demographics. The reviewer follows those
+keys to the resolver's own evidence record.
+
+`resolution_hold` holds a subject *without* moving it, so it has no committable form until the
+write path accepts non-state-bearing facts: `commit_declaration` requires a `to_state` and the
+catalog has no `received → received` edge. Task 3.5 introduces the first such vocabulary
+(`reconstruction_gap`) and `resolution_hold` belongs with it. Until then a caller passes the
+`event_id` of the hold fact and the store's foreign key enforces that some event exists.
