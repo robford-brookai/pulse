@@ -73,9 +73,11 @@ COMMANDS_BATCH_PATH = "/commands:batch"
 TWENTY_WEBHOOK_PATH = "/webhooks/twenty"
 WRITER_CURSOR_PATH = CURSOR_PATH_TEMPLATE
 
-#: Injected by the service entrypoint; a fake in tests. Anything that turns one declaration into
-#: one commit result, including opening and owning the transaction.
-Committer = Callable[[Declaration], CommitResult]
+#: Injected by the service entrypoint; a fake in tests. Anything that turns one declaration and
+#: its idempotency key (`None` when the body carried none) into one commit result, including
+#: opening and owning the transaction — `pulse_ledger.idempotency.commit_idempotent` in the
+#: running service.
+Committer = Callable[[Declaration, "str | None"], CommitResult]
 
 #: Injected the same way as `Committer` — a fake in tests, the real store (`pulse_ledger.cursor`)
 #: in the running service. `CursorReader` mirrors `get_cursor`'s contract: `None` is "no cursor
@@ -121,6 +123,30 @@ class MalformedBodyError(DeclarationError):
 
     def __init__(self) -> None:
         super().__init__("the request body must be a JSON object")
+
+
+class MalformedIdempotencyKeyError(DeclarationError):
+    """An `idempotency_key` that is not a string — refused, never coerced or dropped."""
+
+    def __init__(self) -> None:
+        super().__init__("'idempotency_key' must be a string")
+
+
+def split_idempotency_key(body: object) -> tuple[object, str | None]:
+    """Carve `idempotency_key` out of the body before the unknown-field check sees it.
+
+    The key addresses the commit, not the event — `Declaration` has no place for it, so it is
+    extracted here rather than allow-listed in `coerce_declaration_fields`. Absence is fine: the
+    key is accepted-if-present at this boundary, and a keyless body still commits (DNA-801).
+    Non-dict bodies pass through untouched for `declaration_from_request` to reject.
+    """
+    if not isinstance(body, dict) or "idempotency_key" not in body:
+        return body, None
+    key = body["idempotency_key"]
+    if not isinstance(key, str):
+        raise MalformedIdempotencyKeyError()
+    remainder = {name: value for name, value in body.items() if name != "idempotency_key"}
+    return remainder, key
 
 
 class NoCursorError(LookupError):
@@ -244,6 +270,7 @@ def _commit_response(result: CommitResult) -> dict[str, object]:
         "rule_version": result.rule_version,
         "outbox_seq": result.outbox_seq,
         "state": state,
+        "replayed": result.replayed,
     }
 
 
@@ -403,8 +430,9 @@ def create_app(
             body: Any = json.loads(await request.body())
         except ValueError as exc:
             raise MalformedBodyError() from exc
+        body, idempotency_key = split_idempotency_key(body)
         declaration = declaration_from_request(body, writer)
-        return _commit_response(committer(declaration))
+        return _commit_response(committer(declaration, idempotency_key))
 
     _install_cursor_routes(app, credentials, read_cursor, write_cursor)
 
@@ -428,8 +456,9 @@ def create_app(
             raise MalformedBodyError() from exc
         if not isinstance(body, list):
             raise MalformedBatchBodyError()
-        declarations = [declaration_from_request(item, writer) for item in body]
-        return [_commit_response(committer(declaration)) for declaration in declarations]
+        split = [split_idempotency_key(item) for item in body]
+        declarations = [(declaration_from_request(item, writer), key) for item, key in split]
+        return [_commit_response(committer(declaration, key)) for declaration, key in declarations]
 
     if webhook.enabled:
         secret = webhook.secret
