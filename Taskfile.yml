@@ -137,6 +137,11 @@ tasks:
     cmds:
       - uv run pytest {{.TESTS}} -m "slow or not slow" {{.COV_PATHS}} --cov-report=term-missing
 
+  test:integration:
+    desc: Run Docker-backed integration tests (LocalStack via testcontainers), e.g. the ledger relay smoke (4.5)
+    cmds:
+      - uv run pytest {{.TESTED_PATHS}} --import-mode=importlib -m integration
+
   # --- 5. Gate ---
 
   # `check` is the contract between a developer's machine and CI:

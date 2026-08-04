@@ -50,6 +50,12 @@ MIN_TOKEN_LENGTH = 32
 #: different (still disabled) route.
 INTERNAL_ACTOR_TYPE = "system"
 
+#: The one writer identity permitted to declare the backfill-only vocabulary
+#: (`backfill_genesis`, `reconstruction_gap` — command-api spec "Backfill mode is the same path
+#: with a restricted vocabulary", task 3.5). Configured like any other writer, via
+#: `PULSE_LEDGER_WRITER_TOKEN_BACKFILL`.
+BACKFILL_ACTOR_ID = "backfill"
+
 #: The fields a credential decides. A body may not carry them — see `Writer.attribute`.
 CREDENTIAL_DERIVED_FIELDS = ("actor_type", "actor_id", "actor_authority", "producer")
 

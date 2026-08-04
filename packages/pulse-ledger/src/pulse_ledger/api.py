@@ -13,6 +13,11 @@ What this module is responsible for, and deliberately nothing else:
 - **A rejection surface a client can act on.** 401 unauthenticated, 403 authenticated-but-not-that
   actor, 422 malformed or catalog-illegal — the last carrying the catalog's reason and version, as
   the spec requires.
+- **Bulk backfill mode (task 3.5).** `POST /commands:batch` is the same boundary run once per item
+  in an array, so the backfill loader authenticates once for a whole reconstructed sequence. The
+  `backfill_genesis` and `reconstruction_gap` vocabulary is further restricted to the backfill
+  actor here — the one place a command's declared type and its authenticated writer are both in
+  scope, same reasoning as the spoof check above.
 
 The commit path is injected rather than imported-and-called: this module never opens a
 transaction, and the service entrypoint (task 4.5) supplies the connection. That is also what lets
@@ -42,9 +47,10 @@ from typing import Any
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
-from pulse_core.cursor import CURSOR_PATH_TEMPLATE, InvalidCursorError, validate_cursor
+from pulse_core.generated import BACKFILL_ONLY_COMMAND_TYPES
 
 from pulse_ledger.auth import (
+    BACKFILL_ACTOR_ID,
     SIGNATURE_HEADER,
     TIMESTAMP_HEADER,
     ActorSpoofError,
@@ -62,6 +68,7 @@ from pulse_ledger.validation import IllegalTransitionError
 logger = logging.getLogger(__name__)
 
 COMMANDS_PATH = "/commands"
+COMMANDS_BATCH_PATH = "/commands:batch"
 TWENTY_WEBHOOK_PATH = "/webhooks/twenty"
 WRITER_CURSOR_PATH = CURSOR_PATH_TEMPLATE
 
@@ -115,12 +122,26 @@ class MalformedBodyError(DeclarationError):
         super().__init__("the request body must be a JSON object")
 
 
-class NoCursorError(LookupError):
-    """`GET /writers/{writer_id}/cursor` for a writer that has never checkpointed one. Maps to 404."""
+class MalformedBatchBodyError(DeclarationError):
+    """A `:batch` request body that is not a JSON array of commands."""
 
-    def __init__(self, writer_id: str) -> None:
+    def __init__(self) -> None:
+        super().__init__("the request body must be a JSON array of commands")
+
+
+class BackfillActorRequiredError(Exception):
+    """A backfill-only event type declared by a writer other than the backfill actor.
+
+    Maps to 403 — authenticated, but not the identity the command-api spec restricts this
+    vocabulary to ("Backfill mode is the same path with a restricted vocabulary", task 3.5).
+    """
+
+    def __init__(self, event_type: str, writer_id: str) -> None:
+        self.event_type = event_type
         self.writer_id = writer_id
-        super().__init__(f"no cursor persisted for writer {writer_id!r}")
+        super().__init__(
+            f"{event_type!r} may only be declared by the backfill actor {BACKFILL_ACTOR_ID!r}, not {writer_id!r}"
+        )
 
 
 class UnparseableTimestampError(DeclarationError):
@@ -191,7 +212,10 @@ def declaration_from_request(body: object, writer: Writer) -> Declaration:
     if not isinstance(body, dict):
         raise MalformedBodyError()
     attributed = writer.attribute(body)
-    return Declaration.from_mapping(coerce_declaration_fields(attributed))
+    declaration = Declaration.from_mapping(coerce_declaration_fields(attributed))
+    if declaration.event_type in BACKFILL_ONLY_COMMAND_TYPES and writer.writer_id != BACKFILL_ACTOR_ID:
+        raise BackfillActorRequiredError(declaration.event_type, writer.writer_id)
+    return declaration
 
 
 def _commit_response(result: CommitResult) -> dict[str, object]:
@@ -244,6 +268,19 @@ def _install_error_handlers(app: FastAPI) -> None:
                     "claimed": exc.claimed,
                 }
             },
+        )
+
+    @app.exception_handler(BackfillActorRequiredError)
+    async def _backfill_restricted(request: Request, exc: Exception) -> Response:
+        assert isinstance(exc, BackfillActorRequiredError)  # noqa: S101 — handler is registered for this type
+        logger.warning(
+            "writer %s attempted backfill-only event type %r; rejected",
+            exc.writer_id,
+            exc.event_type,
+        )
+        return JSONResponse(
+            status_code=403,
+            content={"detail": {"message": str(exc), "event_type": exc.event_type, "writer_id": exc.writer_id}},
         )
 
     @app.exception_handler(IllegalTransitionError)
@@ -330,28 +367,28 @@ def create_app(
         declaration = declaration_from_request(body, writer)
         return _commit_response(committer(declaration))
 
-    @app.get(WRITER_CURSOR_PATH)
-    async def get_writer_cursor(writer_id: str, request: Request) -> dict[str, object]:
-        writer = credentials.resolve(bearer_token(request.headers.get("Authorization")))
-        _require_own_writer(writer, writer_id)
-        stored = read_cursor(writer_id)
-        if stored is None:
-            raise NoCursorError(writer_id)
-        return _cursor_response(stored)
+    @app.post(COMMANDS_BATCH_PATH, status_code=201)
+    async def submit_command_batch(request: Request) -> list[dict[str, object]]:
+        """Bulk backfill mode: one bearer credential, one array of commands, same validation.
 
-    @app.put(WRITER_CURSOR_PATH, status_code=200)
-    async def put_writer_cursor(writer_id: str, request: Request) -> dict[str, object]:
+        Every item runs through the same `declaration_from_request` boundary as `/commands` — the
+        same catalog legality, the same attribution, and the same backfill-actor restriction — so
+        the batch is "the same endpoint family" the spec requires rather than a second write path.
+        Declarations are built for the whole array before any of them commits: a malformed or
+        spoofed item further down the array aborts the batch before its predecessors are attempted.
+        Once committing starts, each item is its own call to `committer` (its own transaction, as
+        `/commands` already is) — the array is a convenience for the backfill loader's single
+        credential, not an atomic unit across items.
+        """
         writer = credentials.resolve(bearer_token(request.headers.get("Authorization")))
-        _require_own_writer(writer, writer_id)
         try:
             body: Any = json.loads(await request.body())
         except ValueError as exc:
             raise MalformedBodyError() from exc
-        if not isinstance(body, dict):
-            raise MalformedBodyError()
-        canonical = validate_cursor(body)
-        stored = write_cursor(writer_id, canonical)
-        return _cursor_response(stored)
+        if not isinstance(body, list):
+            raise MalformedBatchBodyError()
+        declarations = [declaration_from_request(item, writer) for item in body]
+        return [_commit_response(committer(declaration)) for declaration in declarations]
 
     if webhook.enabled:
         secret = webhook.secret
