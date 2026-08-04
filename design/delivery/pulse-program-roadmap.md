@@ -23,8 +23,8 @@ Crosswalk:
 | Phase (ADR §6) | S-stages | Delivery vehicle | Waves |
 |---|---|---|---|
 | 0 — Absorption | S0.1 catalog spec, S0.2 catalog machinery | ✅ complete — `ocean-eventbridge-migration` (DNA-733), archived `2026-08-02-ocean-eventbridge-migration`, specs baseline seeded | 0–4 + post-merge ops, all done |
-| 1 — Record | S1.1 ledger schema + command API | **active — `pulse-ledger-core` (DNA-784)** | 0–4 |
-| 2 — Ingress | S2, plus S1.2 verdict-relay, S1.3 schedules, S1.4 identity | queued, gated on S1.1 | — |
+| 1 — Record | S1.1 ledger schema + command API | **implementation complete — `pulse-ledger-core` (DNA-784)**, all 16 tasks merged; awaiting doc_update → verify → archive | 0–4, all done |
+| 2 — Ingress | S2, plus S1.2 verdict-relay, S1.3 schedules, S1.4 identity | gate cleared — names pinned (5.2); propose `s12`/`s13`/`s14` at S1.1 archive | — |
 | 3 — Projections | S3 (incl. migration M1) | queued | — |
 | 4 — Retirement | S4 | queued | — |
 
@@ -38,15 +38,23 @@ Crosswalk:
 
 ## Active change: `pulse-ledger-core` (S1.1)
 
-Snapshot 2026-08-03 (after main `908b10d`): **1 / 15 tasks merged.**
+Snapshot 2026-08-03 (after PR #94): **implementation complete — all 16 tasks done** (5.2, this
+document refresh, is the last to merge). Remaining lifecycle steps: collect → doc_update →
+verify → merge → archive.
 
 | Wave | Tasks | State |
 |---|---|---|
-| 0 — schema and scaffold | 1.1–1.2 | 1.1 ✅ (#70); 1.2 in flight (worktree task-002) |
-| 1 — generated command surface | 2.1 | held — serial, releases when 1.2 merges |
-| 2 — the write path | 3.1–3.5 | held |
-| 3 — reads, client, distribution | 4.1–4.5 | held |
-| 4 — proof and documentation | 5.1–5.2 | held |
+| 0 — schema and scaffold | 1.1–1.2 | ✅ |
+| 1 — generated command surface | 2.1 | ✅ |
+| 2 — the write path | 3.1–3.5 | ✅ |
+| 3 — reads, client, distribution | 4.1–4.5 | ✅ |
+| 4 — proof and documentation | 5.1–5.3 | ✅ (5.2 = this refresh; Demo 1 receipt from 5.3 attaches to DNA-784 before archive) |
+
+One known end-to-end gap survives the change, flagged independently by tasks 4.3 and 5.3:
+`pulse_ledger.api` does not yet accept an `idempotency_key` body field or echo `replayed`, so
+`pulse_core.client` is not wired to the live replay semantics (the commit path itself is). Tracked
+as DNA-801, in `docs/contracts/publishes.md`, and in ADR-0003 (Consequences); it gates
+`s12-verdict-relay` enqueue.
 
 ## Remaining waves — provisional master plan
 
@@ -100,8 +108,11 @@ means** lines quote ADR §6 exits verbatim.
 
 ### Phase 2 — Ingress
 
-Gate for the S1.x siblings: `pulse-ledger-core` through wave 4 (task 5.2 / DNA-799 pins client
-path, read endpoints, quarantine table, cursor facility, handler signature).
+Gate for the S1.x siblings: **cleared** — `pulse-ledger-core` is through wave 4, and task 5.2 /
+DNA-799 pinned the names in `design/delivery/pulse-s1-work-orders.md` (client path, read surface,
+quarantine table, cursor facility, handler signature). One caveat carries: the
+`idempotency_key`/`replayed` HTTP wiring gap noted in the active-change section above must land
+before `s12-verdict-relay`, whose declarer depends on replay classification.
 
 | Change | Delivers | Gate |
 |---|---|---|
