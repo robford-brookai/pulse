@@ -98,7 +98,7 @@ downstream-facing tests and exercised against a local Postgres in service tests.
       backfill) for each subject type; independently fold events and assert equality with
       `current_state`; flat-projection columns present for the STG_EVENTS contract.
       `[model: opus | deps: 3.5, 4.1, 4.4 | lane: repo_change | wave: 4]`
-- [ ] 5.2 [DNA-799] Pin the downstream names: update `design/delivery/pulse-s1-work-orders.md` "confirm
+- [x] 5.2 [DNA-799] Pin the downstream names: update `design/delivery/pulse-s1-work-orders.md` "confirm
       path" markers (client path, read endpoints, quarantine table, cursor facility, handler
       signature) and the roadmap's queued-changes row; supersession notes on the two v1 platform
       docs (envelope ingest posture, state-catalog grain/legality). ADR entry in `docs/adr/`;
