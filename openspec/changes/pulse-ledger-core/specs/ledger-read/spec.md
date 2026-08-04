@@ -49,6 +49,16 @@ completed work.
 - **WHEN** the writer restarts and reads its cursor
 - **THEN** it receives C and continues from batch N+1, and idempotency makes any overlap a replay
 
+#### Scenario: A writer cannot touch another writer's cursor
+
+- **GIVEN** a request authenticated as writer A
+- **WHEN** it calls `GET` or `PUT /writers/{writer_id}/cursor` for writer B's `writer_id`
+- **THEN** the request is rejected and no cursor is read or written
+
+Cursor access enforces the same D15 rule the command API states for command bodies: the
+authenticated identity is the only writer whose cursor a request may read or write, and a path
+`writer_id` that disagrees with the bearer credential is rejected as identity spoofing.
+
 ### Requirement: Ambiguous resolutions land in a review queue
 
 The ledger schema SHALL include a quarantine review queue: a subject held with a
@@ -79,8 +89,8 @@ queue only by a declared resolution from the reviewer role.
 Candidate sets hold pseudonymous person keys only — never demographics. The reviewer follows those
 keys to the resolver's own evidence record.
 
-`resolution_hold` holds a subject *without* moving it, so it has no committable form until the
-write path accepts non-state-bearing facts: `commit_declaration` requires a `to_state` and the
-catalog has no `received → received` edge. Task 3.5 introduces the first such vocabulary
-(`reconstruction_gap`) and `resolution_hold` belongs with it. Until then a caller passes the
-`event_id` of the hold fact and the store's foreign key enforces that some event exists.
+`resolution_hold` holds a subject *without* moving it. Task 3.5 gave such non-state-bearing facts
+a committable form: a declaration may carry no `to_state`, in which case the write path commits
+the fact without catalog-transition validation or a state re-fold, so `resolution_hold` (and
+`reconstruction_gap`) commit through the normal write path rather than requiring raw store
+inserts.
