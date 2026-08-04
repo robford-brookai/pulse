@@ -78,7 +78,7 @@ downstream-facing tests and exercised against a local Postgres in service tests.
 - [x] 4.2 [DNA-794] Writer-state cursors: `PUT/GET /writers/{writer_id}/cursor` + `pulse_core` accessors.
       Test: crash/resume round-trip.
       `[model: sonnet | deps: 3.4 | lane: repo_change | wave: 3]`
-- [ ] 4.3 [DNA-795] `pulse_core` client: command submission with response classification
+- [x] 4.3 [DNA-795] `pulse_core` client: command submission with response classification
       (committed/replayed/rejected/transient), retry/backoff on transient only, and the
       `consume(handler)` convention (SQS receive/process/delete, event_id dedupe). Tests: each
       classification mapped; handler safe under redelivery.
@@ -94,7 +94,7 @@ downstream-facing tests and exercised against a local Postgres in service tests.
 
 ## 5. Wave 4 — proof and documentation
 
-- [ ] 5.1 [DNA-798] End-to-end fold equivalence: commit a mixed history (forward, backdated, reversal,
+- [x] 5.1 [DNA-798] End-to-end fold equivalence: commit a mixed history (forward, backdated, reversal,
       backfill) for each subject type; independently fold events and assert equality with
       `current_state`; flat-projection columns present for the STG_EVENTS contract.
       `[model: opus | deps: 3.5, 4.1, 4.4 | lane: repo_change | wave: 4]`
