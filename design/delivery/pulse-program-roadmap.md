@@ -138,9 +138,22 @@ Gate: Phase 2 exit; Twenty dev instance from `environment-matrix`.
 | `twenty-projection` | ledger-fed consumer: upserts on `(subject_id, ledger_seq)`, monotonic apply, heal-back write (closes D8 end-to-end), read-only status fields | `pulse-app-scaffold` |
 | `customerio-projection` | segment/attribute sync from ledger events | Phase 2 exit |
 | `snowflake-projection` | STG_EVENTS ledger contract (flat projection proven in S1.1 task 5.1) atop the existing `OCEAN_RAW.EVENTS` landing | Phase 2 exit |
+| `survey-engine-ingress` | PX survey responses become attributed commands/facts on the ledger's single write path — actor is the survey engine's service identity, message-level provenance, same shape as `customerio-consent-ingress`; born compliant with the `producer-ingress-policy` CI gate | Phase 2 exit + PX schema validation |
 | `reconciliation-sweeps` | per-family referee sweeps generalizing S1.3's consent sweep; corrections actor `reconciliation`; optional legacy-inference drift sentinel (legacy-harvest #4) | `snowflake-projection` |
 | `projection-rebuild-drill` | ADR §4.6 authoritative rebuild as a drill; **carries Demo 3** | `twenty-projection` |
 | `m1-retire-patient-state` | ADR §6.2: `patients` rows only from ledger projection; three read surfaces cut over; `enrollment_status` read-only; `alerts.py` bootstrap insert deleted | `twenty-projection` |
+
+Why `survey-engine-ingress` sits here and not mid-Phase 2: it is an ingress producer, so it
+enters after the producer rules exist (`producer-ingress-policy`) — no grandfathering, and
+Phase 2's pinned ADR §6 exit criteria stay untouched. PX's identity-resolution need is served by
+`s14-identity`'s published matcher contract, not a parallel matcher; its "non-response as
+first-class state" is a state-catalog modeling question that lands via `catalog-authority` (D18);
+its 24h-queryable warehouse metric is the `snowflake-projection` STG_EVENTS contract — hence the
+early-Phase-3 slot alongside it. The gate's "PX schema validation" half is PX's own milestone:
+schema validated against pulse, NPS, and CHF surveys before build. **Caution:** PX's stated June–July delivery target has already
+passed (it is Aug 2026) — re-verify the timeline with Max Pengilly before sequencing anything
+against it. Survey responses are patient-reported data: the adapter inherits the full PHI
+boundary rules (no demographics to logs, synthetic fixtures only).
 
 **Done means (ADR §6):** "Reconciliation clean over one full cycle. Projections rebuild from
 ledger in a drill. M1 retired — no consumer writes `patients.enrollment_status`."
