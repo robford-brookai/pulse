@@ -47,6 +47,7 @@ from typing import Any
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
+from pulse_core.cursor import CURSOR_PATH_TEMPLATE, InvalidCursorError, validate_cursor
 from pulse_core.generated import BACKFILL_ONLY_COMMAND_TYPES
 
 from pulse_ledger.auth import (
@@ -120,6 +121,14 @@ class MalformedBodyError(DeclarationError):
 
     def __init__(self) -> None:
         super().__init__("the request body must be a JSON object")
+
+
+class NoCursorError(LookupError):
+    """`GET /writers/{writer_id}/cursor` for a writer that has never checkpointed one. Maps to 404."""
+
+    def __init__(self, writer_id: str) -> None:
+        self.writer_id = writer_id
+        super().__init__(f"no cursor persisted for writer {writer_id!r}")
 
 
 class MalformedBatchBodyError(DeclarationError):
@@ -329,6 +338,36 @@ def _require_own_writer(writer: Writer, path_writer_id: str) -> None:
         raise ActorSpoofError("writer_id", writer.writer_id, path_writer_id)
 
 
+def _install_cursor_routes(
+    app: FastAPI,
+    credentials: CredentialRegistry,
+    read_cursor: CursorReader,
+    write_cursor: CursorWriter,
+) -> None:
+    @app.get(WRITER_CURSOR_PATH)
+    async def get_writer_cursor(writer_id: str, request: Request) -> dict[str, object]:
+        writer = credentials.resolve(bearer_token(request.headers.get("Authorization")))
+        _require_own_writer(writer, writer_id)
+        stored = read_cursor(writer_id)
+        if stored is None:
+            raise NoCursorError(writer_id)
+        return _cursor_response(stored)
+
+    @app.put(WRITER_CURSOR_PATH, status_code=200)
+    async def put_writer_cursor(writer_id: str, request: Request) -> dict[str, object]:
+        writer = credentials.resolve(bearer_token(request.headers.get("Authorization")))
+        _require_own_writer(writer, writer_id)
+        try:
+            body: Any = json.loads(await request.body())
+        except ValueError as exc:
+            raise MalformedBodyError() from exc
+        if not isinstance(body, dict):
+            raise MalformedBodyError()
+        canonical = validate_cursor(body)
+        stored = write_cursor(writer_id, canonical)
+        return _cursor_response(stored)
+
+
 def create_app(
     *,
     committer: Committer,
@@ -366,6 +405,8 @@ def create_app(
             raise MalformedBodyError() from exc
         declaration = declaration_from_request(body, writer)
         return _commit_response(committer(declaration))
+
+    _install_cursor_routes(app, credentials, read_cursor, write_cursor)
 
     @app.post(COMMANDS_BATCH_PATH, status_code=201)
     async def submit_command_batch(request: Request) -> list[dict[str, object]]:
