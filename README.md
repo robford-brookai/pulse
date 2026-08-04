@@ -11,6 +11,10 @@ task check
 
 Run `task` on its own to list every command, grouped by area and in workflow order.
 
+## Status
+
+Latest program status: [`.planning/reports/2026-08-03-program-status.md`](.planning/reports/2026-08-03-program-status.md).
+
 ## How this repo is organised
 
 - `AGENTS.md` — operating contract for agents working in Orca worktrees. Binding.

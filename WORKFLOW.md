@@ -60,7 +60,10 @@ ade_workflow:
     status_ownership:                      # one writer per band
       unstarted: sync                      # Todo (and healing Triage -> Todo)
       started: agents_and_orca             # In Progress, Blocked, In Review
-      terminal: human_via_merge_archive    # Done, Canceled
+      terminal: human_via_merge_archive_plus_sync_on_checkoff
+                                            # parent issue Done/Canceled: human, at merge/archive.
+                                            # sub-issue Done: sync, immediately on tasks.md checkoff
+                                            # -- the one terminal write sync owns; never the parent's
 
   state_resolution:                        # how an agent determines "where are we"
     order:                                 # first match wins
@@ -133,11 +136,21 @@ ade_workflow:
       - task check green locally before pushing
       - touches no spec, no src/, no design/ — those are always a PR
       - one focused commit, and the message says why it bypassed review
+      - a commit that checks off a task also runs
+        `task linear:sync CHANGE=<id> --apply` as part of the same mechanical
+        action — the checkoff and the Linear write travel together, not as
+        two separately-reviewed events; this is what makes sub-issue Done
+        immediate rather than whenever someone next happens to run sync
     rationale: >
       A checkbox flip after every one of ~45 tasks is not reviewable content, and
       routing it through a PR trains people to merge their own PRs unread, which is
       worse than the bypass. The conditions keep it from widening: the moment a push
-      carries a decision, it is a PR again.
+      carries a decision, it is a PR again. The checkoff bypass now carries one side
+      effect on a shared system — a Linear sub-issue write, not the purely local
+      change this exemption originally assumed — but that write is --apply-gated,
+      idempotent (a no-op once already Done), and trivially correctable by hand if
+      wrong, so the exemption still holds, on a documented basis rather than an
+      implicit one.
 
   steps:
     - id: propose
@@ -175,10 +188,16 @@ ade_workflow:
                 dispatched work-order body;
                 status writes — pass stateId explicitly on create (resolve DNA
                 "Todo" once per sync run, never rely on team default or triage
-                intake); heal Triage -> Todo on update; never write any
-                started or completed status (In Progress onward is
-                agent/Orca-owned per status_ownership);
+                intake); heal Triage -> Todo on update; if a task's checkbox
+                is already [x] in tasks.md, move its existing sub-issue
+                straight to Done -- the one status this step may write
+                outside Todo/Triage-healing; it never writes In Progress,
+                Blocked, In Review or Canceled, and it never touches the
+                parent issue's status (that stays merge/archive's); Done here
+                can precede the PR landing on main -- checkoff, not merge, is
+                the Linear trigger by design;
                 files canonical, one-directional
+      linear_status: Todo -> Done   # Todo on create; Done only on an already-checked-off task
       next: execute
 
     - id: execute
