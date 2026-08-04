@@ -1,8 +1,20 @@
 # PULSE State Catalog — Schema and Generation
 
+> **Superseded in part (2026-08-03, `pulse-ledger-core` / DNA-784).** Two positions of this v1
+> are superseded. **Grain**: the `patient × program` entity grain gives way to the six-subject
+> model of object model v0.7 (Referral, Consent, Enrollment, BillingEpisode, Device, Contract,
+> each with its own grain — `design/migration/rpc-object-model-assessment.md`). **Legality**:
+> "transition legality remains flag-only at MVP" (Enforcer 1) gives way to write-time enforcement —
+> the command API validates every declared transition against the catalog's generated adjacency
+> and rejects illegal ones with the catalog reason and version (`openspec/changes/pulse-ledger-core/specs/command-api/spec.md`,
+> ADR-0003). The catalog-as-single-source model, generation targets, and versioning rules stand;
+> the generator now also emits Python transition tables and Pydantic command types
+> (`pulse_core.generated`, from the Appendix C seed until the `catalog-authority` change lands
+> the authoritative `state_catalog.yaml`).
+
 | | |
 |---|---|
-| **Status** | Draft v1 |
+| **Status** | Draft v1 — superseded in part, see note above |
 | **Date** | 2026-07-28 |
 | **Owner** | Rob Ford, Data |
 | **Harvested from** | DNA-SPEC-DECLARED-STATE-PRM §3 |
