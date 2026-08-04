@@ -42,15 +42,10 @@ UPDATE/DELETE on `events` and the API is the single writer.
 | `pulse_core` (client SDK) | workspace package | beta | `PulseCoreClient.submit_command` classifies `committed \| replayed \| rejected \| transient`, retries transient only; `consume(handler)` is the SQS consumer convention (`event_id` dedupe, delete-after-success); D16 key derivation in `pulse_core.idempotency` |
 | `pulse_ledger.reads` / `.identity` / `.review` | library read surface | beta | in-process reads over the ledger Postgres: `enumerate_state` (co-committed `ledger.current_state`, catalog-validated states), `lookup_identifier`/`find_candidates` (identity, digests only — never demographics), `list_review_queue`/`resolve_review` (`ledger.review_queue` quarantine). No HTTP read routes shipped in S1.1 |
 
-**Known gap — replay classification is not yet end-to-end.** `pulse_ledger.api` does not accept
-an `idempotency_key` body field (rejected as unknown) and never echoes `replayed` in the
-`POST /commands` response; the app's committer calls `commit_declaration` rather than
-`commit_idempotent`. `PulseCoreClient` already sends the D16 key and reads `replayed` (defaulting
-`False`), so today every replay classifies as `committed`. The commit path itself
-(`pulse_ledger.idempotency.commit_idempotent`) fully supports both. Flagged independently by
-tasks 4.3 and 5.3 of `pulse-ledger-core`; tracked as **DNA-801** (see ADR-0003, Consequences).
-Do not depend on the `replayed` classification, and do not send `idempotency_key` over HTTP,
-until DNA-801 lands.
+Replay classification is end-to-end (DNA-801): `POST /commands` and `POST /commands:batch` accept
+an optional `idempotency_key` body field, thread it to `commit_idempotent`, and every commit
+response carries `replayed` — a repeated key returns the original event with `"replayed": true`
+and writes nothing. A keyless body still commits as a fresh event.
 
 Retired with the transport change: the `ocean.<domain>` topics, the `ocean.warehouse-dlq` topic
 (each consumer now has its own SQS dead-letter queue), and the Redpanda Connect warehouse sink

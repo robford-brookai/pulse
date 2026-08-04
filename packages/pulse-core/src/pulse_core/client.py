@@ -16,11 +16,10 @@ Two conventions this module owns, so a writer never touches raw HTTP:
   own visibility-timeout redelivery. `event_id` dedupe means a redelivered message — the ordinary
   cost of at-least-once delivery — is deleted without running `handler` a second time.
 
-**A gap this module surfaces, not one it can close**: `pulse_ledger.api`'s `_commit_response` does
-not yet echo `replayed` in the response body, and `coerce_declaration_fields` does not yet accept
-an `idempotency_key` field — both are needed for this client's classification and idempotency key
-to do anything once wired to the real service. Recorded in `HANDOFF.md` rather than patched here:
-that wiring belongs to `pulse_ledger`, a package this task does not own.
+The server side of this contract is wired (DNA-801): `pulse_ledger.api` accepts an
+`idempotency_key` body field at the HTTP boundary, threads it to the idempotent commit path, and
+echoes `replayed` in the commit response — so the `committed | replayed` classification above is
+trustworthy end to end.
 """
 
 from __future__ import annotations

@@ -31,7 +31,9 @@ class _CommitPathUnexpectedlyReachedError(AssertionError):
 
 
 class FailingCommitter:
-    def __call__(self, declaration: Declaration) -> CommitResult:  # pragma: no cover - unused here
+    def __call__(
+        self, declaration: Declaration, idempotency_key: str | None
+    ) -> CommitResult:  # pragma: no cover - unused here
         raise _CommitPathUnexpectedlyReachedError
 
 

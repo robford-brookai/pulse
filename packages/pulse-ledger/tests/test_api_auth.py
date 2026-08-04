@@ -6,6 +6,7 @@ happens before it and what never reaches it. Task 3.2's suite owns the transacti
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import secrets
 import uuid
@@ -49,29 +50,46 @@ def _token() -> str:
     return secrets.token_urlsafe(32)
 
 
+_EVENT_ID_BASE = uuid.UUID("018f5a1e-0000-7000-8000-000000000000").int
+
+
 class FakeCommitter:
-    """Records what reached the commit path — including that nothing did."""
+    """Records what reached the commit path — including that nothing did.
+
+    Mirrors `commit_idempotent`'s replay contract: a repeated key returns the original commit's
+    result with `replayed=True` and no new event id, so the HTTP edge can be tested end to end
+    without the database `test_idempotent_commit.py` already covers.
+    """
 
     def __init__(self, raises: Exception | None = None) -> None:
         self.declarations: list[Declaration] = []
+        self.keys: list[str | None] = []
         self.raises = raises
+        self._by_key: dict[str, CommitResult] = {}
 
-    def __call__(self, declaration: Declaration) -> CommitResult:
+    def __call__(self, declaration: Declaration, idempotency_key: str | None) -> CommitResult:
         self.declarations.append(declaration)
+        self.keys.append(idempotency_key)
         if self.raises is not None:
             raise self.raises
-        return CommitResult(
-            event_id=uuid.UUID("018f5a1e-0000-7000-8000-000000000001"),
+        if idempotency_key is not None and idempotency_key in self._by_key:
+            return dataclasses.replace(self._by_key[idempotency_key], replayed=True)
+        event_id = uuid.UUID(int=_EVENT_ID_BASE + len(self.declarations))
+        result = CommitResult(
+            event_id=event_id,
             recorded_at=NOW,
             rule_version="appendix-c-v0.7",
-            outbox_seq=1,
+            outbox_seq=len(self.declarations),
             state=FoldedState(
                 state="on_hold",
                 effective_at=NOW,
                 recorded_at=NOW,
-                event_id=uuid.UUID("018f5a1e-0000-7000-8000-000000000001"),
+                event_id=event_id,
             ),
         )
+        if idempotency_key is not None:
+            self._by_key[idempotency_key] = result
+        return result
 
     @property
     def called(self) -> bool:
@@ -288,7 +306,9 @@ class TestBoundaryCoercion:
         stateless = CommitResult(
             event_id=uuid.uuid4(), recorded_at=NOW, rule_version="appendix-c-v0.7", outbox_seq=2, state=None
         )
-        app = create_app(committer=lambda _: stateless, registry=registry, twenty_webhook=TwentyWebhookConfig())
+        app = create_app(
+            committer=lambda _declaration, _key: stateless, registry=registry, twenty_webhook=TwentyWebhookConfig()
+        )
         with TestClient(app) as client:
             response = client.post(COMMANDS_PATH, json=declaration_body(), headers=auth(relay_token))
         assert response.status_code == 201, response.text
@@ -417,6 +437,65 @@ class TestTwentyWebhookRoute:
     def test_the_webhook_route_takes_no_bearer_credential(self, signed_client: TestClient, relay_token: str) -> None:
         """A writer credential must not open the webhook door, and vice versa."""
         assert signed_client.post(TWENTY_WEBHOOK_PATH, content=b"{}", headers=auth(relay_token)).status_code == 401
+
+
+class TestIdempotency:
+    """DNA-801: the D16 key crosses the HTTP boundary and `replayed` comes back.
+
+    The key is accepted-if-present — a keyless body still commits. `commit_idempotent`'s own
+    replay semantics are covered against Postgres by `test_idempotent_commit.py`; here the
+    committer is a fake and what is under test is the boundary's extraction and echo.
+    """
+
+    KEY = "verdict-relay:0123456789abcdef"
+
+    def test_a_body_carrying_an_idempotency_key_commits(
+        self, client: TestClient, relay_token: str, committer: FakeCommitter
+    ) -> None:
+        response = client.post(
+            COMMANDS_PATH, json=declaration_body(idempotency_key=self.KEY), headers=auth(relay_token)
+        )
+        assert response.status_code == 201, response.text
+        assert committer.keys == [self.KEY]
+        assert response.json()["replayed"] is False
+
+    def test_a_repeated_key_replays_the_original_commit(
+        self, client: TestClient, relay_token: str, committer: FakeCommitter
+    ) -> None:
+        body = declaration_body(idempotency_key=self.KEY)
+        first = client.post(COMMANDS_PATH, json=body, headers=auth(relay_token))
+        second = client.post(COMMANDS_PATH, json=body, headers=auth(relay_token))
+        assert first.json()["replayed"] is False
+        assert second.status_code == 201, second.text
+        assert second.json()["replayed"] is True
+        assert second.json()["event_id"] == first.json()["event_id"]
+
+    def test_a_keyless_body_still_commits(self, client: TestClient, relay_token: str, committer: FakeCommitter) -> None:
+        response = client.post(COMMANDS_PATH, json=declaration_body(), headers=auth(relay_token))
+        assert response.status_code == 201, response.text
+        assert committer.keys == [None]
+        assert response.json()["replayed"] is False
+
+    def test_a_non_string_key_is_422(self, client: TestClient, relay_token: str, committer: FakeCommitter) -> None:
+        response = client.post(COMMANDS_PATH, json=declaration_body(idempotency_key=17), headers=auth(relay_token))
+        assert response.status_code == 422
+        assert not committer.called
+
+    def test_a_batch_passes_each_items_key_through(
+        self, client: TestClient, backfill_token: str, committer: FakeCommitter
+    ) -> None:
+        body = [
+            declaration_body(
+                subject_key=f"{SUBJECT_KEY}-{index}",
+                event_type="reconstruction_gap",
+                idempotency_key=f"backfill:{index}",
+            )
+            for index in range(2)
+        ]
+        response = client.post(COMMANDS_BATCH_PATH, json=body, headers=auth(backfill_token))
+        assert response.status_code == 201, response.text
+        assert committer.keys == ["backfill:0", "backfill:1"]
+        assert [item["replayed"] for item in response.json()] == [False, False]
 
 
 class TestBackfillMode:
