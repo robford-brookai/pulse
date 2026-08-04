@@ -42,6 +42,7 @@ from typing import Any
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
+from pulse_core.cursor import CURSOR_PATH_TEMPLATE, InvalidCursorError, validate_cursor
 
 from pulse_ledger.auth import (
     SIGNATURE_HEADER,
@@ -55,16 +56,44 @@ from pulse_ledger.auth import (
     verify_signature,
 )
 from pulse_ledger.commit import CommitResult, Declaration, DeclarationError
+from pulse_ledger.cursor import WriterCursor
 from pulse_ledger.validation import IllegalTransitionError
 
 logger = logging.getLogger(__name__)
 
 COMMANDS_PATH = "/commands"
 TWENTY_WEBHOOK_PATH = "/webhooks/twenty"
+WRITER_CURSOR_PATH = CURSOR_PATH_TEMPLATE
 
 #: Injected by the service entrypoint; a fake in tests. Anything that turns one declaration into
 #: one commit result, including opening and owning the transaction.
 Committer = Callable[[Declaration], CommitResult]
+
+#: Injected the same way as `Committer` — a fake in tests, the real store (`pulse_ledger.cursor`)
+#: in the running service. `CursorReader` mirrors `get_cursor`'s contract: `None` is "no cursor
+#: yet", not an error.
+CursorReader = Callable[[str], "WriterCursor | None"]
+CursorWriter = Callable[[str, Mapping[str, object]], WriterCursor]
+
+
+class CursorStoreNotConfiguredError(RuntimeError):
+    """The app was built without a writer-cursor store wired in.
+
+    Only raised if a cursor route is actually hit; an app that never uses `/writers/*/cursor`
+    (every existing test fixture, until this task) never notices the default is unconfigured.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("no writer-cursor store is configured for this app")
+
+
+def _unconfigured_cursor_reader(writer_id: str) -> WriterCursor | None:
+    raise CursorStoreNotConfiguredError()
+
+
+def _unconfigured_cursor_writer(writer_id: str, cursor: Mapping[str, object]) -> WriterCursor:
+    raise CursorStoreNotConfiguredError()
+
 
 _DECLARATION_FIELDS = frozenset(f.name for f in dataclasses.fields(Declaration))
 _TIMESTAMP_FIELDS = ("effective_at", "occurred_at")
@@ -84,6 +113,14 @@ class MalformedBodyError(DeclarationError):
 
     def __init__(self) -> None:
         super().__init__("the request body must be a JSON object")
+
+
+class NoCursorError(LookupError):
+    """`GET /writers/{writer_id}/cursor` for a writer that has never checkpointed one. Maps to 404."""
+
+    def __init__(self, writer_id: str) -> None:
+        self.writer_id = writer_id
+        super().__init__(f"no cursor persisted for writer {writer_id!r}")
 
 
 class UnparseableTimestampError(DeclarationError):
@@ -230,6 +267,30 @@ def _install_error_handlers(app: FastAPI) -> None:
     async def _malformed(request: Request, exc: Exception) -> Response:
         return JSONResponse(status_code=422, content={"detail": str(exc)})
 
+    @app.exception_handler(InvalidCursorError)
+    async def _invalid_cursor(request: Request, exc: Exception) -> Response:
+        assert isinstance(exc, InvalidCursorError)  # noqa: S101 — handler is registered for this type
+        return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+    @app.exception_handler(NoCursorError)
+    async def _no_cursor(request: Request, exc: Exception) -> Response:
+        return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+
+def _cursor_response(cursor: WriterCursor) -> dict[str, object]:
+    return {"writer_id": cursor.writer_id, "cursor": cursor.cursor, "updated_at": cursor.updated_at}
+
+
+def _require_own_writer(writer: Writer, path_writer_id: str) -> None:
+    """A writer may read or write only its own cursor — the same D15 rule as the command body's.
+
+    Raises `ActorSpoofError` for the mismatch: an authenticated writer claiming an identity the
+    credential disagrees with is exactly what that error already names, whether the claim arrives
+    in a body field or a path segment.
+    """
+    if writer.writer_id != path_writer_id:
+        raise ActorSpoofError("writer_id", writer.writer_id, path_writer_id)
+
 
 def create_app(
     *,
@@ -237,16 +298,24 @@ def create_app(
     registry: CredentialRegistry | None = None,
     twenty_webhook: TwentyWebhookConfig | None = None,
     environ: Mapping[str, str] | None = None,
+    cursor_reader: CursorReader | None = None,
+    cursor_writer: CursorWriter | None = None,
 ) -> FastAPI:
     """Build the command API.
 
     Credentials and the webhook switch come from the environment unless passed in. A service with
     no writer credentials cannot serve anyone, so `CredentialRegistry.from_env` refuses to build
     one — the app fails to boot rather than starting with an open or useless door.
+
+    `cursor_reader`/`cursor_writer` are injected the same way `committer` is (a fake in tests, the
+    real store in the running service) and default to a stub that raises only if a cursor route is
+    actually hit, so building an app for command-path tests alone needs no database either.
     """
     env = os.environ if environ is None else environ
     credentials = CredentialRegistry.from_env(env) if registry is None else registry
     webhook = TwentyWebhookConfig.from_env(env) if twenty_webhook is None else twenty_webhook
+    read_cursor = _unconfigured_cursor_reader if cursor_reader is None else cursor_reader
+    write_cursor = _unconfigured_cursor_writer if cursor_writer is None else cursor_writer
 
     app = FastAPI(title="PULSE ledger command API", version="0.1.0")
     _install_error_handlers(app)
@@ -260,6 +329,29 @@ def create_app(
             raise MalformedBodyError() from exc
         declaration = declaration_from_request(body, writer)
         return _commit_response(committer(declaration))
+
+    @app.get(WRITER_CURSOR_PATH)
+    async def get_writer_cursor(writer_id: str, request: Request) -> dict[str, object]:
+        writer = credentials.resolve(bearer_token(request.headers.get("Authorization")))
+        _require_own_writer(writer, writer_id)
+        stored = read_cursor(writer_id)
+        if stored is None:
+            raise NoCursorError(writer_id)
+        return _cursor_response(stored)
+
+    @app.put(WRITER_CURSOR_PATH, status_code=200)
+    async def put_writer_cursor(writer_id: str, request: Request) -> dict[str, object]:
+        writer = credentials.resolve(bearer_token(request.headers.get("Authorization")))
+        _require_own_writer(writer, writer_id)
+        try:
+            body: Any = json.loads(await request.body())
+        except ValueError as exc:
+            raise MalformedBodyError() from exc
+        if not isinstance(body, dict):
+            raise MalformedBodyError()
+        canonical = validate_cursor(body)
+        stored = write_cursor(writer_id, canonical)
+        return _cursor_response(stored)
 
     if webhook.enabled:
         secret = webhook.secret
