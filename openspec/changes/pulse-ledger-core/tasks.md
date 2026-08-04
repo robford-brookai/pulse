@@ -60,7 +60,7 @@ downstream-facing tests and exercised against a local Postgres in service tests.
       credential names from env, never fixtures.
       `[model: opus | deps: 3.2 | lane: repo_change | wave: 2]`
       Model `opus`: security boundary; PHI-adjacent logging reviewed here.
-- [ ] 3.5 [DNA-792] Backfill mode: `POST /commands:batch`, `backfill_genesis` and `reconstruction_gap`
+- [x] 3.5 [DNA-792] Backfill mode: `POST /commands:batch`, `backfill_genesis` and `reconstruction_gap`
       restricted to the backfill actor, evidence_class/epoch stamping. Also land `resolution_hold`
       here: it is the other non-state-bearing fact, holding a subject without moving it, and 4.1
       found it has no committable form until this vocabulary exists (no `received → received` edge,
@@ -75,7 +75,7 @@ downstream-facing tests and exercised against a local Postgres in service tests.
       with (system, value) uniqueness enforcement, review-queue listing. Tests: month-open
       enumeration case; duplicate attach rejected naming the holder; quarantine pending/drained.
       `[model: sonnet | deps: 3.2 | lane: repo_change | wave: 3]`
-- [ ] 4.2 [DNA-794] Writer-state cursors: `PUT/GET /writers/{writer_id}/cursor` + `pulse_core` accessors.
+- [x] 4.2 [DNA-794] Writer-state cursors: `PUT/GET /writers/{writer_id}/cursor` + `pulse_core` accessors.
       Test: crash/resume round-trip.
       `[model: sonnet | deps: 3.4 | lane: repo_change | wave: 3]`
 - [ ] 4.3 [DNA-795] `pulse_core` client: command submission with response classification
@@ -87,7 +87,7 @@ downstream-facing tests and exercised against a local Postgres in service tests.
       sequence order, 5 attempts → DLQ, lag metric. Tests: order across retry; poison row
       dead-letters and relay continues; no publish without commit.
       `[model: opus | deps: 3.2 | lane: repo_change | wave: 3]`
-- [ ] 4.5 [DNA-797] LocalStack wiring: ledger Postgres + relay + bus in `infra/docker-compose` extension of
+- [x] 4.5 [DNA-797] LocalStack wiring: ledger Postgres + relay + bus in `infra/docker-compose` extension of
       the existing local stack; idempotent bring-up. Test: committed event observable on a
       LocalStack queue.
       `[model: sonnet | deps: 4.4 | lane: repo_change | wave: 3]`
