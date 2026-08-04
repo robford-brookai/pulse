@@ -44,7 +44,12 @@ from psycopg.types.json import Jsonb
 from pulse_core.generated import CATALOG_VERSION
 
 from pulse_ledger.fold import TO_STATE_KEY, FoldedEvent, FoldedState, fold_state, state_as_of, state_borne_by
-from pulse_ledger.validation import validate_genesis, validate_state_membership, validate_transition
+from pulse_ledger.validation import (
+    validate_genesis,
+    validate_state_membership,
+    validate_subject_type,
+    validate_transition,
+)
 
 #: Input alias for `effective_at`, accepted for envelope compatibility (decision 5).
 EFFECTIVE_AT_ALIAS = "occurred_at"
@@ -125,16 +130,20 @@ class Declaration:
 
     Carries no `recorded_at`, no `event_id` and no `rule_version`: those are the server's, and
     leaving them off the type is what makes that structural rather than documented.
+
+    `to_state` is optional: a subject-moving fact carries it, a non-state-bearing one
+    (`resolution_hold`, `reconstruction_gap` — task 3.5) does not, and `commit_declaration` skips
+    catalog-transition validation and the state re-fold for the latter.
     """
 
     subject_type: str
     subject_key: str
     event_type: str
-    to_state: str
     effective_at: datetime
     actor_type: str
     actor_id: str
     producer: str
+    to_state: str | None = None
     # The actor's authority to declare this fact (a role, a delegation) — resolved from the
     # credential by task 3.4's auth layer, which is why it is optional here.
     actor_authority: str | None = None
@@ -174,8 +183,17 @@ class Declaration:
         return cls(effective_at=resolved, **fields)  # type: ignore[arg-type]
 
     def event_payload(self) -> dict[str, object]:
-        """The stored payload: the writer's fields plus the state this event moves the subject to."""
-        return {**self.payload, TO_STATE_KEY: self.to_state}
+        """The stored payload: the writer's fields plus the state this event moves the subject to.
+
+        A non-state-bearing declaration (`to_state` is `None`) carries no `to_state` key at all,
+        rather than one holding `null` — `fold.state_borne_by` treats both the same, but leaving
+        the key out is what makes "this event is not state-bearing" visible in the stored payload
+        itself, not just in the type that produced it.
+        """
+        payload = dict(self.payload)
+        if self.to_state is not None:
+            payload[TO_STATE_KEY] = self.to_state
+        return payload
 
 
 @dataclass(frozen=True)
@@ -356,22 +374,32 @@ def commit_declaration(
     `allow_arbitrary_genesis` lets a subject's first event land at a non-entry state. Only the
     backfill vocabulary may set it (task 3.5); the forward path must not.
 
-    Raises `IllegalTransitionError` before any write when the catalog forbids the transition.
+    A declaration with no `to_state` (`resolution_hold`, `reconstruction_gap` — task 3.5) is not a
+    transition: it skips catalog-transition validation (only the subject type is checked) and never
+    joins the fold, so `current_state` is left exactly as it was — there is no state for a hold or a
+    gap to move the subject to or away from.
+
+    Raises `IllegalTransitionError` before any write when the catalog forbids the transition, or
+    (for a non-state-bearing declaration) names an unknown subject type.
     """
     with conn.transaction():
         _lock_subject(conn, declaration.subject_type, declaration.subject_key)
         history = load_folded_events(conn, declaration.subject_type, declaration.subject_key)
-        predecessor = state_as_of(history, declaration.effective_at)
-        if predecessor is not None:
-            # A backdated declaration departs from the state that held when its fact was true,
-            # not from the subject's latest state — same call, different predecessor.
-            rule_version = validate_transition(declaration.subject_type, predecessor.state, declaration.to_state)
-        elif allow_arbitrary_genesis:
-            # The flag relaxes the entry-state rule only. The state must still be one the catalog
-            # contains, or a typo lands in `current_state` stamped as catalog-conformant.
-            rule_version = validate_state_membership(declaration.subject_type, declaration.to_state)
+        if declaration.to_state is None:
+            validate_subject_type(declaration.subject_type)
+            rule_version = CATALOG_VERSION
         else:
-            rule_version = validate_genesis(declaration.subject_type, declaration.to_state)
+            predecessor = state_as_of(history, declaration.effective_at)
+            if predecessor is not None:
+                # A backdated declaration departs from the state that held when its fact was true,
+                # not from the subject's latest state — same call, different predecessor.
+                rule_version = validate_transition(declaration.subject_type, predecessor.state, declaration.to_state)
+            elif allow_arbitrary_genesis:
+                # The flag relaxes the entry-state rule only. The state must still be one the
+                # catalog contains, or a typo lands in `current_state` stamped as catalog-conformant.
+                rule_version = validate_state_membership(declaration.subject_type, declaration.to_state)
+            else:
+                rule_version = validate_genesis(declaration.subject_type, declaration.to_state)
 
         event_id = uuid.uuid4()
         lower, upper = declaration.evidence_bounds or (None, None)
@@ -396,15 +424,20 @@ def commit_declaration(
             causation_id=declaration.causation_id,
             payload=Jsonb(declaration.event_payload()),
         )
-        history.append(
-            FoldedEvent(
-                event_id=event_id,
-                to_state=declaration.to_state,
-                effective_at=declaration.effective_at,
-                recorded_at=recorded_at,
+        if declaration.to_state is None:
+            # Not state-bearing: `load_folded_events` would skip this row too, so folding the
+            # unchanged history back is a no-op — `current_state` is not written at all.
+            folded = fold_state(history)
+        else:
+            history.append(
+                FoldedEvent(
+                    event_id=event_id,
+                    to_state=declaration.to_state,
+                    effective_at=declaration.effective_at,
+                    recorded_at=recorded_at,
+                )
             )
-        )
-        folded = _refold_and_write(conn, declaration.subject_type, declaration.subject_key, history)
+            folded = _refold_and_write(conn, declaration.subject_type, declaration.subject_key, history)
         seq = _insert_outbox_row(conn, event_id, declaration.subject_type, declaration.subject_key)
 
     return CommitResult(

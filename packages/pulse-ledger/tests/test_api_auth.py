@@ -15,8 +15,15 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from pulse_ledger.api import COMMANDS_PATH, TWENTY_WEBHOOK_PATH, coerce_declaration_fields, create_app
+from pulse_ledger.api import (
+    COMMANDS_BATCH_PATH,
+    COMMANDS_PATH,
+    TWENTY_WEBHOOK_PATH,
+    coerce_declaration_fields,
+    create_app,
+)
 from pulse_ledger.auth import (
+    BACKFILL_ACTOR_ID,
     SIGNATURE_HEADER,
     TIMESTAMP_HEADER,
     TWENTY_WEBHOOK_ENABLED_ENV,
@@ -77,11 +84,17 @@ def relay_token() -> str:
 
 
 @pytest.fixture
-def registry(relay_token: str) -> CredentialRegistry:
+def backfill_token() -> str:
+    return _token()
+
+
+@pytest.fixture
+def registry(relay_token: str, backfill_token: str) -> CredentialRegistry:
     return CredentialRegistry.from_env({
         f"{WRITER_TOKEN_PREFIX}VERDICT_RELAY": relay_token,
         f"{WRITER_AUTHORITY_PREFIX}VERDICT_RELAY": "verdict-publication",
         f"{WRITER_TOKEN_PREFIX}SCHEDULER": _token(),
+        f"{WRITER_TOKEN_PREFIX}BACKFILL": backfill_token,
     })
 
 
@@ -404,6 +417,74 @@ class TestTwentyWebhookRoute:
     def test_the_webhook_route_takes_no_bearer_credential(self, signed_client: TestClient, relay_token: str) -> None:
         """A writer credential must not open the webhook door, and vice versa."""
         assert signed_client.post(TWENTY_WEBHOOK_PATH, content=b"{}", headers=auth(relay_token)).status_code == 401
+
+
+class TestBackfillMode:
+    """Task 3.5: `backfill_genesis` and `reconstruction_gap` are restricted to the backfill actor."""
+
+    @pytest.mark.parametrize("event_type", ["backfill_genesis", "reconstruction_gap"])
+    def test_a_forward_writer_is_rejected_on_a_backfill_only_event_type(
+        self, client: TestClient, relay_token: str, committer: FakeCommitter, event_type: str
+    ) -> None:
+        response = client.post(COMMANDS_PATH, json=declaration_body(event_type=event_type), headers=auth(relay_token))
+        assert response.status_code == 403
+        assert not committer.called
+        assert response.json()["detail"]["event_type"] == event_type
+        assert response.json()["detail"]["writer_id"] == "verdict-relay"
+
+    @pytest.mark.parametrize("event_type", ["backfill_genesis", "reconstruction_gap"])
+    def test_the_backfill_actor_may_declare_a_backfill_only_event_type(
+        self, client: TestClient, backfill_token: str, committer: FakeCommitter, event_type: str
+    ) -> None:
+        response = client.post(
+            COMMANDS_PATH, json=declaration_body(event_type=event_type), headers=auth(backfill_token)
+        )
+        assert response.status_code == 201, response.text
+        assert committer.declarations[0].actor_id == BACKFILL_ACTOR_ID
+
+    def test_an_ordinary_event_type_is_unrestricted(
+        self, client: TestClient, relay_token: str, committer: FakeCommitter
+    ) -> None:
+        response = client.post(COMMANDS_PATH, json=declaration_body(), headers=auth(relay_token))
+        assert response.status_code == 201, response.text
+        assert committer.called
+
+
+class TestCommandsBatch:
+    """`POST /commands:batch` (task 3.5): one credential, an array of commands, same validation."""
+
+    def _batch_body(self, count: int = 2) -> list[dict[str, object]]:
+        return [
+            declaration_body(subject_key=f"{SUBJECT_KEY}-{index}", event_type="reconstruction_gap")
+            for index in range(count)
+        ]
+
+    def test_a_batch_commits_every_item_in_order(
+        self, client: TestClient, backfill_token: str, committer: FakeCommitter
+    ) -> None:
+        response = client.post(COMMANDS_BATCH_PATH, json=self._batch_body(2), headers=auth(backfill_token))
+        assert response.status_code == 201, response.text
+        assert len(response.json()) == 2
+        assert [d.subject_key for d in committer.declarations] == [f"{SUBJECT_KEY}-0", f"{SUBJECT_KEY}-1"]
+
+    def test_a_non_array_batch_body_is_422(self, client: TestClient, backfill_token: str) -> None:
+        response = client.post(COMMANDS_BATCH_PATH, json={"not": "an array"}, headers=auth(backfill_token))
+        assert response.status_code == 422
+
+    def test_a_forward_writer_is_rejected_on_a_batch_of_backfill_only_commands(
+        self, client: TestClient, relay_token: str, committer: FakeCommitter
+    ) -> None:
+        response = client.post(COMMANDS_BATCH_PATH, json=self._batch_body(2), headers=auth(relay_token))
+        assert response.status_code == 403
+        assert not committer.called
+
+    def test_a_bad_item_aborts_the_whole_batch_before_any_of_it_commits(
+        self, client: TestClient, backfill_token: str, committer: FakeCommitter
+    ) -> None:
+        body = [*self._batch_body(1), declaration_body(event_type="reconstruction_gap", nonsense="x")]
+        response = client.post(COMMANDS_BATCH_PATH, json=body, headers=auth(backfill_token))
+        assert response.status_code == 422
+        assert not committer.called
 
 
 class TestBoot:
