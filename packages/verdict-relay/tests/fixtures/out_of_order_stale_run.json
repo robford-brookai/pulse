@@ -1,0 +1,28 @@
+{
+  "case": "out_of_order_stale_run",
+  "description": "An out-of-order run arriving after a newer verdict was declared: the row's as_of is behind the subject's persisted watermark, so it is skipped and counted, never declared and never an error. No API response is scripted \u2014 a submission would fail the replay.",
+  "watermarks": {
+    "episode-1003": "2026-08-01T00:00:00+00:00"
+  },
+  "responses": [],
+  "rows": [
+    {
+      "subject_id": "episode-1003",
+      "verdict_type": "billing_qualification",
+      "outcome": "positive",
+      "reason": null,
+      "rule_version": "rules-v2",
+      "as_of": "2026-07-15T00:00:00+00:00",
+      "lineage_ref": "dbt-run-2026-07-15T02",
+      "computed_at": "2026-08-01T02:02:00+00:00"
+    }
+  ],
+  "expected": {
+    "declared": 0,
+    "replayed": 0,
+    "skipped_stale": 1,
+    "rejected": 0,
+    "failed": 0,
+    "api_calls": 0
+  }
+}

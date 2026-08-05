@@ -72,7 +72,7 @@ named on that task below.
 
 ## 4. Wave 3 — fixture corpus and property test
 
-- [ ] 4.1 `tests/fixtures/` recorded mart rows (JSON, synthetic) covering all six work-order
+- [x] 4.1 `tests/fixtures/` recorded mart rows (JSON, synthetic) covering all six work-order
       cases — normal declare, idempotent replay, out-of-order stale run, illegal-transition
       rejection, indeterminate-with-reason, indeterminate-without-reason — plus the fixture-driven
       end-to-end suite over the faked client. Tests: normal declare submits attribution + lineage
