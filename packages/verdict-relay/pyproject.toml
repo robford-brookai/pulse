@@ -3,7 +3,16 @@ name = "verdict-relay"
 version = "0.1.0"
 description = "PULSE verdict relay — reads the warehouse verdict mart, declares verdicts on the ledger's single write path"
 requires-python = ">=3.10,<4.0"
-dependencies = []
+dependencies = [
+    # The cursor store's HTTP edge (mart_reader.LedgerCursorStore) — same floor pulse-core pins,
+    # so the workspace resolves one httpx.
+    "httpx>=0.28.1",
+    # cursor_path / validate_cursor: the writer-state contract the durable cursor persists through.
+    "pulse-core",
+]
+
+[tool.uv.sources]
+pulse-core = { workspace = true }
 
 [dependency-groups]
 dev = [
