@@ -61,7 +61,7 @@ named on that task below.
 
 ## 3. Wave 2 — batch entrypoint
 
-- [ ] 3.1 `src/verdict_relay/run.py`: batch entrypoint, read → declare → receipt; five counts
+- [x] 3.1 `src/verdict_relay/run.py`: batch entrypoint, read → declare → receipt; five counts
       (declared, replayed, skipped-stale, rejected, failed) as structured JSON logs tagged
       `service:verdict-relay` with one Datadog-parsable `key=value` summary line; nonzero exit on
       run failure with the receipt reflecting completed work. Tests: mixed-batch receipt counts
