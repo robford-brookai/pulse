@@ -82,7 +82,7 @@ named on that task below.
       "Indeterminate with a reason declares normally",
       "Indeterminate without a reason fails before the API call".
       `[model: sonnet | deps: 3.1 | lane: repo_change | wave: 3]`
-- [ ] 4.2 `tests/test_ordering.py`: hypothesis property test — for any shuffled batch of runs per
+- [x] 4.2 `tests/test_ordering.py`: hypothesis property test — for any shuffled batch of runs per
       subject, declared order is `as_of`-monotonic per subject, every stale row is skipped and
       counted, and no stale row declares or errors. Deterministic profile in CI (fixed seed
       derivation, no deadline flake).
