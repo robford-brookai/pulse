@@ -3,7 +3,14 @@ name = "verdict-relay"
 version = "0.1.0"
 description = "PULSE verdict relay — reads the warehouse verdict mart, declares verdicts on the ledger's single write path"
 requires-python = ">=3.10,<4.0"
-dependencies = []
+dependencies = [
+    # Command submission + classification, D16 idempotency, generated command types, cursor
+    # validation — the S1.1 surface the declarer is built against.
+    "pulse-core",
+]
+
+[tool.uv.sources]
+pulse-core = { workspace = true }
 
 [dependency-groups]
 dev = [
