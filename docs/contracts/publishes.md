@@ -47,6 +47,23 @@ an optional `idempotency_key` body field, thread it to `commit_idempotent`, and 
 response carries `replayed` — a repeated key returns the original event with `"replayed": true`
 and writes nothing. A keyless body still commits as a fresh event.
 
+### Offered to PX survey engine (discovery stage, `survey-engine-ingress` planned)
+
+PX (survey engine, owner Max Pengilly) is in discovery; pulse's planned adapter is
+`survey-engine-ingress`, sequenced early Phase 3 in `design/delivery/pulse-program-roadmap.md`.
+What pulse offers PX now, before any code integrates:
+
+| Surface | Kind | Stability | Notes |
+|---|---|---|---|
+| Event envelope + state catalog | contract docs | stable | `design/platform/event-envelope-spec.md`, `design/platform/state-catalog.md` — the shape survey responses take as attributed commands/facts on the single write path; PX defines survey payloads against these, never a parallel event schema |
+| `s14-identity` matcher | library read surface | planned | PX's cross-surface identity resolution consumes the deterministic matcher `s14-identity` publishes (`pulse_ledger.identity`: `lookup_identifier`/`find_candidates`, digests only — never demographics), not a parallel matcher. Pending that change landing; this row hardens when it merges |
+
+**Consent-model overlap:** PX's open consent-model decision overlaps D9 and
+`customerio-consent-ingress` — consent state lives in the ledger's catalog, actor-attributed and
+message-provenanced; PX must consume it there, not model consent independently. Survey responses
+are patient-reported data: any adapter inherits the full PHI boundary rules (no demographics to
+logs, synthetic fixtures only).
+
 Retired with the transport change: the `ocean.<domain>` topics, the `ocean.warehouse-dlq` topic
 (each consumer now has its own SQS dead-letter queue), and the Redpanda Connect warehouse sink
 (the warehouse path is an ordinary rule-and-queue consumer).
