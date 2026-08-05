@@ -3240,6 +3240,10 @@ wheels = [
 name = "verdict-relay"
 version = "0.1.0"
 source = { editable = "packages/verdict-relay" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pulse-core" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -3249,6 +3253,10 @@ dev = [
 ]
 
 [package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "pulse-core", editable = "packages/pulse-core" },
+]
 
 [package.metadata.requires-dev]
 dev = [
