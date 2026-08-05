@@ -25,7 +25,7 @@ named on that task below.
 
 ## 1. Wave 0 — scaffold
 
-- [ ] 1.1 Scaffold `packages/verdict-relay` as a workspace member per the monorepo template:
+- [x] 1.1 Scaffold `packages/verdict-relay` as a workspace member per the monorepo template:
       pyproject, uv workspace root entry, ruff/pyright/pytest wiring, coverage floor 85%,
       `hypothesis` as a dev dependency of this package only, `TESTED_PATHS` updated honestly.
       Test: package imports and an empty-suite pytest run passes under `--disable-socket`.
