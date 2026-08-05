@@ -35,7 +35,7 @@ named on that task below.
 
 ## 2. Wave 1 — reader and declarer
 
-- [ ] 2.1 `src/verdict_relay/mart_reader.py`: `RowSource` protocol + fixture-backed source,
+- [x] 2.1 `src/verdict_relay/mart_reader.py`: `RowSource` protocol + fixture-backed source,
       contract validation (missing column / unparseable timestamp fails the run naming the row),
       (subject, `as_of`) ordering, `computed_at` page cursor persisted with the per-subject
       watermark via `pulse_core.cursor` (`cursor_path(writer_id)`, `validate_cursor`) — design
@@ -44,7 +44,7 @@ named on that task below.
       Scenarios: verdict-mart-read "A batch yields subject-grouped, as_of-ordered rows",
       "Crash and resume without re-reading".
       `[model: sonnet | deps: 1.1 | lane: repo_change | wave: 1]`
-- [ ] 2.2 `src/verdict_relay/declarer.py`: mart row → `declare_verdict` command (actor = service
+- [x] 2.2 `src/verdict_relay/declarer.py`: mart row → `declare_verdict` command (actor = service
       identity per D15, carrying `rule_version`, `as_of`, `lineage_ref`), D16 key via
       `pulse_core.idempotency.derive_idempotency_key`, pre-submission validation on the generated
       command type, stale-skip against the cursor watermark, and classification handling —
