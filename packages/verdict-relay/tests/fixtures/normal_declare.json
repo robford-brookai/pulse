@@ -1,0 +1,28 @@
+{
+  "case": "normal_declare",
+  "description": "A valid mart row for a subject with no newer declared verdict: the relay submits an attributed, idempotent declare_verdict command and the response classifies as committed.",
+  "watermarks": {},
+  "responses": [
+    "committed"
+  ],
+  "rows": [
+    {
+      "subject_id": "episode-1001",
+      "verdict_type": "billing_qualification",
+      "outcome": "positive",
+      "reason": null,
+      "rule_version": "rules-v3",
+      "as_of": "2026-08-01T00:00:00+00:00",
+      "lineage_ref": "dbt-run-2026-08-01T02",
+      "computed_at": "2026-08-01T02:00:00+00:00"
+    }
+  ],
+  "expected": {
+    "declared": 1,
+    "replayed": 0,
+    "skipped_stale": 0,
+    "rejected": 0,
+    "failed": 0,
+    "api_calls": 1
+  }
+}
