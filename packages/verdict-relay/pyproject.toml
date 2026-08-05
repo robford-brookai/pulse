@@ -7,7 +7,9 @@ dependencies = [
     # The cursor store's HTTP edge (mart_reader.LedgerCursorStore) — same floor pulse-core pins,
     # so the workspace resolves one httpx.
     "httpx>=0.28.1",
-    # cursor_path / validate_cursor: the writer-state contract the durable cursor persists through.
+    # Command submission + classification, D16 idempotency, generated command types, and the
+    # cursor_path / validate_cursor writer-state contract — the S1.1 surface the reader and
+    # declarer are built against.
     "pulse-core",
 ]
 
