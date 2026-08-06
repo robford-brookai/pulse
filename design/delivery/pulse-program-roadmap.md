@@ -24,7 +24,7 @@ Crosswalk:
 |---|---|---|---|
 | 0 — Absorption | S0.1 catalog spec, S0.2 catalog machinery | ✅ complete — `ocean-eventbridge-migration` (DNA-733), archived `2026-08-02-ocean-eventbridge-migration`, specs baseline seeded | 0–4 + post-merge ops, all done |
 | 1 — Record | S1.1 ledger schema + command API | ✅ **complete — `pulse-ledger-core` (DNA-784)**, all 16 tasks merged, archived `2026-08-03-pulse-ledger-core`; specs baseline updated (`command-api`, `ledger-distribution`, `ledger-read`, `ledger-record`) | 0–4, all done |
-| 2 — Ingress | S2, plus S1.2 verdict-relay, S1.3 schedules, S1.4 identity | gate cleared, S1.1 archived — propose `s12`/`s13`/`s14` now | — |
+| 2 — Ingress | S2, plus S1.2 verdict-relay, S1.3 schedules, S1.4 identity | in flight — `s12-verdict-relay` ✅ shipped (archived `2026-08-05-s12-verdict-relay`); `s13`/`s14` dispatched (DNA-837, DNA-849); four changes gate-held | s12: 0–4 done |
 | 3 — Projections | S3 (incl. migration M1) | queued | — |
 | 4 — Retirement | S4 | queued | — |
 
@@ -35,12 +35,16 @@ Crosswalk:
   `openspec/specs/` as the repo's first baseline. Out-of-lane ops executed: terraform applied,
   MSK Serverless torn down, `robford-brookai/ocean` archived read-only with the ADR §7
   supersession notice as its final commit.
+- `s12-verdict-relay` (DNA-827) — 8/8 tasks (#106–#113), doc_update #114, archived via #115 at
+  `openspec/changes/archive/2026-08-05-s12-verdict-relay/`; three delta specs
+  (`verdict-declare`, `verdict-mart-read`, `verdict-relay-run`) merged into the baseline.
+  G_DRIFT flags resolved with receipts on DNA-827. Supersedes the clinic-rules-engine Snowpark
+  emitter (P5).
 
-## Active change: `pulse-ledger-core` (S1.1)
+## Completed change: `pulse-ledger-core` (S1.1)
 
-Snapshot 2026-08-03 (after PR #94): **implementation complete — all 16 tasks done** (5.2, this
-document refresh, is the last to merge). Remaining lifecycle steps: collect → doc_update →
-verify → merge → archive.
+Closed: archived `2026-08-03-pulse-ledger-core`, four delta specs in the baseline, v1.5
+released. The wave narrative below stays as the historical record of how S1.1 ran.
 
 | Wave | Tasks | State |
 |---|---|---|
@@ -50,11 +54,12 @@ verify → merge → archive.
 | 3 — reads, client, distribution | 4.1–4.5 | ✅ |
 | 4 — proof and documentation | 5.1–5.3 | ✅ (5.2 = this refresh; Demo 1 receipt from 5.3 attaches to DNA-784 before archive) |
 
-One known end-to-end gap survives the change, flagged independently by tasks 4.3 and 5.3:
-`pulse_ledger.api` does not yet accept an `idempotency_key` body field or echo `replayed`, so
-`pulse_core.client` is not wired to the live replay semantics (the commit path itself is). Tracked
-as DNA-801, in `docs/contracts/publishes.md`, and in ADR-0003 (Consequences); it gates
-`s12-verdict-relay` enqueue.
+One known end-to-end gap survived the change (tasks 4.3 and 5.3): `pulse_ledger.api` did not
+accept an `idempotency_key` body field or echo `replayed`. **Resolved 2026-08-04** — DNA-801
+landed as a direct fix PR (#104, sub-issues DNA-819/820/821; accepted-if-present at the HTTP
+boundary, mandatory-key tightening tracked on DNA-801 as follow-up). The stale "known gap"
+prose in `docs/contracts/publishes.md` and `pulse_core/client.py` was deleted in the same PR;
+ADR-0003's Consequences note stands as historical record. This unblocked `s12-verdict-relay`.
 
 ## Remaining waves — provisional master plan
 
@@ -108,17 +113,16 @@ means** lines quote ADR §6 exits verbatim.
 
 ### Phase 2 — Ingress
 
-Gate for the S1.x siblings: **cleared** — `pulse-ledger-core` is through wave 4, and task 5.2 /
-DNA-799 pinned the names in `design/delivery/pulse-s1-work-orders.md` (client path, read surface,
-quarantine table, cursor facility, handler signature). One caveat carries: the
-`idempotency_key`/`replayed` HTTP wiring gap noted in the active-change section above must land
-before `s12-verdict-relay`, whose declarer depends on replay classification.
+Gate for the S1.x siblings: **cleared** — `pulse-ledger-core` archived, names pinned by task
+5.2 / DNA-799, and the `idempotency_key`/`replayed` caveat closed (DNA-801 → PR #104,
+2026-08-04). `s12-verdict-relay` shipped through the full lifecycle; `s13-schedules` and
+`s14-identity` are dispatched with Linear sub-issues in Todo (DNA-837, DNA-849).
 
 | Change | Delivers | Gate |
 |---|---|---|
-| `s12-verdict-relay` | `packages/verdict-relay` per the S1 work order; supersedes the clinic-rules-engine Snowpark emitter (P5) | S1.1 wave 4 |
-| `s13-schedules` | `packages/schedules` — month-open + D9 consent sweep | S1.1 wave 4 |
-| `s14-identity` | `packages/identity` — deterministic matcher v1; also genesis's matcher | S1.1 wave 4 |
+| `s12-verdict-relay` | `packages/verdict-relay` per the S1 work order; supersedes the clinic-rules-engine Snowpark emitter (P5) | ✅ shipped — archived `2026-08-05-s12-verdict-relay` (DNA-827) |
+| `s13-schedules` | `packages/schedules` — month-open + D9 consent sweep | dispatched — in execution (DNA-837) |
+| `s14-identity` | `packages/identity` — deterministic matcher v1; also genesis's matcher | dispatched — in execution (DNA-849) |
 | `catalog-authority` | authoritative `state_catalog.yaml` replacing the Appendix C seed; regeneration into the 2.1 generator; D18 Snowflake release job + breaking-change rule. Serial lane `catalog_generated_surfaces` | D18 confirmed |
 | `twenty-kanban-webhook-ingress` | D8: enable the HMAC route 3.4 ships disabled; drag → command; invalid → rejection + card comment (heal-back write completes in Phase 3) | D15 confirmed |
 | `customerio-consent-ingress` | D9 forward consent ingress, actor `customer.io`, message-level provenance | export/webhook mechanism confirmed |
@@ -275,11 +279,11 @@ a phase boundary:
   gate specific phase milestones (`environment-matrix` gates Demo 3's staging leg and cutover P0)
   but ship as prerequisites woven into whichever phase needs them, not as their own version.
 
-**Midterm objective: v2.0.** Seven changes, all currently gate-clear or one hop from it
-(`s12-verdict-relay`, `s13-schedules`, `s14-identity`, `catalog-authority`,
-`twenty-kanban-webhook-ingress`, `customerio-consent-ingress`, `producer-ingress-policy`), plus
-the still-open `idempotency_key`/`replayed` HTTP wiring gap (DNA-801) that gates
-`s12-verdict-relay`'s enqueue path — close that first.
+**Midterm objective: v2.0.** Seven changes: `s12-verdict-relay` ✅ shipped (DNA-801 closed
+first via #104, as planned); `s13-schedules` and `s14-identity` dispatched and in execution;
+`catalog-authority` (D18), `twenty-kanban-webhook-ingress` (D15), `customerio-consent-ingress`
+(export mechanism), and `producer-ingress-policy` (needs `catalog-authority`) remain
+gate-held — D15–D18 close at the exec session.
 
 **Longterm objective: v5.0 — Program done.** Everything after v2.0 is sequential and gated
 (Phase 3 needs Phase 2 exit + a Twenty dev instance; Phase 4 needs Phase 3 exit; genesis needs
