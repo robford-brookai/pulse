@@ -13,6 +13,7 @@ nav:
   - Runbooks:
       - Month-open: runbooks/month-open.md
       - Consent-sweep: runbooks/consent-sweep.md
+      - Identity-quarantine: runbooks/identity-quarantine.md
 plugins:
   - search
   - mkdocstrings:
