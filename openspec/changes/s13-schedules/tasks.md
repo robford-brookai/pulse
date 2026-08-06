@@ -75,7 +75,7 @@ Fixtures are synthetic only (PHI rule) and ship with the task that consumes them
 
 ## 4. Wave 2 — CLI and dry-run
 
-- [ ] 4.1 `schedules/cli.py`: one entrypoint, subcommands `month-open` and `consent-sweep`, exit
+- [x] 4.1 [DNA-845] `schedules/cli.py`: one entrypoint, subcommands `month-open` and `consent-sweep`, exit
       status as the scheduler contract (nonzero on any failed run, invariant breach, or usage
       error). Tests: each subcommand drives its job through the faked boundaries; unknown
       subcommand and missing required argument exit nonzero with usage help (spec: "Subcommands
@@ -98,7 +98,7 @@ Fixtures are synthetic only (PHI rule) and ship with the task that consumes them
       definitions and checks both cadences and their targets (spec: "Schedule definitions exist
       and match the cadence").
       `[model: sonnet | deps: 4.2 | lane: repo_change | wave: 3]`
-- [ ] 5.2 Runbooks: `docs/runbooks/month-open.md` — the missed-month-open page procedure (billing
+- [x] 5.2 [DNA-848] Runbooks: `docs/runbooks/month-open.md` — the missed-month-open page procedure (billing
       incident severity per ops plan §1.5), the zero-enrollment failure meaning, the re-run
       posture, and the DNA-801 replay-accounting caveat; `docs/runbooks/consent-sweep.md` — the
       drift-spike procedure and the malformed-row triage. mkdocs nav entries; placeholders as
