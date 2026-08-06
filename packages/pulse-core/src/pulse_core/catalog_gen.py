@@ -5,6 +5,10 @@ variant) and emits `pulse_core/generated/__init__.py`: transition tables, the tr
 enum, and one Pydantic command model per catalog command. The generated module is committed and
 version-pinned to `catalog_version`; producers and the write-path validator both import it.
 
+The authoritative catalog (`catalog/state_catalog.yaml`, repo root) loads through `load_catalog`
+into the `Catalog` model — the seed schema plus reason ValueSets, program config, and a semver
+`catalog_version`. The generator's input path moves to it in catalog-authority task 2.1.
+
 Regenerate:        uv run python -m pulse_core.catalog_gen
 Verify (no write): uv run python -m pulse_core.catalog_gen --check
 """
@@ -12,11 +16,12 @@ Verify (no write): uv run python -m pulse_core.catalog_gen --check
 from __future__ import annotations
 
 import argparse
+import re
 from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 FieldType = Literal["str", "optional_str", "datetime", "date", "verdict_outcome", "json"]
 
@@ -32,6 +37,14 @@ _FIELD_ANNOTATIONS: dict[str, str] = {
 PACKAGE_ROOT = Path(__file__).parent
 SEED_PATH = PACKAGE_ROOT / "catalog" / "state_catalog_seed.yaml"
 GENERATED_PATH = PACKAGE_ROOT / "generated" / "__init__.py"
+# The authoritative catalog is a repo-level artifact, not a package resource (design decision 1):
+# four generated surfaces derive from it, and regeneration is a dev/CI-time command reading the
+# repo tree. Only the committed generated module ships in the wheel.
+REPO_ROOT = PACKAGE_ROOT.parents[3]
+CATALOG_PATH = REPO_ROOT / "catalog" / "state_catalog.yaml"
+
+# MAJOR.MINOR.PATCH, no leading zeros, no pre-release or build metadata (design decision 3).
+_SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 
 
 class SubjectSpec(BaseModel):
@@ -85,6 +98,82 @@ def load_seed(path: Path = SEED_PATH) -> Seed:
     """Load and validate the seed file."""
     with path.open() as fh:
         return Seed.model_validate(yaml.safe_load(fh))
+
+
+class ValueSetSpec(BaseModel):
+    """One reason ValueSet: codes are the keys, so a code appears once and order is not meaning."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    description: str
+    codes: dict[str, str] = Field(min_length=1)
+
+
+class ProgramSpec(BaseModel):
+    """One program's configuration (I6: programs are configuration, not schema)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: str
+    # The gate `pending_start -> active` must clear (§5.2), and the CMS exclusivity group the
+    # command API enforces against concurrent enrollments (I6). Both are optional because the
+    # design records them for some programs only; a later catalog PR fills the gaps.
+    entry_gate: str | None = None
+    exclusivity_group: str | None = None
+
+
+class CatalogCommandSpec(CommandSpec):
+    """A command, plus the optional ValueSet its `reason` binds to (§5.2 reason CodeableConcept)."""
+
+    reason_valueset: str | None = None
+
+
+class Catalog(BaseModel):
+    """The authoritative state catalog: the seed schema plus ValueSets, programs, and semver.
+
+    Not a subclass of `Seed` — narrowing `commands` to the extended spec would be an invariant
+    override. The subject and command specs are the seed's, extended where v1 adds a section.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    catalog_version: str
+    subjects: dict[str, SubjectSpec]
+    commands: dict[str, CatalogCommandSpec]
+    valuesets: dict[str, ValueSetSpec]
+    programs: dict[str, ProgramSpec]
+    # Subjects a command can be pinned to that carry no state machine — the registry anchors
+    # (Person, Provider, Clinic). They are not in `subjects`, which is the state surface the
+    # generator emits adjacency for.
+    registry_subjects: list[str] = Field(default_factory=list)
+
+    # A field validator, not a model one: it must still report when another section is also
+    # malformed, so a rejected catalog names every violation at once.
+    @field_validator("catalog_version")
+    @classmethod
+    def _version_is_semver(cls, value: str) -> str:
+        if not _SEMVER.fullmatch(value):
+            msg = f"catalog_version {value!r} is not a MAJOR.MINOR.PATCH semver"
+            raise ValueError(msg)
+        return value
+
+    @model_validator(mode="after")
+    def _command_references_are_declared(self) -> Catalog:
+        declared_subjects = set(self.subjects) | set(self.registry_subjects)
+        for command, spec in self.commands.items():
+            if spec.subject_type is not None and spec.subject_type not in declared_subjects:
+                msg = f"command {command!r} pins undeclared subject {spec.subject_type!r}"
+                raise ValueError(msg)
+            if spec.reason_valueset is not None and spec.reason_valueset not in self.valuesets:
+                msg = f"command {command!r} binds undeclared ValueSet {spec.reason_valueset!r}"
+                raise ValueError(msg)
+        return self
+
+
+def load_catalog(path: Path = CATALOG_PATH) -> Catalog:
+    """Load and validate the authoritative catalog; a malformed file raises and yields nothing."""
+    with path.open() as fh:
+        return Catalog.model_validate(yaml.safe_load(fh))
 
 
 def _class_name(command_type: str) -> str:
