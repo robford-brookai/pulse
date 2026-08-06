@@ -1,0 +1,54 @@
+{
+  "kind": "decision",
+  "case": "exact_identifier_hit",
+  "description": "A referral carries an ExternalIdentifier already held by an existing person. The identifier tier must short-circuit the decision even though the referral's demographics would composite-match a different, unrelated person.",
+  "referral": {
+    "identifiers": [
+      {
+        "system": "MRN-ACME",
+        "value": "SYN-0001"
+      }
+    ],
+    "demographics": {
+      "first_name": "Alex",
+      "last_name": "Nguyen",
+      "dob": "1988-11-02",
+      "sex": "F"
+    }
+  },
+  "existing_persons": [
+    {
+      "person_id": "person-identifier-owner",
+      "identifiers": [
+        {
+          "system": "MRN-ACME",
+          "value": "SYN-0001"
+        }
+      ],
+      "demographics": {
+        "first_name": "Alex",
+        "last_name": "Nguyen",
+        "dob": "1988-11-02",
+        "sex": "F"
+      }
+    },
+    {
+      "person_id": "person-composite-decoy",
+      "identifiers": [
+        {
+          "system": "MRN-OTHER",
+          "value": "SYN-9999"
+        }
+      ],
+      "demographics": {
+        "first_name": "Sam",
+        "last_name": "Rivera",
+        "dob": "1975-06-19",
+        "sex": "M"
+      }
+    }
+  ],
+  "expected_decision": "match",
+  "expected_person_id": "person-identifier-owner",
+  "expected_rule_id": "identifier_exact"
+}
