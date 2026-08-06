@@ -98,7 +98,7 @@ named on that task below.
       strict, and both monitored failure modes are named.
       Scenario: verdict-relay-run "The runbook covers both monitored failure modes".
       `[model: sonnet | deps: 3.1 | lane: repo_change | wave: 4]`
-- [ ] 5.2 Contract and supersession docs: add the verdict mart contract to
+- [x] 5.2 Contract and supersession docs: add the verdict mart contract to
       `docs/contracts/consumes.md` (per roadmap P5) and a supersession note to
       `design/platform/clinic-rules-engine.md` (Snowpark emitter superseded by this relay on the
       single write path). Test: mkdocs strict build; docs-consistency gate green.
