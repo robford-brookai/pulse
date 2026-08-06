@@ -16,19 +16,19 @@ vars:
   # Lint reaches the absorbed package; typecheck and test do not yet. These are separate vars so
   # each target's scope is readable at the point of use — a var that names packages/ocean while
   # the command runs against src is a false claim about what CI verifies (task 1.3).
-  LINT_PATHS: src tests packages/pulse-ledger packages/pulse-core packages/verdict-relay packages/schedules packages/ocean
+  LINT_PATHS: src tests packages/pulse-ledger packages/pulse-core packages/verdict-relay packages/schedules packages/identity packages/ocean
   # Typecheck reaches ocean's libs but not its 16 services (task 1.4, DNA-779): the services
   # carry 217 mypy errors. Stated here rather than implied, so what CI verifies is readable
   # from this file.
-  # schedules typechecks under pyright strict (task 1.1), same as verdict-relay — see typecheck,
-  # not this mypy list.
+  # schedules and identity typecheck under pyright strict (task 1.1), same as verdict-relay — see
+  # typecheck, not this mypy list.
   TYPED_PATHS: src packages/pulse-ledger/src packages/pulse-core/src packages/ocean/libs/ocean-events/src packages/ocean/libs/ocean-broker/src packages/ocean/libs/ocean-connector-mcp/src
   # Tests reach ocean's libs here; the 14 service suites run in test:services, one pytest
   # process per service (task 4.14, DNA-781). They cannot join this list: every service ships a
   # top-level `src` package and imports itself as `from src.X`, and one interpreter cannot hold
   # sixteen different `src` packages in sys.modules. graph-projection moved from this list into
   # the loop with the rest. tests/test_taskfile_test_coverage.py pins this arrangement.
-  TESTED_PATHS: tests packages/pulse-ledger/tests packages/pulse-core/tests packages/verdict-relay/tests packages/schedules/tests packages/ocean/libs
+  TESTED_PATHS: tests packages/pulse-ledger/tests packages/pulse-core/tests packages/verdict-relay/tests packages/schedules/tests packages/identity/tests packages/ocean/libs
   # Coverage covers ocean-events because it is the envelope every consumer depends on, and it is
   # at 100%. ocean-broker joins it at task 2.2: the reason it was excluded — that 2.2 would throw
   # its tests away — expired when 2.2 landed EventBridgePublisher and the event catalog, which are
@@ -36,10 +36,11 @@ vars:
   # ocean-connector-mcp is outside this migration, still at 0%, tracked in DNA-779.
   # The pulse packages are covered from their first commit — placeholder-sized today, and the
   # 80% floor applies as they grow rather than being retrofitted later.
-  # verdict-relay and schedules each carry their own 85% floor (s12-verdict-relay, s13-schedules),
-  # enforced by the extra `coverage report` steps in `test` — the global fail_under cannot
-  # express a per-package floor.
-  COV_PATHS: --cov=src/pkg_pulse --cov=packages/pulse-ledger/src --cov=packages/pulse-core/src --cov=packages/verdict-relay/src --cov=packages/schedules/src --cov=packages/ocean/libs/ocean-events/src --cov=packages/ocean/libs/ocean-broker/src
+  # verdict-relay and schedules each carry their own 85% floor (s12-verdict-relay, s13-schedules);
+  # identity carries a 90% floor (s14-identity — wrong matches are the costliest bug in the
+  # system). Each is enforced by the extra `coverage report` steps in `test` — the global
+  # fail_under cannot express a per-package floor.
+  COV_PATHS: --cov=src/pkg_pulse --cov=packages/pulse-ledger/src --cov=packages/pulse-core/src --cov=packages/verdict-relay/src --cov=packages/schedules/src --cov=packages/identity/src --cov=packages/ocean/libs/ocean-events/src --cov=packages/ocean/libs/ocean-broker/src
   CHANGE: ""
   VISIBILITY: --private
 
@@ -106,14 +107,15 @@ tasks:
       - uv run ruff check {{.LINT_PATHS}}
 
   typecheck:
-    desc: Type check — mypy on TYPED_PATHS (DNA-779), pyright on verdict-relay (s12) and schedules (s13)
+    desc: Type check — mypy on TYPED_PATHS (DNA-779), pyright on verdict-relay (s12), schedules (s13), identity (s14)
     cmds:
       - uv run mypy {{.TYPED_PATHS}}
-      # verdict-relay and schedules typecheck under pyright strict (s12-verdict-relay,
-      # s13-schedules); pyright is a dev dependency of each package, installed by
-      # `uv sync --all-packages`.
+      # verdict-relay, schedules, and identity typecheck under pyright strict
+      # (s12-verdict-relay, s13-schedules, s14-identity); pyright is a dev dependency of each
+      # package, installed by `uv sync --all-packages`.
       - uv run pyright -p packages/verdict-relay
       - uv run pyright -p packages/schedules
+      - uv run pyright -p packages/identity
 
   # --- 4. Test ---
 
@@ -121,11 +123,12 @@ tasks:
     desc: Run tests with coverage, then every ocean service suite (DNA-781)
     cmds:
       - uv run pytest {{.TESTED_PATHS}} --import-mode=importlib {{.COV_PATHS}} --cov-report=term-missing
-      # verdict-relay's and schedules's per-package 85% floors (s12-verdict-relay, s13-schedules),
-      # read from the combined run's coverage data — no second test run. The flag overrides the
-      # global fail_under.
+      # verdict-relay's and schedules's per-package 85% floors (s12-verdict-relay,
+      # s13-schedules), and identity's 90% floor (s14-identity), read from the combined run's
+      # coverage data — no second test run. The flag overrides the global fail_under.
       - uv run coverage report --include="packages/verdict-relay/src/*" --fail-under=85
       - uv run coverage report --include="packages/schedules/src/*" --fail-under=85
+      - uv run coverage report --include="packages/identity/src/*" --fail-under=90
       - task: test:services
 
   test:services:
