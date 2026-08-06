@@ -47,6 +47,24 @@ an optional `idempotency_key` body field, thread it to `commit_idempotent`, and 
 response carries `replayed` — a repeated key returns the original event with `"replayed": true`
 and writes nothing. A keyless body still commits as a fresh event.
 
+### Identity matcher (`s14-identity`, DNA-850)
+
+The deterministic identity matcher lives in `packages/identity` and is consumed as a library
+entrypoint, independent of `identity.service`'s event-consumption path — genesis adjudication
+calls it directly, in batch, with its own harness (spec: "the matcher entrypoint is stable for
+genesis"). Quarantine disposition for its `Ambiguous` outcome is
+[`docs/runbooks/identity-quarantine.md`](../runbooks/identity-quarantine.md).
+
+| Surface | Kind | Stability | Notes |
+|---|---|---|---|
+| `identity.matcher.resolve(referral, lookup)` | library entrypoint | stable | pure function — no I/O, no ledger writes; takes a `Referral` (demographics + identifiers) and a `CandidateLookup` port, returns a `Decision` |
+| `identity.matcher.Decision` (`Match \| Mint \| Ambiguous`) | typed union | stable | `Match(person_id, evidence)`, `Mint(evidence)`, `Ambiguous(candidates, evidence)`; every decision carries `Evidence(matched_fields, rule_id, candidate_count)` — field names only, never demographic values |
+| Rule ids | module constants (string) | stable | `identifier_exact`, `identifier_conflict`, `composite_unique`, `composite_none`, `composite_ambiguous` — the last two quarantine; normalization rules each composite digest depends on are versioned in `packages/identity/docs/matching.md` |
+| `identity.matcher.CandidateLookup` | `Protocol` | stable | the read port `resolve` decides against (`lookup_identifier`, `find_candidates`); a caller batching reads (e.g. genesis) brings its own adapter, not the live one wired in `identity.lookup` |
+
+Ambiguity that turns out to be duplicate person records corrects through `merge_person`
+(`pulse_core.generated.MergePersonCommand`, S1.1's command) — never a parallel dedup mechanism.
+
 ### Offered to PX survey engine (discovery stage, `survey-engine-ingress` planned)
 
 PX (survey engine, owner Max Pengilly) is in discovery; pulse's planned adapter is
@@ -56,7 +74,7 @@ What pulse offers PX now, before any code integrates:
 | Surface | Kind | Stability | Notes |
 |---|---|---|---|
 | Event envelope + state catalog | contract docs | stable | `design/platform/event-envelope-spec.md`, `design/platform/state-catalog.md` — the shape survey responses take as attributed commands/facts on the single write path; PX defines survey payloads against these, never a parallel event schema |
-| `s14-identity` matcher | library read surface | planned | PX's cross-surface identity resolution consumes the deterministic matcher `s14-identity` publishes (`pulse_ledger.identity`: `lookup_identifier`/`find_candidates`, digests only — never demographics), not a parallel matcher. Pending that change landing; this row hardens when it merges |
+| `s14-identity` matcher | library read surface | beta | PX's cross-surface identity resolution consumes the deterministic matcher `s14-identity` publishes (`pulse_ledger.identity`: `lookup_identifier`/`find_candidates`, digests only — never demographics; full entrypoint contract in the "Identity matcher" section above), not a parallel matcher |
 
 **Consent-model overlap:** PX's open consent-model decision overlaps D9 and
 `customerio-consent-ingress` — consent state lives in the ledger's catalog, actor-attributed and
