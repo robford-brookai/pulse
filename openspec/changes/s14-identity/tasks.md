@@ -90,7 +90,7 @@ the system).
       in `received` with a hold fact and a queue row carrying exactly the two person keys and no
       demographics; reprocessing a pending referral does not double-enqueue.
       `[model: sonnet | deps: 4.1 | lane: repo_change | wave: 3]`
-- [ ] 4.3 `identity/service.py` — consumption entrypoint via
+- [x] 4.3 [DNA-857] `identity/service.py` — consumption entrypoint via
       `pulse_core.client.consume(handler, queue_url=...)` (`ConsumerHandler` signature): one
       referral per invocation, `event_id` dedupe, delete only after the handler returns. This is
       the composition root: the handler wires the 3.2 live adapter into the 3.1 matcher and the
