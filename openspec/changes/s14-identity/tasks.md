@@ -104,7 +104,7 @@ the system).
 
 ## 5. Wave 4 — proof and documentation
 
-- [ ] 5.1 `packages/identity/tests/test_determinism.py` — the property test: resolution of any
+- [x] 5.1 [DNA-858] `packages/identity/tests/test_determinism.py` — the property test: resolution of any
       fixture set is order-independent and re-run-identical (same decisions, same evidence,
       idempotent commands on replay), driven through the library entrypoint directly — no queue,
       no service process — proving the genesis batch-invocation contract yields the same typed
