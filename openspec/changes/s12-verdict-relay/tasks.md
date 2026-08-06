@@ -91,7 +91,7 @@ named on that task below.
 
 ## 5. Wave 4 — runbook and contract docs
 
-- [ ] 5.1 `docs/runbooks/verdict-relay.md`: failure modes and operator actions for the §1.5
+- [x] 5.1 `docs/runbooks/verdict-relay.md`: failure modes and operator actions for the §1.5
       monitors — staleness > 26 h and run failure — including reading the receipt, rejected vs
       failed, recovery-overlap replay counts (design risk 4), and safe re-run semantics against
       the persisted cursor. Test: docs-consistency check that the runbook exists, mkdocs builds
