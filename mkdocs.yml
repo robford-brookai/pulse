@@ -10,6 +10,9 @@ copyright: Maintained by <a href="https://robford-brookai.com">robford-brookai</
 nav:
   - Home: index.md
   - Modules: modules.md
+  - Runbooks:
+      - Month-open: runbooks/month-open.md
+      - Consent-sweep: runbooks/consent-sweep.md
 plugins:
   - search
   - mkdocstrings:
