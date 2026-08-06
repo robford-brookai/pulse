@@ -110,7 +110,7 @@ the system).
       no service process — proving the genesis batch-invocation contract yields the same typed
       decisions the service path produces.
       `[model: sonnet | deps: 3.1, 4.1 | lane: repo_change | wave: 4]`
-- [ ] 5.2 `docs/runbooks/identity-quarantine.md` + the published contract: runbook covers reading
+- [x] 5.2 [DNA-859] `docs/runbooks/identity-quarantine.md` + the published contract: runbook covers reading
       an evidence record from the queue row's pseudonymous keys, the disposition commands per
       outcome, and the merge-by-command correction path (`merge_person` is S1.1's command —
       linked, not rebuilt); register the matcher entrypoint, decision types, and rule ids in
