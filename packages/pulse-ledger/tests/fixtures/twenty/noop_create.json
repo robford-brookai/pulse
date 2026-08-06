@@ -1,0 +1,32 @@
+{
+  "eventId": "evt-twenty-fixture-noop-create-0001",
+  "eventType": "record.created",
+  "objectMetadata": {
+    "nameSingular": "patientProgram",
+    "namePlural": "patientPrograms"
+  },
+  "workspaceMember": {
+    "id": "wsm-0004-canary-nurse",
+    "name": {
+      "firstName": "Canary",
+      "lastName": "CareCoordinator"
+    }
+  },
+  "record": {
+    "id": "twenty-record-patientprogram-0004",
+    "lifecycleStatus": "registered",
+    "lifecycleStatusAsOf": "2026-08-06T15:25:00Z",
+    "patient": {
+      "id": "twenty-record-patient-0004",
+      "canonicalPatientId": "DIM_PATIENT_CONFORMED-000104",
+      "name": {
+        "firstName": "Canary",
+        "lastName": "NoopCreate"
+      }
+    },
+    "program": {
+      "id": "twenty-record-program-0001",
+      "code": "diabetes-mgmt"
+    }
+  }
+}

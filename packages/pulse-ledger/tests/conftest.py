@@ -1,4 +1,4 @@
-"""Throwaway-cluster Postgres fixtures for the ledger migration tests.
+"""Throwaway-cluster Postgres fixtures for the ledger migration tests, plus sys.path setup.
 
 The suite starts its own Postgres on a private unix socket — no TCP listener, so the
 no-live-network test posture holds. It needs server binaries (initdb, pg_ctl, postgres)
@@ -6,6 +6,13 @@ in one directory: set PULSE_PG_BINDIR to point at one, otherwise discovery walks
 and the usual Homebrew/Debian install locations (GitHub's ubuntu runners ship Postgres
 under /usr/lib/postgresql/*/bin). With no server available the Postgres-backed tests
 skip, visibly, rather than fake the store.
+
+The root `task test` run collects every package's tests with `--import-mode=importlib`, which
+does not add a test module's directory to sys.path (unlike the default "prepend" mode) — so
+`twenty_fixtures.py` (the Twenty webhook fixture loader/signer, shared by this task's tests and
+later waves' — 2.1's mapping tests, 3.1's route tests) would not import under either mode without
+this. Same fix `identity`'s and `ocean`'s conftests already use for their own sibling helper
+modules.
 """
 
 from __future__ import annotations
@@ -15,6 +22,7 @@ import itertools
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from collections.abc import Iterator
 from pathlib import Path
@@ -24,6 +32,10 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from psycopg import sql
+
+_TESTS_DIR = Path(__file__).resolve().parent
+if str(_TESTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_TESTS_DIR))
 
 INFRA_DIR = Path(__file__).resolve().parents[1] / "infra" / "postgres"
 

@@ -1,0 +1,38 @@
+{
+  "eventId": "evt-twenty-fixture-missing-canonical-0001",
+  "eventType": "record.updated",
+  "objectMetadata": {
+    "nameSingular": "patientProgram",
+    "namePlural": "patientPrograms"
+  },
+  "workspaceMember": {
+    "id": "wsm-0003-canary-nurse",
+    "name": {
+      "firstName": "Canary",
+      "lastName": "CareCoordinator"
+    }
+  },
+  "updatedFields": [
+    {
+      "name": "lifecycleStatus",
+      "before": "registered",
+      "after": "enrolled"
+    }
+  ],
+  "record": {
+    "id": "twenty-record-patientprogram-0003",
+    "lifecycleStatus": "enrolled",
+    "lifecycleStatusAsOf": "2026-08-06T15:20:00Z",
+    "patient": {
+      "id": "twenty-record-patient-0003",
+      "name": {
+        "firstName": "Canary",
+        "lastName": "MissingCanonical"
+      }
+    },
+    "program": {
+      "id": "twenty-record-program-0001",
+      "code": "diabetes-mgmt"
+    }
+  }
+}

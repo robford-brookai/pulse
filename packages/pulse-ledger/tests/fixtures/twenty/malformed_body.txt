@@ -1,0 +1,1 @@
+{"eventId": "evt-twenty-fixture-malformed-0001", "eventType": "record.updated", "record": {"id": "twenty-record-patientprogram-0007", "patient": {"name": {"firstName": "Canary", "lastName": "Malformed"
