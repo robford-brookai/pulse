@@ -14,7 +14,7 @@ is states, transitions, ValueSets, and program config only.
 
 ## 1. Wave 0 — schema and authoritative file
 
-- [ ] 1.1 Authoritative catalog schema and file: extend the `pulse_core.catalog_gen` loader models
+- [x] 1.1 [DNA-863] Authoritative catalog schema and file: extend the `pulse_core.catalog_gen` loader models
       with `valuesets` and `programs` sections and a semver `catalog_version`; write
       `catalog/state_catalog.yaml` at `1.0.0` — subjects and commands carried over from the
       Appendix C seed unchanged, referral closure reasons (`deceased`, `duplicate`,

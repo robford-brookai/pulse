@@ -19,7 +19,7 @@ one task.
 
 ## 1. Wave 0 — fixtures and rotation
 
-- [ ] 1.1 `packages/pulse-ledger/tests/fixtures/twenty/` — synthetic Twenty webhook payloads
+- [x] 1.1 [DNA-873] `packages/pulse-ledger/tests/fixtures/twenty/` — synthetic Twenty webhook payloads
       pinned from the documented `record.updated` shape plus
       `design/platform/twenty-data-model.md`: a legal drag (status field old→new, canonical spine
       ID, workspace member), an illegal drag, a redelivery duplicate (same webhook event id), a
