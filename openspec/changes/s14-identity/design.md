@@ -59,9 +59,12 @@ See proposal.md — Why. Constraints that shape the design:
    ledger in every property run.
 2. **Typed decisions as frozen dataclasses:** `Match(person_id, evidence)`, `Mint(evidence)`,
    `Ambiguous(candidates, evidence)`; `Evidence(matched_fields, rule_id, candidate_count)`.
-   Rule ids are stable strings (`identifier_exact`, `composite_unique`, `composite_none`,
-   `composite_ambiguous`) — they appear in evidence records, review-queue triage, and the
-   runbook, so they are part of the published contract alongside the entrypoint signature.
+   Rule ids are stable strings (`identifier_exact`, `identifier_conflict`, `composite_unique`,
+   `composite_none`, `composite_ambiguous`) — they appear in evidence records, review-queue
+   triage, and the runbook, so they are part of the published contract alongside the entrypoint
+   signature. *(`identifier_conflict` added at execution — task 3.1 found the two-holders split
+   the spec didn't cover and quarantined it under its own rule id; see the identity-matching
+   scenario.)*
    `Evidence.matched_fields` holds field *names* (e.g. `("last_name", "dob", "sex",
    "first_initial")`), never field values — evidence travels in command payloads to the ledger,
    and values would re-import the PHI the digest design just removed.
@@ -86,10 +89,16 @@ See proposal.md — Why. Constraints that shape the design:
    → `attach_identifier`(s); `Match` declares `resolve_referral` → `attach_identifier` for
    identifiers the person lacks (present ones are skipped, not re-attached — attaching an
    identifier held by another person would be rejected naming the holder, and that rejection is
-   quarantine-worthy, not retryable). Idempotency keys derive per D16 from the logical resolution
-   (subject, command type, payload, logical time = the triggering `event_id`), so redelivery
-   replays rather than duplicates. A `rejected` response on any step stops the sequence and
-   quarantines with the rejection in evidence; `transient` retries via the client's backoff.
+   quarantine-worthy, not retryable). Idempotency derives per D16 from the logical resolution,
+   as two distinct keys (clarified at execution — task 4.1): the **wire key**,
+   `PulseCoreClient.submit_command`'s own derivation (its `effective_at: datetime` is the
+   logical time — the client exposes no hook to inject a raw-string logical time), which is what
+   protects the ledger against duplicates; and the **audit key**, derived directly via
+   `pulse_core.idempotency.derive_idempotency_key` with logical time = the triggering
+   `event_id`, attached to evidence so a resolution is traceable to its triggering event.
+   Redelivery replays rather than duplicates via the wire key. A `rejected` response on any step
+   stops the sequence and quarantines with the rejection in evidence; `transient` retries via
+   the client's backoff.
 6. **Quarantine is two effects, made convergent by construction:** the `resolution_hold` fact
    (idempotent by D16 key) and `quarantine_subject` (pending at most once, per S1.1). Either may
    have happened before a crash; both are safe to repeat, so the handler needs no distributed
