@@ -61,7 +61,7 @@ the system).
       `[model: opus | deps: 2.1, 2.2 | lane: repo_change | wave: 2]`
       Model `opus`: a wrong match here is the reportable event the whole v1 posture exists to
       prevent.
-- [ ] 3.2 `identity/lookup.py` — live lookup adapter over the ledger read surface: wraps
+- [x] 3.2 [DNA-854] `identity/lookup.py` — live lookup adapter over the ledger read surface: wraps
       `pulse_ledger.identity.lookup_identifier(conn, system=..., value=...)` and
       `pulse_ledger.identity.find_candidates(conn, match_key)`, conforming to the 3.1 port.
       Tests: the adapter transmits only the sha256 digest for the composite tier (readable
