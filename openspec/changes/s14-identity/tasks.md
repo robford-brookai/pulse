@@ -118,7 +118,7 @@ the system).
       Tests: `mkdocs build -s` green; verification file-existence checks pass.
       `[model: sonnet | deps: 4.2, 5.1 | lane: repo_change | wave: 4]`
       `serial: openspec_main_specs` — doc-updater lane, contract and spec-adjacent files.
-- [ ] 5.3 Verification wrap — the work order's block, end to end on a fresh checkout:
+- [x] 5.3 Verification wrap — the work order's block, end to end on a fresh checkout:
       `ruff check packages/identity && pyright packages/identity`;
       `uv run pytest packages/identity --cov=identity --cov-fail-under=90 --disable-socket`;
       `uv run pytest packages/identity/tests/test_determinism.py -q`;
