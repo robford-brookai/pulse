@@ -83,7 +83,7 @@ the system).
       caplog scan across the resolver's decision/evidence logging (flagged path (c) in design
       decision 3) finds no fixture demographic string.
       `[model: sonnet | deps: 3.1 | lane: repo_change | wave: 3]`
-- [ ] 4.2 Quarantine path: `Ambiguous` → `resolution_hold` fact (no `to_state`; subject stays
+- [x] 4.2 [DNA-856] Quarantine path: `Ambiguous` → `resolution_hold` fact (no `to_state`; subject stays
       `received`) + `pulse_ledger.review.quarantine_subject` queue row holding pseudonymous
       person keys only — no demographic field enters the queue; both effects idempotent so a
       crash between them converges on redelivery. Tests: two-candidate case leaves the Referral
