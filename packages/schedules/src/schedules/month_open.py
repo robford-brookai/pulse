@@ -25,9 +25,12 @@ Two boundaries this module never crosses directly (design decision 9):
 
 from __future__ import annotations
 
+import json
+import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
+from pathlib import Path
 from typing import Protocol
 
 import psycopg
@@ -122,6 +125,32 @@ class FixtureEnrollmentSource:
         return [row for row in self.rows if row.state in wanted]
 
 
+def load_enrollment_fixture(path: Path) -> tuple[date, FixtureEnrollmentSource]:
+    """Load a recorded `enumerate_state` fixture (this package's own JSON shape — `month` plus an
+    `enrollments` list, e.g. `tests/fixtures/normal_month.json`) into its billing month and a
+    `FixtureEnrollmentSource` over its rows.
+
+    This is `--dry-run --fixture`'s substitute for a live ledger connection (task 4.2, spec: "Both
+    jobs support an offline dry-run") — the same fixture shape the test suite already records, so
+    the work order's own offline check command reads straight off a test fixture with no
+    conversion step.
+    """
+    data = json.loads(path.read_text())
+    month = date.fromisoformat(data["month"])
+    rows = [
+        SubjectState(
+            subject_type=ENROLLMENT_SUBJECT_TYPE,
+            subject_key=row["subject_key"],
+            state=row["state"],
+            effective_at=datetime.fromisoformat(row["effective_at"]),
+            last_event_id=uuid.UUID(row["last_event_id"]),
+            updated_at=datetime.fromisoformat(row["updated_at"]),
+        )
+        for row in data["enrollments"]
+    ]
+    return month, FixtureEnrollmentSource(rows=rows)
+
+
 def build_open_billing_episode_command(enrollment: SubjectState, month: date) -> OpenBillingEpisodeCommand:
     """One `open_billing_episode` command for one enrollment's current-month episode."""
     return OpenBillingEpisodeCommand(
@@ -171,6 +200,29 @@ def declare_month_open(
         response = client.submit_command(command, effective_at=effective_at)
         declarations.append(MonthOpenDeclaration(enrollment=enrollment, command=command, response=response))
     return declarations
+
+
+def dry_run_month_open(
+    source: EnrollmentSource,
+    *,
+    month: date,
+    states: Sequence[str] = ELIGIBLE_ENROLLMENT_STATES,
+) -> list[OpenBillingEpisodeCommand]:
+    """Build the would-declare set month-open would submit, without a client at all (task 4.2,
+    spec: "Both jobs support an offline dry-run").
+
+    Shares `declare_month_open`'s enumeration and command-building path — the identical
+    `source.eligible` read and `build_open_billing_episode_command` key derivation — so a dry run
+    exercises the real subject-key and payload shape, but the loop never constructs a
+    `PulseCoreClient` or calls `submit_command`: no token, no base URL, no socket, ever (spec:
+    "the process ... makes no API calls and no network connections at all"). Raises
+    `ZeroEnrollmentError` on empty enumeration, the same invariant `declare_month_open` enforces,
+    so a dry run cannot mask a would-be invariant breach behind an empty would-declare set.
+    """
+    enrollments = source.eligible(states)
+    if not enrollments:
+        raise ZeroEnrollmentError(states)
+    return [build_open_billing_episode_command(enrollment, month) for enrollment in enrollments]
 
 
 @dataclass(frozen=True)

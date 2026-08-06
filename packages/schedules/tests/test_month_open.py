@@ -42,6 +42,8 @@ from schedules.month_open import (
     billing_episode_subject_key,
     billing_month_effective_at,
     declare_month_open,
+    dry_run_month_open,
+    load_enrollment_fixture,
     run_month_open,
 )
 
@@ -250,3 +252,38 @@ class TestReceiptReflectsTheRun:
         assert run.receipt.invariant_breach is None
         assert run.receipt.ok is False
         assert len(run.declarations) == 3
+
+
+class TestDryRun:
+    """Task 4.2's scenario: `dry_run_month_open` builds the same would-declare set
+    `declare_month_open` would submit, without a client, and `load_enrollment_fixture` reads the
+    package's own recorded-fixture shape — the pair `schedules.cli --dry-run --fixture` wires
+    together (spec: "Both jobs support an offline dry-run")."""
+
+    def test_builds_the_same_commands_a_real_run_would_declare(self) -> None:
+        month, enrollments = load_enrollments("normal_month")
+        source = FixtureEnrollmentSource(rows=enrollments)
+
+        commands = dry_run_month_open(source, month=month)
+
+        assert {command.subject_key for command in commands} == {
+            billing_episode_subject_key("enr-active-1", month),
+            billing_episode_subject_key("enr-hold-1", month),
+        }
+        assert all(command.command_type == "open_billing_episode" for command in commands)
+        assert all(command.month == month for command in commands)
+
+    def test_zero_enrollment_raises_the_same_invariant_error_as_a_real_run(self) -> None:
+        month, enrollments = load_enrollments("zero_enrollment")
+        source = FixtureEnrollmentSource(rows=enrollments)
+
+        with pytest.raises(ZeroEnrollmentError):
+            dry_run_month_open(source, month=month)
+
+    def test_load_enrollment_fixture_reads_the_same_shape_load_enrollments_reads(self) -> None:
+        expected_month, expected_rows = load_enrollments("normal_month")
+
+        month, source = load_enrollment_fixture(FIXTURES / "normal_month.json")
+
+        assert month == expected_month
+        assert list(source.rows) == expected_rows

@@ -56,12 +56,24 @@ from schedules.consent_sweep import (
     build_drift_receipt,
     declare_consent_corrections,
     diff_consent,
+    dry_run_consent_corrections,
+    export_logical_time,
+    load_ledger_state_fixture,
     parse_export,
 )
 from schedules.consent_sweep import (
     SUBJECT_TYPE as CONSENT_SUBJECT_TYPE,
 )
-from schedules.month_open import EnrollmentSource, LedgerEnrollmentSource, run_month_open
+from schedules.month_open import (
+    ZERO_ENROLLMENT_INVARIANT,
+    EnrollmentSource,
+    LedgerEnrollmentSource,
+    ZeroEnrollmentError,
+    billing_month_effective_at,
+    dry_run_month_open,
+    load_enrollment_fixture,
+    run_month_open,
+)
 
 #: This job's own D15 credential name (mirrors `consent_sweep.RECONCILIATION_WRITER_ID`) — the
 #: writer identity `PulseCoreClient` authenticates as, so the ledger resolves every
@@ -104,6 +116,63 @@ def run_month_open_job(
     run = run_month_open(source, client, month=month)
     _emit(asdict(run.receipt), stream=stream if stream is not None else sys.stdout)
     return 0 if run.receipt.ok else 1
+
+
+def run_month_open_dry_run_job(
+    source: EnrollmentSource,
+    *,
+    month: date,
+    stream: TextIO | None = None,
+) -> int:
+    """Build and print month-open's would-declare set; no client, no submission, no socket at all
+    (task 4.2, spec: "Both jobs support an offline dry-run").
+
+    Mirrors `run_month_open_job`'s invariant handling without ever constructing a client:
+    `ZeroEnrollmentError` becomes the same `invariant_breach` name a real run's receipt carries
+    (spec: "Zero enrollments enumerated is a hard failure" applies to a dry run's enumeration
+    too) and the process exits nonzero; otherwise every command the real run would submit prints
+    alongside the `effective_at` its D16 idempotency key would derive from, and the process exits
+    zero (spec: "Dry-run declares nothing" — nothing is ever submitted, dry run or not).
+    """
+    out = stream if stream is not None else sys.stdout
+    try:
+        commands = dry_run_month_open(source, month=month)
+    except ZeroEnrollmentError:
+        _emit({"dry_run": True, "invariant_breach": ZERO_ENROLLMENT_INVARIANT, "would_declare": []}, stream=out)
+        return 1
+    effective_at = billing_month_effective_at(month).isoformat()
+    would_declare = [{"command": command.model_dump(mode="json"), "effective_at": effective_at} for command in commands]
+    _emit({"dry_run": True, "invariant_breach": None, "would_declare": would_declare}, stream=out)
+    return 0
+
+
+def run_consent_sweep_dry_run_job(
+    csv_text: str,
+    ledger_states: Sequence[SubjectState],
+    *,
+    file_id: str,
+    export_as_of: date,
+    stream: TextIO | None = None,
+) -> int:
+    """Build and print the sweep's would-declare set; no client, no submission, no socket at all
+    (task 4.2, spec: "Both jobs support an offline dry-run").
+
+    Malformed rows are counted the same way a real run counts them (spec: "Malformed rows are
+    counted and attached") but never fail the run — with no client to reject a declaration
+    against, a dry run has nothing else that can fail, so this job always exits zero.
+    """
+    parse_result = parse_export(csv_text)
+    corrections = diff_consent(parse_result.rows, ledger_states)
+    commands = dry_run_consent_corrections(corrections, file_id=file_id)
+    effective_at = export_logical_time(export_as_of).isoformat()
+    would_declare = [{"command": command.model_dump(mode="json"), "effective_at": effective_at} for command in commands]
+    payload: dict[str, object] = {
+        "dry_run": True,
+        "would_declare": would_declare,
+        "unparseable": len(parse_result.errors),
+    }
+    _emit(payload, stream=stream if stream is not None else sys.stdout)
+    return 0
 
 
 def run_consent_sweep_job(
@@ -171,9 +240,20 @@ def _build_parser() -> argparse.ArgumentParser:
     month_open_parser = subparsers.add_parser("month-open", help="Declare this month's BillingEpisodes.")
     month_open_parser.add_argument(
         "--month",
-        required=True,
         type=date.fromisoformat,
-        help="Any date (YYYY-MM-DD) within the billing month to open.",
+        help="Any date (YYYY-MM-DD) within the billing month to open. Required unless --dry-run "
+        "supplies one via --fixture.",
+    )
+    month_open_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the would-declare set and exit; no ledger connection, no API call, no socket.",
+    )
+    month_open_parser.add_argument(
+        "--fixture",
+        type=Path,
+        help="Path to a recorded enumerate_state fixture (required with --dry-run) — this "
+        "package's own JSON shape, e.g. tests/fixtures/normal_month.json.",
     )
 
     consent_sweep_parser = subparsers.add_parser("consent-sweep", help="Reconcile the D9 consent export.")
@@ -194,26 +274,67 @@ def _build_parser() -> argparse.ArgumentParser:
         type=date.fromisoformat,
         help="The export's as-of date (YYYY-MM-DD) — the D16 logical_time for its corrections.",
     )
+    consent_sweep_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the would-declare set and exit; no ledger connection, no API call, no socket.",
+    )
+    consent_sweep_parser.add_argument(
+        "--ledger-fixture",
+        type=Path,
+        default=None,
+        help="Path to a ledger consent-state fixture (optional with --dry-run; a JSON list of "
+        "{subject_key, channel, state} objects — omitted means no known prior state).",
+    )
 
     return parser
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    """Parse `argv`, run the named job against production wiring, and return its exit code."""
-    args = _build_parser().parse_args(argv)
+def _dispatch_month_open(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
+    """`month-open`'s two paths: `--dry-run --fixture` reads no ledger and touches no client at
+    all; otherwise this is task 4.1's original real-wiring path, unchanged."""
+    if args.dry_run:
+        if args.fixture is None:
+            parser.error("month-open --dry-run requires --fixture")
+        fixture_month, source = load_enrollment_fixture(args.fixture)
+        month = args.month if args.month is not None else fixture_month
+        return run_month_open_dry_run_job(source, month=month)
+    if args.month is None:
+        parser.error("month-open requires --month unless --dry-run is set")
+    source = LedgerEnrollmentSource(conn=_ledger_connection_from_env())
+    client = _pulse_core_client_from_env(writer_id=MONTH_OPEN_WRITER_ID, token_env_var=MONTH_OPEN_TOKEN_ENV_VAR)
+    return run_month_open_job(source, client, month=args.month)
 
-    if args.command == "month-open":
-        source = LedgerEnrollmentSource(conn=_ledger_connection_from_env())
-        client = _pulse_core_client_from_env(writer_id=MONTH_OPEN_WRITER_ID, token_env_var=MONTH_OPEN_TOKEN_ENV_VAR)
-        return run_month_open_job(source, client, month=args.month)
 
-    # Only "month-open" and "consent-sweep" are registered subparsers, so `args.command` is one
-    # of them by the time argparse's own required-subparser validation has passed.
+def _dispatch_consent_sweep(args: argparse.Namespace) -> int:
+    """`consent-sweep`'s two paths: `--dry-run` reads the export file (never a network call) and
+    an optional ledger-state fixture instead of a live ledger; otherwise this is task 4.1's
+    original real-wiring path, unchanged. Unlike `_dispatch_month_open`, every consent-sweep
+    argument is already unconditionally required at the argparse level, so there is no
+    `parser.error` seam here to justify taking `parser` too."""
+    csv_text = args.export_file.read_text()
+    if args.dry_run:
+        ledger_states = load_ledger_state_fixture(args.ledger_fixture) if args.ledger_fixture is not None else []
+        return run_consent_sweep_dry_run_job(
+            csv_text, ledger_states, file_id=args.file_id, export_as_of=args.export_as_of
+        )
     conn = _ledger_connection_from_env()
     ledger_states = enumerate_state(conn, CONSENT_SUBJECT_TYPE)
     client = _pulse_core_client_from_env(writer_id=RECONCILIATION_WRITER_ID, token_env_var=CONSENT_SWEEP_TOKEN_ENV_VAR)
-    csv_text = args.export_file.read_text()
     return run_consent_sweep_job(csv_text, ledger_states, client, file_id=args.file_id, export_as_of=args.export_as_of)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Parse `argv`, run the named job against production wiring, and return its exit code."""
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+
+    if args.command == "month-open":
+        return _dispatch_month_open(args, parser)
+
+    # Only "month-open" and "consent-sweep" are registered subparsers, so `args.command` is one
+    # of them by the time argparse's own required-subparser validation has passed.
+    return _dispatch_consent_sweep(args)
 
 
 if __name__ == "__main__":  # pragma: no cover
