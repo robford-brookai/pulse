@@ -91,7 +91,7 @@ Fixtures are synthetic only (PHI rule) and ship with the task that consumes them
 
 ## 5. Wave 3 — infra and runbooks
 
-- [ ] 5.1 `packages/schedules/infra/` schedule definitions per the monorepo IaC convention
+- [x] 5.1 [DNA-847] `packages/schedules/infra/` schedule definitions per the monorepo IaC convention
       (`packages/ocean/infra/terraform` pattern) and D14: month-open at 00:30 on the 1st with a
       same-day retry window, sweep daily, each trigger targeting its CLI subcommand. Config only —
       applying it is a deploy step outside this change. Test: a config assertion test parses the
