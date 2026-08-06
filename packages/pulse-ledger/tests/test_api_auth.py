@@ -29,6 +29,7 @@ from pulse_ledger.auth import (
     TIMESTAMP_HEADER,
     TWENTY_WEBHOOK_ENABLED_ENV,
     TWENTY_WEBHOOK_SECRET_ENV,
+    TWENTY_WEBHOOK_SECRET_NEXT_ENV,
     WRITER_AUTHORITY_PREFIX,
     WRITER_TOKEN_PREFIX,
     CredentialRegistry,
@@ -437,6 +438,44 @@ class TestTwentyWebhookRoute:
     def test_the_webhook_route_takes_no_bearer_credential(self, signed_client: TestClient, relay_token: str) -> None:
         """A writer credential must not open the webhook door, and vice versa."""
         assert signed_client.post(TWENTY_WEBHOOK_PATH, content=b"{}", headers=auth(relay_token)).status_code == 401
+
+
+class TestTwentyWebhookRotationOverHttp:
+    """The rotation window as the route sees it (D15 quarterly cadence)."""
+
+    retired = _token()
+    incoming = _token()
+
+    @staticmethod
+    def _post(client: TestClient, secret: str) -> int:
+        body = b'{"card":"synthetic"}'
+        timestamp = str(int(datetime.now(tz=timezone.utc).timestamp()))
+        response = client.post(
+            TWENTY_WEBHOOK_PATH,
+            content=body,
+            headers={TIMESTAMP_HEADER: timestamp, SIGNATURE_HEADER: sign(secret, timestamp, body)},
+        )
+        return response.status_code
+
+    @staticmethod
+    def _client(registry: CredentialRegistry, env: dict[str, str]) -> TestClient:
+        app = create_app(
+            committer=FakeCommitter(),
+            registry=registry,
+            twenty_webhook=TwentyWebhookConfig.from_env({TWENTY_WEBHOOK_ENABLED_ENV: "true", **env}),
+        )
+        return TestClient(app)
+
+    def test_both_secrets_reach_the_route_during_rotation(self, registry: CredentialRegistry) -> None:
+        env = {TWENTY_WEBHOOK_SECRET_ENV: self.retired, TWENTY_WEBHOOK_SECRET_NEXT_ENV: self.incoming}
+        with self._client(registry, env) as client:
+            assert self._post(client, self.retired) == 501
+            assert self._post(client, self.incoming) == 501
+
+    def test_the_retired_secret_is_unauthenticated_once_removed(self, registry: CredentialRegistry) -> None:
+        with self._client(registry, {TWENTY_WEBHOOK_SECRET_ENV: self.incoming}) as client:
+            assert self._post(client, self.incoming) == 501
+            assert self._post(client, self.retired) == 401
 
 
 class TestIdempotency:

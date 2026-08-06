@@ -41,6 +41,11 @@ WRITER_AUTHORITY_PREFIX = "PULSE_LEDGER_WRITER_AUTHORITY_"
 TWENTY_WEBHOOK_ENABLED_ENV = "PULSE_LEDGER_TWENTY_WEBHOOK_ENABLED"
 TWENTY_WEBHOOK_SECRET_ENV = "PULSE_LEDGER_TWENTY_WEBHOOK_SECRET"  # noqa: S105 — a variable name, not a secret
 
+#: The second accepted secret, set for the length of a D15 quarterly rotation: add the incoming
+#: secret here, re-point Twenty at it, then promote it into `TWENTY_WEBHOOK_SECRET_ENV` and delete
+#: this one. Both are accepted meanwhile, so no correctly signed drag is rejected in the window.
+TWENTY_WEBHOOK_SECRET_NEXT_ENV = "PULSE_LEDGER_TWENTY_WEBHOOK_SECRET_NEXT"  # noqa: S105 — a variable name, not a secret
+
 #: A bearer credential shorter than this is a placeholder someone forgot to replace. Refusing it
 #: at boot beats discovering `changeme` in a production environment by reading the logs.
 MIN_TOKEN_LENGTH = 32
@@ -156,7 +161,23 @@ class WeakCredentialError(CredentialConfigurationError):
 
 class TwentyWebhookSecretMissingError(CredentialConfigurationError):
     def __init__(self) -> None:
-        super().__init__(f"{TWENTY_WEBHOOK_ENABLED_ENV} is set but {TWENTY_WEBHOOK_SECRET_ENV} is not")
+        super().__init__(
+            f"{TWENTY_WEBHOOK_ENABLED_ENV} is set but neither {TWENTY_WEBHOOK_SECRET_ENV} nor "
+            f"{TWENTY_WEBHOOK_SECRET_NEXT_ENV} is"
+        )
+
+
+class TwentyWebhookBlankSecretError(CredentialConfigurationError):
+    """A secret variable is set to whitespace or the empty string.
+
+    Refused rather than read as "unset": treating a blank value as absent would silently run half
+    a rotation on whichever secret happened to be non-blank, and leave a route enabled by a value
+    nobody set. The variable name is named; the value never is.
+    """
+
+    def __init__(self, variable: str) -> None:
+        self.variable = variable
+        super().__init__(f"{variable} is set to a blank value; unset it or give it the secret")
 
 
 @dataclass(frozen=True)
@@ -309,20 +330,69 @@ def _is_fresh(timestamp: str | None, *, now: datetime, freshness: timedelta) -> 
 
 @dataclass(frozen=True)
 class TwentyWebhookConfig:
-    """Whether the D8 kanban ingress route exists, and the secret guarding it if it does.
+    """Whether the D8 kanban ingress route exists, and the secrets guarding it if it does.
 
-    It ships disabled: S1.1 lands the middleware and the route's shape, S2 turns it on
-    (`twenty-kanban-webhook-ingress` on the program roadmap). Enabled-without-a-secret is a
-    boot failure, not an unauthenticated route.
+    Enabled-with-no-secret is a boot failure, not an unauthenticated route — and the check lives
+    in `__post_init__` rather than in `from_env`, so the invariant holds however the config is
+    built and the route can call `verify` without re-proving it.
+
+    Two secrets are accepted so D15's quarterly rotation has no window of rejected drags: set
+    `secret_next`, re-point Twenty, then promote it into `secret` and unset it. Neither secret
+    changes the signing recipe, the headers, or the freshness window — `verify` is `verify_signature`
+    tried against each configured value.
     """
 
     enabled: bool = False
     secret: str | None = None
+    secret_next: str | None = None
+
+    def __post_init__(self) -> None:
+        for variable, value in (
+            (TWENTY_WEBHOOK_SECRET_ENV, self.secret),
+            (TWENTY_WEBHOOK_SECRET_NEXT_ENV, self.secret_next),
+        ):
+            if value is not None and not value.strip():
+                raise TwentyWebhookBlankSecretError(variable)
+        if self.enabled and not self.accepted_secrets:
+            raise TwentyWebhookSecretMissingError()
+
+    @property
+    def accepted_secrets(self) -> tuple[str, ...]:
+        """Every configured secret, current first. Empty only when the route is disabled."""
+        return tuple(value for value in (self.secret, self.secret_next) if value is not None)
 
     @classmethod
     def from_env(cls, environ: Mapping[str, str]) -> TwentyWebhookConfig:
-        enabled = environ.get(TWENTY_WEBHOOK_ENABLED_ENV, "").strip().lower() in _TRUTHY
-        secret = environ.get(TWENTY_WEBHOOK_SECRET_ENV) or None
-        if enabled and secret is None:
-            raise TwentyWebhookSecretMissingError()
-        return cls(enabled=enabled, secret=secret)
+        return cls(
+            enabled=environ.get(TWENTY_WEBHOOK_ENABLED_ENV, "").strip().lower() in _TRUTHY,
+            secret=environ.get(TWENTY_WEBHOOK_SECRET_ENV),
+            secret_next=environ.get(TWENTY_WEBHOOK_SECRET_NEXT_ENV),
+        )
+
+    def verify(
+        self,
+        body: bytes,
+        timestamp: str | None,
+        signature: str | None,
+        *,
+        now: datetime,
+        freshness: timedelta = SIGNATURE_FRESHNESS,
+    ) -> None:
+        """Accept a signature valid under any configured secret, or raise.
+
+        Every configured secret is checked — no early exit on the first match — so the time this
+        takes does not say *which* secret a request was signed with. Each individual check is the
+        unchanged `verify_signature`, so each HMAC comparison is still constant-time and freshness
+        is still decided before any HMAC (a stale timestamp raises from the first check, and the
+        answer would be identical for the second). With no secret configured nothing verifies:
+        a misconstructed config fails closed rather than open.
+        """
+        matched = False
+        for secret in self.accepted_secrets:
+            try:
+                verify_signature(secret, body, timestamp, signature, now=now, freshness=freshness)
+            except InvalidSignatureError:
+                continue
+            matched = True
+        if not matched:
+            raise InvalidSignatureError()
