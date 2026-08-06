@@ -25,7 +25,7 @@ the system).
 
 ## 2. Wave 1 — normalization core and fixtures
 
-- [ ] 2.1 `identity/normalize.py` — deterministic normalization and the PHI boundary: casefold,
+- [x] 2.1 [DNA-851] `identity/normalize.py` — deterministic normalization and the PHI boundary: casefold,
       punctuation and suffix stripping (Jr/Sr/III), first-initial reduction, DOB parsing with
       explicit rejection of ambiguous formats naming the field (never echoing the value);
       `composite_digest(demographics) -> str` as the only public exit — the readable composite is
