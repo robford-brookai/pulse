@@ -214,6 +214,11 @@ __marimo__/
 # openlore analysis artifacts
 .openlore/
 
+# Terraform local state/init artifacts (packages/*/infra/terraform) — config only ships;
+# provider binaries and lock files are a deploy-time concern, not a commit-time one.
+**/.terraform/
+.terraform.lock.hcl
+
 # Thin-glue working state
 work_orders/
 handoffs/
