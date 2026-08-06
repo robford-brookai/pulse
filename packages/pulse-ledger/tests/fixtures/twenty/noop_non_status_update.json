@@ -1,0 +1,40 @@
+{
+  "eventId": "evt-twenty-fixture-noop-non-status-0001",
+  "eventType": "record.updated",
+  "objectMetadata": {
+    "nameSingular": "patientProgram",
+    "namePlural": "patientPrograms"
+  },
+  "workspaceMember": {
+    "id": "wsm-0006-canary-nurse",
+    "name": {
+      "firstName": "Canary",
+      "lastName": "CareCoordinator"
+    }
+  },
+  "updatedFields": [
+    {
+      "name": "qualificationStatus",
+      "before": "pending",
+      "after": "qualified"
+    }
+  ],
+  "record": {
+    "id": "twenty-record-patientprogram-0006",
+    "lifecycleStatus": "enrolled",
+    "qualificationStatus": "qualified",
+    "qualificationStatusAsOf": "2026-08-06T15:35:00Z",
+    "patient": {
+      "id": "twenty-record-patient-0006",
+      "canonicalPatientId": "DIM_PATIENT_CONFORMED-000106",
+      "name": {
+        "firstName": "Canary",
+        "lastName": "NoopNonStatus"
+      }
+    },
+    "program": {
+      "id": "twenty-record-program-0001",
+      "code": "diabetes-mgmt"
+    }
+  }
+}

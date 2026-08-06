@@ -1,0 +1,32 @@
+{
+  "eventId": "evt-twenty-fixture-noop-unmapped-0001",
+  "eventType": "record.updated",
+  "objectMetadata": {
+    "nameSingular": "provider",
+    "namePlural": "providers"
+  },
+  "workspaceMember": {
+    "id": "wsm-0007-canary-nurse",
+    "name": {
+      "firstName": "Canary",
+      "lastName": "CareCoordinator"
+    }
+  },
+  "updatedFields": [
+    {
+      "name": "lifecycleStatus",
+      "before": "credentialed",
+      "after": "credentialed"
+    }
+  ],
+  "record": {
+    "id": "twenty-record-provider-0001",
+    "lifecycleStatus": "credentialed",
+    "lifecycleStatusAsOf": "2026-08-06T15:40:00Z",
+    "name": {
+      "firstName": "Canary",
+      "lastName": "NoopUnmapped"
+    },
+    "npi": "1999999999"
+  }
+}

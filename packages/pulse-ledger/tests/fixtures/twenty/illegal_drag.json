@@ -1,0 +1,39 @@
+{
+  "eventId": "evt-twenty-fixture-illegal-drag-0001",
+  "eventType": "record.updated",
+  "objectMetadata": {
+    "nameSingular": "patientProgram",
+    "namePlural": "patientPrograms"
+  },
+  "workspaceMember": {
+    "id": "wsm-0002-canary-nurse",
+    "name": {
+      "firstName": "Canary",
+      "lastName": "CareCoordinator"
+    }
+  },
+  "updatedFields": [
+    {
+      "name": "lifecycleStatus",
+      "before": "activated",
+      "after": "registered"
+    }
+  ],
+  "record": {
+    "id": "twenty-record-patientprogram-0002",
+    "lifecycleStatus": "registered",
+    "lifecycleStatusAsOf": "2026-08-06T15:10:00Z",
+    "patient": {
+      "id": "twenty-record-patient-0002",
+      "canonicalPatientId": "DIM_PATIENT_CONFORMED-000102",
+      "name": {
+        "firstName": "Canary",
+        "lastName": "IllegalDrag"
+      }
+    },
+    "program": {
+      "id": "twenty-record-program-0001",
+      "code": "diabetes-mgmt"
+    }
+  }
+}
