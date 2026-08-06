@@ -71,7 +71,7 @@ the system).
 
 ## 4. Wave 3 — resolver and service
 
-- [ ] 4.1 `identity/resolver.py` — decisions to commands: `Match` → `resolve_referral` +
+- [x] 4.1 [DNA-855] `identity/resolver.py` — decisions to commands: `Match` → `resolve_referral` +
       `attach_identifier` only for identifiers the person does not already hold; `Mint` →
       `mint_person` → `resolve_referral` → attach, in that order; D16 idempotency keys derived
       per logical resolution (triggering `event_id` as logical time) via
