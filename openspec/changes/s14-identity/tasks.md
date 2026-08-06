@@ -48,7 +48,7 @@ the system).
 
 ## 3. Wave 2 — matcher core
 
-- [ ] 3.1 `identity/matcher.py` — the two-tier deterministic match: candidate-lookup port
+- [x] 3.1 [DNA-853] `identity/matcher.py` — the two-tier deterministic match: candidate-lookup port
       (`Protocol`) with an in-memory test adapter; exact `(system, value)` tier short-circuits;
       composite tier decides by candidate count alone — zero → `Mint`, one → `Match`, >1 →
       `Ambiguous`; frozen decision dataclasses (`Match(person_id, evidence)`, `Mint(evidence)`,
