@@ -14,6 +14,7 @@ nav:
       - Month-open: runbooks/month-open.md
       - Consent-sweep: runbooks/consent-sweep.md
       - Identity-quarantine: runbooks/identity-quarantine.md
+      - Demo 2 (partial) — s13+s14: runbooks/demo2-partial-s13-s14.md
 plugins:
   - search
   - mkdocstrings:
