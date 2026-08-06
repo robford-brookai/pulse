@@ -46,23 +46,30 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
+import psycopg
 from pulse_core.client import CommandResponse, PulseCoreClient, ResponseClassification
 from pulse_core.generated import AttachIdentifierCommand, Command, MintPersonCommand, ResolveReferralCommand
 from pulse_core.idempotency import derive_idempotency_key
+from pulse_ledger import idempotency as ledger_idempotency
+from pulse_ledger import review as ledger_review
+from pulse_ledger.commit import Declaration
 
-from identity.matcher import CandidateLookup, Decision, Evidence, ExternalIdentifier, Match, Mint, Referral
+from identity.matcher import Ambiguous, CandidateLookup, Decision, Evidence, ExternalIdentifier, Match, Mint, Referral
 
 logger = logging.getLogger("identity.resolver")
 
 __all__ = [
+    "HOLD_EVENT_TYPE",
     "CommandOutcome",
     "PersonKeyFactory",
+    "QuarantineOutcome",
     "RejectedCommandError",
     "ResolutionOutcome",
     "ResolverError",
     "TransientCommandError",
     "act",
     "default_person_key",
+    "quarantine",
 ]
 
 PersonKeyFactory = Callable[[], str]
@@ -71,6 +78,12 @@ PersonKeyFactory = Callable[[], str]
 #: Distinct from the client's `writer_id` — this key is not the one that reaches the wire; it is
 #: this module's own auditable record, so it does not need to share the client's identity.
 _AUDIT_WRITER_ID = "identity-resolver"
+
+#: The non-state-bearing fact `quarantine()` declares (design decision 6) — no `to_state`, so
+#: `commit_declaration` skips catalog-transition validation and the state re-fold: a quarantined
+#: Referral is left exactly where it was, in `received`.
+HOLD_EVENT_TYPE = "resolution_hold"
+_HOLD_SUBJECT_TYPE = "referral"
 
 
 def default_person_key() -> str:
@@ -134,6 +147,126 @@ class ResolutionOutcome:
     referral_key: str
     person_key: str
     commands: tuple[CommandOutcome, ...]
+
+
+@dataclass(frozen=True)
+class QuarantineOutcome:
+    """What one `quarantine()` call produced: the hold fact and the queue row it belongs to.
+
+    Stable across redelivery (design decision 6): a repeat of the same ambiguous decision derives
+    the same hold idempotency key — a replay, not a second event — and finds the subject already
+    pending, which is reported here rather than raised past.
+    """
+
+    referral_key: str
+    hold_event_id: uuid.UUID
+    review_id: uuid.UUID
+    candidates: tuple[str, ...]
+
+
+def quarantine(
+    decision: Decision,
+    *,
+    referral_key: str,
+    triggering_event_id: str,
+    effective_at: datetime,
+    conn: psycopg.Connection,
+) -> QuarantineOutcome:
+    """Hold an ambiguous referral for human review: a `resolution_hold` fact plus a queue row.
+
+    Two effects, made convergent by construction (design decision 6): the hold fact commits under
+    a D16 idempotency key derived from this resolution (`pulse_ledger.idempotency.commit_idempotent`
+    — redelivery replays the same event, never a second one), then the subject is enqueued on
+    `ledger.review_queue` (`pulse_ledger.review.quarantine_subject`) naming that event. Unlike
+    `act()`, there is no `PulseCoreClient` here to derive its own wire key — `resolution_hold` is
+    not part of the generated command vocabulary (it is a fact, not a command) — so the key this
+    function derives is the one the ledger actually claims, not an audit-only copy.
+
+    Either effect may already have happened before a crash: the hold fact may be committed with no
+    queue row yet, or both may already exist. A `SubjectAlreadyPendingError` from the second effect
+    is therefore not a failure here — it means a prior attempt already got this subject onto the
+    queue — and this call reports that row instead of raising past it (spec: "a subject SHALL be
+    pending at most once"). The referral itself never transitions: the hold fact carries no
+    `to_state`, so `commit_declaration` skips the state re-fold and `received` stands.
+
+    The candidate set travels as `decision.candidates` — pseudonymous person keys only, exactly as
+    the matcher decided them — and no demographic field is ever in scope of this function to leak.
+
+    Raises `TypeError` for any decision that is not `Ambiguous` — `act()` resolves `Match`/`Mint`.
+    """
+    if not isinstance(decision, Ambiguous):
+        msg = f"quarantine() holds Ambiguous decisions only; got {type(decision).__name__} — act() resolves Match/Mint"
+        raise TypeError(msg)
+
+    idempotency_key = _hold_idempotency_key(referral_key, decision.evidence, triggering_event_id=triggering_event_id)
+    hold = ledger_idempotency.commit_idempotent(
+        conn,
+        Declaration(
+            subject_type=_HOLD_SUBJECT_TYPE,
+            subject_key=referral_key,
+            event_type=HOLD_EVENT_TYPE,
+            effective_at=effective_at,
+            actor_type="system",
+            actor_id=_AUDIT_WRITER_ID,
+            producer=_AUDIT_WRITER_ID,
+            evidence={
+                "matched_fields": list(decision.evidence.matched_fields),
+                "rule_id": decision.evidence.rule_id,
+                "candidate_count": decision.evidence.candidate_count,
+                "idempotency_key": idempotency_key,
+            },
+        ),
+        idempotency_key=idempotency_key,
+    )
+    logger.info(
+        "quarantining subject %s (rule_id=%s, candidate_count=%d)",
+        referral_key,
+        decision.evidence.rule_id,
+        decision.evidence.candidate_count,
+    )
+    try:
+        review = ledger_review.quarantine_subject(
+            conn,
+            subject_type=_HOLD_SUBJECT_TYPE,
+            subject_key=referral_key,
+            hold_event_id=hold.event_id,
+            candidates=decision.candidates,
+        )
+    except ledger_review.SubjectAlreadyPendingError as exc:
+        logger.info("subject %s already pending review as %s", referral_key, exc.review_id)
+        return QuarantineOutcome(
+            referral_key=referral_key,
+            hold_event_id=hold.event_id,
+            review_id=exc.review_id,
+            candidates=decision.candidates,
+        )
+    return QuarantineOutcome(
+        referral_key=referral_key,
+        hold_event_id=hold.event_id,
+        review_id=review.review_id,
+        candidates=review.candidates,
+    )
+
+
+def _hold_idempotency_key(referral_key: str, evidence: Evidence, *, triggering_event_id: str) -> str:
+    """The D16 key that protects the hold fact — the real protective key, `commit_idempotent` claims.
+
+    Unlike `_audit_key` (an audit-only record alongside the wire key `PulseCoreClient` derives for
+    itself), `quarantine()` calls `commit_idempotent` directly — there is no intervening client — so
+    this key must be the one the ledger actually enforces uniqueness on.
+    """
+    return derive_idempotency_key(
+        writer_id=_AUDIT_WRITER_ID,
+        subject_type=_HOLD_SUBJECT_TYPE,
+        subject_key=referral_key,
+        command_type=HOLD_EVENT_TYPE,
+        payload={
+            "matched_fields": list(evidence.matched_fields),
+            "rule_id": evidence.rule_id,
+            "candidate_count": evidence.candidate_count,
+        },
+        logical_time=triggering_event_id,
+    )
 
 
 def act(
