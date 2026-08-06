@@ -14,7 +14,7 @@ Fixtures are synthetic only (PHI rule) and ship with the task that consumes them
 
 ## 1. Wave 0 — scaffold
 
-- [ ] 1.1 Scaffold `packages/schedules` as a workspace member: pyproject, uv workspace root,
+- [x] 1.1 [DNA-838] Scaffold `packages/schedules` as a workspace member: pyproject, uv workspace root,
       ruff/pyright/pytest wiring, coverage floor 85, `--disable-socket` posture, `TESTED_PATHS`
       updated honestly, dependencies on `pulse-core` (client) and `pulse-ledger` (reads module).
       Test: package imports and an empty test module collects under `task check`.
