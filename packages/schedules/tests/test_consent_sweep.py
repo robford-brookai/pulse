@@ -8,17 +8,25 @@ in this suite.
 
 from __future__ import annotations
 
+import json
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
+from typing import cast
 
+import httpx
 import pytest
+from pulse_core.client import PulseCoreClient
 from pulse_ledger.reads import SubjectState
 from schedules.consent_sweep import (
+    RECONCILIATION_WRITER_ID,
     Correction,
     CorrectionDirection,
     ExportHeaderError,
+    declare_consent_corrections,
     diff_consent,
+    export_logical_time,
+    export_row_reference,
     parse_export,
 )
 
@@ -145,3 +153,107 @@ def test_unrecognised_boolean_value_is_a_row_error_not_a_crash():
     assert result.rows == []
     assert len(result.errors) == 1
     assert result.errors[0].row_number == 1
+
+
+# --- task 3.2: declaration (attribution, provenance, replay) ---
+
+
+def committed(event_id: str = "e1") -> httpx.Response:
+    return httpx.Response(201, json={"event_id": event_id, "replayed": False})
+
+
+def replayed(event_id: str = "e1") -> httpx.Response:
+    return httpx.Response(200, json={"event_id": event_id, "replayed": True})
+
+
+class ScriptedApi:
+    """The command API faked at the client boundary: scripted answers, recorded request bodies.
+
+    `writer_id` defaults to the sweep's own D15 credential name — `client()` stands in for what
+    the CLI boundary would build from config (the name) plus the environment (the token value).
+    """
+
+    def __init__(self, responses: list[httpx.Response], *, writer_id: str = RECONCILIATION_WRITER_ID) -> None:
+        self.bodies: list[dict[str, object]] = []
+        self._responses = responses
+        self._writer_id = writer_id
+
+    def handler(self, request: httpx.Request) -> httpx.Response:
+        parsed = json.loads(request.content)
+        assert isinstance(parsed, dict)
+        self.bodies.append(cast("dict[str, object]", parsed))
+        return self._responses[min(len(self.bodies), len(self._responses)) - 1]
+
+    def client(self) -> PulseCoreClient:
+        return PulseCoreClient(
+            "http://ledger.test",
+            writer_id=self._writer_id,
+            token="unit-test-token",  # noqa: S106 — a fixture value, not a secret
+            transport=httpx.MockTransport(self.handler),
+            max_attempts=1,
+        )
+
+
+def test_export_row_reference_is_file_id_and_row_number():
+    result = parse_export((FIXTURES / "opt_out_drift.csv").read_text())
+
+    assert export_row_reference("export-42", result.rows[0]) == "export-42:row:1"
+
+
+def test_export_logical_time_has_no_wall_clock_component():
+    assert export_logical_time(date(2026, 8, 5)) == datetime(2026, 8, 5, tzinfo=timezone.utc)
+
+
+def test_a_correction_is_attributed_and_traceable():
+    """spec: "A correction is attributed and traceable" — the command's actor is `reconciliation`
+    and its payload references the export row, and re-running the sweep on the same export
+    classifies the same correction as `replayed`.
+
+    Attribution is authentication (ADR-0003): no actor field travels in the body, so the actor
+    assertion is that `client` authenticates with the `reconciliation` credential — observable
+    here via the D16 idempotency key, which is always `{writer_id}:{digest}`.
+    """
+    result = parse_export((FIXTURES / "opt_out_drift.csv").read_text())
+    corrections = diff_consent(result.rows, ledger_states=[])
+    export_as_of = date(2026, 8, 5)
+
+    first_api = ScriptedApi([committed()])
+    first = declare_consent_corrections(corrections, first_api.client(), file_id="export-42", export_as_of=export_as_of)
+
+    assert len(first) == 1
+    first_body = first_api.bodies[0]
+    assert str(first_body["idempotency_key"]).startswith(f"{RECONCILIATION_WRITER_ID}:")
+    assert cast("dict[str, object]", first_body["payload"])["evidence_ref"] == "export-42:row:1"
+    assert first[0].response.classification.value == "committed"
+
+    second_api = ScriptedApi([replayed()])
+    second = declare_consent_corrections(
+        corrections, second_api.client(), file_id="export-42", export_as_of=export_as_of
+    )
+
+    assert second[0].response.classification.value == "replayed"
+    assert second_api.bodies[0]["idempotency_key"] == first_body["idempotency_key"]
+
+
+def test_opt_in_correction_declares_the_opposite_to_state():
+    result = parse_export((FIXTURES / "opt_in_drift.csv").read_text())
+    ledger_states = [
+        SubjectState(
+            subject_type="communication_consent",
+            subject_key="SUBJ-002:email",
+            state="opted_out",
+            effective_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+            last_event_id=uuid.uuid4(),
+            updated_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+        )
+    ]
+    corrections = diff_consent(result.rows, ledger_states)
+    api = ScriptedApi([committed()])
+
+    declarations = declare_consent_corrections(
+        corrections, api.client(), file_id="export-42", export_as_of=date(2026, 8, 5)
+    )
+
+    assert declarations[0].command.to_state == "opted_in"
+    assert declarations[0].command.subject_key == "SUBJ-002:email"
+    assert cast("dict[str, object]", api.bodies[0]["payload"])["evidence_ref"] == "export-42:row:1"
