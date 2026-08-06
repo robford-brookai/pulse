@@ -9,6 +9,7 @@ copyright: Maintained by <a href="https://robford-brookai.com">robford-brookai</
 
 nav:
   - Home: index.md
+  - Architecture: architecture.html
   - Modules: modules.md
   - Runbooks:
       - Month-open: runbooks/month-open.md
