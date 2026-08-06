@@ -1,0 +1,21 @@
+{
+  "case": "rerun_month",
+  "description": "The same active/on_hold enrollment pair a first month-open run already opened episodes for, used by the 'Re-run replays' scenario: a second run against this enumeration must replay both, opening no second episode.",
+  "month": "2026-08-01",
+  "enrollments": [
+    {
+      "subject_key": "enr-active-1",
+      "state": "active",
+      "effective_at": "2026-07-01T00:00:00+00:00",
+      "last_event_id": "11111111-1111-1111-1111-111111111111",
+      "updated_at": "2026-07-01T00:00:00+00:00"
+    },
+    {
+      "subject_key": "enr-hold-1",
+      "state": "on_hold",
+      "effective_at": "2026-07-05T00:00:00+00:00",
+      "last_event_id": "22222222-2222-2222-2222-222222222222",
+      "updated_at": "2026-07-05T00:00:00+00:00"
+    }
+  ]
+}

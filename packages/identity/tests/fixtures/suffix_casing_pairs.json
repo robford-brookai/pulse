@@ -1,0 +1,52 @@
+{
+  "kind": "normalization_pairs",
+  "case": "suffix_casing_pairs",
+  "description": "Pairs of demographic records that differ only in casing, punctuation, or a name suffix (Jr/Sr/III). Each pair must normalize to the identical composite match key.",
+  "pairs": [
+    {
+      "label": "suffix_jr_vs_bare",
+      "a": {
+        "first_name": "Miguel",
+        "last_name": "Martinez, Jr.",
+        "dob": "1990-04-03",
+        "sex": "M"
+      },
+      "b": {
+        "first_name": "miguel",
+        "last_name": "martinez",
+        "dob": "1990-04-03",
+        "sex": "M"
+      }
+    },
+    {
+      "label": "suffix_sr_and_punctuation",
+      "a": {
+        "first_name": "Harold",
+        "last_name": "O'Donnell Sr.",
+        "dob": "1955-12-25",
+        "sex": "M"
+      },
+      "b": {
+        "first_name": "HAROLD",
+        "last_name": "ODONNELL",
+        "dob": "1955-12-25",
+        "sex": "M"
+      }
+    },
+    {
+      "label": "suffix_iii_mixed_case",
+      "a": {
+        "first_name": "Elliot",
+        "last_name": "Vance III",
+        "dob": "1978-07-22",
+        "sex": "M"
+      },
+      "b": {
+        "first_name": "ELLIOT",
+        "last_name": "vance",
+        "dob": "1978-07-22",
+        "sex": "M"
+      }
+    }
+  ]
+}

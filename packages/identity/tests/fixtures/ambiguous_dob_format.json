@@ -1,0 +1,12 @@
+{
+  "kind": "ambiguous_dob",
+  "case": "ambiguous_dob_format",
+  "description": "A DOB in a slash-separated numeric format with no format contract, where day and month cannot be distinguished (e.g. 03/04/1990 could be March 4th or April 3rd). Normalization must reject this explicitly rather than guess, naming the offending field.",
+  "demographics": {
+    "first_name": "Sam",
+    "last_name": "Lee",
+    "dob": "03/04/1990",
+    "sex": "M"
+  },
+  "expected_rejected_field": "dob"
+}
