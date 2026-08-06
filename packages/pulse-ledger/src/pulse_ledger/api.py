@@ -60,7 +60,6 @@ from pulse_ledger.auth import (
     TwentyWebhookConfig,
     Writer,
     bearer_token,
-    verify_signature,
 )
 from pulse_ledger.commit import CommitResult, Declaration, DeclarationError
 from pulse_ledger.cursor import WriterCursor
@@ -461,14 +460,15 @@ def create_app(
         return [_commit_response(committer(declaration, key)) for declaration, key in declarations]
 
     if webhook.enabled:
-        secret = webhook.secret
-        assert secret is not None  # noqa: S101 — TwentyWebhookConfig refuses enabled-without-secret
 
         @app.post(TWENTY_WEBHOOK_PATH, status_code=501)
         async def twenty_webhook_ingress(request: Request) -> Response:
-            """D8's kanban ingress. Signed here; drag → command is S2's to write."""
-            verify_signature(
-                secret,
+            """D8's kanban ingress. Signed here; drag → command is S2's to write.
+
+            `webhook.verify` accepts either configured secret, so a D15 rotation window rejects
+            nothing that Twenty signed correctly.
+            """
+            webhook.verify(
                 await request.body(),
                 request.headers.get(TIMESTAMP_HEADER),
                 request.headers.get(SIGNATURE_HEADER),

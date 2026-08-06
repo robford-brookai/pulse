@@ -18,6 +18,7 @@ from pulse_ledger.auth import (
     SIGNATURE_VERSION,
     TWENTY_WEBHOOK_ENABLED_ENV,
     TWENTY_WEBHOOK_SECRET_ENV,
+    TWENTY_WEBHOOK_SECRET_NEXT_ENV,
     WRITER_AUTHORITY_PREFIX,
     WRITER_TOKEN_PREFIX,
     ActorSpoofError,
@@ -28,6 +29,7 @@ from pulse_ledger.auth import (
     MissingCredentialError,
     NoCredentialsConfiguredError,
     StaleSignatureError,
+    TwentyWebhookBlankSecretError,
     TwentyWebhookConfig,
     TwentyWebhookSecretMissingError,
     UnknownCredentialError,
@@ -278,3 +280,110 @@ class TestTwentyWebhookConfig:
 
     def test_a_secret_alone_does_not_enable_it(self) -> None:
         assert TwentyWebhookConfig.from_env({TWENTY_WEBHOOK_SECRET_ENV: "a" * 32}).enabled is False
+
+
+class TestTwentyWebhookRotation:
+    """D15's quarterly rotation: add the incoming secret, re-point Twenty, remove the retired one.
+
+    Both secrets are generated per test, like every other credential value in this file.
+    """
+
+    now = datetime(2026, 8, 3, 12, 0, tzinfo=timezone.utc)
+
+    @staticmethod
+    def _enabled(current: str | None, incoming: str | None = None) -> TwentyWebhookConfig:
+        env = {TWENTY_WEBHOOK_ENABLED_ENV: "true"}
+        if current is not None:
+            env[TWENTY_WEBHOOK_SECRET_ENV] = current
+        if incoming is not None:
+            env[TWENTY_WEBHOOK_SECRET_NEXT_ENV] = incoming
+        return TwentyWebhookConfig.from_env(env)
+
+    def _verify(self, config: TwentyWebhookConfig, signing_secret: str) -> None:
+        body = b'{"card":"synthetic"}'
+        timestamp = str(int(self.now.timestamp()))
+        config.verify(body, timestamp, sign(signing_secret, timestamp, body), now=self.now)
+
+    def test_no_second_secret_by_default(self) -> None:
+        assert TwentyWebhookConfig.from_env({TWENTY_WEBHOOK_SECRET_ENV: "a" * 32}).secret_next is None
+
+    def test_both_secrets_verify_during_rotation(self) -> None:
+        """Spec: "A request signed with the incoming secret verifies during rotation"."""
+        current, incoming = _token(), _token()
+        config = self._enabled(current, incoming)
+        self._verify(config, current)
+        self._verify(config, incoming)
+
+    def test_a_third_secret_verifies_under_neither(self) -> None:
+        config = self._enabled(_token(), _token())
+        with pytest.raises(InvalidSignatureError):
+            self._verify(config, _token())
+
+    def test_a_retired_secret_stops_verifying_once_removed(self) -> None:
+        """Spec: "A retired secret stops verifying once removed"."""
+        retired, promoted = _token(), _token()
+        during_rotation = self._enabled(retired, promoted)
+        self._verify(during_rotation, retired)
+
+        # Rotation completes: the incoming value is promoted into the current variable and the
+        # retired value is deleted from the environment.
+        after_rotation = self._enabled(promoted)
+        self._verify(after_rotation, promoted)
+        with pytest.raises(InvalidSignatureError):
+            self._verify(after_rotation, retired)
+
+    def test_only_the_incoming_secret_configured_still_verifies(self) -> None:
+        """Mid-procedure, before promotion, the current variable may already be gone."""
+        incoming = _token()
+        self._verify(self._enabled(None, incoming), incoming)
+
+    def test_freshness_is_still_checked_before_the_hmac(self) -> None:
+        current = _token()
+        config = self._enabled(current, _token())
+        stale = self.now - timedelta(minutes=10)
+        timestamp = str(int(stale.timestamp()))
+        with pytest.raises(StaleSignatureError):
+            config.verify(b"{}", timestamp, sign(current, timestamp, b"{}"), now=self.now)
+
+    def test_a_missing_signature_is_rejected_with_two_secrets_set(self) -> None:
+        config = self._enabled(_token(), _token())
+        with pytest.raises(InvalidSignatureError):
+            config.verify(b"{}", str(int(self.now.timestamp())), None, now=self.now)
+
+    def test_enabled_with_neither_secret_refuses_to_boot(self) -> None:
+        with pytest.raises(TwentyWebhookSecretMissingError):
+            self._enabled(None, None)
+
+    @pytest.mark.parametrize("blank", ["", "   ", "\n"])
+    @pytest.mark.parametrize("variable", [TWENTY_WEBHOOK_SECRET_ENV, TWENTY_WEBHOOK_SECRET_NEXT_ENV])
+    def test_a_blank_secret_refuses_to_boot(self, variable: str, blank: str) -> None:
+        """A blank variable is a provisioning mistake, not "no secret": say so at boot.
+
+        Falling back to the other secret would let half a rotation run on a value nobody set.
+        """
+        env = {TWENTY_WEBHOOK_ENABLED_ENV: "true", TWENTY_WEBHOOK_SECRET_ENV: _token(), variable: blank}
+        with pytest.raises(TwentyWebhookBlankSecretError) as raised:
+            TwentyWebhookConfig.from_env(env)
+        assert variable in str(raised.value)
+
+    def test_a_blank_secret_is_refused_even_while_disabled(self) -> None:
+        with pytest.raises(TwentyWebhookBlankSecretError):
+            TwentyWebhookConfig.from_env({TWENTY_WEBHOOK_SECRET_ENV: ""})
+
+    def test_the_invariant_holds_however_the_config_is_built(self) -> None:
+        """Constructed directly, not just via `from_env` — the route trusts this, so it is checked."""
+        with pytest.raises(TwentyWebhookSecretMissingError):
+            TwentyWebhookConfig(enabled=True)
+        with pytest.raises(TwentyWebhookBlankSecretError):
+            TwentyWebhookConfig(enabled=True, secret=_token(), secret_next="")
+
+    def test_a_disabled_config_verifies_nothing(self) -> None:
+        """Fail closed: no configured secret means no signature is acceptable."""
+        with pytest.raises(InvalidSignatureError):
+            self._verify(TwentyWebhookConfig(), _token())
+
+    def test_no_secret_value_reaches_the_error_messages(self) -> None:
+        secret = _token()
+        with pytest.raises(TwentyWebhookBlankSecretError) as raised:
+            TwentyWebhookConfig(enabled=True, secret=secret, secret_next="   ")  # noqa: S106 — blank, not a secret
+        assert secret not in str(raised.value)
