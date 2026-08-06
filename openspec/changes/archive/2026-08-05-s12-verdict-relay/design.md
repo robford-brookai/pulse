@@ -49,8 +49,10 @@ See proposal.md — Why. Constraints that shape the design:
 
 1. **Package layout:** `packages/verdict-relay`, workspace member per the monorepo template —
    `src/verdict_relay/{mart_reader.py, declarer.py, run.py}`, `tests/` with `fixtures/` (recorded
-   mart rows, JSON, synthetic only). Same toolchain posture as the S1.1 packages (uv, ruff,
-   pyright, pytest, coverage ≥ 85%).
+   mart rows, JSON, synthetic only). Toolchain: uv, ruff, pyright, pytest, coverage ≥ 85%, per
+   this change's S1.2 work-order verification block. *Correction (drift review, 2026-08-05):* an
+   earlier revision claimed this matched the S1.1 packages' posture; S1.1 actually runs mypy at an
+   80% floor (PR #106), so pyright/85% is deliberately stricter here, not parity.
 2. **The reader is source-abstracted:** `mart_reader` iterates a `RowSource` protocol yielding
    contract rows; the Snowflake implementation is a thin, config-driven adapter (connection
    parameters from the environment, D15 pattern), and every test drives the protocol with

@@ -16,9 +16,9 @@ Three contracts live here:
   one page, which D16 idempotency classifies as replays downstream — correctness never depends on
   the cursor being fresh.
 
-The watermark map is written by whoever declares (the declarer calls `record_declared` after a
-committed or replayed declaration) and read back on resume; the reader only carries and persists
-it, updated-only-forward.
+The watermark map is written by whoever declares (the run entrypoint calls `record_declared`
+after a committed or replayed declaration) and read back on resume; the reader only carries and
+persists it, updated-only-forward.
 """
 
 from __future__ import annotations
