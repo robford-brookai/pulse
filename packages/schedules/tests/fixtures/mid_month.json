@@ -1,0 +1,28 @@
+{
+  "case": "mid_month",
+  "description": "A mid-month enumeration for the 'Mid-month invocation' scenario: the same active/on_hold pair whose episodes were opened on the 1st, plus one enrollment that activated on the 10th and has no episode yet. `month` is the 15th itself \u2014 the run's invocation day, not the billing month's first \u2014 to exercise that the derived idempotency key and effective_at depend only on the billing month, never the day the job happens to run.",
+  "month": "2026-08-15",
+  "enrollments": [
+    {
+      "subject_key": "enr-active-1",
+      "state": "active",
+      "effective_at": "2026-07-01T00:00:00+00:00",
+      "last_event_id": "11111111-1111-1111-1111-111111111111",
+      "updated_at": "2026-07-01T00:00:00+00:00"
+    },
+    {
+      "subject_key": "enr-hold-1",
+      "state": "on_hold",
+      "effective_at": "2026-07-05T00:00:00+00:00",
+      "last_event_id": "22222222-2222-2222-2222-222222222222",
+      "updated_at": "2026-07-05T00:00:00+00:00"
+    },
+    {
+      "subject_key": "enr-active-2",
+      "state": "active",
+      "effective_at": "2026-08-10T00:00:00+00:00",
+      "last_event_id": "44444444-4444-4444-4444-444444444444",
+      "updated_at": "2026-08-10T00:00:00+00:00"
+    }
+  ]
+}

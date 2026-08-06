@@ -1,9 +1,16 @@
-"""`schedules.month_open` — task 2.1's two scenarios (spec: month-open).
+"""`schedules.month_open` — task 2.1's two scenarios plus task 2.2's re-run scenarios (spec:
+month-open).
 
 "Normal month-open": month-open declares exactly the active/on-hold set from a recorded
 enumeration that also holds an `ended` enrollment, which gets none. "A state-name typo rejects the
 run": an unknown state name in the requested set fails via the catalog rejection, with zero
-commands submitted.
+commands submitted. "Re-run replays": a second run over the same enumeration classifies every
+declaration `replayed`, deriving the identical D16 key it derived the first time, because
+`logical_time` is the billing month's first-of-month instant — never "now" — so it is stable
+across calls regardless of which day either call happens to run on. "Mid-month invocation": a run
+on the 15th replays the two enrollments already opened on the 1st and opens the one enrollment
+that activated on the 10th, with every command's `effective_at` pinned to the 1st regardless of
+the run's own day.
 
 The command API is faked at the client boundary (`httpx.MockTransport` under a real
 `PulseCoreClient`, per verdict-relay's pattern) and the ledger read at the `enumerate_state`
@@ -29,6 +36,7 @@ from schedules.month_open import (
     FixtureEnrollmentSource,
     LedgerEnrollmentSource,
     billing_episode_subject_key,
+    billing_month_effective_at,
     declare_month_open,
 )
 
@@ -55,6 +63,10 @@ def load_enrollments(case: str) -> tuple[date, list[SubjectState]]:
 
 def committed(event_id: str = "e1") -> httpx.Response:
     return httpx.Response(201, json={"event_id": event_id, "replayed": False})
+
+
+def replayed(event_id: str = "e1") -> httpx.Response:
+    return httpx.Response(201, json={"event_id": event_id, "replayed": True})
 
 
 class ScriptedApi:
@@ -136,3 +148,53 @@ class TestStateNameTypoRejectsTheRun:
             declare_month_open(source, api.client(), month=date(2026, 8, 1), states=("active", "on_hold_typo"))
 
         assert api.bodies == []
+
+
+class TestReRunReplays:
+    def test_same_day_rerun_classifies_every_declaration_replayed_with_no_second_episode(self) -> None:
+        month, enrollments = load_enrollments("rerun_month")
+        source = FixtureEnrollmentSource(rows=enrollments)
+
+        first_run_api = ScriptedApi([committed("e-active"), committed("e-hold")])
+        first_run = declare_month_open(source, first_run_api.client(), month=month)
+        assert {declaration.response.classification.value for declaration in first_run} == {"committed"}
+
+        second_run_api = ScriptedApi([replayed("e-active"), replayed("e-hold")])
+        second_run = declare_month_open(source, second_run_api.client(), month=month)
+
+        assert {declaration.response.classification.value for declaration in second_run} == {"replayed"}
+        # The same enumeration declares the same episode subject_key both times — a replay, not a
+        # second episode for the same enrollment x month.
+        assert {declaration.command.subject_key for declaration in first_run} == {
+            declaration.command.subject_key for declaration in second_run
+        }
+        # The D16 idempotency key the client derived is identical run to run: same writer, same
+        # subject, same payload, same `logical_time` — the ledger has no way to tell the second
+        # call apart from a retry of the first.
+        assert [body["idempotency_key"] for body in first_run_api.bodies] == [
+            body["idempotency_key"] for body in second_run_api.bodies
+        ]
+
+
+class TestMidMonthInvocation:
+    def test_replays_existing_episodes_and_opens_only_the_newly_activated_enrollment(self) -> None:
+        month, enrollments = load_enrollments("mid_month")
+        source = FixtureEnrollmentSource(rows=enrollments)
+        # Enumeration order is the fixture's own order: the two enrollments opened on the 1st,
+        # then the one that activated on the 10th — so the API script mirrors that order.
+        api = ScriptedApi([replayed("e-active"), replayed("e-hold"), committed("e-active-2")])
+
+        declarations = declare_month_open(source, api.client(), month=month)
+
+        by_subject_key = {declaration.enrollment.subject_key: declaration for declaration in declarations}
+        assert by_subject_key["enr-active-1"].response.classification.value == "replayed"
+        assert by_subject_key["enr-hold-1"].response.classification.value == "replayed"
+        assert by_subject_key["enr-active-2"].response.classification.value == "committed"
+
+        # `month` here is the 15th — the run's own invocation day, per the fixture — yet every
+        # declaration's `effective_at` (and therefore `logical_time`) is pinned to the billing
+        # month's first, never the day the job happened to run (spec: "Month-open is safely
+        # re-runnable any day of the month").
+        expected_effective_at = billing_month_effective_at(month).isoformat()
+        assert month.day != 1
+        assert all(body["effective_at"] == expected_effective_at for body in api.bodies)
