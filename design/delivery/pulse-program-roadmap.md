@@ -135,9 +135,9 @@ Gate for the S1.x siblings: **cleared** — `pulse-ledger-core` archived, names 
 | `s12-verdict-relay` | `packages/verdict-relay` per the S1 work order; supersedes the clinic-rules-engine Snowpark emitter (P5) | ✅ shipped — archived `2026-08-05-s12-verdict-relay` (DNA-827) |
 | `s13-schedules` | `packages/schedules` — month-open + D9 consent sweep | ✅ shipped — archived `2026-08-06-s13-schedules` (DNA-837) |
 | `s14-identity` | `packages/identity` — deterministic matcher v1; also genesis's matcher | ✅ shipped — archived `2026-08-06-s14-identity` (DNA-849) |
-| `catalog-authority` | authoritative `state_catalog.yaml` replacing the Appendix C seed; regeneration into the 2.1 generator; D18 Snowflake release job + breaking-change rule. Serial lane `catalog_generated_surfaces` | D18 confirmed |
-| `twenty-kanban-webhook-ingress` | D8: enable the HMAC route 3.4 ships disabled; drag → command; invalid → rejection + card comment (heal-back write completes in Phase 3) | D15 confirmed |
-| `customerio-consent-ingress` | D9 forward consent ingress, actor `customer.io`, message-level provenance | export/webhook mechanism confirmed |
+| `catalog-authority` | authoritative `state_catalog.yaml` replacing the Appendix C seed; regeneration into the 2.1 generator; D18 Snowflake release job + breaking-change rule. Serial lane `catalog_generated_surfaces` | ✅ D18 closed (ADR-0004) — proposable now |
+| `twenty-kanban-webhook-ingress` | D8: enable the HMAC route 3.4 ships disabled; drag → command; invalid → rejection + card comment (heal-back write completes in Phase 3) | ✅ D15 closed (ADR-0004) — proposable now |
+| `customerio-consent-ingress` | D9 forward consent ingress, actor `customer.io`, message-level provenance; inherits s13's `{subject_key}:{channel}` grain composition | export/webhook mechanism confirmed (rides the compliance-owner role-fill) |
 | `producer-ingress-policy` | the ADR §4.4 CI gate: no producer schema in `packages/ocean` names a catalog state; wired into `task check` | `catalog-authority` |
 
 **Done means (ADR §6):** "Zero direct emits of catalog-state events, checked in CI against
@@ -249,8 +249,8 @@ byte-identical.
 | ID | Decision | Gates | Owner |
 |---|---|---|---|
 | D4 | Catalog→Twenty generator: artifact vs live-apply | `pulse-app-scaffold` codegen | Ford |
-| D14 | SPCS vs EKS (spike first) | `pulse-spcs-deployment` | Tal + Ford |
-| D15–D18 | Auth / idempotency / outbox / catalog SoR — recommended; close at exec session | D15: kanban ingress; D18: `catalog-authority` | per runtime-readiness §5 |
+| D14 | SPCS vs EKS — **closed 2026-08-06, ADR-0004**: SPCS, gated on the one-day webhook-latency spike (EKS fallback is inside the decision) | `pulse-spcs-deployment` | Tal + Ford |
+| D15–D18 | Auth / idempotency / outbox / catalog SoR — **closed 2026-08-06, ADR-0004** (D15 HMAC + per-service credentials; D16/D17 ratify shipped behavior; D18 Snowflake SoR). D15's compliance-owner sign-off rides the §3.1 role-fill | D15: kanban ingress ✅ unblocked; D18: `catalog-authority` ✅ unblocked | ADR-0004 |
 | G-1 | Historical closed objects excluded from genesis | genesis scope | Tal |
 | G-2 | Drift tolerance per family | cutover P0 exit | Ethan + Luke |
 | G-3 | Per-family flip dates | cutover P2 | Ford + Tal (after P0) |
@@ -296,9 +296,11 @@ a phase boundary:
 the s13/s14 surface offline). The remaining four are all gate-held on decisions:
 `catalog-authority` (D18), `twenty-kanban-webhook-ingress` (D15), `customerio-consent-ingress`
 (export mechanism — note it now inherits s13's pinned `{subject_key}:{channel}` consent-grain
-key composition), and `producer-ingress-policy` (needs `catalog-authority`). **The exec
-session closing D15–D18 is now the only blocker on the entire v2.0 path.** The full Demo 2
-(HMAC drag, producer-policy gate red/green) completes at phase exit.
+key composition), and `producer-ingress-policy` (needs `catalog-authority`). **D14–D18 closed
+2026-08-06 (ADR-0004)**: `catalog-authority` and `twenty-kanban-webhook-ingress` are proposable
+now, `producer-ingress-policy` follows `catalog-authority`, and `customerio-consent-ingress`
+waits only on the export-mechanism confirmation riding the compliance-owner role-fill. The full
+Demo 2 (HMAC drag, producer-policy gate red/green) completes at phase exit.
 
 **Longterm objective: v5.0 — Program done.** Everything after v2.0 is sequential and gated
 (Phase 3 needs Phase 2 exit + a Twenty dev instance; Phase 4 needs Phase 3 exit; genesis needs
