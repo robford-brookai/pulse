@@ -24,7 +24,7 @@ Fixtures are synthetic only (PHI rule) and ship with the task that consumes them
 
 ## 2. Wave 1 — month-open
 
-- [ ] 2.1 `schedules/month_open.py` core: enumerate active/on-hold Enrollments through the
+- [x] 2.1 [DNA-839] `schedules/month_open.py` core: enumerate active/on-hold Enrollments through the
       `pulse_ledger.reads.enumerate_state` boundary (never the warehouse), build one
       `open_billing_episode` per enrollment × current month with D16 keys, submit through the
       client boundary. Fixtures: recorded enumeration for the normal month. Tests: normal
@@ -50,7 +50,7 @@ Fixtures are synthetic only (PHI rule) and ship with the task that consumes them
 
 ## 3. Wave 1 — consent sweep
 
-- [ ] 3.1 `schedules/consent_sweep.py` parse and diff: suppression-export CSV parser
+- [x] 3.1 [DNA-842] `schedules/consent_sweep.py` parse and diff: suppression-export CSV parser
       (fixture-pinned format), set-based diff against ledger CommunicationConsent current state,
       corrections computed in both directions with Customer.io as authority (D9). Fixtures:
       exports with drift in each direction. Tests: opt-out present in export, missing from ledger

@@ -16,7 +16,7 @@ the system).
 
 ## 1. Wave 0 — scaffold
 
-- [ ] 1.1 Scaffold `packages/identity` as a workspace member: pyproject, uv workspace root entry,
+- [x] 1.1 [DNA-850] Scaffold `packages/identity` as a workspace member: pyproject, uv workspace root entry,
       ruff/pyright/pytest wiring, coverage gate `--cov=identity --cov-fail-under=90`,
       `--disable-socket` posture, `TESTED_PATHS` updated honestly. Test: package imports and an
       empty suite runs green under the gates.
