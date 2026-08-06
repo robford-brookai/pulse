@@ -29,7 +29,7 @@ one task.
       and stale signatures without duplicating the HMAC recipe. `fixtures/twenty/README.md` names
       each case. Test: a loader validates fixture shape; no live network anywhere.
       `[model: sonnet | deps: — | lane: repo_change | wave: 0]`
-- [ ] 1.2 Dual-secret rotation in `pulse_ledger/auth.py`: `TwentyWebhookConfig` gains
+- [x] 1.2 [DNA-874] Dual-secret rotation in `pulse_ledger/auth.py`: `TwentyWebhookConfig` gains
       `secret_next` (`PULSE_LEDGER_TWENTY_WEBHOOK_SECRET_NEXT`); verification accepts a signature
       valid under either configured secret, each check constant-time via the existing
       `verify_signature`; enabled-with-neither-secret stays a boot failure; empty-string secrets
