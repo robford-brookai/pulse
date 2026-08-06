@@ -1,0 +1,28 @@
+{
+  "case": "normal_month",
+  "description": "A recorded enumerate_state response for the active/on_hold/ended enrollment mix the 'Normal month-open' scenario describes: month-open declares exactly the active and on-hold set.",
+  "month": "2026-08-01",
+  "enrollments": [
+    {
+      "subject_key": "enr-active-1",
+      "state": "active",
+      "effective_at": "2026-07-01T00:00:00+00:00",
+      "last_event_id": "11111111-1111-1111-1111-111111111111",
+      "updated_at": "2026-07-01T00:00:00+00:00"
+    },
+    {
+      "subject_key": "enr-hold-1",
+      "state": "on_hold",
+      "effective_at": "2026-07-05T00:00:00+00:00",
+      "last_event_id": "22222222-2222-2222-2222-222222222222",
+      "updated_at": "2026-07-05T00:00:00+00:00"
+    },
+    {
+      "subject_key": "enr-ended-1",
+      "state": "ended",
+      "effective_at": "2026-06-10T00:00:00+00:00",
+      "last_event_id": "33333333-3333-3333-3333-333333333333",
+      "updated_at": "2026-06-10T00:00:00+00:00"
+    }
+  ]
+}
