@@ -1,0 +1,6 @@
+{
+  "case": "zero_enrollment",
+  "description": "An empty `enumerate_state` response for the 'Zero-enrollment failure' scenario: no rows at all, so the active/on_hold filter yields nothing regardless of what states a run requests.",
+  "month": "2026-08-01",
+  "enrollments": []
+}
