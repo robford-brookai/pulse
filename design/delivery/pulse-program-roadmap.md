@@ -24,7 +24,7 @@ Crosswalk:
 |---|---|---|---|
 | 0 — Absorption | S0.1 catalog spec, S0.2 catalog machinery | ✅ complete — `ocean-eventbridge-migration` (DNA-733), archived `2026-08-02-ocean-eventbridge-migration`, specs baseline seeded | 0–4 + post-merge ops, all done |
 | 1 — Record | S1.1 ledger schema + command API | ✅ **complete — `pulse-ledger-core` (DNA-784)**, all 16 tasks merged, archived `2026-08-03-pulse-ledger-core`; specs baseline updated (`command-api`, `ledger-distribution`, `ledger-read`, `ledger-record`) | 0–4, all done |
-| 2 — Ingress | S2, plus S1.2 verdict-relay, S1.3 schedules, S1.4 identity | in flight — `s12-verdict-relay` ✅ and `s13-schedules` ✅ shipped (archived `2026-08-05-s12-verdict-relay`, `2026-08-06-s13-schedules`); `s14-identity` executing 7/11 (DNA-849); four changes gate-held | s12, s13: all waves done |
+| 2 — Ingress | S2, plus S1.2 verdict-relay, S1.3 schedules, S1.4 identity | in flight — S1.x siblings all ✅ shipped (`2026-08-05-s12-verdict-relay`, `2026-08-06-s13-schedules`, `2026-08-06-s14-identity`; Demo 2 partial receipt #144); four changes gate-held on D15–D18/export mechanism | s12–s14: all waves done |
 | 3 — Projections | S3 (incl. migration M1) | queued | — |
 | 4 — Retirement | S4 | queued | — |
 
@@ -35,6 +35,12 @@ Crosswalk:
   `openspec/specs/` as the repo's first baseline. Out-of-lane ops executed: terraform applied,
   MSK Serverless torn down, `robford-brookai/ocean` archived read-only with the ADR §7
   supersession notice as its final commit.
+- `s14-identity` (DNA-849) — 11/11 tasks (#118–#141), doc_update #142 (identifier_conflict rule
+  id pinned as a scenario — the two-holders split quarantines, never auto-resolves — and the
+  dual D16 wire/audit key clarification), archived via #143 at
+  `openspec/changes/archive/2026-08-06-s14-identity/`; identity-normalization/matching/resolution
+  in the baseline. Matcher entrypoint + Decision union + rule ids are a published contract
+  (#140) — genesis's matcher and PX's identity-resolution answer.
 - `s13-schedules` (DNA-837) — 11/11 tasks (#117–#133), doc_update #135, archived via #136 at
   `openspec/changes/archive/2026-08-06-s13-schedules/`; three delta specs (`month-open`,
   `consent-reconciliation`, `schedule-execution`) merged into the baseline. Notable pins from
@@ -128,7 +134,7 @@ Gate for the S1.x siblings: **cleared** — `pulse-ledger-core` archived, names 
 |---|---|---|
 | `s12-verdict-relay` | `packages/verdict-relay` per the S1 work order; supersedes the clinic-rules-engine Snowpark emitter (P5) | ✅ shipped — archived `2026-08-05-s12-verdict-relay` (DNA-827) |
 | `s13-schedules` | `packages/schedules` — month-open + D9 consent sweep | ✅ shipped — archived `2026-08-06-s13-schedules` (DNA-837) |
-| `s14-identity` | `packages/identity` — deterministic matcher v1; also genesis's matcher | executing — 7/11 merged (DNA-849) |
+| `s14-identity` | `packages/identity` — deterministic matcher v1; also genesis's matcher | ✅ shipped — archived `2026-08-06-s14-identity` (DNA-849) |
 | `catalog-authority` | authoritative `state_catalog.yaml` replacing the Appendix C seed; regeneration into the 2.1 generator; D18 Snowflake release job + breaking-change rule. Serial lane `catalog_generated_surfaces` | D18 confirmed |
 | `twenty-kanban-webhook-ingress` | D8: enable the HMAC route 3.4 ships disabled; drag → command; invalid → rejection + card comment (heal-back write completes in Phase 3) | D15 confirmed |
 | `customerio-consent-ingress` | D9 forward consent ingress, actor `customer.io`, message-level provenance | export/webhook mechanism confirmed |
@@ -285,12 +291,14 @@ a phase boundary:
   gate specific phase milestones (`environment-matrix` gates Demo 3's staging leg and cutover P0)
   but ship as prerequisites woven into whichever phase needs them, not as their own version.
 
-**Midterm objective: v2.0.** Seven changes: `s12-verdict-relay` ✅ and `s13-schedules` ✅
-shipped (DNA-801 closed first via #104, as planned); `s14-identity` executing (7/11);
+**Midterm objective: v2.0.** Seven changes: the three S1.x siblings ✅ shipped
+(`s12-verdict-relay`, `s13-schedules`, `s14-identity` — Demo 2 partial receipt on #144 covers
+the s13/s14 surface offline). The remaining four are all gate-held on decisions:
 `catalog-authority` (D18), `twenty-kanban-webhook-ingress` (D15), `customerio-consent-ingress`
 (export mechanism — note it now inherits s13's pinned `{subject_key}:{channel}` consent-grain
-key composition), and `producer-ingress-policy` (needs `catalog-authority`) remain gate-held —
-D15–D18 close at the exec session.
+key composition), and `producer-ingress-policy` (needs `catalog-authority`). **The exec
+session closing D15–D18 is now the only blocker on the entire v2.0 path.** The full Demo 2
+(HMAC drag, producer-policy gate red/green) completes at phase exit.
 
 **Longterm objective: v5.0 — Program done.** Everything after v2.0 is sequential and gated
 (Phase 3 needs Phase 2 exit + a Twenty dev instance; Phase 4 needs Phase 3 exit; genesis needs
