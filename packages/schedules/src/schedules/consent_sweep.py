@@ -37,10 +37,13 @@ from __future__ import annotations
 
 import csv
 import io
+import json
+import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from enum import Enum
+from pathlib import Path
 
 from pulse_core.client import CommandResponse, PulseCoreClient
 from pulse_core.generated import RecordCommunicationConsentCommand
@@ -185,6 +188,37 @@ def _ledger_key(subject_key: str, channel: str) -> str:
     return f"{subject_key}:{channel}"
 
 
+#: `diff_consent` reads only `subject_type`/`subject_key`/`state` off a `SubjectState` — never
+#: `effective_at`/`last_event_id`/`updated_at` — so `load_ledger_state_fixture` fills those with
+#: fixed placeholders rather than asking a dry-run fixture to carry fields nothing consumes.
+_LEDGER_FIXTURE_PLACEHOLDER_TIME = datetime(1970, 1, 1, tzinfo=timezone.utc)
+_LEDGER_FIXTURE_PLACEHOLDER_EVENT_ID = uuid.UUID(int=0)
+
+
+def load_ledger_state_fixture(path: Path) -> list[SubjectState]:
+    """Load a `--dry-run` ledger-state substitute: a JSON list of `{subject_key, channel, state}`
+    objects at the sweep's own natural (subject, channel) grain — never the composed
+    `current_state` row key `diff_consent` looks up internally.
+
+    This is `consent-sweep --dry-run`'s stand-in for a live `enumerate_state` read (task 4.2,
+    spec: "Both jobs support an offline dry-run") — omitting `--ledger-fixture` entirely is also
+    valid: `diff_consent` against an empty ledger state still derives the full would-declare set
+    for a fresh export, just as `opt_out_drift.csv`'s own scenario does.
+    """
+    rows = json.loads(path.read_text())
+    return [
+        SubjectState(
+            subject_type=SUBJECT_TYPE,
+            subject_key=_ledger_key(row["subject_key"], row["channel"]),
+            state=row["state"],
+            effective_at=_LEDGER_FIXTURE_PLACEHOLDER_TIME,
+            last_event_id=_LEDGER_FIXTURE_PLACEHOLDER_EVENT_ID,
+            updated_at=_LEDGER_FIXTURE_PLACEHOLDER_TIME,
+        )
+        for row in rows
+    ]
+
+
 def diff_consent(export_rows: Sequence[ExportRow], ledger_states: Sequence[SubjectState]) -> list[Correction]:
     """The export's suppression set against the ledger's current consent state, export-wins.
 
@@ -252,6 +286,20 @@ def build_record_communication_consent_command(
         to_state=_TO_STATE[correction.direction],
         evidence_ref=export_row_reference(file_id, correction.export_row),
     )
+
+
+def dry_run_consent_corrections(
+    corrections: Sequence[Correction], *, file_id: str
+) -> list[RecordCommunicationConsentCommand]:
+    """Build the would-declare set the sweep would submit, without a client at all (task 4.2,
+    spec: "Both jobs support an offline dry-run").
+
+    Shares `declare_consent_corrections`'s command-building path — the identical
+    `build_record_communication_consent_command` key derivation and provenance — so a dry run
+    exercises the real subject-key and payload shape, but never constructs a `PulseCoreClient` or
+    calls `submit_command`: no token, no base URL, no socket, ever.
+    """
+    return [build_record_communication_consent_command(correction, file_id=file_id) for correction in corrections]
 
 
 @dataclass(frozen=True)

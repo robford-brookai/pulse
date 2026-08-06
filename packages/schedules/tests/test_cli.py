@@ -21,7 +21,7 @@ from pulse_core.client import PulseCoreClient
 from pulse_ledger.reads import SubjectState
 from schedules import cli
 from schedules.consent_sweep import RECONCILIATION_WRITER_ID
-from schedules.month_open import FixtureEnrollmentSource, billing_episode_subject_key
+from schedules.month_open import FixtureEnrollmentSource, billing_episode_subject_key, load_enrollment_fixture
 
 MONTH_OPEN_FIXTURES = Path(__file__).parent / "fixtures"
 CONSENT_SWEEP_FIXTURES = Path(__file__).parent / "fixtures" / "consent_sweep"
@@ -264,3 +264,137 @@ class TestMainDispatch:
 
         assert exc_info.value.code == 2
         assert "usage" in capsys.readouterr().err.lower()
+
+
+class TestMonthOpenDryRunJob:
+    """Task 4.2's own scenario: `run_month_open_dry_run_job` prints the would-declare set and
+    exits zero, with no `PulseCoreClient` argument in its signature at all (spec: "Both jobs
+    support an offline dry-run")."""
+
+    def test_prints_the_would_declare_set_and_exits_zero(self) -> None:
+        month, enrollments = load_enrollments("normal_month")
+        source = FixtureEnrollmentSource(rows=enrollments)
+        stream = io.StringIO()
+
+        exit_code = cli.run_month_open_dry_run_job(source, month=month, stream=stream)
+
+        payload = json.loads(stream.getvalue())
+        assert exit_code == 0
+        assert payload["dry_run"] is True
+        assert payload["invariant_breach"] is None
+        declared_keys = {entry["command"]["subject_key"] for entry in payload["would_declare"]}
+        assert declared_keys == {
+            billing_episode_subject_key("enr-active-1", month),
+            billing_episode_subject_key("enr-hold-1", month),
+        }
+
+    def test_zero_enrollment_prints_the_invariant_breach_and_exits_nonzero(self) -> None:
+        month, enrollments = load_enrollments("zero_enrollment")
+        source = FixtureEnrollmentSource(rows=enrollments)
+        stream = io.StringIO()
+
+        exit_code = cli.run_month_open_dry_run_job(source, month=month, stream=stream)
+
+        payload = json.loads(stream.getvalue())
+        assert exit_code == 1
+        assert payload["invariant_breach"] == "zero_enrollment"
+        assert payload["would_declare"] == []
+
+
+class TestConsentSweepDryRunJob:
+    def test_prints_the_would_declare_set_and_exits_zero(self) -> None:
+        csv_text = (CONSENT_SWEEP_FIXTURES / "opt_out_drift.csv").read_text()
+        stream = io.StringIO()
+
+        exit_code = cli.run_consent_sweep_dry_run_job(
+            csv_text, [], file_id="export-42", export_as_of=date(2026, 8, 5), stream=stream
+        )
+
+        payload = json.loads(stream.getvalue())
+        assert exit_code == 0
+        assert payload["dry_run"] is True
+        assert len(payload["would_declare"]) == 1
+        assert payload["would_declare"][0]["command"]["subject_key"] == "SUBJ-001:sms"
+        assert payload["unparseable"] == 0
+
+    def test_malformed_rows_are_counted_but_never_fail_a_dry_run(self) -> None:
+        csv_text = (CONSENT_SWEEP_FIXTURES / "malformed_among_valid.csv").read_text()
+        ledger_states = [
+            _ledger_state("SUBJ-020", "sms", "opted_out"),
+            _ledger_state("SUBJ-022", "sms", "opted_in"),
+        ]
+        stream = io.StringIO()
+
+        exit_code = cli.run_consent_sweep_dry_run_job(
+            csv_text, ledger_states, file_id="export-42", export_as_of=date(2026, 8, 5), stream=stream
+        )
+
+        payload = json.loads(stream.getvalue())
+        assert exit_code == 0
+        assert payload["would_declare"] == []
+        assert payload["unparseable"] == 2
+
+
+class TestMainDispatchDryRun:
+    """`main` wired to real argv for `--dry-run`: fakes the environment-wiring seams to raise, so
+    a test failure surfaces loudly if a dry run ever reaches for a client or a ledger connection —
+    exactly what the offline check command
+    (`schedules.cli month-open --dry-run --fixture .../normal_month.json`) relies on to run with
+    no ledger access and `--disable-socket` (spec: "Dry-run declares nothing")."""
+
+    def _forbid_environment_wiring(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def _forbidden(*args: object, **kwargs: object) -> None:
+            msg = "dry-run must never touch production wiring"
+            raise AssertionError(msg)
+
+        monkeypatch.setattr(cli, "_ledger_connection_from_env", _forbidden)
+        monkeypatch.setattr(cli, "_pulse_core_client_from_env", _forbidden)
+
+    def test_month_open_dry_run_with_fixture_and_no_month_derives_the_month_from_the_fixture(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        self._forbid_environment_wiring(monkeypatch)
+        fixture_path = MONTH_OPEN_FIXTURES / "normal_month.json"
+        expected_month, _ = load_enrollment_fixture(fixture_path)
+
+        exit_code = cli.main(["month-open", "--dry-run", "--fixture", str(fixture_path)])
+
+        assert exit_code == 0
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["dry_run"] is True
+        assert len(payload["would_declare"]) == 2
+        assert all(entry["command"]["month"] == expected_month.isoformat() for entry in payload["would_declare"])
+
+    def test_month_open_dry_run_without_fixture_exits_nonzero_with_usage_help(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        self._forbid_environment_wiring(monkeypatch)
+
+        with pytest.raises(SystemExit) as exc_info:
+            cli.main(["month-open", "--dry-run"])
+
+        assert exc_info.value.code == 2
+        assert "usage" in capsys.readouterr().err.lower()
+
+    def test_consent_sweep_dry_run_needs_no_ledger_fixture_at_all(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        self._forbid_environment_wiring(monkeypatch)
+        export_file = tmp_path / "export.csv"
+        export_file.write_text((CONSENT_SWEEP_FIXTURES / "opt_out_drift.csv").read_text())
+
+        exit_code = cli.main([
+            "consent-sweep",
+            "--dry-run",
+            "--export-file",
+            str(export_file),
+            "--file-id",
+            "export-42",
+            "--export-as-of",
+            "2026-08-05",
+        ])
+
+        assert exit_code == 0
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["dry_run"] is True
+        assert len(payload["would_declare"]) == 1

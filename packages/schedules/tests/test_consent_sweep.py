@@ -26,8 +26,10 @@ from schedules.consent_sweep import (
     build_drift_receipt,
     declare_consent_corrections,
     diff_consent,
+    dry_run_consent_corrections,
     export_logical_time,
     export_row_reference,
+    load_ledger_state_fixture,
     parse_export,
 )
 
@@ -320,3 +322,43 @@ def test_drift_receipt_never_carries_raw_contact_values():
 
     for error in receipt.parse_errors:
         assert "@" not in error.detail
+
+
+# --- task 4.2: offline dry run (would-declare set, no client) ---
+
+
+def test_dry_run_builds_the_same_commands_a_real_run_would_declare():
+    """`dry_run_consent_corrections` builds the identical command shape and key derivation
+    `declare_consent_corrections` would submit — just without a client (spec: "Both jobs support
+    an offline dry-run")."""
+    result = parse_export((FIXTURES / "opt_out_drift.csv").read_text())
+    corrections = diff_consent(result.rows, ledger_states=[])
+
+    commands = dry_run_consent_corrections(corrections, file_id="export-42")
+
+    assert len(commands) == 1
+    assert commands[0].command_type == "record_communication_consent"
+    assert commands[0].subject_key == "SUBJ-001:sms"
+    assert commands[0].to_state == "opted_out"
+    assert commands[0].evidence_ref == "export-42:row:1"
+
+
+def test_load_ledger_state_fixture_reads_the_subject_channel_grain_into_the_composed_key():
+    states = load_ledger_state_fixture(FIXTURES / "ledger_agrees_with_malformed_among_valid.json")
+
+    assert {(state.subject_key, state.state) for state in states} == {
+        ("SUBJ-020:sms", "opted_out"),
+        ("SUBJ-022:sms", "opted_in"),
+    }
+    assert all(state.subject_type == "communication_consent" for state in states)
+
+
+def test_dry_run_against_a_fixture_that_fully_agrees_declares_nothing_but_still_counts_malformed_rows():
+    result = parse_export((FIXTURES / "malformed_among_valid.csv").read_text())
+    ledger_states = load_ledger_state_fixture(FIXTURES / "ledger_agrees_with_malformed_among_valid.json")
+
+    corrections = diff_consent(result.rows, ledger_states)
+    commands = dry_run_consent_corrections(corrections, file_id="export-42")
+
+    assert commands == []
+    assert result.errors != []
