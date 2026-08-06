@@ -1,0 +1,22 @@
+{
+  "kind": "decision",
+  "case": "mint_unknown_everything",
+  "description": "A referral whose identifiers are unknown and whose composite digest has no candidates among existing persons. Nothing matches, so the decision mints a new person.",
+  "referral": {
+    "identifiers": [
+      {
+        "system": "MRN-ACME",
+        "value": "SYN-9001"
+      }
+    ],
+    "demographics": {
+      "first_name": "Toshiro",
+      "last_name": "Yamamoto",
+      "dob": "2001-09-30",
+      "sex": "M"
+    }
+  },
+  "existing_persons": [],
+  "expected_decision": "mint",
+  "expected_rule_id": "composite_none"
+}

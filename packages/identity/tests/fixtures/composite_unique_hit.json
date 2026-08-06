@@ -1,0 +1,34 @@
+{
+  "kind": "decision",
+  "case": "composite_unique_hit",
+  "description": "A referral carries no known ExternalIdentifier, but its composite match key (last name + DOB + sex + first-initial) resolves to exactly one existing person. The composite tier matches.",
+  "referral": {
+    "identifiers": [],
+    "demographics": {
+      "first_name": "Priya",
+      "last_name": "Chandrasekhar",
+      "dob": "1992-02-14",
+      "sex": "F"
+    }
+  },
+  "existing_persons": [
+    {
+      "person_id": "person-composite-owner",
+      "identifiers": [
+        {
+          "system": "MRN-ACME",
+          "value": "SYN-0002"
+        }
+      ],
+      "demographics": {
+        "first_name": "Priya",
+        "last_name": "Chandrasekhar",
+        "dob": "1992-02-14",
+        "sex": "F"
+      }
+    }
+  ],
+  "expected_decision": "match",
+  "expected_person_id": "person-composite-owner",
+  "expected_rule_id": "composite_unique"
+}

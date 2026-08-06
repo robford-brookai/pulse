@@ -1,0 +1,52 @@
+{
+  "kind": "decision",
+  "case": "two_candidate_ambiguity",
+  "description": "A referral's composite digest resolves to two distinct existing persons. v1 is deterministic-only, so ambiguity always quarantines for human review rather than auto-choosing between them.",
+  "referral": {
+    "identifiers": [],
+    "demographics": {
+      "first_name": "Jordan",
+      "last_name": "Okafor",
+      "dob": "1980-05-01",
+      "sex": "M"
+    }
+  },
+  "existing_persons": [
+    {
+      "person_id": "person-candidate-one",
+      "identifiers": [
+        {
+          "system": "MRN-ACME",
+          "value": "SYN-0003"
+        }
+      ],
+      "demographics": {
+        "first_name": "Jordan",
+        "last_name": "Okafor",
+        "dob": "1980-05-01",
+        "sex": "M"
+      }
+    },
+    {
+      "person_id": "person-candidate-two",
+      "identifiers": [
+        {
+          "system": "MRN-OTHER",
+          "value": "SYN-0004"
+        }
+      ],
+      "demographics": {
+        "first_name": "James",
+        "last_name": "Okafor",
+        "dob": "1980-05-01",
+        "sex": "M"
+      }
+    }
+  ],
+  "expected_decision": "ambiguous",
+  "expected_candidate_person_ids": [
+    "person-candidate-one",
+    "person-candidate-two"
+  ],
+  "expected_rule_id": "composite_ambiguous"
+}
