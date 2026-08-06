@@ -18,6 +18,16 @@ failed run, so scheduler retry and paging key off exit status.
 - **THEN** the named job runs, and an unknown subcommand or missing required argument exits
   nonzero with usage help
 
+#### Scenario: A rejected declared correction fails the sweep run
+
+- **GIVEN** a consent-sweep run whose declared correction the command API classifies as
+  `rejected` or `transient`
+- **WHEN** the run completes
+- **THEN** the printed receipt payload reports the failure (`failed_declarations` count and
+  `failed_subject_keys`) and the CLI exits nonzero — the same treatment month-open's own
+  receipt applies to a failed declaration. Malformed export rows remain non-fatal per the
+  consent-reconciliation spec; only failed declarations fail the run.
+
 ### Requirement: Both jobs support an offline dry-run
 
 Each subcommand SHALL accept `--dry-run`, printing the would-declare set — every command the run
