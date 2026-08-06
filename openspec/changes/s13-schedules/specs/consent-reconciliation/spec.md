@@ -41,6 +41,25 @@ export replays rather than double-declaring.
 - **THEN** the command's actor is `reconciliation` and its payload references the export row, and
   re-running the sweep on the same export classifies the same correction as `replayed`
 
+Note: actor is authentication, never a payload field (ADR-0003 — a body actor is rejected as a
+spoof), so client-boundary tests observe attribution only via the D16 idempotency key's
+`{writer_id}:` prefix; no test asserts an `actor` field directly.
+
+### Requirement: The consent grain composes the ledger subject key
+
+`CommunicationConsent` is per patient × channel (object model §5.2), but `ledger.current_state`
+keys one row per `(subject_type, subject_key)` single string. The sweep SHALL compose that key as
+`{subject_key}:{channel}`, and SHALL use the same composition on both directions — reading current
+state for the diff and declaring corrections — so the sweep's reads and writes can never disagree
+on which row a (subject, channel) pair owns. Any other producer of `communication_consent` state
+(e.g. a forward consent ingress) MUST adopt this same composition.
+
+#### Scenario: Read and write compose the key identically
+
+- **GIVEN** an export row for subject S on channel C
+- **WHEN** the sweep reads current state and, on drift, declares a correction
+- **THEN** both the state lookup and the declared command address subject key `S:C`
+
 ### Requirement: The sweep emits a drift receipt and never drops rows
 
 Every run SHALL emit a drift receipt with the counts of agreements, corrections (by direction),
