@@ -1,8 +1,17 @@
 # Clinic Rules Engine — `patient.qualified` / `patient.disqualified` (PULSE)
 
+> **Superseded (2026-08-05, `s12-verdict-relay`, roadmap P5).** The Emitter (§3 below) — a
+> Snowpark Python stored proc POSTing transition events straight to Twenty — is superseded as the
+> verdict write path. `packages/verdict-relay` reads the qualification mart this document's
+> Evaluation step (§2) produces and declares each row to the ledger as a `declare_verdict` command
+> on the platform's single write path, per D16 idempotency
+> (`openspec/changes/s12-verdict-relay/proposal.md`). The qualification mart is now a consumed
+> contract, documented in `docs/contracts/consumes.md`. Not breaking — the emitter was never
+> built. Rules landing (§1) and evaluation (§2) are unaffected; only the emission leg changes.
+
 | | |
 |---|---|
-| **Status** | Draft v1 |
+| **Status** | Draft v1 — superseded in part, see note above |
 | **Date** | 2026-07-28 |
 | **Owner** | Rob Ford, Data |
 | **Producer identity** | `clinic-rules-engine` |

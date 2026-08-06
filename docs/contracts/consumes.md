@@ -12,6 +12,23 @@ surface — a Snowflake object, an API, or a released package.
 
 ## This repo
 
+### Verdict mart (dbt, Snowflake)
+
+`packages/verdict-relay` reads the verdict mart the dbt project computes in Snowflake and declares
+each row to the ledger as a `declare_verdict` command
+(`openspec/changes/s12-verdict-relay/specs/verdict-mart-read/spec.md`). Per roadmap P5
+(`design/delivery/pulse-program-roadmap.md`), this relay supersedes the clinic-rules-engine
+Snowpark emitter as the verdict write path — see the supersession note in
+`design/platform/clinic-rules-engine.md`.
+
+| Dependency | Kind | Source | Breakage risk |
+|---|---|---|---|
+| Verdict mart | dbt-computed Snowflake table(s) | fixture-pinned contract: one row per `(subject_id, verdict_type, run)`, columns `subject_id, verdict_type, outcome, reason, rule_version, as_of, lineage_ref, computed_at` | a row missing a contract column or carrying an unparseable `as_of`/`computed_at` fails the run before any declaration, naming the offending row; the dbt side has no publisher contract of its own yet — this repo's fixtures are the only pinned shape |
+
+The relay pages on `computed_at` and persists its cursor through the ledger's writer-state
+facility (`pulse_core.cursor`), scoped to its own writer id — so schema drift on the mart is caught
+at read time, never silently skipped by resuming past a bad page.
+
 ### Event transport (runtime)
 
 With the Kafka → EventBridge migration
