@@ -79,17 +79,14 @@ connectivity, catalog state names, command API health), then re-run `schedules.c
 for the affected month. The same-day retry window in the infra config exists so this is usually
 automatic; a page means it needs to be triggered by hand.
 
-## DNA-801 replay-accounting caveat
+## Replay accounting
 
-Until `DNA-801` (the command API's `idempotency_key` / `replayed` HTTP wiring gap) lands, the live
-`PulseCoreClient` classifies every replay as `committed`, not `replayed` — so a re-run's receipt
-will under-report `replayed` and over-report `opened` against what actually happened. This is an
-accounting distinction only: the ledger's commit path already guarantees no duplicate
-BillingEpisode regardless of what the receipt's counts say, and `pulse-core`'s idempotency
-derivation is unaffected. **Do not treat an `opened` count that looks too high on a known re-run as
-evidence of duplicate episodes** — confirm against the ledger's own state before escalating, and
-expect this caveat to close automatically once DNA-801 ships (the tests already pin the target
-`replayed` contract at the client-fake boundary, so no runbook update is needed when it lands).
+`DNA-801` (the command API's `idempotency_key` / `replayed` HTTP wiring) landed 2026-08-04
+(PR #104), so the live `PulseCoreClient` classifies replays as `replayed` and a re-run's receipt
+counts are trustworthy. The general caution still stands on any version predating that fix:
+an `opened` count that looks too high on a known re-run is an accounting artifact, not evidence
+of duplicate episodes — the ledger's commit path guarantees no duplicate BillingEpisode
+regardless of receipt counts; confirm against the ledger's own state before escalating.
 
 ## PHI posture
 
