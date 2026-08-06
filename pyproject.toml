@@ -63,6 +63,7 @@ members = [
     "packages/pulse-ledger",
     "packages/pulse-core",
     "packages/verdict-relay",
+    "packages/schedules",
     "packages/ocean",
     "packages/ocean/libs/ocean-events",
     "packages/ocean/libs/ocean-broker",
@@ -73,6 +74,7 @@ members = [
 pulse-ledger = { workspace = true }
 pulse-core = { workspace = true }
 verdict-relay = { workspace = true }
+schedules = { workspace = true }
 ocean-events = { workspace = true }
 ocean-broker = { workspace = true }
 ocean-connector-mcp = { workspace = true }
@@ -185,6 +187,7 @@ ignore = [
 "packages/pulse-ledger/tests/**" = ["S101"]
 "packages/pulse-core/tests/**" = ["S101"]
 "packages/verdict-relay/tests/**" = ["S101"]
+"packages/schedules/tests/**" = ["S101"]
 
 "packages/ocean/tests/**" = ["S101", "S105", "B017"]
 "packages/ocean/**/tests/**" = ["S101", "S105", "B017"]
