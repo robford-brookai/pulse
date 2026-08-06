@@ -81,7 +81,7 @@ Fixtures are synthetic only (PHI rule) and ship with the task that consumes them
       subcommand and missing required argument exit nonzero with usage help (spec: "Subcommands
       are invocable").
       `[model: sonnet | deps: 2.2, 2.3, 3.2, 3.3 | lane: repo_change | wave: 2]`
-- [ ] 4.2 `--dry-run` on both subcommands: build the full would-declare set (exercising key
+- [x] 4.2 [DNA-846] `--dry-run` on both subcommands: build the full would-declare set (exercising key
       derivation and payload shape), print it, stop before the client — no API calls, no sockets.
       Must satisfy the work order's offline check:
       `uv run python -m schedules.cli month-open --dry-run --fixture packages/schedules/tests/fixtures/normal_month.json`.
