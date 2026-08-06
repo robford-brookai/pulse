@@ -38,7 +38,7 @@ Fixtures are synthetic only (PHI rule) and ship with the task that consumes them
       with no second episode (spec: "Re-run replays"); a mid-month run replays existing episodes
       and opens only the newly activated enrollment's (spec: "Mid-month invocation").
       `[model: sonnet | deps: 2.1 | lane: repo_change | wave: 1]`
-- [ ] 2.3 Month-open invariant and receipt: empty enumeration → failure receipt, nonzero exit,
+- [x] 2.3 [DNA-841] Month-open invariant and receipt: empty enumeration → failure receipt, nonzero exit,
       zero commands submitted; receipt reports opened/replayed/failed and any failed declaration
       makes the exit status nonzero (subject keys and counts only, never demographics). Fixtures:
       zero-enrollment case, mixed-outcome case. Tests: zero-enrollment failure (spec:
@@ -63,7 +63,7 @@ Fixtures are synthetic only (PHI rule) and ship with the task that consumes them
       a declared correction carries the actor and row reference, and re-running the sweep on the
       same export classifies it `replayed` (spec: "A correction is attributed and traceable").
       `[model: sonnet | deps: 3.1 | lane: repo_change | wave: 1]`
-- [ ] 3.3 Drift receipt: agreements / corrections-by-direction / unparseable counts; malformed
+- [x] 3.3 [DNA-844] Drift receipt: agreements / corrections-by-direction / unparseable counts; malformed
       rows accumulate on the receipt with their parse errors and never abort the remaining rows;
       no raw contact values in receipts or logs. Fixtures: fully agreeing export; export with
       malformed rows among valid ones. Tests: full agreement declares nothing and the receipt
