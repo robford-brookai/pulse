@@ -22,6 +22,21 @@ re-declaring the same row can never commit a second event.
   `rule_version`, `as_of`, and `lineage_ref`, and a D16 idempotency key, and the response
   classifies as committed
 
+### Requirement: The subject type derives from a configuration mapping
+
+The relay SHALL derive the declared command's `subject_type` from the row's `verdict_type` via a
+configuration mapping (`subject_type_by_verdict`) — the mart contract carries no `subject_type`
+column, and the ledger validates `subject_type` against the catalog. A `verdict_type` absent from
+the mapping SHALL fail validation before any API call, and the row SHALL be reported as failed
+with the validation error naming the row — the same treatment as indeterminate-without-reason.
+
+#### Scenario: An unmapped verdict type fails before the API call
+
+- **GIVEN** a mart row whose `verdict_type` has no entry in `subject_type_by_verdict`
+- **WHEN** the relay processes it
+- **THEN** validation fails before any command is submitted, no API call occurs, and the row is
+  reported as failed with the validation error
+
 ### Requirement: Outcomes are trinary and indeterminate requires a reason
 
 Verdict outcomes SHALL be exactly `positive | negative | indeterminate`, per the catalog-generated
