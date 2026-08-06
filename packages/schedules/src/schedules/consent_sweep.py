@@ -1,7 +1,7 @@
-"""Parse and diff the D9 consent-reconciliation suppression export (task 3.1).
+"""Parse, diff, and declare the D9 consent-reconciliation suppression export (tasks 3.1-3.2).
 
-Two responsibilities, kept separate so 3.2 (attribution/provenance) and 3.3 (the drift receipt)
-compose on top of this module rather than duplicating it:
+Three responsibilities, kept separate so 3.3 (the drift receipt) composes on top of this module
+rather than duplicating it:
 
 - **`parse_export`** reads the delivered Customer.io suppression export — CSV, fixture-pinned
   format — into `ExportRow`s. A row that fails to parse becomes an `ExportParseError` rather than
@@ -10,6 +10,16 @@ compose on top of this module rather than duplicating it:
 - **`diff_consent`** is the set-based diff (design decision 5): the export's suppression state for
   each (subject, channel) against the ledger's current `communication_consent` state, resolved with
   the export as authority (D9) — Customer.io wins every conflict, per spec.
+- **`declare_consent_corrections`** (task 3.2) submits one `record_communication_consent` command
+  per `Correction` through the command-API client boundary. Attribution is authentication, never a
+  payload field (ADR-0003): the command's actor becomes `reconciliation` because `client`
+  authenticates with this sweep's own D15 credential, not because this module writes an actor
+  anywhere — `RECONCILIATION_WRITER_ID` documents the credential's name (config; the token value
+  comes from the environment at the CLI boundary that constructs `client`). Each command's payload
+  carries the export row reference (file id + row number) as provenance, and the D16 idempotency
+  key derives from `logical_time` = the export's as-of date, so a re-run of the same export
+  replays every correction rather than double-declaring (spec: "A correction is attributed and
+  traceable").
 
 The export's grain is (subject, channel) — one patient can appear once per channel (SMS, email,
 voice), per the object model (`CommunicationConsent` — per patient x channel). The ledger's
@@ -29,8 +39,11 @@ import csv
 import io
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import date, datetime, timezone
 from enum import Enum
 
+from pulse_core.client import CommandResponse, PulseCoreClient
+from pulse_core.generated import RecordCommunicationConsentCommand
 from pulse_ledger.reads import SubjectState
 
 #: The one subject type this sweep reconciles (catalog: `state_catalog_seed.yaml`).
@@ -195,3 +208,82 @@ def diff_consent(export_rows: Sequence[ExportRow], ledger_states: Sequence[Subje
             Correction(subject_key=row.subject_key, channel=row.channel, direction=direction, export_row=row)
         )
     return corrections
+
+
+#: D15: this sweep's own service credential name. A per-writer bearer credential resolves to
+#: `writer_id` = actor server-side (ADR-0003) — so authenticating `client` with the credential
+#: named `reconciliation` is what makes every correction's actor `reconciliation`, not any field
+#: this module writes. The credential's value (bearer token) lives in the environment and is never
+#: hardcoded; only its name is pinned here.
+RECONCILIATION_WRITER_ID = "reconciliation"
+
+#: The ledger `to_state` each correction direction declares (catalog: communication_consent
+#: transitions) — the mirror image of `_OPTED_OUT_STATE` above.
+_TO_STATE: dict[CorrectionDirection, str] = {
+    CorrectionDirection.OPT_OUT: "opted_out",
+    CorrectionDirection.OPT_IN: "opted_in",
+}
+
+
+def export_row_reference(file_id: str, export_row: ExportRow) -> str:
+    """The provenance a correction's payload carries: the export row that produced it (file id +
+    row number), so any corrected consent state traces back to the authority that dictated it."""
+    return f"{file_id}:row:{export_row.row_number}"
+
+
+def export_logical_time(export_as_of: date) -> datetime:
+    """D16 `logical_time` for sweep corrections: the export's as-of date at midnight UTC.
+
+    No wall-clock component, so every correction derived from the same delivered export derives
+    the same idempotency key regardless of what day the sweep happens to run (design decision 3)
+    — the same re-runnability month-open's `billing_month_effective_at` gives billing months. A
+    next day's export, with its own as-of date, can legitimately re-correct.
+    """
+    return datetime(export_as_of.year, export_as_of.month, export_as_of.day, tzinfo=timezone.utc)
+
+
+def build_record_communication_consent_command(
+    correction: Correction, *, file_id: str
+) -> RecordCommunicationConsentCommand:
+    """One `record_communication_consent` correction command, export-attributed."""
+    return RecordCommunicationConsentCommand(
+        subject_key=_ledger_key(correction.subject_key, correction.channel),
+        channel=correction.channel,
+        to_state=_TO_STATE[correction.direction],
+        evidence_ref=export_row_reference(file_id, correction.export_row),
+    )
+
+
+@dataclass(frozen=True)
+class ConsentCorrectionDeclaration:
+    """One correction's command and the client's classified response.
+
+    The drift receipt (task 3.3) is a tally over these; this task returns them uninterpreted.
+    """
+
+    correction: Correction
+    command: RecordCommunicationConsentCommand
+    response: CommandResponse
+
+
+def declare_consent_corrections(
+    corrections: Sequence[Correction],
+    client: PulseCoreClient,
+    *,
+    file_id: str,
+    export_as_of: date,
+) -> list[ConsentCorrectionDeclaration]:
+    """Declare one `record_communication_consent` correction per disagreement `diff_consent` found.
+
+    `client` must authenticate with this sweep's own D15 credential (`RECONCILIATION_WRITER_ID`) so
+    the ledger resolves the command's actor to `reconciliation` — attribution is authentication
+    (ADR-0003), never a payload field this function could set instead. Declarations happen in
+    `corrections`' own order — the diff's export-row order.
+    """
+    effective_at = export_logical_time(export_as_of)
+    declarations: list[ConsentCorrectionDeclaration] = []
+    for correction in corrections:
+        command = build_record_communication_consent_command(correction, file_id=file_id)
+        response = client.submit_command(command, effective_at=effective_at)
+        declarations.append(ConsentCorrectionDeclaration(correction=correction, command=command, response=response))
+    return declarations
