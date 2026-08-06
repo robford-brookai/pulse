@@ -1,5 +1,5 @@
-"""`schedules.month_open` — task 2.1's two scenarios plus task 2.2's re-run scenarios (spec:
-month-open).
+"""`schedules.month_open` — task 2.1's two scenarios plus task 2.2's re-run scenarios and task
+2.3's invariant/receipt scenarios (spec: month-open).
 
 "Normal month-open": month-open declares exactly the active/on-hold set from a recorded
 enumeration that also holds an `ended` enrollment, which gets none. "A state-name typo rejects the
@@ -10,7 +10,10 @@ declaration `replayed`, deriving the identical D16 key it derived the first time
 across calls regardless of which day either call happens to run on. "Mid-month invocation": a run
 on the 15th replays the two enrollments already opened on the 1st and opens the one enrollment
 that activated on the 10th, with every command's `effective_at` pinned to the 1st regardless of
-the run's own day.
+the run's own day. "Zero-enrollment failure": an empty enumeration raises before any command is
+built, and `run_month_open` turns that into a failure receipt naming the invariant. "Receipt
+reflects the run": a mix of committed, replayed, and rejected declarations tallies onto the
+receipt exactly, and the run is not `ok` because one declaration failed.
 
 The command API is faked at the client boundary (`httpx.MockTransport` under a real
 `PulseCoreClient`, per verdict-relay's pattern) and the ledger read at the `enumerate_state`
@@ -35,9 +38,11 @@ from pulse_ledger.validation import IllegalTransitionError
 from schedules.month_open import (
     FixtureEnrollmentSource,
     LedgerEnrollmentSource,
+    ZeroEnrollmentError,
     billing_episode_subject_key,
     billing_month_effective_at,
     declare_month_open,
+    run_month_open,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -67,6 +72,10 @@ def committed(event_id: str = "e1") -> httpx.Response:
 
 def replayed(event_id: str = "e1") -> httpx.Response:
     return httpx.Response(201, json={"event_id": event_id, "replayed": True})
+
+
+def rejected(reason: str = "catalog rejection") -> httpx.Response:
+    return httpx.Response(422, json={"detail": {"message": reason, "reason": reason}})
 
 
 class ScriptedApi:
@@ -198,3 +207,46 @@ class TestMidMonthInvocation:
         expected_effective_at = billing_month_effective_at(month).isoformat()
         assert month.day != 1
         assert all(body["effective_at"] == expected_effective_at for body in api.bodies)
+
+
+class TestZeroEnrollmentFailure:
+    def test_empty_enumeration_raises_before_any_command_is_built(self) -> None:
+        month, enrollments = load_enrollments("zero_enrollment")
+        assert enrollments == []
+        source = FixtureEnrollmentSource(rows=enrollments)
+        api = ScriptedApi([])
+
+        with pytest.raises(ZeroEnrollmentError):
+            declare_month_open(source, api.client(), month=month)
+
+        assert api.bodies == []
+
+    def test_run_month_open_turns_the_invariant_breach_into_a_failure_receipt(self) -> None:
+        month, enrollments = load_enrollments("zero_enrollment")
+        source = FixtureEnrollmentSource(rows=enrollments)
+        api = ScriptedApi([])
+
+        run = run_month_open(source, api.client(), month=month)
+
+        assert run.declarations == ()
+        assert run.receipt.invariant_breach == "zero_enrollment"
+        assert run.receipt.opened == run.receipt.replayed == run.receipt.failed == 0
+        assert run.receipt.ok is False
+        assert api.bodies == []
+
+
+class TestReceiptReflectsTheRun:
+    def test_receipt_counts_match_the_mixed_outcome_and_the_run_is_not_ok(self) -> None:
+        month, enrollments = load_enrollments("mixed_outcome")
+        source = FixtureEnrollmentSource(rows=enrollments)
+        api = ScriptedApi([committed("e-opens"), replayed("e-replays"), rejected()])
+
+        run = run_month_open(source, api.client(), month=month)
+
+        assert run.receipt.opened == 1
+        assert run.receipt.replayed == 1
+        assert run.receipt.failed == 1
+        assert run.receipt.failed_subject_keys == (billing_episode_subject_key("enr-fails-1", month),)
+        assert run.receipt.invariant_breach is None
+        assert run.receipt.ok is False
+        assert len(run.declarations) == 3
