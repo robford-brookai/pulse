@@ -1,0 +1,5 @@
+subject_key,channel,suppressed
+SUBJ-020,sms,true
+SUBJ-021,email,maybe
+,voice,true
+SUBJ-022,sms,false

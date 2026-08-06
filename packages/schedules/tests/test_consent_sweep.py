@@ -23,6 +23,7 @@ from schedules.consent_sweep import (
     Correction,
     CorrectionDirection,
     ExportHeaderError,
+    build_drift_receipt,
     declare_consent_corrections,
     diff_consent,
     export_logical_time,
@@ -257,3 +258,65 @@ def test_opt_in_correction_declares_the_opposite_to_state():
     assert declarations[0].command.to_state == "opted_in"
     assert declarations[0].command.subject_key == "SUBJ-002:email"
     assert cast("dict[str, object]", api.bodies[0]["payload"])["evidence_ref"] == "export-42:row:1"
+
+
+# --- task 3.3: drift receipt (agreements / corrections-by-direction / unparseable; malformed) ---
+
+
+def test_full_agreement_declares_nothing_and_the_receipt_shows_all_agreements():
+    """spec: "Agreements produce no writes" — an export that fully agrees with ledger state
+    declares no commands and the receipt reports every row as an agreement."""
+    result = parse_export((FIXTURES / "full_agreement.csv").read_text())
+    ledger_states = [
+        _ledger_state("SUBJ-010", "sms", "opted_out"),
+        _ledger_state("SUBJ-011", "email", "opted_in"),
+    ]
+
+    corrections = diff_consent(result.rows, ledger_states)
+    receipt = build_drift_receipt(result, corrections)
+
+    assert corrections == []
+    assert receipt.agreements == 2
+    assert receipt.opt_out_corrections == 0
+    assert receipt.opt_in_corrections == 0
+    assert receipt.unparseable == 0
+    assert receipt.parse_errors == ()
+
+
+def test_malformed_rows_are_counted_and_attached_while_valid_rows_process():
+    """spec: "Malformed rows are counted and attached" — the valid rows are processed, the
+    receipt counts the malformed rows and attaches them, and none are dropped without a trace."""
+    result = parse_export((FIXTURES / "malformed_among_valid.csv").read_text())
+    ledger_states = [_ledger_state("SUBJ-022", "sms", "opted_in")]
+
+    corrections = diff_consent(result.rows, ledger_states)
+    receipt = build_drift_receipt(result, corrections)
+
+    # Two malformed rows (row 2: unrecognised boolean, row 3: missing subject_key) never abort
+    # the two valid rows (row 1: opt-out drift, row 4: agreement).
+    assert [row.subject_key for row in result.rows] == ["SUBJ-020", "SUBJ-022"]
+    assert corrections == [
+        Correction(
+            subject_key="SUBJ-020",
+            channel="sms",
+            direction=CorrectionDirection.OPT_OUT,
+            export_row=result.rows[0],
+        )
+    ]
+    assert receipt.agreements == 1
+    assert receipt.opt_out_corrections == 1
+    assert receipt.opt_in_corrections == 0
+    assert receipt.unparseable == 2
+    assert [error.row_number for error in receipt.parse_errors] == [2, 3]
+
+
+def test_drift_receipt_never_carries_raw_contact_values():
+    """No raw contact values in receipts or logs: a malformed row's error carries only its row
+    number and a detail about the tracked columns (subject_key, channel, suppressed) — never an
+    email address or phone number, since the parser never reads one."""
+    result = parse_export((FIXTURES / "malformed_among_valid.csv").read_text())
+
+    receipt = build_drift_receipt(result, corrections=[])
+
+    for error in receipt.parse_errors:
+        assert "@" not in error.detail

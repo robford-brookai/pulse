@@ -266,6 +266,53 @@ class ConsentCorrectionDeclaration:
     response: CommandResponse
 
 
+@dataclass(frozen=True)
+class DriftReceipt:
+    """One sweep run's drift tally (task 3.3, spec: "The sweep emits a drift receipt and never
+    drops rows"): how many export rows agreed with the ledger, how many corrections `diff_consent`
+    declared in each direction, and how many rows never parsed.
+
+    Composes over `parse_export`'s and `diff_consent`'s own outputs rather than re-deriving
+    anything — this dataclass is a tally, not a second pass over the export. `parse_errors`
+    attaches every malformed row's error, not just its count, so a malformed row is never dropped
+    without a trace (spec: "Malformed rows are counted and attached"); `ExportParseError` never
+    carries a raw contact value — only a row number and a detail about the three tracked columns
+    (subject_key, channel, suppressed) — so this receipt is safe to attach whole to logs.
+    """
+
+    agreements: int
+    opt_out_corrections: int
+    opt_in_corrections: int
+    unparseable: int
+    parse_errors: tuple[ExportParseError, ...]
+
+    @property
+    def total_corrections(self) -> int:
+        """Corrections declared in either direction — the writes this run actually made."""
+        return self.opt_out_corrections + self.opt_in_corrections
+
+
+def build_drift_receipt(parse_result: ExportParseResult, corrections: Sequence[Correction]) -> DriftReceipt:
+    """Tally one sweep run's parse result and diff into its drift receipt.
+
+    `agreements` is every row that parsed but produced no correction (spec: "Agreements produce
+    no writes" — `diff_consent` already declares nothing for them; this counts that it didn't, so
+    a fully-agreeing export's receipt reports every row as an agreement rather than reporting
+    nothing at all). `unparseable` and `parse_errors` are `parse_result.errors` verbatim: rows that
+    failed to parse were already counted and collected by `parse_export` without aborting the
+    rest, and this receipt attaches that record rather than re-deriving it.
+    """
+    opt_out_corrections = sum(1 for correction in corrections if correction.direction is CorrectionDirection.OPT_OUT)
+    opt_in_corrections = sum(1 for correction in corrections if correction.direction is CorrectionDirection.OPT_IN)
+    return DriftReceipt(
+        agreements=len(parse_result.rows) - len(corrections),
+        opt_out_corrections=opt_out_corrections,
+        opt_in_corrections=opt_in_corrections,
+        unparseable=len(parse_result.errors),
+        parse_errors=tuple(parse_result.errors),
+    )
+
+
 def declare_consent_corrections(
     corrections: Sequence[Correction],
     client: PulseCoreClient,
