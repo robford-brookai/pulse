@@ -32,7 +32,7 @@ Fixtures are synthetic only (PHI rule) and ship with the task that consumes them
       state name fails the run via the catalog rejection with no commands declared (spec: "A
       state-name typo rejects the run").
       `[model: sonnet | deps: 1.1 | lane: repo_change | wave: 1]`
-- [ ] 2.2 Month-open re-runnability: `logical_time` = billing month (first-of-month date, no
+- [x] 2.2 [DNA-840] Month-open re-runnability: `logical_time` = billing month (first-of-month date, no
       wall-clock component), so keys are stable within a month and roll with it. Fixtures: re-run
       and mid-month enumerations. Tests: same-day re-run classifies every declaration `replayed`
       with no second episode (spec: "Re-run replays"); a mid-month run replays existing episodes
@@ -57,7 +57,7 @@ Fixtures are synthetic only (PHI rule) and ship with the task that consumes them
       → opt-out correction (spec: "Opt-out missing from the ledger"); ledger opt-out the export
       contradicts → opt-in correction (spec: "Ledger opt-out the export contradicts").
       `[model: sonnet | deps: 1.1 | lane: repo_change | wave: 1]`
-- [ ] 3.2 Correction declaration: `record_communication_consent` with actor = `reconciliation`
+- [x] 3.2 [DNA-843] Correction declaration: `record_communication_consent` with actor = `reconciliation`
       (its own D15 credential, name from config, value from environment), payload provenance =
       export row reference (file id + row number), D16 `logical_time` = export as-of date. Test:
       a declared correction carries the actor and row reference, and re-running the sweep on the

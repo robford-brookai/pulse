@@ -38,7 +38,7 @@ the system).
       `[model: opus | deps: 1.1 | lane: repo_change | wave: 1]`
       Model `opus`: a wrong composite or a composite that escapes the module is the
       retrofit-expensive defect — every registered match key downstream depends on these rules.
-- [ ] 2.2 `packages/identity/tests/fixtures/` — synthetic demographic cases: exact identifier
+- [x] 2.2 [DNA-852] `packages/identity/tests/fixtures/` — synthetic demographic cases: exact identifier
       hit, composite unique hit, mint (unknown everything), two-candidate ambiguity, the
       near-miss that must NOT match (same name, different DOB), suffix and casing normalization
       pairs, ambiguous DOB format. `fixtures/README.md` documents each case by name, including
