@@ -21,6 +21,14 @@ most one person by construction.
 - **THEN** the decision is a match on the identifier's person, and the evidence names the
   identifier tier
 
+#### Scenario: Identifiers held by two different persons quarantine
+
+- **GIVEN** a referral carrying two ExternalIdentifiers held by two different persons
+- **WHEN** the matcher runs
+- **THEN** the decision is ambiguous, carrying both holders, and no automatic choice between
+  them is ever made — the tier looks up every carried identifier, and a split is quarantined
+  under its own rule id (`identifier_conflict`) rather than resolved to the first holder
+
 ### Requirement: The composite tier is a strict trichotomy
 
 When no exact identifier matches, the matcher SHALL look up candidates by the composite match-key
