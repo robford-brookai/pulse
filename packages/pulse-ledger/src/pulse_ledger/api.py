@@ -23,10 +23,14 @@ The commit path is injected rather than imported-and-called: this module never o
 transaction, and the service entrypoint (task 4.5) supplies the connection. That is also what lets
 the auth boundary be tested without a database.
 
-The Twenty webhook route (D8) is HMAC-signed rather than bearer-authenticated, and it ships
-disabled — S2's `twenty-kanban-webhook-ingress` turns it on. Present-but-off is deliberate: the
-middleware and the freshness window get written and tested now, when there is nothing behind the
-door, rather than in the change that also has to make drag-to-command work.
+The Twenty webhook route (D8) is HMAC-signed rather than bearer-authenticated, and it stays
+env-disabled by default: enablement is a config event, per this change's migration plan. Enabled,
+it verifies, hands the body to `pulse_ledger.twenty.mapping` (the interpretation lives there, not
+here — design decision 1), and puts a mapped drag on the same committer as `/commands`. Its
+attribution is a constant `Writer` for the webhook principal (decision 2), because the HMAC
+authenticates Twenty and nothing in it proves which human dragged the card. Its responses are 200
+with a disposition rather than a status vocabulary (decision 5): a webhook sender reads 2xx and
+non-2xx, so a 4xx past the door buys a retry storm rather than a message anyone reads.
 
 **Logging posture.** Auth failures log the writer id and the reason. They never log the
 credential, the signature, or the request body — the body is the one thing here that will carry
@@ -41,7 +45,7 @@ import json
 import logging
 import os
 import uuid
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime, timezone
 from typing import Any
 
@@ -63,6 +67,16 @@ from pulse_ledger.auth import (
 )
 from pulse_ledger.commit import CommitResult, Declaration, DeclarationError
 from pulse_ledger.cursor import WriterCursor
+from pulse_ledger.twenty.mapping import (
+    V1_BOARD_MAPPINGS,
+    WEBHOOK_WRITER_ID,
+    BoardMapping,
+    Drag,
+    MalformedPayloadError,
+    NoOp,
+    Unmapped,
+    interpret,
+)
 from pulse_ledger.validation import IllegalTransitionError
 
 logger = logging.getLogger(__name__)
@@ -273,6 +287,91 @@ def _commit_response(result: CommitResult) -> dict[str, object]:
     }
 
 
+#: The disposition vocabulary of the Twenty webhook response and its log line (design decision 5).
+#: Everything past the door is a 200 — Twenty classifies 2xx/non-2xx and retries the rest, so a
+#: status code is a retry instruction, not a verdict. The verdict is this field.
+DISPOSITION_COMMITTED = "committed"
+DISPOSITION_REPLAYED = "replayed"
+DISPOSITION_NOOP = "noop"
+DISPOSITION_UNMAPPED = "unmapped"
+#: Not in decision 5's list: a body that is not the shape Twenty documents. It cannot become valid
+#: on redelivery, so it is acknowledged rather than retried forever, and the field path — never the
+#: body — is what the response and the log line carry.
+DISPOSITION_MALFORMED = "malformed"
+
+#: The principal every webhook command commits as (design decision 2). Built from the same `Writer`
+#: the bearer routes resolve to, so attribution and the spoof rule stay one implementation: the HMAC
+#: authenticates *Twenty*, so the actor is this credential's principal and never a payload field.
+WEBHOOK_WRITER = Writer(writer_id=WEBHOOK_WRITER_ID)
+
+
+def _log_disposition(disposition: str, **facts: object) -> None:
+    """One countable line per webhook delivery: route, disposition, and identifiers or codes only.
+
+    Every value passed here must be an identifier, a state name, or a fixed code. Record *fields*
+    are the one thing the webhook body carries that this process may not log (design Risks), so
+    this helper takes named facts rather than an interpolated message — a caller reaching for
+    `logger.info(..., payload)` has to go around it, visibly.
+    """
+    detail = " ".join(f"{name}={value}" for name, value in facts.items() if value is not None)
+    logger.info("%s disposition=%s %s", TWENTY_WEBHOOK_PATH, disposition, detail)
+
+
+def _webhook_commit_response(drag: Drag, committer: Committer) -> dict[str, object]:
+    """Attribute the mapped drag to the webhook principal and put it on the single write path."""
+    declaration = Declaration.from_mapping(WEBHOOK_WRITER.attribute(drag.declaration_fields))
+    result = committer(declaration, drag.idempotency_key)
+    disposition = DISPOSITION_REPLAYED if result.replayed else DISPOSITION_COMMITTED
+    _log_disposition(
+        disposition,
+        subject_type=declaration.subject_type,
+        subject_key=declaration.subject_key,
+        to_state=declaration.to_state,
+        state=None if result.state is None else result.state.state,
+    )
+    return {"disposition": disposition, **_commit_response(result)}
+
+
+def _twenty_webhook_disposition(
+    body: bytes,
+    mappings: Sequence[BoardMapping],
+    committer: Committer,
+) -> dict[str, object]:
+    """Interpret one verified body and act on it — the whole route past `verify`.
+
+    Split out of the handler so the handler is what it claims to be: verify, then this. Auth has
+    already happened by the time anything here runs, which is the ordering the auth spec is about.
+    """
+    try:
+        payload: Any = json.loads(body)
+    except ValueError:
+        _log_disposition(DISPOSITION_MALFORMED, field_path="<body>")
+        return {"disposition": DISPOSITION_MALFORMED, "field_path": "<body>"}
+    if not isinstance(payload, Mapping):
+        _log_disposition(DISPOSITION_MALFORMED, field_path="<body>")
+        return {"disposition": DISPOSITION_MALFORMED, "field_path": "<body>"}
+    try:
+        disposition = interpret(payload, mappings)
+    except MalformedPayloadError as exc:
+        _log_disposition(DISPOSITION_MALFORMED, field_path=exc.field_path)
+        return {"disposition": DISPOSITION_MALFORMED, "field_path": exc.field_path}
+    if isinstance(disposition, NoOp):
+        _log_disposition(DISPOSITION_NOOP, reason=disposition.reason)
+        return {"disposition": DISPOSITION_NOOP, "reason": disposition.reason}
+    if isinstance(disposition, Unmapped):
+        _log_disposition(
+            DISPOSITION_UNMAPPED,
+            record=str(disposition.record_ref),
+            board=disposition.board,
+        )
+        return {
+            "disposition": DISPOSITION_UNMAPPED,
+            "record_ref": str(disposition.record_ref),
+            "board": disposition.board,
+        }
+    return _webhook_commit_response(disposition, committer)
+
+
 def _install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(AuthenticationError)
     async def _unauthenticated(request: Request, exc: Exception) -> Response:
@@ -399,6 +498,7 @@ def create_app(
     committer: Committer,
     registry: CredentialRegistry | None = None,
     twenty_webhook: TwentyWebhookConfig | None = None,
+    board_mappings: Sequence[BoardMapping] | None = None,
     environ: Mapping[str, str] | None = None,
     cursor_reader: CursorReader | None = None,
     cursor_writer: CursorWriter | None = None,
@@ -412,10 +512,15 @@ def create_app(
     `cursor_reader`/`cursor_writer` are injected the same way `committer` is (a fake in tests, the
     real store in the running service) and default to a stub that raises only if a cursor route is
     actually hit, so building an app for command-path tests alone needs no database either.
+
+    `board_mappings` is the Twenty kanban wiring (design decision 3): which object and status field
+    project which subject. It defaults to `V1_BOARD_MAPPINGS` — the one board this service is
+    configured for — and only matters when the webhook route is enabled.
     """
     env = os.environ if environ is None else environ
     credentials = CredentialRegistry.from_env(env) if registry is None else registry
     webhook = TwentyWebhookConfig.from_env(env) if twenty_webhook is None else twenty_webhook
+    mappings = V1_BOARD_MAPPINGS if board_mappings is None else board_mappings
     read_cursor = _unconfigured_cursor_reader if cursor_reader is None else cursor_reader
     write_cursor = _unconfigured_cursor_writer if cursor_writer is None else cursor_writer
 
@@ -461,22 +566,26 @@ def create_app(
 
     if webhook.enabled:
 
-        @app.post(TWENTY_WEBHOOK_PATH, status_code=501)
-        async def twenty_webhook_ingress(request: Request) -> Response:
-            """D8's kanban ingress. Signed here; drag → command is S2's to write.
+        @app.post(TWENTY_WEBHOOK_PATH, status_code=200)
+        async def twenty_webhook_ingress(request: Request) -> dict[str, object]:
+            """D8's kanban ingress: verify, interpret, commit.
 
-            `webhook.verify` accepts either configured secret, so a D15 rotation window rejects
-            nothing that Twenty signed correctly.
+            The body is read and verified before it is parsed — nothing this route does can run
+            ahead of the signature check, which is the whole of the auth spec's "before any
+            processing". `webhook.verify` accepts either configured secret, so a D15 rotation
+            window rejects nothing that Twenty signed correctly.
+
+            An `IllegalTransitionError` from the committer still reaches the app's 422 handler:
+            the rejection receipt and the card comment are task 3.2's, and turning that into a
+            200 `rejected` disposition before the receipt exists would only hide it.
             """
+            body = await request.body()
             webhook.verify(
-                await request.body(),
+                body,
                 request.headers.get(TIMESTAMP_HEADER),
                 request.headers.get(SIGNATURE_HEADER),
                 now=datetime.now(tz=timezone.utc),
             )
-            return JSONResponse(
-                status_code=501,
-                content={"detail": "the Twenty kanban ingress is not implemented until S2"},
-            )
+            return _twenty_webhook_disposition(body, mappings, committer)
 
     return app

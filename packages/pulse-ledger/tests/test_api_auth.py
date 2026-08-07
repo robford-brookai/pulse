@@ -424,8 +424,12 @@ class TestTwentyWebhookRoute:
         )
         assert response.status_code == 401
 
-    def test_a_valid_signature_reaches_a_route_that_does_nothing_yet(self, signed_client: TestClient) -> None:
-        """Authenticated and not implemented: S2 owns drag → command, S1.1 owns the door."""
+    def test_a_valid_signature_reaches_the_handler(self, signed_client: TestClient) -> None:
+        """Authenticated and interpreted: a body that is not a Twenty drag is an acknowledged no-op.
+
+        What this suite owns is that the door opened; `test_twenty_webhook_route.py` owns what is
+        behind it.
+        """
         body = b'{"card":"synthetic"}'
         timestamp = str(int(datetime.now(tz=timezone.utc).timestamp()))
         response = signed_client.post(
@@ -433,7 +437,8 @@ class TestTwentyWebhookRoute:
             content=body,
             headers={TIMESTAMP_HEADER: timestamp, SIGNATURE_HEADER: sign(self.secret, timestamp, body)},
         )
-        assert response.status_code == 501
+        assert response.status_code == 200
+        assert response.json()["disposition"] == "noop"
 
     def test_the_webhook_route_takes_no_bearer_credential(self, signed_client: TestClient, relay_token: str) -> None:
         """A writer credential must not open the webhook door, and vice versa."""
@@ -469,12 +474,12 @@ class TestTwentyWebhookRotationOverHttp:
     def test_both_secrets_reach_the_route_during_rotation(self, registry: CredentialRegistry) -> None:
         env = {TWENTY_WEBHOOK_SECRET_ENV: self.retired, TWENTY_WEBHOOK_SECRET_NEXT_ENV: self.incoming}
         with self._client(registry, env) as client:
-            assert self._post(client, self.retired) == 501
-            assert self._post(client, self.incoming) == 501
+            assert self._post(client, self.retired) == 200
+            assert self._post(client, self.incoming) == 200
 
     def test_the_retired_secret_is_unauthenticated_once_removed(self, registry: CredentialRegistry) -> None:
         with self._client(registry, {TWENTY_WEBHOOK_SECRET_ENV: self.incoming}) as client:
-            assert self._post(client, self.incoming) == 501
+            assert self._post(client, self.incoming) == 200
             assert self._post(client, self.retired) == 401
 
 
