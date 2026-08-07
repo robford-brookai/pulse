@@ -44,7 +44,7 @@ one task.
 
 ## 2. Wave 1 — mapping core and comment adapter
 
-- [ ] 2.1 `pulse_ledger/twenty/mapping.py` — the pure drag → command core (design decision 1): board
+- [x] 2.1 [DNA-875] `pulse_ledger/twenty/mapping.py` — the pure drag → command core (design decision 1): board
       mappings as typed config (object + status field → subject_type + canonical-key field, one v1
       mapping); payload interpretation into a typed disposition —
       `Drag(declaration_fields, card_ref, member_ref)` / `NoOp(reason)` / `Unmapped(record_ref)`;

@@ -29,7 +29,7 @@ is states, transitions, ValueSets, and program config only.
 
 ## 2. Wave 1 — generator cutover and snapshots
 
-- [ ] 2.1 Generator input cutover: `pulse_core.catalog_gen` reads `catalog/state_catalog.yaml`
+- [x] 2.1 [DNA-864] Generator input cutover: `pulse_core.catalog_gen` reads `catalog/state_catalog.yaml`
       (repo root) as its only input; delete the seed file and every reference to it; regenerate
       `pulse_core/generated/__init__.py` pinned to `1.0.0`. Tests: the regenerated module differs
       from the previous committed module only in the version pin and source-provenance header —
@@ -51,7 +51,7 @@ is states, transitions, ValueSets, and program config only.
 
 ## 3. Wave 2 — the breaking-change rule
 
-- [ ] 3.1 Breaking classifier: a pure function over two loaded catalogs returning the breaking
+- [x] 3.1 [DNA-866] Breaking classifier: a pure function over two loaded catalogs returning the breaking
       findings — removed states, narrowed ValueSets, transition legality changes in either
       direction (runtime-readiness §4.3 verbatim); additive-only diffs classify non-breaking.
       Tests: dropped state names the state (spec: "A removed state classifies breaking"); removed
