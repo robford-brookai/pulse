@@ -1,7 +1,7 @@
 """Spec tests for the generated command surface (pulse-ledger-core §command-api).
 
 Scenarios covered, from `openspec/changes/pulse-ledger-core/specs/command-api/spec.md`:
-- generated adjacency round-trips the Appendix C seed
+- generated adjacency round-trips the authoritative catalog
 - unknown command type is absent from the generated vocabulary
 - indeterminate verdict without a reason fails model validation
 """
@@ -26,25 +26,25 @@ from pulse_core.generated import (
 )
 from pydantic import ValidationError
 
-SEED_PATH = Path(__file__).parents[1] / "src" / "pulse_core" / "catalog" / "state_catalog_seed.yaml"
+CATALOG_PATH = Path(__file__).parents[3] / "catalog" / "state_catalog.yaml"
 
 
-def _load_seed() -> dict[str, object]:
-    with SEED_PATH.open() as fh:
+def _load_catalog() -> dict[str, object]:
+    with CATALOG_PATH.open() as fh:
         loaded: dict[str, object] = yaml.safe_load(fh)
     return loaded
 
 
-class TestAdjacencyRoundTripsSeed:
-    def test_catalog_version_matches_seed(self) -> None:
-        assert _load_seed()["catalog_version"] == CATALOG_VERSION
+class TestAdjacencyRoundTripsCatalog:
+    def test_catalog_version_matches_catalog(self) -> None:
+        assert _load_catalog()["catalog_version"] == CATALOG_VERSION
 
-    def test_every_seed_transition_is_generated_and_nothing_more(self) -> None:
-        seed_subjects = _load_seed()["subjects"]
-        assert isinstance(seed_subjects, dict)
+    def test_every_catalog_transition_is_generated_and_nothing_more(self) -> None:
+        catalog_subjects = _load_catalog()["subjects"]
+        assert isinstance(catalog_subjects, dict)
         expected = {
             subject: {state: frozenset(targets) for state, targets in spec["transitions"].items()}
-            for subject, spec in seed_subjects.items()
+            for subject, spec in catalog_subjects.items()
         }
         assert expected == TRANSITIONS
 

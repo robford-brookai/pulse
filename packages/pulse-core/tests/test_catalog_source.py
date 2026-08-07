@@ -1,9 +1,8 @@
 """Authoritative catalog tests: the file at `catalog/state_catalog.yaml` loads, malformed ones don't.
 
 Covers `catalog-source` spec scenarios "A schema-valid catalog loads" and "A malformed catalog is
-rejected naming the violation". The generator still reads the Appendix C seed at this task —
-task 2.1 moves its input path — so the carry-over assertions here are what make that cutover
-byte-identical.
+rejected naming the violation". Since task 2.1 this file is the generator's only input — the
+Appendix C seed is retired.
 """
 
 from __future__ import annotations
@@ -19,7 +18,6 @@ from pydantic import ValidationError
 
 REPO_ROOT = Path(__file__).parents[3]
 CATALOG_PATH = REPO_ROOT / "catalog" / "state_catalog.yaml"
-SEED_PATH = Path(__file__).parents[1] / "src" / "pulse_core" / "catalog" / "state_catalog_seed.yaml"
 
 
 @pytest.fixture
@@ -41,16 +39,6 @@ def test_authoritative_catalog_loads_into_the_validated_model() -> None:
     assert catalog.commands
     assert catalog.valuesets
     assert catalog.programs
-
-
-def test_subjects_and_commands_carry_over_from_the_seed_unchanged() -> None:
-    seed = catalog_gen.load_seed(SEED_PATH)
-    catalog = catalog_gen.load_catalog()
-
-    assert catalog.subjects == seed.subjects
-    assert {name: spec.model_dump() for name, spec in catalog.commands.items()} == {
-        name: {**spec.model_dump(), "reason_valueset": None} for name, spec in seed.commands.items()
-    }
 
 
 def test_registry_subjects_cover_every_command_subject_without_a_state_machine() -> None:
