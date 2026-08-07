@@ -1,8 +1,6 @@
-"""The Twenty webhook route's body: payload interpretation and the outbound comment adapter.
+"""`pulse_ledger.twenty` — the Twenty kanban ingress surface (twenty-kanban-webhook-ingress).
 
-`pulse_ledger.api` keeps what it already owns — auth at the door, error → status mapping, response
-shaping. This package owns everything behind that door (`twenty-kanban-webhook-ingress` design
-decision 1), so a 200-line payload interpreter never grows inside the API module.
+Design decision 1 splits it in two: `mapping.py` owns payload interpretation (drag → typed
+disposition, task 2.1); `client.py` owns the outbound comment adapter (task 2.2). `api.py` keeps
+auth at the door and wires both behind `/webhooks/twenty` (wave 2).
 """
-
-from __future__ import annotations
