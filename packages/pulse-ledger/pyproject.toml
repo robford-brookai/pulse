@@ -11,10 +11,21 @@ dependencies = [
     "sqlalchemy>=2.0",
     "psycopg[binary]>=3.2",
     "pulse-core",
+    # The outbound Twenty comment adapter (`pulse_ledger.twenty.client`, kanban-ingress design
+    # decision 6). Same major pulse-core already pins, so the workspace resolves one httpx.
+    "httpx>=0.28.1",
 ]
 
 [tool.uv.sources]
 pulse-core = { workspace = true }
+
+[dependency-groups]
+dev = [
+    # Enforces the no-live-network posture for the Twenty adapter tests, which block sockets
+    # per-module rather than trusting the `--disable-socket` flag — same plugin verdict-relay,
+    # schedules, and identity already use.
+    "pytest-socket>=0.7.0",
+]
 
 [build-system]
 requires = ["hatchling"]
