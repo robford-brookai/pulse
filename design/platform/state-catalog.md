@@ -9,8 +9,12 @@
 > and rejects illegal ones with the catalog reason and version (`openspec/changes/pulse-ledger-core/specs/command-api/spec.md`,
 > ADR-0003). The catalog-as-single-source model, generation targets, and versioning rules stand;
 > the generator now also emits Python transition tables and Pydantic command types
-> (`pulse_core.generated`, from the Appendix C seed until the `catalog-authority` change lands
-> the authoritative `state_catalog.yaml`).
+> (`pulse_core.generated`). `catalog-authority` (2026-08-07) landed the authoritative
+> `catalog/state_catalog.yaml` at the repo root: the Appendix C seed is retired per its
+> retirement clause — the catalog file is the source of truth and the seed is deleted — and the
+> consumer contract is pinned once in `docs/contracts/publishes.md` (file at repo head, semver
+> `catalog_version` with MAJOR ⇔ breaking, `pulse_core.generated`, and the Snowflake `catalog`
+> schema as the warehouse read surface).
 
 | | |
 |---|---|

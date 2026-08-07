@@ -65,6 +65,22 @@ genesis"). Quarantine disposition for its `Ambiguous` outcome is
 Ambiguity that turns out to be duplicate person records corrects through `merge_person`
 (`pulse_core.generated.MergePersonCommand`, S1.1's command) — never a parallel dedup mechanism.
 
+### State catalog (`catalog-authority`, DNA-863–DNA-871)
+
+The authoritative state catalog is the contract for every downstream consumer that must know the
+state or command vocabulary — first `producer-ingress-policy`'s CI gate. This is the pin, stated
+once: consumers read the surfaces below and nothing else. No consumer parses the retired Appendix
+C seed, scrapes the Snowflake rows for CI gating, or reaches into generator internals.
+`tests/test_catalog_consumer_contract.py` holds the file and the generated module to the same
+version and vocabulary, so reading either one gives the same answer.
+
+| Surface | Kind | Stability | Notes |
+|---|---|---|---|
+| `catalog/state_catalog.yaml` | versioned YAML file | stable | the authoritative catalog at the repo head: subjects with transition adjacency and ownership, command vocabulary, reason ValueSets, program config; edits land by PR only — never by hand in Snowflake |
+| `catalog_version` | semver convention | stable | MAJOR increments exactly on a breaking release — a removed state, a narrowed ValueSet, or a transition legality change in either direction (runtime-readiness §4.3); a breaking release ships `catalog/releases/v<version>-migration.md` with the consumer checklist, enforced in `task check` |
+| `pulse_core.generated` | workspace package surface | stable | the programmatic surface, pinned to the file's version: `CATALOG_VERSION`, `SUBJECT_TYPES`, `TRANSITIONS`, `COMMAND_TYPES` |
+| Snowflake `catalog` schema | Snowflake schema | stable | the warehouse read surface: insert-only released rows (`STATES`, `TRANSITIONS`, `VALUESET_CODES`, `PROGRAMS`, `VERSIONS`), every row stamped with its version, objects tagged `CATALOG_VERSION`; database name pinned by the first credentialed deploy; release procedure in [`docs/runbooks/catalog-release.md`](../runbooks/catalog-release.md) |
+
 ### Offered to PX survey engine (discovery stage, `survey-engine-ingress` planned)
 
 PX (survey engine, owner Max Pengilly) is in discovery; pulse's planned adapter is
