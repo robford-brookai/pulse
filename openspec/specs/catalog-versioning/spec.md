@@ -1,11 +1,10 @@
-## Purpose
+# catalog-versioning Specification
 
+## Purpose
 Makes every catalog release an immutable, classified version: frozen snapshots, the D18
 breaking-change rule, and the migration-note ceremony breaking releases must pay — all enforced
 offline in `task check`.
-
-## ADDED Requirements
-
+## Requirements
 ### Requirement: Every release is an immutable snapshot
 
 Every released catalog version SHALL be frozen as a byte-identical snapshot file under
@@ -43,6 +42,12 @@ commands, widened ValueSets, new programs — SHALL classify non-breaking.
 - **WHEN** the new version removes a code from a ValueSet the previous version carried
 - **THEN** the release classifies breaking, naming the ValueSet and the removed code
 
+Legality is a property of a `(subject, from, to)` pair both versions can express: an edge whose
+endpoint state exists only in the newer version was undefined before, not illegal, so legality
+findings are raised only over states both versions declare (execution reconciliation, task 3.1 —
+this is what makes "adds states, transitions targeting them" additive rather than breaking).
+Removed commands or programs are deliberately NOT breaking under the §4.3 rule.
+
 #### Scenario: A transition legality change classifies breaking
 
 - **WHEN** the new version removes a previously legal transition or adds a previously illegal
@@ -68,6 +73,15 @@ enforced by CI, not convention.
 - **WHEN** the two most recent snapshots diff as breaking and no migration note exists for the
   new version, or the major version did not increment
 - **THEN** the check suite fails naming the missing artifact
+
+#### Scenario: An empty migration note fails the check
+
+- **GIVEN** a breaking release whose `v<version>-migration.md` exists but is empty or
+  whitespace-only
+- **WHEN** the ceremony check runs
+- **THEN** it fails naming the note, the same as a missing one — an empty note carries no
+  consumer checklist (note prose beyond non-emptiness is reviewed by humans in the release PR,
+  never parsed by CI)
 
 #### Scenario: A conformant breaking release passes
 
