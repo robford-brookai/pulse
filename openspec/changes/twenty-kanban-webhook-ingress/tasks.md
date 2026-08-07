@@ -65,7 +65,7 @@ one task.
       Model `opus`: a wrong transition-commit — wrong subject, wrong state, wrong logical time —
       is the retrofit-expensive defect; every ledger fact this route ever writes flows through
       this mapping.
-- [ ] 2.2 `pulse_ledger/twenty/client.py` — the thin outbound comment adapter (the one new external
+- [x] 2.2 [DNA-876] `pulse_ledger/twenty/client.py` — the thin outbound comment adapter (the one new external
       surface, design decision 6): comment-create only against Twenty's REST API, bearer token
       from `PULSE_LEDGER_TWENTY_API_TOKEN`, bounded retry with backoff on 5xx/timeouts, no other
       verbs; plus `format_rejection_comment(receipt) -> str`, built exclusively from the
