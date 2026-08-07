@@ -32,6 +32,11 @@ authenticates Twenty and nothing in it proves which human dragged the card. Its 
 with a disposition rather than a status vocabulary (decision 5): a webhook sender reads 2xx and
 non-2xx, so a 4xx past the door buys a retry storm rather than a message anyone reads.
 
+A drag the catalog refuses is fed back rather than raised: a 200 `rejected` receipt built only
+from `IllegalTransitionError`'s fields and the mapping's card ref, plus a comment on the card
+through `pulse_ledger.twenty.client`. A comment that will not post is logged (card ref only) and
+the receipt is returned anyway — a broken feedback channel never costs a correct rejection.
+
 **Logging posture.** Auth failures log the writer id and the reason. They never log the
 credential, the signature, or the request body — the body is the one thing here that will carry
 PHI once C1 clears, and a rejection is precisely the moment code reaches for `logger.warning(...,
@@ -67,6 +72,7 @@ from pulse_ledger.auth import (
 )
 from pulse_ledger.commit import CommitResult, Declaration, DeclarationError
 from pulse_ledger.cursor import WriterCursor
+from pulse_ledger.twenty.client import RejectionReceipt, format_rejection_comment
 from pulse_ledger.twenty.mapping import (
     V1_BOARD_MAPPINGS,
     WEBHOOK_WRITER_ID,
@@ -298,6 +304,46 @@ DISPOSITION_UNMAPPED = "unmapped"
 #: on redelivery, so it is acknowledged rather than retried forever, and the field path — never the
 #: body — is what the response and the log line carry.
 DISPOSITION_MALFORMED = "malformed"
+#: A mapped drag the catalog refuses: no ledger write, a receipt, and a comment on the card. Still
+#: a 200 — the refusal is a verdict a redelivery cannot change, so a retry-inducing status would
+#: only redeliver it forever (design decision 5).
+DISPOSITION_REJECTED = "rejected"
+#: Not a verdict at all: the handler broke. Its log line is a disposition for countability, but the
+#: response is a 500 — a delivery that was not handled must not read to Twenty as handled.
+DISPOSITION_ERROR = "error"
+
+#: Injected like `Committer`: anything that posts one comment body on one Twenty card, raising on
+#: permanent failure. `TwentyCommentClient.create_comment` in the running service, a fake in tests.
+CommentPoster = Callable[[str, str], None]
+
+
+class CommentAdapterNotConfiguredError(RuntimeError):
+    """The app was built without a comment adapter and a rejection tried to use one.
+
+    Same shape as `CursorStoreNotConfiguredError`: raised only if the path is actually reached, so
+    an app built for the commit path alone never notices. Reaching it is a wiring bug, not a
+    request failure — `_post_rejection_comment` catches it, logs it, and still returns the receipt.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("no Twenty comment adapter is configured for this app")
+
+
+def _unconfigured_comment_poster(card_ref: str, body: str) -> None:
+    raise CommentAdapterNotConfiguredError()
+
+
+class WebhookProcessingError(Exception):
+    """The webhook handler failed for a reason that is not a verdict. Maps to 500.
+
+    Names the card ref and nothing else — the message reaches the response body, and the payload
+    that was in scope when this was raised is presumed PHI.
+    """
+
+    def __init__(self, card_ref: str) -> None:
+        self.card_ref = card_ref
+        super().__init__(f"failed to process the drag on card {card_ref!r}")
+
 
 #: The principal every webhook command commits as (design decision 2). Built from the same `Writer`
 #: the bearer routes resolve to, so attribution and the spoof rule stay one implementation: the HMAC
@@ -317,10 +363,86 @@ def _log_disposition(disposition: str, **facts: object) -> None:
     logger.info("%s disposition=%s %s", TWENTY_WEBHOOK_PATH, disposition, detail)
 
 
-def _webhook_commit_response(drag: Drag, committer: Committer) -> dict[str, object]:
-    """Attribute the mapped drag to the webhook principal and put it on the single write path."""
-    declaration = Declaration.from_mapping(WEBHOOK_WRITER.attribute(drag.declaration_fields))
-    result = committer(declaration, drag.idempotency_key)
+def _rejection_receipt(drag: Drag, exc: IllegalTransitionError) -> RejectionReceipt:
+    """The receipt for one refused drag — the error's fields, the mapping's card ref, nothing else.
+
+    There is deliberately no parameter here through which the webhook payload could reach the
+    receipt (design Risks b): `exc` carries states, the catalog's coded reason, and the catalog
+    version; `drag.card_ref` is a Twenty object name and record id. An operator can reconstruct
+    the rejection from this without the body ever having been retained.
+    """
+    return RejectionReceipt(
+        card_ref=str(drag.card_ref),
+        from_state=exc.from_state,
+        to_state=exc.to_state,
+        reason=exc.reason,
+        catalog_version=exc.catalog_version,
+    )
+
+
+def _post_rejection_comment(receipt: RejectionReceipt, post_comment: CommentPoster) -> None:
+    """Tell the card why the move did not take; never let that leg disturb the receipt.
+
+    The catch is deliberately broad. The spec's rule is that a broken comment channel degrades
+    feedback and never rejection correctness, so *every* way this adapter can fail — retries
+    exhausted, an unconfigured adapter, something not foreseen — has to end the same way: one
+    log line naming the card, and the receipt returned regardless. Narrowing to `CommentPostError`
+    would leave the unforeseen failure erasing a correct rejection.
+
+    The log carries the card ref and the failure's type name only — no `exc_info`, no comment
+    body, no response body (design Risks d). A comment failure is exactly the moment code reaches
+    for `logger.exception`, and the frame it would serialise holds the payload.
+    """
+    try:
+        post_comment(receipt.card_ref, format_rejection_comment(receipt))
+    except Exception as exc:
+        logger.warning(
+            "%s comment_post_failed card=%s error=%s",
+            TWENTY_WEBHOOK_PATH,
+            receipt.card_ref,
+            type(exc).__name__,
+        )
+
+
+def _rejection_response(drag: Drag, exc: IllegalTransitionError, post_comment: CommentPoster) -> dict[str, object]:
+    """The catalog's refusal as feedback: a 200 receipt, a card comment, one structured log line."""
+    receipt = _rejection_receipt(drag, exc)
+    _log_disposition(
+        DISPOSITION_REJECTED,
+        card=receipt.card_ref,
+        from_state=receipt.from_state,
+        to_state=receipt.to_state,
+        reason=receipt.reason,
+        catalog_version=receipt.catalog_version,
+    )
+    _post_rejection_comment(receipt, post_comment)
+    return {"disposition": DISPOSITION_REJECTED, **dataclasses.asdict(receipt)}
+
+
+def _webhook_commit_response(drag: Drag, committer: Committer, post_comment: CommentPoster) -> dict[str, object]:
+    """Attribute the mapped drag to the webhook principal and put it on the single write path.
+
+    Two of the three ways this can end are not a commit. A catalog refusal is a receipt plus a
+    comment (design decision 5) — never the 422 the bearer routes raise, which a webhook sender
+    reads as "retry this forever". Anything else going wrong is a genuine failure and must not be
+    acknowledged as handled, so it becomes a 500 Twenty will redeliver.
+
+    Building the declaration is inside the guard, not before it. A `DeclarationError` from mapped
+    fields is a mapping bug rather than a client's malformed request, and letting it reach the
+    bearer routes' 422 handler would put `str(exc)` — which quotes the offending field's value —
+    into a response body on the one route whose fields came out of a PHI-bearing payload.
+    """
+    try:
+        declaration = Declaration.from_mapping(WEBHOOK_WRITER.attribute(drag.declaration_fields))
+        result = committer(declaration, drag.idempotency_key)
+    except IllegalTransitionError as exc:
+        return _rejection_response(drag, exc, post_comment)
+    except Exception as exc:
+        # The flagged exception exit (design Risks a): the record ref, the disposition, and the
+        # failure's type name. Never the exception's message, never `exc_info` — both can carry
+        # the payload this handler is holding.
+        _log_disposition(DISPOSITION_ERROR, record=str(drag.card_ref), error=type(exc).__name__)
+        raise WebhookProcessingError(str(drag.card_ref)) from exc
     disposition = DISPOSITION_REPLAYED if result.replayed else DISPOSITION_COMMITTED
     _log_disposition(
         disposition,
@@ -336,6 +458,7 @@ def _twenty_webhook_disposition(
     body: bytes,
     mappings: Sequence[BoardMapping],
     committer: Committer,
+    post_comment: CommentPoster,
 ) -> dict[str, object]:
     """Interpret one verified body and act on it — the whole route past `verify`.
 
@@ -369,7 +492,7 @@ def _twenty_webhook_disposition(
             "record_ref": str(disposition.record_ref),
             "board": disposition.board,
         }
-    return _webhook_commit_response(disposition, committer)
+    return _webhook_commit_response(disposition, committer, post_comment)
 
 
 def _install_error_handlers(app: FastAPI) -> None:
@@ -432,6 +555,16 @@ def _install_error_handlers(app: FastAPI) -> None:
                     "to_state": exc.to_state,
                 }
             },
+        )
+
+    @app.exception_handler(WebhookProcessingError)
+    async def _webhook_failed(request: Request, exc: Exception) -> Response:
+        # Already logged, sanitised, at the point of failure. Nothing more is said here: the
+        # response body reaches Twenty's delivery log, so it names the card and no more.
+        assert isinstance(exc, WebhookProcessingError)  # noqa: S101 — handler is registered for this type
+        return JSONResponse(
+            status_code=500,
+            content={"detail": {"message": "the drag could not be processed", "card_ref": exc.card_ref}},
         )
 
     @app.exception_handler(DeclarationError)
@@ -499,6 +632,7 @@ def create_app(
     registry: CredentialRegistry | None = None,
     twenty_webhook: TwentyWebhookConfig | None = None,
     board_mappings: Sequence[BoardMapping] | None = None,
+    comment_poster: CommentPoster | None = None,
     environ: Mapping[str, str] | None = None,
     cursor_reader: CursorReader | None = None,
     cursor_writer: CursorWriter | None = None,
@@ -516,11 +650,17 @@ def create_app(
     `board_mappings` is the Twenty kanban wiring (design decision 3): which object and status field
     project which subject. It defaults to `V1_BOARD_MAPPINGS` — the one board this service is
     configured for — and only matters when the webhook route is enabled.
+
+    `comment_poster` is the outbound rejection-feedback leg (`TwentyCommentClient.create_comment`,
+    design decision 6), injected the same way for the same reason: no test needs a Twenty instance
+    to exercise a rejection. Left unset, a rejection still produces its receipt and logs that the
+    comment could not be posted — feedback degrades, rejection correctness does not.
     """
     env = os.environ if environ is None else environ
     credentials = CredentialRegistry.from_env(env) if registry is None else registry
     webhook = TwentyWebhookConfig.from_env(env) if twenty_webhook is None else twenty_webhook
     mappings = V1_BOARD_MAPPINGS if board_mappings is None else board_mappings
+    post_comment = _unconfigured_comment_poster if comment_poster is None else comment_poster
     read_cursor = _unconfigured_cursor_reader if cursor_reader is None else cursor_reader
     write_cursor = _unconfigured_cursor_writer if cursor_writer is None else cursor_writer
 
@@ -575,9 +715,9 @@ def create_app(
             processing". `webhook.verify` accepts either configured secret, so a D15 rotation
             window rejects nothing that Twenty signed correctly.
 
-            An `IllegalTransitionError` from the committer still reaches the app's 422 handler:
-            the rejection receipt and the card comment are task 3.2's, and turning that into a
-            200 `rejected` disposition before the receipt exists would only hide it.
+            A catalog refusal from the committer never reaches the app's 422 handler: it becomes a
+            200 `rejected` receipt plus a card comment (decision 5), because a webhook sender reads
+            only 2xx/non-2xx and would redeliver the refused drag forever.
             """
             body = await request.body()
             webhook.verify(
@@ -586,6 +726,6 @@ def create_app(
                 request.headers.get(SIGNATURE_HEADER),
                 now=datetime.now(tz=timezone.utc),
             )
-            return _twenty_webhook_disposition(body, mappings, committer)
+            return _twenty_webhook_disposition(body, mappings, committer, post_comment)
 
     return app
