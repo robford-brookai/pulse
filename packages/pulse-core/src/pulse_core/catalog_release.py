@@ -4,8 +4,12 @@ Released catalog versions live in Snowflake as immutable, tagged rows (D18 / ADR
 runtime-readiness §4): edits stay in git, merge to main triggers the release job, and no hand
 edit ever changes a released row. This module is the *build* half of that job — a pure function
 from a loaded `Catalog` plus its release identity to a statement sequence. Nothing here opens a
-connection, reads a credential, or touches the network; task 4.2 adds the immutability guard and
-the connection boundary that executes what this renders.
+connection, reads a credential, or touches the network. The *apply* half lives here too:
+`apply_release` executes what the renderer renders through the thin `ReleaseConnection`
+boundary, behind the immutability guard — an existing version row with a matching checksum makes
+the run a successful no-op, a differing checksum hard-fails before any write, and a fresh
+version applies inside one transaction. The snowflake driver is an adapter the deploy entrypoint
+supplies (task 4.3); nothing in this module imports it, so tests fake the boundary.
 
 What it renders, in order:
 
@@ -38,6 +42,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal, Protocol
 
 from pulse_core.catalog_breaking import ReleaseClassification
 from pulse_core.catalog_gen import Catalog
@@ -280,7 +285,7 @@ def render_release(
     """Render one catalog version as an ordered statement sequence: DDL, inserts, tags.
 
     Pure and deterministic — the same `(catalog, source, config)` always renders the identical
-    tuple. Task 4.2 executes these in a single transaction behind the immutability guard.
+    tuple. `apply_release` executes these behind the immutability guard.
     """
     config = config or ReleaseConfig()
     statements = _render_ddl(config)
@@ -296,3 +301,107 @@ def render_release_script(
 ) -> str:
     """The rendered release as one script — the plan a credential-free run prints (task 4.3)."""
     return "\n\n".join(render_release(catalog, source, config)) + "\n"
+
+
+class ReleaseConnection(Protocol):
+    """The thin warehouse boundary: one statement in, its result rows out.
+
+    The deploy entrypoint adapts the snowflake driver to this (task 4.3); tests fake it. Keeping
+    the surface to a single method means no snowflake import ever reaches this module or its
+    tests, per the consumes posture (`task check` runs on a credential-free runner).
+    """
+
+    def execute(self, statement: str) -> list[tuple[object, ...]]: ...
+
+
+@dataclass(frozen=True)
+class ReleaseResult:
+    """What an apply did: wrote the version, or found it already released and wrote nothing."""
+
+    version: str
+    status: Literal["applied", "already_released"]
+
+
+class ReleaseConflictError(RuntimeError):
+    """The target version exists with a different checksum — released rows are never rewritten.
+
+    Raised before any insert. Carries the version and both checksums so the failure names
+    exactly what disagrees, per D18: no hand edit, re-release, or job bug may change released
+    rows.
+    """
+
+    def __init__(self, version: str, released_checksum: str, release_checksum: str) -> None:
+        self.version = version
+        self.released_checksum = released_checksum
+        self.release_checksum = release_checksum
+        super().__init__(
+            f"catalog version {version} is already released with checksum {released_checksum}; "
+            f"refusing to apply a release with checksum {release_checksum} — "
+            "released rows are immutable (D18)"
+        )
+
+
+def _guard_query(config: ReleaseConfig, version: str) -> str:
+    # Identifiers are validated by `ReleaseConfig` and the version goes through `_literal`,
+    # the same escaping every rendered row uses — nothing user-controlled is interpolated raw.
+    return f"SELECT CONTENT_CHECKSUM FROM {config.qualified('VERSIONS')} WHERE CATALOG_VERSION = {_literal(version)};"  # noqa: S608
+
+
+def released_checksum(connection: ReleaseConnection, config: ReleaseConfig, version: str) -> str | None:
+    """The checksum the warehouse recorded for `version`, or None if it was never released."""
+    rows = connection.execute(_guard_query(config, version))
+    checksums = sorted({str(row[0]) for row in rows})
+    if not checksums:
+        return None
+    if len(checksums) > 1:
+        msg = (
+            f"catalog version {version} has {len(rows)} version rows with disagreeing checksums "
+            f"{checksums} — the warehouse violates the one-row-per-version invariant"
+        )
+        raise RuntimeError(msg)
+    return checksums[0]
+
+
+def apply_release(
+    catalog: Catalog,
+    source: ReleaseSource,
+    connection: ReleaseConnection,
+    config: ReleaseConfig | None = None,
+) -> ReleaseResult:
+    """Execute one rendered release behind the immutability guard.
+
+    Order matters, and each step is load-bearing:
+
+    1. DDL — `CREATE ... IF NOT EXISTS`, idempotent and row-writing nothing, so the guard query
+       has a `VERSIONS` table to read on an empty account. Snowflake DDL auto-commits, so it
+       cannot live inside the write transaction anyway.
+    2. The guard — read the version row. Present with the release's checksum: return
+       `already_released` having written nothing. Present with a different checksum: raise
+       `ReleaseConflictError` before any insert. Absent: proceed.
+    3. The writes — every insert and tag inside one BEGIN/COMMIT, rolled back on any failure,
+       so a partially released version is never visible.
+    """
+    config = config or ReleaseConfig()
+    version = catalog.catalog_version
+
+    for statement in _render_ddl(config):
+        connection.execute(statement)
+
+    existing = released_checksum(connection, config, version)
+    if existing == source.snapshot_checksum:
+        return ReleaseResult(version=version, status="already_released")
+    if existing is not None:
+        raise ReleaseConflictError(version, existing, source.snapshot_checksum)
+
+    writes = [_render_insert(config, table, rows) for table, rows in _rows(catalog, source).items() if rows]
+    writes.extend(_render_tags(config, version))
+
+    connection.execute("BEGIN;")
+    try:
+        for statement in writes:
+            connection.execute(statement)
+    except BaseException:
+        connection.execute("ROLLBACK;")
+        raise
+    connection.execute("COMMIT;")
+    return ReleaseResult(version=version, status="applied")
