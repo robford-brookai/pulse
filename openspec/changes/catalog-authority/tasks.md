@@ -96,7 +96,7 @@ is states, transitions, ValueSets, and program config only.
       `[model: sonnet | deps: 4.1 | lane: repo_change | wave: 3]`
       Depends on 4.1, not parallel: both edit `catalog_release.py`, so they serialize to avoid a
       same-wave merge conflict.
-- [ ] 4.3 `task catalog:release` and the deploy artifact: Taskfile target with the `linear:sync`
+- [x] 4.3 [DNA-870] `task catalog:release` and the deploy artifact: Taskfile target with the `linear:sync`
       posture (no credentials → print plan, exit 0; `APPLY=1` without credentials → error;
       `APPLY=1` with credentials → execute); `.github/workflows/catalog-release.yml` on push to
       main with a `catalog/**` paths filter, `run:` steps resolving to Taskfile targets (cat4);
