@@ -62,7 +62,7 @@ is states, transitions, ValueSets, and program config only.
       `[model: opus | deps: 1.1 | lane: repo_change | wave: 2]`
       Model `opus`: this function *is* the D18 breaking-change rule — misclassification ships
       silent breaking releases to every consumer.
-- [ ] 3.2 Ceremony enforcement in `task check`: classify the two newest manifest versions; a
+- [x] 3.2 [DNA-867] Ceremony enforcement in `task check`: classify the two newest manifest versions; a
       breaking diff requires the MAJOR bump and `catalog/releases/v<version>-migration.md`
       carrying the consumer checklist (Twenty metadata redeploy, ConceptMap regeneration,
       rule_version bump if verdict criteria reference the changed codes). Tests: breaking diff
