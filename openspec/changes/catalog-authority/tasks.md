@@ -40,7 +40,7 @@ is states, transitions, ValueSets, and program config only.
       `[model: sonnet | deps: 1.1 | lane: repo_change | wave: 1]`
       `serial: catalog_generated_surfaces` — regenerates the one generated contract producers and
       the validator both derive from; releases alone (the pulse-ledger-core 2.1 lane).
-- [ ] 2.2 Release snapshots and the immutability gate: freeze `catalog/releases/v1.0.0.yaml`
+- [x] 2.2 [DNA-865] Release snapshots and the immutability gate: freeze `catalog/releases/v1.0.0.yaml`
       (byte-identical copy) and the append-only checksum manifest; a pytest under `task check`
       verifies head == current-version snapshot and every snapshot == its manifest checksum, all
       offline in a fresh clone. Tests: a consistent tree passes (spec: "The head catalog matches
