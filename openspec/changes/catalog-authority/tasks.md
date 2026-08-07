@@ -73,7 +73,7 @@ is states, transitions, ValueSets, and program config only.
 
 ## 4. Wave 2/3 — the Snowflake release job
 
-- [ ] 4.1 Release renderer (`pulse_core.catalog_release`): deterministic output for one catalog
+- [x] 4.1 [DNA-868] Release renderer (`pulse_core.catalog_release`): deterministic output for one catalog
       version — `CREATE ... IF NOT EXISTS` DDL for the `catalog` schema, tables, and tag;
       INSERT-only rows for states, transitions, ValueSets, programs, and the version row
       (version, git identity, sha256 of the snapshot file, breaking classification); `SET TAG`

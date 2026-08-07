@@ -80,7 +80,7 @@ one task.
 
 ## 3. Wave 2–3 — the enabled route
 
-- [ ] 3.1 Enable the route in `pulse_ledger/api.py`: replace the 501 stub with the real handler —
+- [x] 3.1 [DNA-877] Enable the route in `pulse_ledger/api.py`: replace the 501 stub with the real handler —
       `verify_signature` first (now either configured secret, from 1.2), then the 2.1 mapping,
       then the injected `Committer`; attribution stamped through a constant webhook-principal
       `Writer` (`twenty-webhook`, actor_type `system`) reusing `Writer.attribution()` (design
