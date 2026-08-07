@@ -112,7 +112,7 @@ is states, transitions, ValueSets, and program config only.
 
 ## 5. Wave 4 — docs and the successor's pin
 
-- [ ] 5.1 Docs: `docs/contracts/publishes.md` gains the catalog as a published surface — the
+- [x] 5.1 [DNA-871] Docs: `docs/contracts/publishes.md` gains the catalog as a published surface — the
       `producer-ingress-policy` pin stated once: `catalog/state_catalog.yaml` at repo head,
       semver `catalog_version` (MAJOR ⇔ breaking), programmatic surface `pulse_core.generated`
       (`CATALOG_VERSION`, `SUBJECT_TYPES`, `TRANSITIONS`, `COMMAND_TYPES`), plus the Snowflake
