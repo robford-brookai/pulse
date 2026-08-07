@@ -49,7 +49,7 @@ from pulse_core.client import CommandResponse, PulseCoreClient
 from pulse_core.generated import RecordCommunicationConsentCommand
 from pulse_ledger.reads import SubjectState
 
-#: The one subject type this sweep reconciles (catalog: `state_catalog_seed.yaml`).
+#: The one subject type this sweep reconciles (catalog: `state_catalog.yaml`).
 SUBJECT_TYPE = "communication_consent"
 
 #: The ledger's recorded state meaning "Customer.io suppresses this channel" (catalog:
