@@ -66,7 +66,8 @@ is states, transitions, ValueSets, and program config only.
       breaking diff requires the MAJOR bump and `catalog/releases/v<version>-migration.md`
       carrying the consumer checklist (Twenty metadata redeploy, ConceptMap regeneration,
       rule_version bump if verdict criteria reference the changed codes). Tests: breaking diff
-      with missing note or un-bumped major fails naming the missing artifact (spec: "A breaking
+      an existing-but-empty note fails identically (spec: "An empty migration note fails the
+      check"); with missing note or un-bumped major fails naming the missing artifact (spec: "A breaking
       release without a migration note fails the check"); breaking diff with bump + note passes
       (spec: "A conformant breaking release passes").
       `[model: sonnet | deps: 3.1, 2.2 | lane: repo_change | wave: 2]`

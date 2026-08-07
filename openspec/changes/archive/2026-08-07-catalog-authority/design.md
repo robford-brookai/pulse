@@ -86,8 +86,10 @@ See proposal.md — Why. Constraints that shape the design:
    a remote, breaking the fresh-clone property.
 6. **Breaking classification is a pure function over two loaded catalogs**, returning the list
    of breaking findings (removed states, narrowed ValueSets, legality changes — legality in
-   either direction, verbatim §4.3; an added edge is a legality change and classifies
-   breaking). The ceremony check composes it: classify the two newest manifest versions; if
+   either direction, verbatim §4.3). *Reconciled at execution (task 3.1):* an added edge
+   classifies as a legality change only when both endpoint states exist in both versions — an
+   edge into a newly added state was undefined before, not illegal, which is what keeps the
+   spec's additive scenario additive. The ceremony check composes it: classify the two newest manifest versions; if
    breaking, require MAJOR bump and `catalog/releases/v<version>-migration.md` containing the
    consumer checklist. Both run as pytest under `task check`.
 7. **Release job = renderer + guard in `pulse_core.catalog_release`, executed via

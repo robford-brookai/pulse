@@ -1,11 +1,10 @@
-## Purpose
+# catalog-source Specification
 
+## Purpose
 Makes one schema-validated file — the authoritative state catalog at the repo root — the single
 source every generated surface derives from, retiring the Appendix C seed per its retirement
 clause.
-
-## ADDED Requirements
-
+## Requirements
 ### Requirement: The authoritative catalog is one schema-validated file
 
 The authoritative state catalog SHALL be a single YAML file at `catalog/state_catalog.yaml`
@@ -14,6 +13,13 @@ adjacency and ownership, the command vocabulary, the reason ValueSets, and the p
 configuration. Loading SHALL validate the file against this schema and reject unknown keys,
 transitions targeting undeclared states, and commands referencing undeclared subjects or
 ValueSets — a malformed catalog SHALL fail naming the violation, never load partially.
+
+The schema additionally carries `registry_subjects` (execution finding, task 1.1): registry
+anchors like `person` that commands may pin but that carry no state machine. A command's
+`subject_type` validates against `subjects ∪ registry_subjects`; the generator never reads
+`registry_subjects`, so registry anchors appear in no transition table. ValueSet binding is
+carried per command as optional `reason_valueset`; the per-transition binding the object model
+§5.2 describes is a later, additive catalog widening — no command binds a ValueSet at v1.0.0.
 
 #### Scenario: A schema-valid catalog loads
 
