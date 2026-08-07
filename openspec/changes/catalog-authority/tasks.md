@@ -85,7 +85,7 @@ is states, transitions, ValueSets, and program config only.
       `[model: opus | deps: 1.1 | lane: repo_change | wave: 2]`
       Model `opus`: the rendered rows are the warehouse contract dbt tests and every catalog
       consumer read from — the release-job contract D18 names.
-- [ ] 4.2 Immutability guard and plan/apply execution: query the version row through a thin
+- [x] 4.2 [DNA-869] Immutability guard and plan/apply execution: query the version row through a thin
       connection boundary (faked in tests, no snowflake driver import at test time); absent →
       single-transaction apply; present with matching checksum → successful no-op; present with
       differing checksum → hard fail before any write. One checksum definition shared by
