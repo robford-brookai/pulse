@@ -101,7 +101,7 @@ one task.
       `[model: opus | deps: 1.2, 2.1 | lane: repo_change | wave: 2]`
       Model `opus`: this task opens the door 3.4 deliberately kept shut — an auth-ordering or
       attribution hole here is the retrofit-expensive defect.
-- [ ] 3.2 Rejection feedback in the route: catch the catalog rejection from the committer, build the
+- [x] 3.2 [DNA-878] Rejection feedback in the route: catch the catalog rejection from the committer, build the
       rejection receipt (from-state, to-state, catalog reason, catalog version, card ref —
       exclusively from `IllegalTransitionError` fields and the mapping's card ref), return it as
       a 200 `rejected` disposition, and post the card comment via 2.2; comment failure after
