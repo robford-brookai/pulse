@@ -69,7 +69,7 @@ ship with the task that consumes them.
       would silently diverge from the sweep's own state or double-declare consent, and is
       retrofit-expensive to catch after either path ships against it.
 
-- [ ] 3.2 [DNA-TBD] D16 idempotency: derive `logical_time` from the row's own event identity (its
+- [x] 3.2 [DNA-893] D16 idempotency: derive `logical_time` from the row's own event identity (its
       event timestamp, the same field the cursor pages on) rather than wall-clock read time, so
       `derive_idempotency_key`'s payload hash reproduces identically whenever the same row is
       re-read. Wire this into both re-read paths: a cursor resume that re-fetches its last
