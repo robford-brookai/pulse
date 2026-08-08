@@ -101,7 +101,7 @@ ship with the task that consumes them.
 
 ## 4. Wave 2 — CLI
 
-- [ ] 4.1 [DNA-TBD] `consent_ingress/cli.py`: one entrypoint, `--dry-run` builds the full
+- [x] 4.1 [DNA-895] `consent_ingress/cli.py`: one entrypoint, `--dry-run` builds the full
       would-declare set from a fixture `RowSource` (exercising key derivation and payload shape)
       and prints it, stopping before the client — no API calls, no sockets — mirroring
       `schedules`/`verdict-relay`'s dry-run shape. Exit status is nonzero on any invariant breach
