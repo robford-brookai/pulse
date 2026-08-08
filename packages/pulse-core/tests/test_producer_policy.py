@@ -4,7 +4,8 @@ Covers the `producer-policy` spec scenarios "A state-asserting producer schema i
 non-subject fact schema passes", and "A bare-word name collision does not flag", plus the
 G_MECE narrowing of design decision 3 — a subject-prefixed event type whose action word is not
 a state of that subject (`device.associated`) never flags, while a planted `enrollment.active`
-does.
+does. The suppressions section (producer-ingress-policy 2.1) covers "A justified suppression
+suppresses exactly the named finding" and "A stale or unjustified suppression fails the gate".
 
 Fixtures are synthetic producer sources parsed as text. Nothing here imports scanned code, and
 the one test that reads a committed file (ocean's real `types.py`) reads it as source.
@@ -15,7 +16,16 @@ from __future__ import annotations
 from pathlib import Path
 
 from pulse_core.generated import TRANSITIONS
-from pulse_core.producer_policy import DISPOSITION, Finding, classify_files, classify_source, render_report
+from pulse_core.producer_policy import (
+    DISPOSITION,
+    Finding,
+    SuppressionError,
+    apply_suppressions,
+    classify_files,
+    classify_source,
+    parse_suppressions,
+    render_report,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -267,3 +277,110 @@ def test_the_default_catalog_is_the_pinned_generated_surface() -> None:
     # The classifier's default matcher is TRANSITIONS, not the seed or a Snowflake read.
     source = 'ReferralState = Literal["screened", "outreach"]\n'
     assert classify_source("p.py", source) == classify_source("p.py", source, transitions=TRANSITIONS)
+
+
+# --- Suppressions: adjudicated false positives, never exemptions ---------------------------
+
+FINDING_A = Finding(file="libs/x/src/x/types.py", element="AlertStatus", subject="alert", states=("open", "resolved"))
+FINDING_B = Finding(
+    file="services/y/src/y/emit.py", element="emit.event_type", subject="referral", states=("screened",)
+)
+
+JUSTIFIED_SUPPRESSION_DOC = """
+suppressions:
+  - file: libs/x/src/x/types.py
+    element: AlertStatus
+    subject: alert
+    justification: "adjudicated false positive: AlertStatus collides with catalog state words only"
+"""
+
+UNJUSTIFIED_SUPPRESSION_DOC = """
+suppressions:
+  - file: libs/x/src/x/types.py
+    element: AlertStatus
+    subject: alert
+"""
+
+STALE_SUPPRESSION_DOC = """
+suppressions:
+  - file: libs/x/src/x/types.py
+    element: NeverFound
+    subject: alert
+    justification: "adjudicated false positive"
+"""
+
+
+def test_a_justified_suppression_suppresses_exactly_the_named_finding() -> None:
+    # spec: "A justified suppression suppresses exactly the named finding"
+    entries = parse_suppressions(JUSTIFIED_SUPPRESSION_DOC)
+
+    surviving, errors = apply_suppressions([FINDING_A, FINDING_B], entries)
+
+    assert surviving == [FINDING_B]
+    assert errors == []
+
+
+def test_an_unjustified_entry_fails_the_gate_naming_it() -> None:
+    # spec: "A stale or unjustified suppression fails the gate"
+    entries = parse_suppressions(UNJUSTIFIED_SUPPRESSION_DOC)
+
+    surviving, errors = apply_suppressions([FINDING_A, FINDING_B], entries)
+
+    assert surviving == [FINDING_A, FINDING_B]
+    assert errors == [
+        SuppressionError(
+            file="libs/x/src/x/types.py", element="AlertStatus", subject="alert", reason="missing justification"
+        )
+    ]
+
+
+def test_a_stale_entry_fails_the_gate_naming_it() -> None:
+    # spec: "A stale or unjustified suppression fails the gate"
+    entries = parse_suppressions(STALE_SUPPRESSION_DOC)
+
+    surviving, errors = apply_suppressions([FINDING_A, FINDING_B], entries)
+
+    assert surviving == [FINDING_A, FINDING_B]
+    assert errors == [
+        SuppressionError(
+            file="libs/x/src/x/types.py",
+            element="NeverFound",
+            subject="alert",
+            reason="matches no current finding",
+        )
+    ]
+
+
+def test_an_unrelated_finding_survives_a_justified_suppression_of_another() -> None:
+    entries = parse_suppressions(JUSTIFIED_SUPPRESSION_DOC)
+
+    surviving, _errors = apply_suppressions([FINDING_A, FINDING_B], entries)
+
+    assert FINDING_B in surviving
+
+
+def test_an_empty_suppression_document_parses_to_no_entries() -> None:
+    assert parse_suppressions("") == []
+    assert parse_suppressions("suppressions: []\n") == []
+
+
+def test_the_shipped_ocean_suppression_file_is_empty() -> None:
+    suppressions_path = REPO_ROOT / "packages/ocean/producer-policy-suppressions.yaml"
+
+    entries = parse_suppressions(suppressions_path.read_text(encoding="utf-8"))
+
+    assert entries == []
+
+
+def test_a_suppression_error_renders_the_offending_entry() -> None:
+    error = SuppressionError(file="p.py", element="X", subject="referral", reason="missing justification")
+
+    assert error.render() == "p.py:X (referral): missing justification"
+
+
+def test_suppression_entries_and_errors_are_orderable() -> None:
+    entries = parse_suppressions(JUSTIFIED_SUPPRESSION_DOC)
+    assert entries == sorted(entries)
+
+    _surviving, errors = apply_suppressions([FINDING_A], parse_suppressions(UNJUSTIFIED_SUPPRESSION_DOC))
+    assert errors == sorted(errors)
