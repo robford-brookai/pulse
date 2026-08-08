@@ -40,7 +40,7 @@ code and the catalog; fixtures are synthetic schema files that never carry patie
 
 ## 2. Wave 1/2 — suppressions and the gate
 
-- [ ] 2.1 Suppression mechanism: load `packages/ocean/producer-policy-suppressions.yaml` (ships
+- [x] 2.1 [DNA-886] Suppression mechanism: load `packages/ocean/producer-policy-suppressions.yaml` (ships
       empty) into the classifier's filtering step — each entry names the finding it suppresses
       (file, element, subject) and carries a mandatory `justification`; filtering returns the
       surviving findings plus suppression errors for entries with no justification and entries
