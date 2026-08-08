@@ -143,7 +143,7 @@ one task.
       `serial: openspec_main_specs` — doc-updater lane: `docs/contracts/publishes.md`,
       `consumes.md`, and `mkdocs.yml` are cross-change shared surfaces (s13/s14/catalog-authority
       all touch them), so edits serialize even though no `openspec/specs/` file changes here.
-- [ ] 4.3 Verification wrap — end to end on a fresh checkout:
+- [x] 4.3 [DNA-881] Verification wrap — end to end on a fresh checkout:
       `ruff check packages/pulse-ledger && pyright packages/pulse-ledger`;
       `uv run pytest packages/pulse-ledger --disable-socket` (existing coverage gate unchanged);
       `uv run python scripts/demo/demo2_kanban_drag.py`;
