@@ -67,7 +67,7 @@ code and the catalog; fixtures are synthetic schema files that never carry patie
 
 ## 3. Wave 3 — docs and the contract entry
 
-- [ ] 3.1 Docs: producer-policy page in `packages/ocean/docs/` — the §4.4 rule (state-asserting
+- [x] 3.1 [DNA-888] Docs: producer-policy page in `packages/ocean/docs/` — the §4.4 rule (state-asserting
       emit → command through the ledger write path; non-subject fact → direct emit; the
       classification test), the sanctioned command sources from the adaptation plan §4.4, the
       what-to-do-when-red procedure, and the suppression rules (false positives only,
