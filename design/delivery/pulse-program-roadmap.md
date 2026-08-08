@@ -24,7 +24,7 @@ Crosswalk:
 |---|---|---|---|
 | 0 — Absorption | S0.1 catalog spec, S0.2 catalog machinery | ✅ complete — `ocean-eventbridge-migration` (DNA-733), archived `2026-08-02-ocean-eventbridge-migration`, specs baseline seeded | 0–4 + post-merge ops, all done |
 | 1 — Record | S1.1 ledger schema + command API | ✅ **complete — `pulse-ledger-core` (DNA-784)**, all 16 tasks merged, archived `2026-08-03-pulse-ledger-core`; specs baseline updated (`command-api`, `ledger-distribution`, `ledger-read`, `ledger-record`) | 0–4, all done |
-| 2 — Ingress | S2, plus S1.2 verdict-relay, S1.3 schedules, S1.4 identity | **6 of 7 ✅ shipped — build complete** (s12/s13/s14, catalog-authority, kanban ingress, `2026-08-08-producer-ingress-policy`; the D8 route and the §4.4 CI gate are live); `customerio-consent-ingress` held on export mechanism — the phase's sole remaining item | six changes: all waves done |
+| 2 — Ingress | S2, plus S1.2 verdict-relay, S1.3 schedules, S1.4 identity | **6 of 7 ✅ shipped — build complete** (s12/s13/s14, catalog-authority, kanban ingress, `2026-08-08-producer-ingress-policy`; the D8 route and the §4.4 CI gate are live); `customerio-consent-ingress` cleared by **ADR-0005** (consumes `streamline.cio_raw`/`cio_prod`) — in intake, the phase's last change | six changes: all waves done |
 | 3 — Projections | S3 (incl. migration M1) | queued | — |
 | 4 — Retirement | S4 | queued | — |
 
@@ -151,7 +151,7 @@ Gate for the S1.x siblings: **cleared** — `pulse-ledger-core` archived, names 
 | `s14-identity` | `packages/identity` — deterministic matcher v1; also genesis's matcher | ✅ shipped — archived `2026-08-06-s14-identity` (DNA-849) |
 | `catalog-authority` | authoritative `state_catalog.yaml` replacing the Appendix C seed; regeneration into the 2.1 generator; D18 Snowflake release job + breaking-change rule. Serial lane `catalog_generated_surfaces` | ✅ shipped — archived `2026-08-07-catalog-authority` (DNA-862) |
 | `twenty-kanban-webhook-ingress` | D8: enable the HMAC route 3.4 ships disabled; drag → command; invalid → rejection + card comment (heal-back write completes in Phase 3) | ✅ shipped — archived `2026-08-08-twenty-kanban-webhook-ingress` (DNA-872) |
-| `customerio-consent-ingress` | D9 forward consent ingress, actor `customer.io`, message-level provenance; inherits s13's `{subject_key}:{channel}` grain composition | export/webhook mechanism confirmed (rides the compliance-owner role-fill) |
+| `customerio-consent-ingress` | D9 forward consent ingress, actor `customer.io`, message-level provenance; inherits s13's `{subject_key}:{channel}` grain composition; consumes the Snowflake landing `streamline.cio_raw`/`cio_prod` | ✅ cleared — **ADR-0005** (DNA team + Tal compliance sign-off, 2026-08-08) — proposable now |
 | `producer-ingress-policy` | the §4.4 CI gate (design/migration/ocean-to-pulse-adaptation-plan.md, not an ADR): no producer schema in `packages/ocean` names a catalog state; wired into `task check` | ✅ shipped — archived `2026-08-08-producer-ingress-policy` (DNA-884) |
 
 **Done means (ADR §6):** "Zero direct emits of catalog-state events, checked in CI against
@@ -311,10 +311,11 @@ complete** (the S1.x siblings, `catalog-authority`, `twenty-kanban-webhook-ingre
 route (HMAC drag → attributed command, rejection receipts + card comments), the D18 catalog
 machinery, and the §4.4 producer gate inside `task check` — green on today's tree, red on a
 planted catalog-state emit, which is the ADR §6 "zero direct emits, checked in CI" criterion
-plus the Demo 2 red/green mechanic, proven by test. **The single remaining item is
-`customerio-consent-ingress`**: the export-mechanism confirmation riding the compliance-owner
-role-fill — a decision, not build work — and the phase's "all four sanctioned command sources
-live" exit criterion includes it, so v2.0 ships when it does. Standing flags from execution
+plus the Demo 2 red/green mechanic, proven by test. **The last hold cleared 2026-08-08 (ADR-0005)**: Customer.io consent data joins the governed
+path — DNA team + Tal (compliance sign-off) confirmed; the export already lands in Snowflake
+`streamline.cio_raw`/`cio_prod`, which the ingress consumes. `customerio-consent-ingress` is
+in intake; when it ships, the phase's "all four sanctioned command sources live" criterion is
+met and v2.0 releases. Standing flags from execution
 ride the parent issues: board-vocabulary/catalog reconciliation and patient×program grain
 (DNA-872), program entry_gate/exclusivity fills and ValueSet-binding widening (DNA-862).
 
