@@ -1,8 +1,10 @@
-"""`consent_ingress.declarer` — grain composition, provenance, and D15 attribution (task 3.1).
+"""`consent_ingress.declarer` — grain composition, provenance, D15 attribution, and the run
+receipt (tasks 3.1-3.3).
 
-Covers five spec scenarios: "A landed row becomes a command", "A declared command is
+Covers seven spec scenarios: "A landed row becomes a command", "A declared command is
 customer.io-attributed and traceable", "Ingress and sweep address the same row identically", "A
-cursor resume replays its last page", and "A full re-run over the same landing replays".
+cursor resume replays its last page", "A full re-run over the same landing replays", "A malformed
+row among valid ones", and "A run receipt is safe to attach to logs".
 
 Two boundaries are faked, both the ones this change's testing posture pins: the landing read at
 `RowSource` (`FixtureRowSource`) and the command API at the client's HTTP edge
@@ -18,19 +20,23 @@ importable (this package deliberately does not depend on `schedules`; design dec
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import cast
 
 import httpx
+import pytest
 from consent_ingress.declarer import (
     CUSTOMERIO_WRITER_ID,
     ConsentDeclaration,
     build_record_communication_consent_command,
+    build_run_receipt,
     declare_consent_rows,
     landing_row_reference,
     ledger_subject_key,
+    log_run_receipt,
 )
 from consent_ingress.row_source import ConsentRow, ConsentRowReader, FixtureRowSource
 from pulse_core.client import COMMANDS_PATH, PulseCoreClient
@@ -135,6 +141,10 @@ def committed(event_id: str = "e1") -> httpx.Response:
 
 def replayed(event_id: str = "e1") -> httpx.Response:
     return httpx.Response(200, json={"event_id": event_id, "replayed": True})
+
+
+def rejected(reason: str = "illegal transition") -> httpx.Response:
+    return httpx.Response(422, json={"detail": {"message": reason, "reason": reason}})
 
 
 class InMemoryCursorStore:
@@ -338,6 +348,112 @@ def test_a_full_rerun_over_the_same_landing_replays_every_command():
     assert [body["idempotency_key"] for body in second_api.bodies] == [
         body["idempotency_key"] for body in first_api.bodies
     ]
+
+
+# --- Requirement: Malformed landing rows are counted and never dropped silently ---
+
+
+def test_a_malformed_row_among_valid_ones_is_counted_attached_and_does_not_abort_the_page():
+    """spec: "A malformed row among valid ones" — the malformed row is counted and attached to
+    the receipt by reference (page offset + offending column), never dropped, and the valid rows
+    in the same page still declare."""
+    landing = (
+        *_LANDING_ROWS,
+        {
+            "subject_key": "SUBJ-003",
+            "channel": "",  # empty: fails the pinned row contract
+            "to_state": "opted_in",
+            "message_id": "cio-msg-0003",
+            "event_time": "2026-08-01T12:10:00+00:00",
+        },
+    )
+    reader = ConsentRowReader(FixtureRowSource(landing), _NullCursorStore())
+    page = next(reader.batches())
+    assert len(page.rows) == 2
+    assert len(page.errors) == 1
+
+    api = ScriptedApi()
+    declarations = declare_consent_rows(page.rows, api.client())
+    receipt = build_run_receipt(declarations, page.errors)
+
+    assert receipt.declared == 2
+    assert receipt.replayed == 0
+    assert receipt.rejected == 0
+    assert receipt.malformed == 1
+    assert receipt.row_errors[0].row_index == 2
+    assert receipt.row_errors[0].column == "channel"
+    assert len(api.bodies) == 2  # the remaining valid rows still declared, not aborted
+
+
+def test_build_run_receipt_tallies_declared_replayed_and_rejected_separately():
+    landing = (
+        *_LANDING_ROWS,
+        {
+            "subject_key": "SUBJ-003",
+            "channel": "voice",
+            "to_state": "opted_in",
+            "message_id": "cio-msg-0003",
+            "event_time": "2026-08-01T12:10:00+00:00",
+        },
+    )
+    reader = ConsentRowReader(FixtureRowSource(landing), _NullCursorStore())
+    rows = next(reader.batches()).rows
+    api = ScriptedApi([committed("e1"), replayed("e2"), rejected()])
+
+    declarations = declare_consent_rows(rows, api.client())
+    receipt = build_run_receipt(declarations, row_errors=())
+
+    assert receipt.declared == 1
+    assert receipt.replayed == 1
+    assert receipt.rejected == 1
+    assert receipt.malformed == 0
+    assert receipt.row_errors == ()
+
+
+# --- Requirement: Receipts and logs carry no contact values ---
+
+
+def test_run_receipt_and_log_lines_never_carry_a_contact_value(caplog: pytest.LogCaptureFixture):
+    """spec: "A run receipt is safe to attach to logs" — rows carrying a synthetic
+    contact-identifier-shaped field (never a pinned contract column) never surface that value in
+    the receipt or in any log line the run produced, valid row or malformed."""
+    contact_value = "not-a-real-address@example.test"
+    landing = (
+        {
+            "subject_key": "SUBJ-004",
+            # channel missing: malformed, but still carries the contact-shaped field
+            "to_state": "opted_out",
+            "message_id": "cio-msg-0004",
+            "event_time": "2026-08-01T12:15:00+00:00",
+            "contact_email": contact_value,  # not a contract column
+        },
+        {
+            "subject_key": "SUBJ-005",
+            "channel": "email",
+            "to_state": "opted_in",
+            "message_id": "cio-msg-0005",
+            "event_time": "2026-08-01T12:20:00+00:00",
+            "contact_email": contact_value,
+        },
+    )
+    reader = ConsentRowReader(FixtureRowSource(landing), _NullCursorStore())
+    page = next(reader.batches())
+    api = ScriptedApi()
+
+    with caplog.at_level(logging.INFO, logger="consent_ingress.declarer"):
+        declarations = declare_consent_rows(page.rows, api.client())
+        receipt = build_run_receipt(declarations, page.errors)
+        log_run_receipt(receipt)
+
+    assert receipt.declared == 1
+    assert receipt.malformed == 1
+    assert contact_value not in receipt.summary_line()
+    for error in receipt.row_errors:
+        assert contact_value not in error.detail
+        assert contact_value not in error.column
+    assert caplog.records  # the run did produce log lines, not merely a silent receipt
+    for record in caplog.records:
+        assert contact_value not in record.getMessage()
 
 
 def test_a_cursor_resume_replays_its_last_uncommitted_page():

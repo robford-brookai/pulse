@@ -40,13 +40,16 @@ catalog-state event vocabulary — spec Requirement 1).
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from pulse_core.client import CommandResponse, PulseCoreClient
+from pulse_core.client import CommandResponse, PulseCoreClient, ResponseClassification
 from pulse_core.generated import RecordCommunicationConsentCommand
 
-from consent_ingress.row_source import ConsentRow
+from consent_ingress.row_source import ConsentRow, RowError
+
+logger = logging.getLogger(__name__)
 
 #: D15: this ingress's own service credential name. A per-writer bearer credential resolves to
 #: `writer_id` = actor server-side (ADR-0003), so authenticating `client` with the credential named
@@ -129,3 +132,73 @@ def declare_consent_rows(rows: Sequence[ConsentRow], client: PulseCoreClient) ->
         response = client.submit_command(command, effective_at=row.event_time)
         declarations.append(ConsentDeclaration(row=row, command=command, response=response))
     return declarations
+
+
+@dataclass(frozen=True)
+class RunReceipt:
+    """One run's tally (task 3.3, spec: "Malformed landing rows are counted and never dropped
+    silently", "Receipts and logs carry no contact values").
+
+    Composes over `declare_consent_rows`'s declarations and `row_source`'s collected `RowError`s
+    without re-deriving anything: `declared`/`replayed`/`rejected` classify each declaration's own
+    response (a retry-exhausted `transient` response counts as `rejected` here too —
+    `schedules.month_open.build_receipt`'s precedent for the identical three-way split), and
+    `malformed`/`row_errors` are `row_source`'s catch-and-collect output attached whole, never
+    dropped (spec: "A malformed row among valid ones"). `row_errors` names each malformed row by
+    page offset and offending column only — `RowError`'s own PHI contract — so this receipt is
+    safe to attach whole to logs (spec: "A run receipt is safe to attach to logs").
+    """
+
+    declared: int
+    replayed: int
+    rejected: int
+    malformed: int
+    row_errors: tuple[RowError, ...]
+
+    def summary_line(self) -> str:
+        """One machine-parsable summary line — counts only, never a row's contents."""
+        return f"declared={self.declared} replayed={self.replayed} rejected={self.rejected} malformed={self.malformed}"
+
+
+def build_run_receipt(declarations: Sequence[ConsentDeclaration], row_errors: Sequence[RowError]) -> RunReceipt:
+    """Tally one run's declarations and collected row errors into its receipt.
+
+    A `committed` response counts as `declared`; `replayed` counts as its own bucket; anything
+    else (`rejected`, or a `transient` response that exhausted the client's own retry budget)
+    counts as `rejected` — the same three-way split `schedules.month_open.build_receipt` already
+    uses for the identical `CommandResponse` shape.
+    """
+    declared = replayed = rejected = 0
+    for declaration in declarations:
+        classification = declaration.response.classification
+        if classification is ResponseClassification.COMMITTED:
+            declared += 1
+        elif classification is ResponseClassification.REPLAYED:
+            replayed += 1
+        else:
+            rejected += 1
+    return RunReceipt(
+        declared=declared,
+        replayed=replayed,
+        rejected=rejected,
+        malformed=len(row_errors),
+        row_errors=tuple(row_errors),
+    )
+
+
+def log_run_receipt(receipt: RunReceipt) -> None:
+    """Emit one run's receipt to the package logger.
+
+    Every value logged here is `RunReceipt`'s own — counts, page offsets, and contract column
+    names — never a contact value (spec: "Receipts and logs carry no contact values"): a
+    malformed row's `detail` comes from `row_source._validate_row`, which never reads a column
+    outside `CONTRACT_COLUMNS`, let alone reports one.
+    """
+    logger.info("consent-ingress run receipt: %s", receipt.summary_line())
+    for error in receipt.row_errors:
+        logger.warning(
+            "consent-ingress malformed row: row_index=%s column=%s detail=%s",
+            error.row_index,
+            error.column,
+            error.detail,
+        )
