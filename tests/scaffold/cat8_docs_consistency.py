@@ -283,6 +283,21 @@ def test_contracts_forbid_side_cloning() -> None:
     )
 
 
+def test_consumes_md_registers_customerio_export() -> None:
+    """5.1: the forward consent ingress's Snowflake read must be a named, pinned entry.
+
+    Names both landing schemas and the pinned `CONTRACT_COLUMNS` set (task 2.1) so a column
+    drop on either side of the contract is traceable to this entry, not just this task's diff.
+    """
+    consumes = (ROOT / "docs/contracts/consumes.md").read_text()
+    assert "streamline.cio_raw" in consumes, "consumes.md must name the cio_raw landing schema"
+    assert "streamline.cio_prod" in consumes, "consumes.md must name the cio_prod landing schema"
+    assert "ADR-0005" in consumes, "consumes.md must cross-link ADR-0005 as the source of the export mechanism"
+    contract_columns = ("subject_key", "channel", "to_state", "message_id", "event_time")
+    for column in contract_columns:
+        assert f"`{column}`" in consumes, f"consumes.md must name pinned column {column!r}"
+
+
 def test_adr_log_is_append_only_and_seeded() -> None:
     adr_dir = ROOT / "docs/adr"
     numbered = sorted(p for p in adr_dir.glob("ADR-*.md") if not p.name.startswith("ADR-0000"))

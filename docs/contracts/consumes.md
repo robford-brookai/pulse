@@ -29,6 +29,21 @@ The relay pages on `computed_at` and persists its cursor through the ledger's wr
 facility (`pulse_core.cursor`), scoped to its own writer id — so schema drift on the mart is caught
 at read time, never silently skipped by resuming past a bad page.
 
+### Customer.io consent export (`customerio-consent-ingress`, DNA-891)
+
+`packages/consent-ingress` reads the Customer.io consent export landed in Snowflake, database
+`streamline`, schemas `cio_raw` (raw landing) and `cio_prod` (modeled) — the export mechanism
+confirmed in [ADR-0005](../adr/ADR-0005-customerio-consent-on-the-governed-path.md). Same posture
+as the verdict mart entry above: a fixture-pinned row contract, no live Snowflake connection in
+tests (`FixtureRowSource` is the only source every test drives), per-row validation that catches
+and collects malformed rows rather than aborting the run.
+
+| Dependency | Kind | Source | Breakage risk |
+|---|---|---|---|
+| `streamline.cio_raw` | Snowflake schema, raw landing | Customer.io export, delivered — no live Customer.io API pull in v1 ([ADR-0005](../adr/ADR-0005-customerio-consent-on-the-governed-path.md)) | schema drift on the vendor export becomes a counted `RowError` naming the row's page offset and offending column, never a contact value, and never aborts the page |
+| `streamline.cio_prod` | Snowflake schema, modeled | Customer.io export, delivered — no live Customer.io API pull in v1 ([ADR-0005](../adr/ADR-0005-customerio-consent-on-the-governed-path.md)) | same as above; this ingress reads whichever schema its `RowSource` is configured against |
+| `CONTRACT_COLUMNS` (pinned row contract) | fixture-pinned column set: `subject_key`, `channel`, `to_state`, `message_id`, `event_time` | `packages/consent-ingress/src/consent_ingress/row_source.py` | a row missing a contract column, or an `event_time` that fails to parse as a timezone-aware timestamp, is the only reason a row fails validation |
+
 ### Event transport (runtime)
 
 With the Kafka → EventBridge migration
