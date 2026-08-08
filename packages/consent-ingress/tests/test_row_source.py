@@ -214,6 +214,33 @@ class TestCursorBoundary:
         assert pages[0].rows == []
         assert len(pages[0].errors) == 1
 
+    def test_a_trailing_malformed_row_with_a_parseable_event_time_is_not_recounted_across_pages(self) -> None:
+        """A malformed row's own timestamp can still parse even though another column doesn't; the
+        cursor must advance past it too, or the next `fetch(after=...)` call re-surfaces the exact
+        same row and it validates (and fails) a second time — double-counting one physical
+        malformed row as two distinct `RowError`s. Regression for the crash-resume replay bug
+        flagged in task 3.3's handoff."""
+        good_one = _row("subj-a", event_time="2026-08-01T00:00:00+00:00")
+        bad = _row("subj-b", event_time="2026-08-01T01:00:00+00:00")
+        del bad["to_state"]
+        good_two = _row("subj-c", event_time="2026-08-01T02:00:00+00:00")
+        store = InMemoryCursorStore()
+        source = RecordingSource(FixtureRowSource([good_one, bad, good_two]))
+        reader = ConsentRowReader(source, store, page_size=2)
+
+        pages = list(reader.batches())
+
+        assert source.after_values == [
+            None,
+            "2026-08-01T01:00:00+00:00",
+            "2026-08-01T02:00:00+00:00",
+        ]
+        all_errors = [error for page in pages for error in page.errors]
+        assert len(all_errors) == 1
+        assert all_errors[0].column == "to_state"
+        yielded = [row.subject_key for page in pages for row in page.rows]
+        assert yielded == ["subj-a", "subj-c"]
+
     def test_commit_persists_a_json_native_cursor(self) -> None:
         rows = [_row("subj-a", event_time="2026-08-01T00:00:00+00:00")]
         store = InMemoryCursorStore()
