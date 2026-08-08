@@ -112,7 +112,7 @@ ship with the task that consumes them.
 
 ## 5. Wave 2 — contract doc
 
-- [ ] 5.1 [DNA-TBD] Register `streamline.cio_raw`/`cio_prod` in `docs/contracts/consumes.md`: a
+- [x] 5.1 [DNA-896] Register `streamline.cio_raw`/`cio_prod` in `docs/contracts/consumes.md`: a
       new entry naming the pinned row contract (`CONTRACT_COLUMNS` from task 2.1) this ingress
       validates against, alongside the existing verdict-mart entry's format, and cross-linking
       ADR-0005 as the source of the export mechanism.
