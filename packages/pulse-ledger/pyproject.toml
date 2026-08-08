@@ -36,3 +36,14 @@ packages = ["src/pulse_ledger"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Mirrors the root pyproject.toml exclusion: pytest picks this file as its rootdir config when
+# invoked directly on this subpackage (e.g. `uv run pytest packages/pulse-ledger`), so without this
+# the root's `-m "not slow and not integration"` addopts never applies and
+# tests/integration/test_localstack_relay.py tries to reach Docker.
+markers = [
+    "integration: needs Docker, excluded from the default run",
+]
+# --allow-unix-socket: harmless under `--disable-socket` (AF_UNIX can't reach the network) and
+# required for it — FastAPI's TestClient runs its anyio portal via a unix-socketpair self-pipe,
+# which a global `--disable-socket` blocks along with real network calls.
+addopts = '-m "not integration" --allow-unix-socket'
