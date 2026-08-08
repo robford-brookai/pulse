@@ -599,6 +599,7 @@ name = "consent-ingress"
 version = "0.1.0"
 source = { editable = "packages/consent-ingress" }
 dependencies = [
+    { name = "httpx" },
     { name = "pulse-core" },
 ]
 
@@ -609,7 +610,10 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pulse-core", editable = "packages/pulse-core" }]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "pulse-core", editable = "packages/pulse-core" },
+]
 
 [package.metadata.requires-dev]
 dev = [
