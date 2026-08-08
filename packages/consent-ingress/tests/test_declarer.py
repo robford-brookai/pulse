@@ -1,7 +1,8 @@
 """`consent_ingress.declarer` — grain composition, provenance, and D15 attribution (task 3.1).
 
-Covers three spec scenarios: "A landed row becomes a command", "A declared command is
-customer.io-attributed and traceable", and "Ingress and sweep address the same row identically".
+Covers five spec scenarios: "A landed row becomes a command", "A declared command is
+customer.io-attributed and traceable", "Ingress and sweep address the same row identically", "A
+cursor resume replays its last page", and "A full re-run over the same landing replays".
 
 Two boundaries are faked, both the ones this change's testing posture pins: the landing read at
 `RowSource` (`FixtureRowSource`) and the command API at the client's HTTP edge
@@ -17,6 +18,7 @@ importable (this package deliberately does not depend on `schedules`; design dec
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import cast
@@ -89,12 +91,18 @@ class ScriptedApi:
 
     Records the full request — method and path included — so a test can assert not just *what*
     was submitted but that `POST /commands` was the only write path used at all (spec: "A landed
-    row becomes a command").
+    row becomes a command"). `responses` is `None` for the ordinary "every row commits" case; task
+    3.2's replay tests pass an explicit script (`committed()`/`replayed()`, `consent_sweep`'s and
+    `schedules.month_open`'s pattern) so a second run can answer `replayed` without this fake
+    tracking idempotency keys itself — that dedup is the ledger's job, not this test double's.
     """
 
-    def __init__(self, *, writer_id: str = CUSTOMERIO_WRITER_ID) -> None:
+    def __init__(
+        self, responses: Sequence[httpx.Response] | None = None, *, writer_id: str = CUSTOMERIO_WRITER_ID
+    ) -> None:
         self.requests: list[tuple[str, str]] = []
         self.bodies: list[dict[str, object]] = []
+        self._responses = responses
         self._writer_id = writer_id
 
     def handler(self, request: httpx.Request) -> httpx.Response:
@@ -102,6 +110,8 @@ class ScriptedApi:
         parsed = json.loads(request.content)
         assert isinstance(parsed, dict)
         self.bodies.append(cast("dict[str, object]", parsed))
+        if self._responses is not None:
+            return self._responses[min(len(self.bodies), len(self._responses)) - 1]
         return httpx.Response(201, json={"event_id": f"e{len(self.bodies)}", "replayed": False})
 
     def client(self) -> PulseCoreClient:
@@ -117,6 +127,32 @@ class ScriptedApi:
             transport=httpx.MockTransport(self.handler),
             max_attempts=1,
         )
+
+
+def committed(event_id: str = "e1") -> httpx.Response:
+    return httpx.Response(201, json={"event_id": event_id, "replayed": False})
+
+
+def replayed(event_id: str = "e1") -> httpx.Response:
+    return httpx.Response(200, json={"event_id": event_id, "replayed": True})
+
+
+class InMemoryCursorStore:
+    """A `CursorStore` that survives across separate `ConsentRowReader` instances (task 3.2).
+
+    Stands in for the ledger's durable writer-state cursor: a crash before `commit()` never calls
+    `save`, so a fresh reader built over the same store `load()`s the same (unmoved) position and
+    re-fetches the same page — the cursor-resume scenario the spec's first scenario tests.
+    """
+
+    def __init__(self) -> None:
+        self._cursor: Mapping[str, object] | None = None
+
+    def load(self) -> Mapping[str, object] | None:
+        return self._cursor
+
+    def save(self, cursor: Mapping[str, object]) -> None:
+        self._cursor = dict(cursor)
 
 
 # --- Requirement: Landed consent rows declare through the command API ---
@@ -274,3 +310,67 @@ def test_two_rows_for_one_subject_on_different_channels_address_different_keys()
     """`CommunicationConsent` is per patient x channel: one subject's email and sms consent are
     distinct ledger rows, never one row that overwrites itself."""
     assert ledger_subject_key("SUBJ-001", "email") != ledger_subject_key("SUBJ-001", "sms")
+
+
+# --- Requirement: Re-reading the same landing rows replays (task 3.2, D16) ---
+
+
+def test_a_full_rerun_over_the_same_landing_replays_every_command():
+    """spec: "A full re-run over the same landing replays" — no new rows since the prior run, so
+    the second run's declarations derive the identical D16 key and every one classifies
+    `replayed`. `logical_time` (the row's own `event_time`) is what makes this reproduce: a
+    wall-clock `effective_at` would mint a fresh key every run and never replay."""
+    rows = _fixture_rows()
+
+    first_api = ScriptedApi([committed("e-consent-1"), committed("e-consent-2")])
+    first_run = declare_consent_rows(rows, first_api.client())
+    assert {declaration.response.classification.value for declaration in first_run} == {"committed"}
+
+    second_api = ScriptedApi([replayed("e-consent-1"), replayed("e-consent-2")])
+    second_run = declare_consent_rows(rows, second_api.client())
+
+    assert {declaration.response.classification.value for declaration in second_run} == {"replayed"}
+    # The same landing rows address the same subject keys both times — a replay of the same
+    # consent facts, never a second, distinct declaration for either.
+    assert [declaration.command.subject_key for declaration in second_run] == [
+        declaration.command.subject_key for declaration in first_run
+    ]
+    assert [body["idempotency_key"] for body in second_api.bodies] == [
+        body["idempotency_key"] for body in first_api.bodies
+    ]
+
+
+def test_a_cursor_resume_replays_its_last_uncommitted_page():
+    """spec: "A cursor resume replays its last page" — a crash between a page's declarations and
+    its cursor `commit()` leaves the store unmoved, so the resumed process re-fetches the exact
+    same page. Every re-declared command must classify `replayed`, and no consent state is
+    double-declared: the resumed run addresses the same subject keys, not a fresh set."""
+    cursor_store = InMemoryCursorStore()
+
+    crashed_reader = ConsentRowReader(FixtureRowSource(_LANDING_ROWS), cursor_store)
+    crashed_page = next(crashed_reader.batches())
+    assert crashed_page.errors == []
+    assert len(crashed_page.rows) == 2
+
+    first_api = ScriptedApi([committed("e-consent-1"), committed("e-consent-2")])
+    first_run = declare_consent_rows(crashed_page.rows, first_api.client())
+    assert {declaration.response.classification.value for declaration in first_run} == {"committed"}
+    # The crash happens here — `crashed_reader.commit()` never runs, so `cursor_store` still
+    # holds no saved position.
+    assert cursor_store.load() is None
+
+    resumed_reader = ConsentRowReader(FixtureRowSource(_LANDING_ROWS), cursor_store)
+    resumed_page = next(resumed_reader.batches())
+
+    assert resumed_page.rows == crashed_page.rows
+
+    second_api = ScriptedApi([replayed("e-consent-1"), replayed("e-consent-2")])
+    second_run = declare_consent_rows(resumed_page.rows, second_api.client())
+
+    assert {declaration.response.classification.value for declaration in second_run} == {"replayed"}
+    assert [declaration.command.subject_key for declaration in second_run] == [
+        declaration.command.subject_key for declaration in first_run
+    ]
+    assert [body["idempotency_key"] for body in second_api.bodies] == [
+        body["idempotency_key"] for body in first_api.bodies
+    ]
