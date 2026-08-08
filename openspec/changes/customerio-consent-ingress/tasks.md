@@ -84,7 +84,7 @@ ship with the task that consumes them.
       Depends on 3.1, not 2.1: both 3.1 and 3.2 edit `declarer.py`'s command-build path, so they
       serialize to avoid a same-wave merge conflict.
 
-- [ ] 3.3 [DNA-TBD] Run receipt and no-PHI logging: tally declared/replayed/rejected counts and
+- [x] 3.3 [DNA-894] Run receipt and no-PHI logging: tally declared/replayed/rejected counts and
       malformed-row counts, malformed rows attached to the receipt by row reference (page offset
       plus identifying contract columns) rather than dropped; every receipt and log line carries
       subject keys and channel names only, asserted directly by test — never a contact value
