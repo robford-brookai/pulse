@@ -14,7 +14,7 @@ code and the catalog; fixtures are synthetic schema files that never carry patie
 
 ## 1. Wave 0 — the classifier
 
-- [ ] 1.1 Producer-policy classifier (`pulse_core.producer_policy`): AST-based vocabulary
+- [x] 1.1 [DNA-885] Producer-policy classifier (`pulse_core.producer_policy`): AST-based vocabulary
       extraction over handed-in Python source — literal state vocabularies (`Literal` aliases and
       annotations, enum classes, frozen string-set constants), entity/subject-type declarations,
       and `event_type` string addressing (first dot-segment) — classified against the pinned
