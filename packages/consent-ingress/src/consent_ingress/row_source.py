@@ -280,6 +280,15 @@ def _validate_page(page: Sequence[Mapping[str, object]]) -> ValidatedPage:
     return ValidatedPage(rows=rows, errors=errors)
 
 
+def _page_boundary(page: Sequence[Mapping[str, object]]) -> str | None:
+    """The furthest position `batches()` can safely resume past: the max `event_time` across every
+    row in the page that parses one, valid or malformed alike. `None` when no row in the page has
+    a parseable `event_time` — the page's only rows are ones the reader must keep re-surfacing.
+    """
+    instants = [instant for row in page if (instant := _parse_event_time(row)) is not None]
+    return max(instants).isoformat() if instants else None
+
+
 class ConsentRowReader:
     """Pages the consent landing in read order and owns the durable cursor.
 
@@ -312,14 +321,20 @@ class ConsentRowReader:
     def batches(self) -> Iterator[ValidatedPage]:
         """Yield validated pages in read order, resuming from the persisted cursor.
 
-        Cursor advance is computed from each page's *valid* rows only — a malformed row's
-        unparseable `event_time` never contributes to the boundary a resume would page from. If a
-        page has no valid row at all, there is no boundary left to page past: `RowSource.fetch`
-        always re-surfaces a row whose `event_time` never parsed (by contract, since hiding it
-        would hide the violation), so re-fetching with the same `after` would return the same
-        page forever. The reader yields that page's errors once and stops rather than loop —
-        the malformed rows are still counted and attached (never silently dropped), the run just
-        cannot page past them until the drift is corrected upstream.
+        Cursor advance is computed from every row's *own* `event_time` that parses, valid or
+        malformed — not from valid rows alone. A malformed row that fails on some other column
+        still occupies a real position in read order once its timestamp is known; excluding it
+        from the boundary left it eligible for `RowSource.fetch(after=...)` to re-surface in the
+        very next page (whenever a page is not cut short by `limit`, so the malformed row's own,
+        later timestamp is never superseded by a valid row's), where it would validate again and
+        be double-counted as a second, distinct `RowError` for the same physical row. Only a row
+        whose `event_time` itself never parses is excluded from the boundary: the reader has no
+        position to advance past for it, so `RowSource.fetch` always re-surfaces it (by contract,
+        since hiding it would hide the violation). If a page has no row with a parseable
+        `event_time` at all, there is no boundary left to page past, and re-fetching with the same
+        `after` would return the same page forever — the reader yields that page's errors once and
+        stops rather than loop; the malformed rows are still counted and attached (never silently
+        dropped), the run just cannot page past them until the drift is corrected upstream.
         """
         self._load_cursor()
         after = self._page_event_time
@@ -328,10 +343,11 @@ class ConsentRowReader:
             if not raw_page:
                 return
             validated = _validate_page(raw_page)
-            if not validated.rows:
+            boundary = _page_boundary(raw_page)
+            if boundary is None:
                 yield validated
                 return
-            after = max(row.event_time for row in validated.rows).isoformat()
+            after = boundary
             self._page_event_time = after
             yield validated
 
