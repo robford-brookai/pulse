@@ -4,10 +4,13 @@ version = "0.1.0"
 description = "PULSE Customer.io consent ingress — D9's forward path, declaring the delivered streamline.cio_raw/cio_prod landing as record_communication_consent commands"
 requires-python = ">=3.10,<4.0"
 dependencies = [
+    # The cursor store's HTTP edge (row_source.LedgerCursorStore) — same floor pulse-core pins,
+    # so the workspace resolves one httpx (mart_reader's precedent).
+    "httpx>=0.28.1",
     # Command submission + classification, D16 idempotency, generated command types, and the
-    # cursor_path / validate_cursor writer-state contract — the only dependency this package
-    # takes. No dependency on pulse-ledger or schedules: the {subject_key}:{channel} grain
-    # composition is duplicated from consent-reconciliation's sweep, not imported (design
+    # cursor_path / validate_cursor writer-state contract — the only other dependency this
+    # package takes. No dependency on pulse-ledger or schedules: the {subject_key}:{channel}
+    # grain composition is duplicated from consent-reconciliation's sweep, not imported (design
     # decision 3).
     "pulse-core",
 ]
