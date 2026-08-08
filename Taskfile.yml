@@ -162,6 +162,16 @@ tasks:
 
   # --- 5. Gate ---
 
+  catalog:release:
+    desc: Print the catalog release plan (deploy artifact; APPLY=1 executes, needs Snowflake creds)
+    # The deploy artifact for merges to main touching catalog/** (.github/workflows/
+    # catalog-release.yml), with the linear:sync posture: plan by default, `APPLY=1` is the only
+    # way to mutate, and APPLY=1 without credentials is an error rather than a silent no-op.
+    # Never reached from `check` — the check contract stays credential-free
+    # (tests/test_catalog_release_deploy.py pins both).
+    cmds:
+      - uv run python -m pulse_core.catalog_release_cli {{if .APPLY}}--apply{{end}}
+
   # `check` is the contract between a developer's machine and CI:
   # .github/workflows/main.yml invokes exactly this target. Keep it CI-safe — openspec and
   # openlore are npm globals that runners do not install, so they belong in `verify`, not here.

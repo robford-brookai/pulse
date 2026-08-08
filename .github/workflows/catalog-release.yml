@@ -1,0 +1,44 @@
+# The D18 catalog release job: merge to main touching the catalog lands the released version as
+# immutable, tagged rows in the Snowflake `catalog` schema. This workflow is a deploy artifact —
+# it is not CI and is never reached from `task check`; main.yml stays credential-free
+# (tests/test_catalog_release_deploy.py pins the shape asserted here).
+#
+# Config only until the deploy steps outside this change land: the SNOWFLAKE_* secrets and the
+# Actions budget. Until they exist, a run of this job fails loudly at the credential check
+# (`APPLY=1` without credentials is an error, never a silent no-op) — the honest posture.
+name: Catalog release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "catalog/**"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up the environment
+        uses: ./.github/actions/setup-python-env
+
+      # go-task is not preinstalled on runners. Same pin as main.yml.
+      - name: Install go-task
+        uses: arduino/setup-task@c0bc642852239c2689f73f4ea6459c29405f3c52 # v3.0.0
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # cat4: the run step resolves to a Taskfile target. Credentials come only from Actions
+      # secrets; SNOWFLAKE_DATABASE pins the account database once the first credentialed
+      # deploy decides it (ReleaseConfig.database placeholder until then).
+      - name: Release the catalog
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+        run: task catalog:release APPLY=1

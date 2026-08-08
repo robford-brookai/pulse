@@ -66,7 +66,8 @@ is states, transitions, ValueSets, and program config only.
       breaking diff requires the MAJOR bump and `catalog/releases/v<version>-migration.md`
       carrying the consumer checklist (Twenty metadata redeploy, ConceptMap regeneration,
       rule_version bump if verdict criteria reference the changed codes). Tests: breaking diff
-      with missing note or un-bumped major fails naming the missing artifact (spec: "A breaking
+      an existing-but-empty note fails identically (spec: "An empty migration note fails the
+      check"); with missing note or un-bumped major fails naming the missing artifact (spec: "A breaking
       release without a migration note fails the check"); breaking diff with bump + note passes
       (spec: "A conformant breaking release passes").
       `[model: sonnet | deps: 3.1, 2.2 | lane: repo_change | wave: 2]`
@@ -96,7 +97,7 @@ is states, transitions, ValueSets, and program config only.
       `[model: sonnet | deps: 4.1 | lane: repo_change | wave: 3]`
       Depends on 4.1, not parallel: both edit `catalog_release.py`, so they serialize to avoid a
       same-wave merge conflict.
-- [ ] 4.3 `task catalog:release` and the deploy artifact: Taskfile target with the `linear:sync`
+- [x] 4.3 [DNA-870] `task catalog:release` and the deploy artifact: Taskfile target with the `linear:sync`
       posture (no credentials → print plan, exit 0; `APPLY=1` without credentials → error;
       `APPLY=1` with credentials → execute); `.github/workflows/catalog-release.yml` on push to
       main with a `catalog/**` paths filter, `run:` steps resolving to Taskfile targets (cat4);
@@ -112,7 +113,7 @@ is states, transitions, ValueSets, and program config only.
 
 ## 5. Wave 4 — docs and the successor's pin
 
-- [ ] 5.1 Docs: `docs/contracts/publishes.md` gains the catalog as a published surface — the
+- [x] 5.1 [DNA-871] Docs: `docs/contracts/publishes.md` gains the catalog as a published surface — the
       `producer-ingress-policy` pin stated once: `catalog/state_catalog.yaml` at repo head,
       semver `catalog_version` (MAJOR ⇔ breaking), programmatic surface `pulse_core.generated`
       (`CATALOG_VERSION`, `SUBJECT_TYPES`, `TRANSITIONS`, `COMMAND_TYPES`), plus the Snowflake
