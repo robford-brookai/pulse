@@ -81,6 +81,18 @@ version and vocabulary, so reading either one gives the same answer.
 | `pulse_core.generated` | workspace package surface | stable | the programmatic surface, pinned to the file's version: `CATALOG_VERSION`, `SUBJECT_TYPES`, `TRANSITIONS`, `COMMAND_TYPES` |
 | Snowflake `catalog` schema | Snowflake schema | stable | the warehouse read surface: insert-only released rows (`STATES`, `TRANSITIONS`, `VALUESET_CODES`, `PROGRAMS`, `VERSIONS`), every row stamped with its version, objects tagged `CATALOG_VERSION`; database name pinned by the first credentialed deploy; release procedure in [`docs/runbooks/catalog-release.md`](../runbooks/catalog-release.md) |
 
+### Twenty kanban webhook ingress (`twenty-kanban-webhook-ingress`, DNA-873–DNA-879)
+
+The D8 kanban drag route: a Twenty card drag becomes an attributed `declare_transition` command on
+the ledger's single write path, or a rejection receipt plus a card comment if the catalog refuses
+the transition. Runbook: [`docs/runbooks/twenty-webhook.md`](../runbooks/twenty-webhook.md)
+(enablement, quarterly dual-secret rotation, disposition log vocabulary, heal-back boundary).
+
+| Surface | Kind | Stability | Notes |
+|---|---|---|---|
+| `POST /webhooks/twenty` | REST API (webhook) | beta | env-gated (`PULSE_LEDGER_TWENTY_WEBHOOK_ENABLED`); HMAC-signed (`X-Pulse-Signature` / `X-Pulse-Timestamp`, `{version}:{timestamp}:{body}`, 5-minute freshness), dual-secret during quarterly rotation (`PULSE_LEDGER_TWENTY_WEBHOOK_SECRET[_NEXT]`); 401 on auth failure, 200 with a `committed \| replayed \| noop \| unmapped \| rejected \| malformed` disposition body otherwise — no live network in tests, no live Twenty instance exists before Phase 3 |
+| Webhook attribution | design contract | stable | actor is the fixed webhook principal (`twenty-webhook`, actor_type `system`), never a payload field (D15); the dragging workspace member travels as evidence provenance only |
+
 ### Offered to PX survey engine (discovery stage, `survey-engine-ingress` planned)
 
 PX (survey engine, owner Max Pengilly) is in discovery; pulse's planned adapter is
