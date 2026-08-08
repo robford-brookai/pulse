@@ -60,6 +60,19 @@ Open Questions).
 |---|---|---|---|
 | `POST /rest/comments` | REST API (pinned, not live-verified) | Twenty; bearer token via `PULSE_LEDGER_TWENTY_API_TOKEN` | comment shape drift surfaces only at the Phase 3 live re-verification; until then, fixtures are the only pinned contract, same posture as the verdict mart row above |
 
+### Producer-policy gate (`producer-ingress-policy`, DNA-885–DNA-888)
+
+`tests/test_producer_ingress_policy.py` classifies `packages/ocean` producer source against the
+state catalog contract published in the "State catalog" entry of `publishes.md`. The gate reads
+exactly the pinned surfaces — nothing else: not the retired Appendix C seed, not the Snowflake
+`catalog` schema rows, not `catalog_gen`/`catalog_release` internals. Policy and procedure are
+documented at `packages/ocean/docs/producer-policy.md`.
+
+| Dependency | Kind | Source | Breakage risk |
+|---|---|---|---|
+| `catalog/state_catalog.yaml` | versioned YAML file, repo head | this repo, `catalog-authority` | a catalog release narrowing or removing a state can turn an existing ocean vocabulary red — intended per §4.4, the failure names the exact collision |
+| `pulse_core.generated` (`TRANSITIONS`) | workspace package surface | this repo, `catalog-authority` | the classifier takes `transitions` as an injectable argument, defaulting to this surface; a signature change to `TRANSITIONS` breaks the gate at import time, not silently |
+
 ### Toolchain
 
 pulse consumes four external tools, inherited from the repo-ade template. None is vendored; each
