@@ -24,7 +24,7 @@ Crosswalk:
 |---|---|---|---|
 | 0 — Absorption | S0.1 catalog spec, S0.2 catalog machinery | ✅ complete — `ocean-eventbridge-migration` (DNA-733), archived `2026-08-02-ocean-eventbridge-migration`, specs baseline seeded | 0–4 + post-merge ops, all done |
 | 1 — Record | S1.1 ledger schema + command API | ✅ **complete — `pulse-ledger-core` (DNA-784)**, all 16 tasks merged, archived `2026-08-03-pulse-ledger-core`; specs baseline updated (`command-api`, `ledger-distribution`, `ledger-read`, `ledger-record`) | 0–4, all done |
-| 2 — Ingress | S2, plus S1.2 verdict-relay, S1.3 schedules, S1.4 identity | **6 of 7 ✅ shipped — build complete** (s12/s13/s14, catalog-authority, kanban ingress, `2026-08-08-producer-ingress-policy`; the D8 route and the §4.4 CI gate are live); `customerio-consent-ingress` cleared by **ADR-0005** (consumes `streamline.cio_raw`/`cio_prod`) — in intake, the phase's last change | six changes: all waves done |
+| 2 — Ingress | S2, plus S1.2 verdict-relay, S1.3 schedules, S1.4 identity | ✅ **complete — all 7 changes shipped, v2.0 released 2026-08-08** (last: `2026-08-08-customerio-consent-ingress`, #187); all four sanctioned command sources live, §4.4 gate in CI, Demo 2 receipts #144/#165/#173 | 0–4 all done, all changes |
 | 3 — Projections | S3 (incl. migration M1) | queued | — |
 | 4 — Retirement | S4 | queued | — |
 
@@ -289,7 +289,7 @@ number should say which one just became true, not which OpenSpec change happened
 |---|---|---|---|
 | v1.2–v1.4 | pre-Phase-0 | legacy feature line (Sim Realism, Ticketing, Warehouse Sync) | shipped |
 | **v1.5** | 1 — Record | `pulse-ledger-core` archived, 16/16 tasks | **shipped 2026-08-04** |
-| v2.0 | 2 — Ingress | "Zero direct emits of catalog-state events, checked in CI" + all four sanctioned command sources live (kanban webhook, Customer.io ingress, identity service, verdict relay) + Demo 2 receipt | next — midterm objective |
+| **v2.0** | 2 — Ingress | "Zero direct emits of catalog-state events, checked in CI" + all four sanctioned command sources live (kanban webhook, Customer.io ingress, identity service, verdict relay) + Demo 2 receipt | **shipped 2026-08-08** |
 | v3.0 | 3 — Projections | Reconciliation clean over one full cycle; projections rebuild from ledger in a drill; M1 retired (no consumer writes `patients.enrollment_status`) | queued |
 | v4.0 | 4 — Retirement | No warehouse model answers patient status by inference; funnel counts read the ledger + verdict chain | queued |
 | v5.0 | Genesis + cutover | Phase 4 exit + genesis acceptance (genesis §4 a–d) + cutover P3 exit (zero POCAR writes 30 days) — **Program done** | longterm objective |
@@ -305,19 +305,16 @@ a phase boundary:
   gate specific phase milestones (`environment-matrix` gates Demo 3's staging leg and cutover P0)
   but ship as prerequisites woven into whichever phase needs them, not as their own version.
 
-**Midterm objective: v2.0.** Seven changes: **six shipped — Phase 2's buildable work is
-complete** (the S1.x siblings, `catalog-authority`, `twenty-kanban-webhook-ingress`, and
-`producer-ingress-policy`, archived 2026-08-05 through 2026-08-08). Live on main: the D8 kanban
-route (HMAC drag → attributed command, rejection receipts + card comments), the D18 catalog
-machinery, and the §4.4 producer gate inside `task check` — green on today's tree, red on a
-planted catalog-state emit, which is the ADR §6 "zero direct emits, checked in CI" criterion
-plus the Demo 2 red/green mechanic, proven by test. **The last hold cleared 2026-08-08 (ADR-0005)**: Customer.io consent data joins the governed
-path — DNA team + Tal (compliance sign-off) confirmed; the export already lands in Snowflake
-`streamline.cio_raw`/`cio_prod`, which the ingress consumes. `customerio-consent-ingress` is
-in intake; when it ships, the phase's "all four sanctioned command sources live" criterion is
-met and v2.0 releases. Standing flags from execution
-ride the parent issues: board-vocabulary/catalog reconciliation and patient×program grain
-(DNA-872), program entry_gate/exclusivity fills and ValueSet-binding widening (DNA-862).
+**v2.0 shipped 2026-08-08** — https://github.com/robford-brookai/pulse/releases/tag/v2.0,
+tagged on #187 (the `customerio-consent-ingress` archive merge). All seven Phase 2 changes
+archived 2026-08-05 through 2026-08-08; exit criteria met (zero-direct-emits in CI, four
+sanctioned command sources live, Demo 2 receipts #144/#165/#173). Decision records: ADR-0004
+(D14–D18), ADR-0005 (Customer.io governed path). Standing follow-ups ride their parent issues:
+board-vocabulary/catalog reconciliation and patient×program grain (DNA-872), program
+entry_gate/exclusivity fills and ValueSet-binding widening (DNA-862), mandatory idempotency-key
+tightening (DNA-801), SNOWFLAKE_* deploy secrets + database pin for `task catalog:release`
+(DNA-862). **The midterm objective is met; the next rung is v3.0 — Projections**, gated on a
+Twenty dev instance (`environment-matrix`) and D4.
 
 **Longterm objective: v5.0 — Program done.** Everything after v2.0 is sequential and gated
 (Phase 3 needs Phase 2 exit + a Twenty dev instance; Phase 4 needs Phase 3 exit; genesis needs
