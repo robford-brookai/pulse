@@ -16,7 +16,7 @@ ship with the task that consumes them.
 
 ## 1. Wave 0 — scaffold
 
-- [ ] 1.1 [DNA-TBD] Scaffold `packages/consent-ingress` as a workspace member: pyproject, uv
+- [x] 1.1 [DNA-890] Scaffold `packages/consent-ingress` as a workspace member: pyproject, uv
       workspace root, ruff/pyright/pytest wiring, coverage floor 85, `--disable-socket` posture,
       `TESTED_PATHS` updated honestly, dependencies on `pulse-core` (client, cursor, generated)
       only — no dependency on `pulse-ledger` or `schedules` (design decision 3: the grain
