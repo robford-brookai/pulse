@@ -16,6 +16,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from pulse_core.producer_policy import (
+    DISPOSITION,
+    Finding,
     apply_suppressions,
     classify_files,
     parse_suppressions,
@@ -166,3 +168,21 @@ suppressions:
     assert findings == []
     assert len(errors) == 1
     assert errors[0].reason == "matches no current finding"
+
+
+# --- A red gate names the §4.4 disposition --------------------------------------------------
+
+
+def test_a_red_gate_names_the_disposition_and_points_at_the_committed_doc() -> None:
+    fixture_finding = Finding(
+        file="libs/ocean-events/src/ocean_events/planted.py",
+        element="ReferralStatus",
+        subject="referral",
+        states=("converted", "outreach", "screened"),
+    )
+
+    report = render_report([fixture_finding])
+
+    assert report.endswith(DISPOSITION)
+    assert "packages/ocean/docs/producer-policy.md" in DISPOSITION
+    assert (REPO_ROOT / "packages" / "ocean" / "docs" / "producer-policy.md").is_file()
