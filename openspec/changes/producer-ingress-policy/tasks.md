@@ -52,7 +52,7 @@ code and the catalog; fixtures are synthetic schema files that never carry patie
       `[model: sonnet | deps: 1.1 | lane: repo_change | wave: 1]`
       Depends on 1.1, not parallel: both edit `producer_policy.py`, so they serialize to avoid a
       same-wave merge conflict.
-- [ ] 2.2 The repo-level gate `tests/test_producer_ingress_policy.py`: walk `packages/ocean`
+- [x] 2.2 [DNA-887] The repo-level gate `tests/test_producer_ingress_policy.py`: walk `packages/ocean`
       producer source (`libs/*/src`, `services/*/src`, `scripts/`; excluding `tests/`, `docs/`,
       `.venv/`, caches — sorted before iteration), run the classifier against the real catalog,
       apply suppressions, fail listing every unsuppressed finding and every suppression error.
