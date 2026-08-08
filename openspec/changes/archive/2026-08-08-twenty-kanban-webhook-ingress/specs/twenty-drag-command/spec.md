@@ -23,6 +23,14 @@ drag SHALL yield exactly one transition declaration.
 
 #### Scenario: A non-drag notification is acknowledged as a no-op
 
+#### Scenario: A malformed body is acknowledged, never redelivered forever
+
+- **GIVEN** a signed webhook request whose body cannot be parsed
+- **WHEN** the route processes it
+- **THEN** the response is a 200 `malformed` disposition (a non-2xx would make Twenty redeliver
+  a permanently unprocessable payload indefinitely), one structured log line carries identifiers
+  and codes only, and no command is built (execution finding, task 3.1 — implemented and tested)
+
 - **WHEN** a verified payload arrives for an unmapped object, a create/delete, or an update that
   does not touch the status field
 - **THEN** the response is success with a no-op disposition and nothing is written to the ledger

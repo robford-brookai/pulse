@@ -97,7 +97,10 @@ one task.
       rejected"); the committed declaration's actor is the webhook principal and the workspace
       member appears only in evidence (spec: "The dragging user is provenance, not actor");
       redelivering the duplicate fixture returns the original result marked replayed with exactly
-      one committer effect (spec: "Webhook redelivery is a replay, not a second event").
+      one committer effect (spec: "Webhook redelivery is a replay, not a second event"); an
+      unparseable body is a 200 `malformed` disposition with no command built — added in
+      execution so Twenty never redelivers a permanently bad payload forever (spec: "A malformed
+      body is acknowledged, never redelivered forever").
       `[model: opus | deps: 1.2, 2.1 | lane: repo_change | wave: 2]`
       Model `opus`: this task opens the door 3.4 deliberately kept shut — an auth-ordering or
       attribution hole here is the retrofit-expensive defect.
@@ -111,7 +114,8 @@ one task.
       dependency) — this task asserts its record-ID-and-board-only content in the caplog scan
       but does not edit it. Tests: an illegal drag writes no event and
       returns the receipt naming from-state, to-state, reason, and catalog version (spec:
-      "Illegal transition yields a receipt and no event"); a comment-post failure still returns
+      "Illegal transition yields a receipt and no event"; spec: "A declaration-build failure
+      returns a sanitised 500" — the PHI-leak fix found in execution); a comment-post failure still returns
       the receipt and logs only the card ref (spec: "A comment failure never loses the receipt");
       a caplog + receipt + comment-body scan across every disposition — commit, no-op, unmapped,
       rejection, comment failure, malformed payload — finds no fixture demographic string (spec:

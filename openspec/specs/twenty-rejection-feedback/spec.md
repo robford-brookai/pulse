@@ -1,12 +1,11 @@
-## Purpose
+# twenty-rejection-feedback Specification
 
+## Purpose
 Defines what an invalid drag produces: a structured rejection receipt naming the violated
 transition and catalog version, a comment posted back on the Twenty card, and the PHI limits on
 both. The heal-back write (moving the card back) is explicitly out of scope — Phase 3's
 `twenty-projection` completes it.
-
-## ADDED Requirements
-
+## Requirements
 ### Requirement: An illegal drag produces a rejection receipt
 
 A mapped drag whose target state is an illegal transition per the catalog SHALL be rejected with
@@ -53,6 +52,15 @@ content: card drags concern patient records, so the payload is presumed PHI. Log
 most route, disposition, subject key, states, reason, and Twenty record ID. This SHALL hold on
 every failure path — rejection, unmapped record, comment failure, handler crash — not only the
 happy path.
+
+#### Scenario: A declaration-build failure returns a sanitised 500
+
+- **GIVEN** a mapped drag whose declaration build raises (malformed mapped fields)
+- **WHEN** the route handles the failure
+- **THEN** the response is a sanitised 500 and the log carries card ref, disposition, and
+  exception type name only — never `str(exc)`, whose message quotes the offending field's value
+  from a PHI-bearing payload (execution finding, task 3.2: the bearer routes' 422 handler body
+  is exactly that string, so this route never lets a declaration error reach it)
 
 #### Scenario: No fixture payload content in logs or receipts across failure paths
 
