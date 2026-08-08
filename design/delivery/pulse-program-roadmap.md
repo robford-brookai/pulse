@@ -24,7 +24,7 @@ Crosswalk:
 |---|---|---|---|
 | 0 — Absorption | S0.1 catalog spec, S0.2 catalog machinery | ✅ complete — `ocean-eventbridge-migration` (DNA-733), archived `2026-08-02-ocean-eventbridge-migration`, specs baseline seeded | 0–4 + post-merge ops, all done |
 | 1 — Record | S1.1 ledger schema + command API | ✅ **complete — `pulse-ledger-core` (DNA-784)**, all 16 tasks merged, archived `2026-08-03-pulse-ledger-core`; specs baseline updated (`command-api`, `ledger-distribution`, `ledger-read`, `ledger-record`) | 0–4, all done |
-| 2 — Ingress | S2, plus S1.2 verdict-relay, S1.3 schedules, S1.4 identity | in flight — S1.x siblings all ✅ shipped (`2026-08-05-s12-verdict-relay`, `2026-08-06-s13-schedules`, `2026-08-06-s14-identity`; Demo 2 partial receipt #144); four changes gate-held on D15–D18/export mechanism | s12–s14: all waves done |
+| 2 — Ingress | S2, plus S1.2 verdict-relay, S1.3 schedules, S1.4 identity | 5 of 7 ✅ shipped (s12/s13/s14 + `2026-08-07-catalog-authority` + `2026-08-08-twenty-kanban-webhook-ingress`; the D8 route is live); `producer-ingress-policy` in intake; `customerio-consent-ingress` held on export mechanism | five changes: all waves done |
 | 3 — Projections | S3 (incl. migration M1) | queued | — |
 | 4 — Retirement | S4 | queued | — |
 
@@ -135,10 +135,10 @@ Gate for the S1.x siblings: **cleared** — `pulse-ledger-core` archived, names 
 | `s12-verdict-relay` | `packages/verdict-relay` per the S1 work order; supersedes the clinic-rules-engine Snowpark emitter (P5) | ✅ shipped — archived `2026-08-05-s12-verdict-relay` (DNA-827) |
 | `s13-schedules` | `packages/schedules` — month-open + D9 consent sweep | ✅ shipped — archived `2026-08-06-s13-schedules` (DNA-837) |
 | `s14-identity` | `packages/identity` — deterministic matcher v1; also genesis's matcher | ✅ shipped — archived `2026-08-06-s14-identity` (DNA-849) |
-| `catalog-authority` | authoritative `state_catalog.yaml` replacing the Appendix C seed; regeneration into the 2.1 generator; D18 Snowflake release job + breaking-change rule. Serial lane `catalog_generated_surfaces` | ✅ D18 closed (ADR-0004) — proposable now |
-| `twenty-kanban-webhook-ingress` | D8: enable the HMAC route 3.4 ships disabled; drag → command; invalid → rejection + card comment (heal-back write completes in Phase 3) | ✅ D15 closed (ADR-0004) — proposable now |
+| `catalog-authority` | authoritative `state_catalog.yaml` replacing the Appendix C seed; regeneration into the 2.1 generator; D18 Snowflake release job + breaking-change rule. Serial lane `catalog_generated_surfaces` | ✅ shipped — archived `2026-08-07-catalog-authority` (DNA-862) |
+| `twenty-kanban-webhook-ingress` | D8: enable the HMAC route 3.4 ships disabled; drag → command; invalid → rejection + card comment (heal-back write completes in Phase 3) | ✅ shipped — archived `2026-08-08-twenty-kanban-webhook-ingress` (DNA-872) |
 | `customerio-consent-ingress` | D9 forward consent ingress, actor `customer.io`, message-level provenance; inherits s13's `{subject_key}:{channel}` grain composition | export/webhook mechanism confirmed (rides the compliance-owner role-fill) |
-| `producer-ingress-policy` | the ADR §4.4 CI gate: no producer schema in `packages/ocean` names a catalog state; wired into `task check` | `catalog-authority` |
+| `producer-ingress-policy` | the §4.4 CI gate (design/migration/ocean-to-pulse-adaptation-plan.md, not an ADR): no producer schema in `packages/ocean` names a catalog state; wired into `task check` | ✅ gate cleared — proposed, in G_MECE validation |
 
 **Done means (ADR §6):** "Zero direct emits of catalog-state events, checked in CI against
 producer schemas" — plus all four sanctioned command sources live (kanban webhook, Customer.io
@@ -291,16 +291,19 @@ a phase boundary:
   gate specific phase milestones (`environment-matrix` gates Demo 3's staging leg and cutover P0)
   but ship as prerequisites woven into whichever phase needs them, not as their own version.
 
-**Midterm objective: v2.0.** Seven changes: the three S1.x siblings ✅ shipped
-(`s12-verdict-relay`, `s13-schedules`, `s14-identity` — Demo 2 partial receipt on #144 covers
-the s13/s14 surface offline). The remaining four are all gate-held on decisions:
-`catalog-authority` (D18), `twenty-kanban-webhook-ingress` (D15), `customerio-consent-ingress`
-(export mechanism — note it now inherits s13's pinned `{subject_key}:{channel}` consent-grain
-key composition), and `producer-ingress-policy` (needs `catalog-authority`). **D14–D18 closed
-2026-08-06 (ADR-0004)**: `catalog-authority` and `twenty-kanban-webhook-ingress` are proposable
-now, `producer-ingress-policy` follows `catalog-authority`, and `customerio-consent-ingress`
-waits only on the export-mechanism confirmation riding the compliance-owner role-fill. The full
-Demo 2 (HMAC drag, producer-policy gate red/green) completes at phase exit.
+**Midterm objective: v2.0.** Seven changes: **five shipped** — the S1.x siblings, then
+`catalog-authority` (2026-08-07: the D18 machinery live, seed retired, ceremony gate in
+`task check`) and `twenty-kanban-webhook-ingress` (2026-08-08: the D8 route live, Demo 2
+kanban leg receipted on #165). `producer-ingress-policy` is in intake (proposed, G_MECE
+validation running — its gate cleared with catalog-authority's pinned contract).
+`customerio-consent-ingress` is the sole remaining hold: export-mechanism confirmation riding
+the compliance-owner role-fill — **now the only decision between here and the v2.0 build being
+complete**. The full Demo 2 (producer-policy gate red/green joins the existing kanban +
+s13/s14 legs) completes at phase exit; note the phase's ADR §6 "all four sanctioned command
+sources live" criterion includes Customer.io ingress, so v2.0's exit hangs on that hold.
+Standing flags from execution ride the parent issues: the board-vocabulary/catalog
+reconciliation and patient×program grain (DNA-872), program entry_gate/exclusivity fills and
+ValueSet-binding widening (DNA-862).
 
 **Longterm objective: v5.0 — Program done.** Everything after v2.0 is sequential and gated
 (Phase 3 needs Phase 2 exit + a Twenty dev instance; Phase 4 needs Phase 3 exit; genesis needs
