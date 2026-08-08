@@ -28,7 +28,7 @@ ship with the task that consumes them.
 
 ## 2. Wave 1 — reader
 
-- [ ] 2.1 [DNA-TBD] `consent_ingress/row_source.py`: `RowSource` protocol reading
+- [x] 2.1 [DNA-891] `consent_ingress/row_source.py`: `RowSource` protocol reading
       `streamline.cio_raw`/`cio_prod` landing rows, pinned `CONTRACT_COLUMNS` (`subject_key`,
       `channel`, `to_state`, a message/event id, an orderable event timestamp), per-row contract
       validation with `consent_sweep.parse_export`'s catch-and-collect shape (a malformed row
