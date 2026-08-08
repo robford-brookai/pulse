@@ -118,6 +118,7 @@ ship with the task that consumes them.
       ADR-0005 as the source of the export mechanism.
       Test: `mkdocs build -s` stays green; a doc-presence test asserts the entry names both
       schemas and the pinned column list.
-      `[model: sonnet | deps: 2.1 | lane: doc | wave: 2]`
-      `serial: consumes_doc` — `docs/contracts/consumes.md` is a single shared file every
-      consumer-registering change edits; this task owns the edit for this change.
+      `[model: sonnet | deps: 2.1 | lane: repo_change | wave: 2]`
+      `serial: openspec_main_specs` — doc-updater lane: `docs/contracts/consumes.md` is a
+      single shared file every consumer-registering change edits; this task owns the edit for
+      this change.
