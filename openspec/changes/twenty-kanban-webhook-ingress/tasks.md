@@ -131,7 +131,7 @@ one task.
       before archive. Test: a smoke-parse test covers the script; the script runs green from a
       fresh checkout with no network.
       `[model: sonnet | deps: 3.2 | lane: repo_change | wave: 4]`
-- [ ] 4.2 `docs/runbooks/twenty-webhook.md` + contracts: runbook covers enablement (env switch +
+- [x] 4.2 [DNA-880] `docs/runbooks/twenty-webhook.md` + contracts: runbook covers enablement (env switch +
       secret + API token, all from the platform secret store, never workflow config), the
       quarterly dual-secret rotation procedure (set `secret_next` → re-point Twenty → promote →
       unset), the disposition log vocabulary, and the heal-back boundary (rejected cards sit
