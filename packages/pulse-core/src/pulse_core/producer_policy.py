@@ -47,6 +47,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+import yaml
+
 from pulse_core.generated import TRANSITIONS
 
 StateCatalog = Mapping[str, Mapping[str, frozenset[str]]]
@@ -315,3 +317,88 @@ def render_report(findings: Sequence[Finding]) -> str:
     if not findings:
         return EMPTY_REPORT
     return "\n".join(finding.render() for finding in findings) + "\n\n" + DISPOSITION
+
+
+# --- Suppressions (producer-ingress-policy 2.1) --------------------------------------------
+#
+# Suppressions are adjudicated name-collision false positives, never exemptions: an entry
+# removes exactly the finding it names and nothing else. A finding is named by (file, element,
+# subject) — the same triple a Finding without states renders — so a suppression is oblivious
+# to which states happened to trigger it.
+
+_FindingKey = tuple[str, str, str]
+
+
+def _finding_key(file: str, element: str, subject: str) -> _FindingKey:
+    return (file, element, subject)
+
+
+@dataclass(frozen=True, order=True)
+class SuppressionEntry:
+    """One suppression-list entry, as authored in `producer-policy-suppressions.yaml`.
+
+    `justification` is empty when the entry omitted it — a missing justification is a gate
+    failure, not a parse error, so parsing never raises on it.
+    """
+
+    file: str
+    element: str
+    subject: str
+    justification: str = ""
+
+    def key(self) -> _FindingKey:
+        return _finding_key(self.file, self.element, self.subject)
+
+
+@dataclass(frozen=True, order=True)
+class SuppressionError:
+    """One suppression entry that fails the gate: unjustified, or stale (matches nothing)."""
+
+    file: str
+    element: str
+    subject: str
+    reason: Literal["missing justification", "matches no current finding"]
+
+    def render(self) -> str:
+        return f"{self.file}:{self.element} ({self.subject}): {self.reason}"
+
+
+def parse_suppressions(text: str) -> list[SuppressionEntry]:
+    """Parse the suppression YAML doc. Ships empty; an empty or all-comment doc yields `[]`."""
+    document = yaml.safe_load(text) or {}
+    raw_entries = document.get("suppressions") or []
+    return [
+        SuppressionEntry(
+            file=str(entry.get("file", "")),
+            element=str(entry.get("element", "")),
+            subject=str(entry.get("subject", "")),
+            justification=str(entry.get("justification") or ""),
+        )
+        for entry in raw_entries
+    ]
+
+
+def apply_suppressions(
+    findings: Sequence[Finding], entries: Sequence[SuppressionEntry]
+) -> tuple[list[Finding], list[SuppressionError]]:
+    """Filter findings through the suppression list.
+
+    A justified entry matching a current finding removes exactly that finding. An entry with no
+    justification, or one matching no current finding (stale), never suppresses anything and
+    instead produces a `SuppressionError` naming it — checked independently, so an unjustified
+    entry is reported for that even when it would also be stale.
+    """
+    findings_by_key = {(f.file, f.element, f.subject) for f in findings}
+    suppressed: set[_FindingKey] = set()
+    errors: list[SuppressionError] = []
+
+    for entry in entries:
+        if not entry.justification:
+            errors.append(SuppressionError(entry.file, entry.element, entry.subject, "missing justification"))
+        elif entry.key() not in findings_by_key:
+            errors.append(SuppressionError(entry.file, entry.element, entry.subject, "matches no current finding"))
+        else:
+            suppressed.add(entry.key())
+
+    surviving = [f for f in findings if (f.file, f.element, f.subject) not in suppressed]
+    return sorted(surviving), sorted(errors)
