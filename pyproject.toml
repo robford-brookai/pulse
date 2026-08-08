@@ -65,6 +65,7 @@ members = [
     "packages/verdict-relay",
     "packages/schedules",
     "packages/identity",
+    "packages/consent-ingress",
     "packages/ocean",
     "packages/ocean/libs/ocean-events",
     "packages/ocean/libs/ocean-broker",
@@ -77,6 +78,7 @@ pulse-core = { workspace = true }
 verdict-relay = { workspace = true }
 schedules = { workspace = true }
 identity = { workspace = true }
+consent-ingress = { workspace = true }
 ocean-events = { workspace = true }
 ocean-broker = { workspace = true }
 ocean-connector-mcp = { workspace = true }
@@ -191,6 +193,7 @@ ignore = [
 "packages/verdict-relay/tests/**" = ["S101"]
 "packages/schedules/tests/**" = ["S101"]
 "packages/identity/tests/**" = ["S101"]
+"packages/consent-ingress/tests/**" = ["S101"]
 
 "packages/ocean/tests/**" = ["S101", "S105", "B017"]
 "packages/ocean/**/tests/**" = ["S101", "S105", "B017"]
