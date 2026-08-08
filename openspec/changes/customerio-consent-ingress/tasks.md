@@ -48,7 +48,7 @@ ship with the task that consumes them.
 
 ## 3. Wave 1 — declaration
 
-- [ ] 3.1 [DNA-TBD] `consent_ingress/declarer.py` core: compose the ledger subject key as
+- [x] 3.1 [DNA-892] `consent_ingress/declarer.py` core: compose the ledger subject key as
       `f"{subject_key}:{channel}"` — the exact composition `consent-reconciliation`'s sweep uses
       (binding, `openspec/specs/consent-reconciliation`) — build one
       `RecordCommunicationConsentCommand` per validated row, payload carrying the source row's
