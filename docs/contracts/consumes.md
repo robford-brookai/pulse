@@ -45,6 +45,21 @@ services in `packages/ocean` consume AWS messaging primitives instead of a broke
 `confluent-kafka` and the Redpanda containers are removed. None of these is reached by
 `task check` — no live network in tests; the LocalStack stack exists for local simulation runs.
 
+### Twenty comment API (`twenty-kanban-webhook-ingress`, DNA-878)
+
+`pulse_ledger.twenty.client` posts a rejection comment back to the Twenty card via Twenty's REST
+API — the one outbound surface the D8 kanban route introduces (comment-create only, no other
+verb). The shape is a documented guess, not a live-verified contract: no live Twenty instance
+exists before Phase 3, so every test runs against recorded/synthetic responses at the HTTP
+boundary, `--disable-socket`. **This dependency's exact request/response shape is re-verified
+against a live Twenty instance in Phase 3, before production enablement** — a shape drift there
+changes this module's URL/body construction and its recorded fixtures, nothing else (design.md
+Open Questions).
+
+| Dependency | Kind | Source | Breakage risk |
+|---|---|---|---|
+| `POST /rest/comments` | REST API (pinned, not live-verified) | Twenty; bearer token via `PULSE_LEDGER_TWENTY_API_TOKEN` | comment shape drift surfaces only at the Phase 3 live re-verification; until then, fixtures are the only pinned contract, same posture as the verdict mart row above |
+
 ### Toolchain
 
 pulse consumes four external tools, inherited from the repo-ade template. None is vendored; each
