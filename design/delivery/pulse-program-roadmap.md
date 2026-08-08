@@ -24,7 +24,7 @@ Crosswalk:
 |---|---|---|---|
 | 0 — Absorption | S0.1 catalog spec, S0.2 catalog machinery | ✅ complete — `ocean-eventbridge-migration` (DNA-733), archived `2026-08-02-ocean-eventbridge-migration`, specs baseline seeded | 0–4 + post-merge ops, all done |
 | 1 — Record | S1.1 ledger schema + command API | ✅ **complete — `pulse-ledger-core` (DNA-784)**, all 16 tasks merged, archived `2026-08-03-pulse-ledger-core`; specs baseline updated (`command-api`, `ledger-distribution`, `ledger-read`, `ledger-record`) | 0–4, all done |
-| 2 — Ingress | S2, plus S1.2 verdict-relay, S1.3 schedules, S1.4 identity | 5 of 7 ✅ shipped (s12/s13/s14 + `2026-08-07-catalog-authority` + `2026-08-08-twenty-kanban-webhook-ingress`; the D8 route is live); `producer-ingress-policy` in intake; `customerio-consent-ingress` held on export mechanism | five changes: all waves done |
+| 2 — Ingress | S2, plus S1.2 verdict-relay, S1.3 schedules, S1.4 identity | **6 of 7 ✅ shipped — build complete** (s12/s13/s14, catalog-authority, kanban ingress, `2026-08-08-producer-ingress-policy`; the D8 route and the §4.4 CI gate are live); `customerio-consent-ingress` held on export mechanism — the phase's sole remaining item | six changes: all waves done |
 | 3 — Projections | S3 (incl. migration M1) | queued | — |
 | 4 — Retirement | S4 | queued | — |
 
@@ -35,6 +35,20 @@ Crosswalk:
   `openspec/specs/` as the repo's first baseline. Out-of-lane ops executed: terraform applied,
   MSK Serverless torn down, `robford-brookai/ocean` archived read-only with the ADR §7
   supersession notice as its final commit.
+- `producer-ingress-policy` (DNA-884) — 4/4 tasks (#171–#174), archived via #175 at
+  `openspec/changes/archive/2026-08-08-producer-ingress-policy/`; the §4.4 gate lives in
+  `task check` (subject-scoped matching as narrowed at G_MECE — the `device.associated`
+  counterexample; shipped-empty justified suppressions, no grandfathering).
+- `twenty-kanban-webhook-ingress` (DNA-872) — 9/9 tasks (#149–#167), archived via #168 at
+  `openspec/changes/archive/2026-08-08-twenty-kanban-webhook-ingress/`; the D8 route is live
+  (HMAC + dual-secret rotation, drag → attributed command, rejection receipt + card comment,
+  Demo 2 kanban leg #165; the 3.2 PHI-leak fix pinned as a spec scenario). Open flags on
+  DNA-872: board-vocabulary reconciliation, patient×program grain.
+- `catalog-authority` (DNA-862) — 8/8 tasks (#150–#163), archived via #164 at
+  `openspec/changes/archive/2026-08-07-catalog-authority/`; catalog v1.0.0 authoritative, seed
+  retired, snapshots + ceremony gate in `task check`, guarded Snowflake release machinery
+  (`task catalog:release`). Open flags on DNA-862: program entry_gate/exclusivity fills
+  (billing team), ValueSet-binding widening, first-deploy database pin.
 - `s14-identity` (DNA-849) — 11/11 tasks (#118–#141), doc_update #142 (identifier_conflict rule
   id pinned as a scenario — the two-holders split quarantines, never auto-resolves — and the
   dual D16 wire/audit key clarification), archived via #143 at
@@ -138,7 +152,7 @@ Gate for the S1.x siblings: **cleared** — `pulse-ledger-core` archived, names 
 | `catalog-authority` | authoritative `state_catalog.yaml` replacing the Appendix C seed; regeneration into the 2.1 generator; D18 Snowflake release job + breaking-change rule. Serial lane `catalog_generated_surfaces` | ✅ shipped — archived `2026-08-07-catalog-authority` (DNA-862) |
 | `twenty-kanban-webhook-ingress` | D8: enable the HMAC route 3.4 ships disabled; drag → command; invalid → rejection + card comment (heal-back write completes in Phase 3) | ✅ shipped — archived `2026-08-08-twenty-kanban-webhook-ingress` (DNA-872) |
 | `customerio-consent-ingress` | D9 forward consent ingress, actor `customer.io`, message-level provenance; inherits s13's `{subject_key}:{channel}` grain composition | export/webhook mechanism confirmed (rides the compliance-owner role-fill) |
-| `producer-ingress-policy` | the §4.4 CI gate (design/migration/ocean-to-pulse-adaptation-plan.md, not an ADR): no producer schema in `packages/ocean` names a catalog state; wired into `task check` | ✅ gate cleared — proposed, in G_MECE validation |
+| `producer-ingress-policy` | the §4.4 CI gate (design/migration/ocean-to-pulse-adaptation-plan.md, not an ADR): no producer schema in `packages/ocean` names a catalog state; wired into `task check` | ✅ shipped — archived `2026-08-08-producer-ingress-policy` (DNA-884) |
 
 **Done means (ADR §6):** "Zero direct emits of catalog-state events, checked in CI against
 producer schemas" — plus all four sanctioned command sources live (kanban webhook, Customer.io
@@ -291,19 +305,18 @@ a phase boundary:
   gate specific phase milestones (`environment-matrix` gates Demo 3's staging leg and cutover P0)
   but ship as prerequisites woven into whichever phase needs them, not as their own version.
 
-**Midterm objective: v2.0.** Seven changes: **five shipped** — the S1.x siblings, then
-`catalog-authority` (2026-08-07: the D18 machinery live, seed retired, ceremony gate in
-`task check`) and `twenty-kanban-webhook-ingress` (2026-08-08: the D8 route live, Demo 2
-kanban leg receipted on #165). `producer-ingress-policy` is in intake (proposed, G_MECE
-validation running — its gate cleared with catalog-authority's pinned contract).
-`customerio-consent-ingress` is the sole remaining hold: export-mechanism confirmation riding
-the compliance-owner role-fill — **now the only decision between here and the v2.0 build being
-complete**. The full Demo 2 (producer-policy gate red/green joins the existing kanban +
-s13/s14 legs) completes at phase exit; note the phase's ADR §6 "all four sanctioned command
-sources live" criterion includes Customer.io ingress, so v2.0's exit hangs on that hold.
-Standing flags from execution ride the parent issues: the board-vocabulary/catalog
-reconciliation and patient×program grain (DNA-872), program entry_gate/exclusivity fills and
-ValueSet-binding widening (DNA-862).
+**Midterm objective: v2.0.** Seven changes: **six shipped — Phase 2's buildable work is
+complete** (the S1.x siblings, `catalog-authority`, `twenty-kanban-webhook-ingress`, and
+`producer-ingress-policy`, archived 2026-08-05 through 2026-08-08). Live on main: the D8 kanban
+route (HMAC drag → attributed command, rejection receipts + card comments), the D18 catalog
+machinery, and the §4.4 producer gate inside `task check` — green on today's tree, red on a
+planted catalog-state emit, which is the ADR §6 "zero direct emits, checked in CI" criterion
+plus the Demo 2 red/green mechanic, proven by test. **The single remaining item is
+`customerio-consent-ingress`**: the export-mechanism confirmation riding the compliance-owner
+role-fill — a decision, not build work — and the phase's "all four sanctioned command sources
+live" exit criterion includes it, so v2.0 ships when it does. Standing flags from execution
+ride the parent issues: board-vocabulary/catalog reconciliation and patient×program grain
+(DNA-872), program entry_gate/exclusivity fills and ValueSet-binding widening (DNA-862).
 
 **Longterm objective: v5.0 — Program done.** Everything after v2.0 is sequential and gated
 (Phase 3 needs Phase 2 exit + a Twenty dev instance; Phase 4 needs Phase 3 exit; genesis needs
