@@ -122,7 +122,7 @@ one task.
 
 ## 4. Wave 4 — proof and documentation
 
-- [ ] 4.1 `scripts/demo/demo2_kanban_drag.py` — the Demo 2 kanban leg, offline per the demo
+- [x] 4.1 [DNA-879] `scripts/demo/demo2_kanban_drag.py` — the Demo 2 kanban leg, offline per the demo
       convention (LocalStack/fixtures only, exits nonzero on any failed assertion, out of
       `task check`): build the app with a fake committer and fake comment transport, drive an
       HMAC-signed synthetic drag to a committed event id, then an invalid drag to a rejection
