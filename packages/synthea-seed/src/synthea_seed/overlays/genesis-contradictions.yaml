@@ -1,0 +1,76 @@
+# Contradictory source states for genesis adjudication (genesis-and-cutover.md §2): one
+# patient per conflict class in the v1 referee table, each carrying the expected disposition —
+# adjudicated by a named rule, or quarantine when no rule covers it or consent lacks evidence.
+# These populate the quarantine queue for the genesis rehearsal demo. Synthetic patients and
+# synthetic MRN-shaped keys; no PHI.
+format: synthea-seed/overlay@1
+fixture: genesis_contradictions
+design_ref: "design/migration/genesis-and-cutover.md §2 adjudication — the referee rules, one fixture per v1 conflict class"
+description: >
+  The five v1 conflict classes as engineered patients: POCAR-vs-Billy resolved by billing
+  activity, consent without evidence quarantined, Customer.io suppression winning
+  unconditionally, ambiguous duplicate-MRN identity quarantined, and an uncovered
+  contradiction landing in the quarantine review queue.
+patients:
+  - patient_id: brook-fx-genesis-pocar-vs-billy-0001
+    state:
+      source_states:
+        - source_system: pocar
+          attribute: enrollment_status
+          value: ended
+        - source_system: billy
+          attribute: billing_activity
+          value: current_month
+      genesis_expectation:
+        disposition: adjudicated
+        adjudication_rule: billing_activity_wins_for_active
+        expected_state: active
+  - patient_id: brook-fx-genesis-consent-no-evidence-0001
+    state:
+      source_states:
+        - source_system: pocar
+          attribute: consent_status
+          value: granted
+        - source_system: document_store
+          attribute: consent_evidence
+          value: absent
+      genesis_expectation:
+        disposition: quarantine
+        quarantine_reason: consent_without_evidence_ref
+  - patient_id: brook-fx-genesis-cio-suppression-0001
+    state:
+      source_states:
+        - source_system: customer_io
+          attribute: communication_consent
+          value: suppressed
+        - source_system: pocar
+          attribute: communication_consent
+          value: opted_in
+      genesis_expectation:
+        disposition: adjudicated
+        adjudication_rule: customer_io_wins_unconditionally
+        expected_state: suppressed
+  - patient_id: brook-fx-genesis-duplicate-mrn-0001
+    state:
+      source_states:
+        - source_system: pocar
+          attribute: person_mrn
+          value: SYN-MRN-000101
+        - source_system: pocar
+          attribute: person_mrn
+          value: SYN-MRN-000102
+      genesis_expectation:
+        disposition: quarantine
+        quarantine_reason: ambiguous_identity_match_defers_dependent_genesis
+  - patient_id: brook-fx-genesis-uncovered-0001
+    state:
+      source_states:
+        - source_system: pocar
+          attribute: coverage_status
+          value: active
+        - source_system: billy
+          attribute: coverage_status
+          value: terminated
+      genesis_expectation:
+        disposition: quarantine
+        quarantine_reason: no_covering_adjudication_rule

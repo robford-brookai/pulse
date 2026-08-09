@@ -23,7 +23,7 @@ Java in any test — unit tests cover overlay application and manifest verificat
       manifest re-pin is explicit. Tests: verification logic against fixture trees (no
       generation run).
       `[model: sonnet | deps: 1.1 | lane: repo_change | wave: 1]`
-- [ ] 2.2 Brook overlay fixtures + application logic: YAML per fixture, schema-validated,
+- [x] 2.2 Brook overlay fixtures + application logic: YAML per fixture, schema-validated,
       deterministic application; ship the four named fixture sets (mid-month exclusivity
       switch, trinary verdicts incl. indeterminate-with-reason, genesis contradiction set,
       quarantine-bound consent). Tests: deterministic double-apply; malformed overlay rejected
