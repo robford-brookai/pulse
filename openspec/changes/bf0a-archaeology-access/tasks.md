@@ -18,7 +18,7 @@ socket-blocked — the Mongo client is faked at the driver boundary.
       `[model: opus | max: fable | deps: — | lane: repo_change | wave: 0]`
       `serial: workspace_roots` — edits the root workspace manifest. Model `opus`: the
       streamline pattern inheritance must be read correctly, per the batch doc's routing.
-- [ ] 1.2 Smoke CLI (`python -m archaeology.smoke --list-collections`, names only, exit status
+- [x] 1.2 Smoke CLI (`python -m archaeology.smoke --list-collections`, names only, exit status
       is the receipt), README (read-only-Atlas-role hard precondition, env var names as the
       BF-0b interface, bulk-extraction-seam note), and the credential-material gate wired as a
       test (no `mongodb+srv://…@` material anywhere in the tree). Tests: CLI happy path against
