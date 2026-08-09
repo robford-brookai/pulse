@@ -1,0 +1,1491 @@
+{
+  "namespace": "BrookAiDesignSystemB2BMarketing_e88414",
+  "components": [],
+  "startingPoints": [],
+  "cards": [
+    {
+      "path": "index.html",
+      "group": "Brand",
+      "subtitle": "Design system landing \u2014 hero, palette, type, and kit entry points",
+      "name": "Brook Design System \u00b7 Landing"
+    },
+    {
+      "path": "preview/brand-photography.html",
+      "group": "Brand",
+      "subtitle": "Care Stream heroes + natural lifestyle library",
+      "name": "Brand Photography \u00b7 Library"
+    },
+    {
+      "path": "preview/care-stream.html",
+      "group": "Brand",
+      "viewport": "1100x1400",
+      "subtitle": "Care Stream + Brook Gradient usage",
+      "name": "Brand \u00b7 Care Stream & Gradient"
+    },
+    {
+      "path": "preview/logo.html",
+      "group": "Brand",
+      "viewport": "740x200",
+      "subtitle": "Positive on white \u00b7 negative on dark",
+      "name": "Logo"
+    },
+    {
+      "path": "preview/print-specs.html",
+      "group": "Brand",
+      "viewport": "1300x2600",
+      "subtitle": "One-pager, case study, card",
+      "name": "Print \u00b7 Specs"
+    },
+    {
+      "path": "preview/social-templates.html",
+      "group": "Brand",
+      "viewport": "1320x2400",
+      "subtitle": "1:1, 9:16, 16:9",
+      "name": "Social \u00b7 Templates"
+    },
+    {
+      "path": "preview/swag-merch.html",
+      "group": "Brand",
+      "viewport": "1320x2400",
+      "subtitle": "Apparel, desk, stickers",
+      "name": "Swag \u00b7 Merch"
+    },
+    {
+      "path": "preview/semantic-colors.html",
+      "group": "Colors",
+      "viewport": "740x420",
+      "subtitle": "bg / fg / border / status",
+      "name": "Semantic tokens"
+    },
+    {
+      "path": "preview/swatches-blue.html",
+      "group": "Colors",
+      "viewport": "740x200",
+      "subtitle": "Light \u2192 Dark extended",
+      "name": "Blue family"
+    },
+    {
+      "path": "preview/swatches-earth.html",
+      "group": "Colors",
+      "viewport": "740x200",
+      "subtitle": "Used in isolation to balance",
+      "name": "Earth family"
+    },
+    {
+      "path": "preview/swatches-green.html",
+      "group": "Colors",
+      "viewport": "740x200",
+      "subtitle": "Light \u2192 Dark extended",
+      "name": "Green family"
+    },
+    {
+      "path": "preview/swatches-primary.html",
+      "group": "Colors",
+      "viewport": "740x220",
+      "subtitle": "Bold/Vivid/Dark green \u00b7 Light green \u00b7 Vivid blue",
+      "name": "Primary palette"
+    },
+    {
+      "path": "preview/components-badges.html",
+      "group": "Components",
+      "viewport": "740x140",
+      "subtitle": "Chips \u00b7 status \u00b7 eyebrow",
+      "name": "Badges & eyebrows"
+    },
+    {
+      "path": "preview/components-buttons.html",
+      "group": "Components",
+      "viewport": "740x140",
+      "subtitle": "Primary \u00b7 secondary \u00b7 ghost \u00b7 link",
+      "name": "Buttons"
+    },
+    {
+      "path": "preview/components-cards.html",
+      "group": "Components",
+      "viewport": "740x280",
+      "subtitle": "Eyebrow + headline + body",
+      "name": "Cards"
+    },
+    {
+      "path": "preview/components-inputs.html",
+      "group": "Components",
+      "viewport": "740x280",
+      "subtitle": "Text \u00b7 select \u00b7 error state",
+      "name": "Inputs"
+    },
+    {
+      "path": "preview/components-nav.html",
+      "group": "Components",
+      "viewport": "740x110",
+      "subtitle": "Pill nav over hero",
+      "name": "Nav"
+    },
+    {
+      "path": "preview/components-stat.html",
+      "group": "Components",
+      "viewport": "740x200",
+      "subtitle": "Oversized number + unit + context",
+      "name": "Stat blocks"
+    },
+    {
+      "path": "preview/data-viz.html",
+      "group": "Components",
+      "viewport": "1250x2200",
+      "subtitle": "Charts, tokens, sparklines",
+      "name": "Data viz \u00b7 Spec"
+    },
+    {
+      "path": "preview/email-templates.html",
+      "group": "Components",
+      "viewport": "1150x2400",
+      "subtitle": "Transactional + marketing",
+      "name": "Email \u00b7 Templates"
+    },
+    {
+      "path": "preview/icons.html",
+      "group": "Components",
+      "viewport": "740x220",
+      "subtitle": "Hugeicons stroke (Lucide fallback)",
+      "name": "Iconography"
+    },
+    {
+      "path": "slides/index.html",
+      "group": "Slides",
+      "viewport": "1920x1080",
+      "subtitle": "10-slide master deck: cover, agenda, divider, content, 3-up, stat, 4-stat, quote, product, closing",
+      "name": "Slide templates"
+    },
+    {
+      "path": "preview/radii.html",
+      "group": "Spacing",
+      "viewport": "740x160",
+      "subtitle": "4 / 8 / 12 / 20 / 32 / pill",
+      "name": "Radii"
+    },
+    {
+      "path": "preview/shadows.html",
+      "group": "Spacing",
+      "viewport": "740x200",
+      "subtitle": "Green-tinted, soft",
+      "name": "Shadows"
+    },
+    {
+      "path": "preview/spacing.html",
+      "group": "Spacing",
+      "viewport": "740x340",
+      "subtitle": "8pt grid \u00b7 4 \u2192 128",
+      "name": "Spacing scale"
+    },
+    {
+      "path": "preview/type-scale.html",
+      "group": "Type",
+      "viewport": "740x340",
+      "subtitle": "Display \u2192 eyebrow",
+      "name": "Type scale"
+    },
+    {
+      "path": "preview/type-script.html",
+      "group": "Type",
+      "viewport": "740x240",
+      "subtitle": "Breathing \u2014 max 3 words / layout",
+      "name": "Script accent"
+    },
+    {
+      "path": "preview/type-specimen-body.html",
+      "group": "Type",
+      "viewport": "740x220",
+      "subtitle": "Red Hat Text 400",
+      "name": "Body specimen"
+    },
+    {
+      "path": "preview/type-specimen-display.html",
+      "group": "Type",
+      "viewport": "740x220",
+      "subtitle": "Red Hat Display 600 + Breathing script",
+      "name": "Display specimen"
+    },
+    {
+      "path": "ui_kits/marketing/index.html",
+      "group": "UI Kit \u2014 Marketing",
+      "subtitle": "Nav, hero, stat strip, audience grid, ecosystem, CTA, footer",
+      "name": "brook.ai marketing kit"
+    },
+    {
+      "path": "ui_kits/patient_app/index.html",
+      "group": "UI Kit \u2014 Patient App",
+      "subtitle": "Today \u00b7 Care team chat \u00b7 Readings \u2014 three patient app screens side-by-side",
+      "name": "Brook Health Companion kit"
+    }
+  ],
+  "templates": [],
+  "hasThumbnailHtml": false,
+  "globalCssPaths": [
+    "colors_and_type.css",
+    "fonts/fonts.css"
+  ],
+  "tokens": [
+    {
+      "name": "--brook-bold-green",
+      "value": "#305007",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-dark-green",
+      "value": "#1d280b",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-vivid-green",
+      "value": "#54871a",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-light-green",
+      "value": "#f1f5ed",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-vivid-blue",
+      "value": "#4873c2",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-green-light",
+      "value": "#f1f5ed",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-green-muted",
+      "value": "#849576",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-green-vivid",
+      "value": "#54871a",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-green-bold",
+      "value": "#305007",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-green-dark",
+      "value": "#1d280b",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-blue-light",
+      "value": "#edf5fa",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-blue-muted",
+      "value": "#778ba8",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-blue-vivid",
+      "value": "#4873c2",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-blue-bold",
+      "value": "#284075",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-blue-dark",
+      "value": "#1c2846",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-earth-light",
+      "value": "#f7f3ec",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-earth-muted",
+      "value": "#948272",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-earth-vivid",
+      "value": "#9d6626",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-earth-bold",
+      "value": "#5e3f19",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-earth-dark",
+      "value": "#3c280e",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--blue-50",
+      "value": "#f7fafc",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--blue-100",
+      "value": "#ebf1f5",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--blue-200",
+      "value": "#d1e5f8",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--blue-300",
+      "value": "#a4c8ed",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--blue-300-muted",
+      "value": "#b6c9db",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--blue-400",
+      "value": "#79a4db",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--blue-400-muted",
+      "value": "#91a6bf",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--blue-500",
+      "value": "#5888d0",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--blue-500-muted",
+      "value": "#778ba8",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--blue-600",
+      "value": "#4873c2",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--blue-600-muted",
+      "value": "#647596",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--blue-700",
+      "value": "#355bac",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--blue-700-muted",
+      "value": "#4c5d82",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--blue-800",
+      "value": "#314f95",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--blue-900",
+      "value": "#284075",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--blue-950",
+      "value": "#1c2846",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--green-50",
+      "value": "#f7faf4",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--green-100",
+      "value": "#eff4eb",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--green-200",
+      "value": "#deecd4",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--green-300",
+      "value": "#b8cfa7",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--green-300-muted",
+      "value": "#bfc9b7",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--green-400",
+      "value": "#8eb275",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--green-400-muted",
+      "value": "#9ead92",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--green-500",
+      "value": "#6f9c4b",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--green-500-muted",
+      "value": "#849576",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--green-600",
+      "value": "#54871a",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--green-600-muted",
+      "value": "#698059",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--green-700",
+      "value": "#40730a",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--green-700-muted",
+      "value": "#526a44",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--green-800",
+      "value": "#396708",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--green-900",
+      "value": "#305007",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--green-950",
+      "value": "#1e2e0a",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--earth-50",
+      "value": "#fcfbf7",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--earth-100",
+      "value": "#f7f3ec",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--earth-200",
+      "value": "#eee4d6",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--earth-300",
+      "value": "#d1b89b",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--earth-300-muted",
+      "value": "#c7beb3",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--earth-400",
+      "value": "#c09e78",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--earth-400-muted",
+      "value": "#ab9d8e",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--earth-500",
+      "value": "#b4722a",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--earth-500-muted",
+      "value": "#948272",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--earth-600",
+      "value": "#9d6626",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--earth-600-muted",
+      "value": "#806a54",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--earth-700",
+      "value": "#8a5512",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--earth-700-muted",
+      "value": "#6e5740",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--earth-800",
+      "value": "#784c13",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--earth-900",
+      "value": "#5e3f19",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--earth-950",
+      "value": "#3c280e",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-white",
+      "value": "#ffffff",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-cream",
+      "value": "#faf8f3",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-stone-50",
+      "value": "#f6f6f4",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-stone-100",
+      "value": "#ececea",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-stone-200",
+      "value": "#d8d8d4",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-stone-300",
+      "value": "#b5b5ae",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-stone-400",
+      "value": "#8a8a82",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-stone-500",
+      "value": "#61615b",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-stone-600",
+      "value": "#424240",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-stone-900",
+      "value": "#1d1d1b",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--brook-black",
+      "value": "#0a0f04",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--bg-page",
+      "value": "#ffffff",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--bg-subtle",
+      "value": "var(--brook-light-green)",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--bg-muted",
+      "value": "var(--brook-stone-50)",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--bg-inverse",
+      "value": "var(--brook-dark-green)",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--bg-inverse-deep",
+      "value": "var(--brook-blue-dark)",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--bg-elevated",
+      "value": "#ffffff",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--fg-primary",
+      "value": "var(--brook-dark-green)",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--fg-heading",
+      "value": "var(--brook-dark-green)",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--fg-secondary",
+      "value": "#4a5a3d",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--fg-muted",
+      "value": "var(--brook-stone-500)",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--fg-on-dark",
+      "value": "#f1f5ed",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--fg-on-dark-muted",
+      "value": "#b8c4a7",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--fg-link",
+      "value": "var(--brook-vivid-blue)",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--fg-brand",
+      "value": "var(--brook-bold-green)",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--fg-accent",
+      "value": "var(--brook-vivid-green)",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--border-subtle",
+      "value": "#e6ebe1",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--border-default",
+      "value": "#d3dcca",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--border-strong",
+      "value": "var(--brook-bold-green)",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--border-inverse",
+      "value": "rgba(241, 245, 237, 0.18)",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--status-success",
+      "value": "var(--brook-vivid-green)",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--status-success-bg",
+      "value": "var(--brook-light-green)",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--status-info",
+      "value": "var(--brook-vivid-blue)",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--status-info-bg",
+      "value": "var(--brook-blue-light)",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--status-warning",
+      "value": "#b6710e",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--status-warning-bg",
+      "value": "#fdf3e2",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--status-error",
+      "value": "#a62522",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--status-error-bg",
+      "value": "#fbecea",
+      "kind": "color",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--stream-blue-green",
+      "value": "linear-gradient(110deg,\n                          rgba(241,245,237,0) 0%,\n                          rgba(84,135,26,0.55) 28%,\n                          rgba(77,181,161,0.75) 52%,\n                          rgba(72,115,194,0.75) 80%,\n                          rgba(40,64,117,0.6) 100%)",
+      "kind": "color",
+      "definedIn": "colors_and_type.css",
+      "annotation": "color"
+    },
+    {
+      "name": "--stream-green",
+      "value": "linear-gradient(100deg,\n                          rgba(241,245,237,0.0) 0%,\n                          rgba(157,210,110,0.85) 40%,\n                          rgba(77,181,161,0.75) 75%,\n                          rgba(72,115,194,0.45) 100%)",
+      "kind": "color",
+      "definedIn": "colors_and_type.css",
+      "annotation": "color"
+    },
+    {
+      "name": "--stream-wash",
+      "value": "linear-gradient(135deg,\n                          #f4f9ef 0%, #e9f3e3 40%, #dfeef0 70%, #e7efff 100%)",
+      "kind": "color",
+      "definedIn": "colors_and_type.css",
+      "annotation": "color"
+    },
+    {
+      "name": "--stream-hero-wash",
+      "value": "radial-gradient(60% 80% at 80% 20%, rgba(72,115,194,0.22), transparent 70%),\n                        radial-gradient(70% 90% at 15% 90%, rgba(84,135,26,0.25), transparent 70%),\n                        #f1f5ed",
+      "kind": "color",
+      "definedIn": "colors_and_type.css",
+      "annotation": "color"
+    },
+    {
+      "name": "--brook-gradient-image",
+      "value": "url('./assets/brand/brook-gradient.jpg')",
+      "kind": "other",
+      "definedIn": "colors_and_type.css",
+      "annotation": "other"
+    },
+    {
+      "name": "--brook-gradient-css",
+      "value": "radial-gradient(80% 110% at 85% 20%, #3db9f2 0%, rgba(61,185,242,0) 55%),\n                          radial-gradient(70% 90% at 25% 75%, #3aa9e8 0%, rgba(58,169,232,0) 60%),\n                          radial-gradient(55% 70% at 40% 55%, #83d667 0%, rgba(131,214,103,0) 65%),\n                          linear-gradient(135deg, #f6fbf6 0%, #e9f4ef 35%, #c9eaf5 70%, #7fc8e6 100%)",
+      "kind": "color",
+      "definedIn": "colors_and_type.css",
+      "annotation": "color"
+    },
+    {
+      "name": "--font-display",
+      "value": "'Red Hat Display', 'Avenir Next', 'Avenir', system-ui, sans-serif",
+      "kind": "font",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--font-body",
+      "value": "'Red Hat Text', 'Red Hat Display', 'Avenir Next', system-ui, sans-serif",
+      "kind": "font",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--font-script",
+      "value": "'Breathing', 'Snell Roundhand', 'Apple Chancery', cursive",
+      "kind": "font",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--font-script-swash",
+      "value": "'Breathing Swash', 'Breathing', 'Snell Roundhand', cursive",
+      "kind": "font",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--font-mono",
+      "value": "'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace",
+      "kind": "font",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--fs-display-xl",
+      "value": "clamp(3.5rem, 6vw + 1rem, 6rem)",
+      "kind": "spacing",
+      "definedIn": "colors_and_type.css",
+      "annotation": "spacing"
+    },
+    {
+      "name": "--fs-display-lg",
+      "value": "clamp(2.75rem, 4vw + 1rem, 4.25rem)",
+      "kind": "spacing",
+      "definedIn": "colors_and_type.css",
+      "annotation": "spacing"
+    },
+    {
+      "name": "--fs-h1",
+      "value": "clamp(2.25rem, 2vw + 1.25rem, 3.25rem)",
+      "kind": "spacing",
+      "definedIn": "colors_and_type.css",
+      "annotation": "spacing"
+    },
+    {
+      "name": "--fs-h2",
+      "value": "clamp(1.75rem, 1.2vw + 1.2rem, 2.375rem)",
+      "kind": "spacing",
+      "definedIn": "colors_and_type.css",
+      "annotation": "spacing"
+    },
+    {
+      "name": "--fs-h3",
+      "value": "clamp(1.375rem, 0.5vw + 1.1rem, 1.625rem)",
+      "kind": "spacing",
+      "definedIn": "colors_and_type.css",
+      "annotation": "spacing"
+    },
+    {
+      "name": "--fs-h4",
+      "value": "1.125rem",
+      "kind": "spacing",
+      "definedIn": "colors_and_type.css",
+      "annotation": "spacing"
+    },
+    {
+      "name": "--fs-lead",
+      "value": "1.25rem",
+      "kind": "spacing",
+      "definedIn": "colors_and_type.css",
+      "annotation": "spacing"
+    },
+    {
+      "name": "--fs-body",
+      "value": "1rem",
+      "kind": "spacing",
+      "definedIn": "colors_and_type.css",
+      "annotation": "spacing"
+    },
+    {
+      "name": "--fs-small",
+      "value": "0.875rem",
+      "kind": "spacing",
+      "definedIn": "colors_and_type.css",
+      "annotation": "spacing"
+    },
+    {
+      "name": "--fs-caption",
+      "value": "0.75rem",
+      "kind": "spacing",
+      "definedIn": "colors_and_type.css",
+      "annotation": "spacing"
+    },
+    {
+      "name": "--fs-eyebrow",
+      "value": "0.75rem",
+      "kind": "spacing",
+      "definedIn": "colors_and_type.css",
+      "annotation": "spacing"
+    },
+    {
+      "name": "--lh-tight",
+      "value": "1.08",
+      "kind": "font",
+      "definedIn": "colors_and_type.css",
+      "annotation": "font"
+    },
+    {
+      "name": "--lh-snug",
+      "value": "1.2",
+      "kind": "font",
+      "definedIn": "colors_and_type.css",
+      "annotation": "font"
+    },
+    {
+      "name": "--lh-normal",
+      "value": "1.5",
+      "kind": "font",
+      "definedIn": "colors_and_type.css",
+      "annotation": "font"
+    },
+    {
+      "name": "--lh-relaxed",
+      "value": "1.65",
+      "kind": "font",
+      "definedIn": "colors_and_type.css",
+      "annotation": "font"
+    },
+    {
+      "name": "--tracking-tight",
+      "value": "-0.02em",
+      "kind": "font",
+      "definedIn": "colors_and_type.css",
+      "annotation": "font"
+    },
+    {
+      "name": "--tracking-normal",
+      "value": "0",
+      "kind": "font",
+      "definedIn": "colors_and_type.css",
+      "annotation": "font"
+    },
+    {
+      "name": "--tracking-wide",
+      "value": "0.08em",
+      "kind": "font",
+      "definedIn": "colors_and_type.css",
+      "annotation": "font"
+    },
+    {
+      "name": "--tracking-allcaps",
+      "value": "0.14em",
+      "kind": "font",
+      "definedIn": "colors_and_type.css",
+      "annotation": "font"
+    },
+    {
+      "name": "--space-1",
+      "value": "4px",
+      "kind": "spacing",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--space-2",
+      "value": "8px",
+      "kind": "spacing",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--space-3",
+      "value": "12px",
+      "kind": "spacing",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--space-4",
+      "value": "16px",
+      "kind": "spacing",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--space-5",
+      "value": "24px",
+      "kind": "spacing",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--space-6",
+      "value": "32px",
+      "kind": "spacing",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--space-7",
+      "value": "48px",
+      "kind": "spacing",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--space-8",
+      "value": "64px",
+      "kind": "spacing",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--space-9",
+      "value": "96px",
+      "kind": "spacing",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--space-10",
+      "value": "128px",
+      "kind": "spacing",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--radius-xs",
+      "value": "4px",
+      "kind": "radius",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--radius-sm",
+      "value": "8px",
+      "kind": "radius",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--radius-md",
+      "value": "12px",
+      "kind": "radius",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--radius-lg",
+      "value": "20px",
+      "kind": "radius",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--radius-xl",
+      "value": "32px",
+      "kind": "radius",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--radius-pill",
+      "value": "999px",
+      "kind": "radius",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--radius-full",
+      "value": "9999px",
+      "kind": "radius",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--shadow-xs",
+      "value": "0 1px 2px rgba(29, 40, 11, 0.06)",
+      "kind": "shadow",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--shadow-sm",
+      "value": "0 2px 6px rgba(29, 40, 11, 0.06), 0 1px 2px rgba(29, 40, 11, 0.04)",
+      "kind": "shadow",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--shadow-md",
+      "value": "0 8px 20px -6px rgba(29, 40, 11, 0.10), 0 2px 6px rgba(29, 40, 11, 0.05)",
+      "kind": "shadow",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--shadow-lg",
+      "value": "0 24px 48px -18px rgba(29, 40, 11, 0.22), 0 4px 10px rgba(29, 40, 11, 0.06)",
+      "kind": "shadow",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--shadow-focus",
+      "value": "0 0 0 3px rgba(72, 115, 194, 0.35)",
+      "kind": "shadow",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--shadow-brand",
+      "value": "0 18px 48px -20px rgba(48, 80, 7, 0.35)",
+      "kind": "shadow",
+      "definedIn": "colors_and_type.css"
+    },
+    {
+      "name": "--ease-standard",
+      "value": "cubic-bezier(0.3, 0.6, 0.2, 1)",
+      "kind": "other",
+      "definedIn": "colors_and_type.css",
+      "annotation": "other"
+    },
+    {
+      "name": "--ease-entrance",
+      "value": "cubic-bezier(0.2, 0.8, 0.2, 1)",
+      "kind": "other",
+      "definedIn": "colors_and_type.css",
+      "annotation": "other"
+    },
+    {
+      "name": "--ease-exit",
+      "value": "cubic-bezier(0.4, 0.0, 0.6, 1)",
+      "kind": "other",
+      "definedIn": "colors_and_type.css",
+      "annotation": "other"
+    },
+    {
+      "name": "--dur-fast",
+      "value": "140ms",
+      "kind": "other",
+      "definedIn": "colors_and_type.css",
+      "annotation": "other"
+    },
+    {
+      "name": "--dur-base",
+      "value": "220ms",
+      "kind": "other",
+      "definedIn": "colors_and_type.css",
+      "annotation": "other"
+    },
+    {
+      "name": "--dur-slow",
+      "value": "420ms",
+      "kind": "other",
+      "definedIn": "colors_and_type.css",
+      "annotation": "other"
+    },
+    {
+      "name": "--content-max",
+      "value": "1200px",
+      "kind": "spacing",
+      "definedIn": "colors_and_type.css",
+      "annotation": "spacing"
+    },
+    {
+      "name": "--content-narrow",
+      "value": "720px",
+      "kind": "spacing",
+      "definedIn": "colors_and_type.css",
+      "annotation": "spacing"
+    },
+    {
+      "name": "--content-wide",
+      "value": "1440px",
+      "kind": "spacing",
+      "definedIn": "colors_and_type.css",
+      "annotation": "spacing"
+    },
+    {
+      "name": "--gutter-x",
+      "value": "clamp(20px, 4vw, 48px)",
+      "kind": "spacing",
+      "definedIn": "colors_and_type.css",
+      "annotation": "spacing"
+    }
+  ],
+  "themes": [],
+  "fonts": [
+    {
+      "family": "Red Hat Display",
+      "weight": "300",
+      "style": "normal",
+      "cssPath": "fonts/fonts.css",
+      "files": [
+        "fonts/RedHatDisplay-Light.ttf"
+      ]
+    },
+    {
+      "family": "Red Hat Display",
+      "weight": "300",
+      "style": "italic",
+      "cssPath": "fonts/fonts.css",
+      "files": [
+        "fonts/RedHatDisplay-LightItalic.ttf"
+      ]
+    },
+    {
+      "family": "Red Hat Display",
+      "weight": "400",
+      "style": "normal",
+      "cssPath": "fonts/fonts.css",
+      "files": [
+        "fonts/RedHatDisplay-Regular.ttf"
+      ]
+    },
+    {
+      "family": "Red Hat Display",
+      "weight": "400",
+      "style": "italic",
+      "cssPath": "fonts/fonts.css",
+      "files": [
+        "fonts/RedHatDisplay-Italic.ttf"
+      ]
+    },
+    {
+      "family": "Red Hat Display",
+      "weight": "500",
+      "style": "normal",
+      "cssPath": "fonts/fonts.css",
+      "files": [
+        "fonts/RedHatDisplay-Medium.ttf"
+      ]
+    },
+    {
+      "family": "Red Hat Display",
+      "weight": "500",
+      "style": "italic",
+      "cssPath": "fonts/fonts.css",
+      "files": [
+        "fonts/RedHatDisplay-MediumItalic.ttf"
+      ]
+    },
+    {
+      "family": "Red Hat Display",
+      "weight": "600",
+      "style": "normal",
+      "cssPath": "fonts/fonts.css",
+      "files": [
+        "fonts/RedHatDisplay-SemiBold.ttf"
+      ]
+    },
+    {
+      "family": "Red Hat Display",
+      "weight": "600",
+      "style": "italic",
+      "cssPath": "fonts/fonts.css",
+      "files": [
+        "fonts/RedHatDisplay-SemiBoldItalic.ttf"
+      ]
+    },
+    {
+      "family": "Red Hat Display",
+      "weight": "700",
+      "style": "normal",
+      "cssPath": "fonts/fonts.css",
+      "files": [
+        "fonts/RedHatDisplay-Bold.ttf"
+      ]
+    },
+    {
+      "family": "Red Hat Display",
+      "weight": "700",
+      "style": "italic",
+      "cssPath": "fonts/fonts.css",
+      "files": [
+        "fonts/RedHatDisplay-BoldItalic.ttf"
+      ]
+    },
+    {
+      "family": "Red Hat Display",
+      "weight": "800",
+      "style": "normal",
+      "cssPath": "fonts/fonts.css",
+      "files": [
+        "fonts/RedHatDisplay-ExtraBold.ttf"
+      ]
+    },
+    {
+      "family": "Red Hat Display",
+      "weight": "800",
+      "style": "italic",
+      "cssPath": "fonts/fonts.css",
+      "files": [
+        "fonts/RedHatDisplay-ExtraBoldItalic.ttf"
+      ]
+    },
+    {
+      "family": "Red Hat Display",
+      "weight": "900",
+      "style": "normal",
+      "cssPath": "fonts/fonts.css",
+      "files": [
+        "fonts/RedHatDisplay-Black.ttf"
+      ]
+    },
+    {
+      "family": "Red Hat Display",
+      "weight": "900",
+      "style": "italic",
+      "cssPath": "fonts/fonts.css",
+      "files": [
+        "fonts/RedHatDisplay-BlackItalic.ttf"
+      ]
+    },
+    {
+      "family": "Red Hat Display",
+      "weight": "300 900",
+      "style": "normal",
+      "cssPath": "fonts/fonts.css",
+      "files": [
+        "fonts/RedHatDisplay-VariableFont_wght.ttf"
+      ]
+    },
+    {
+      "family": "Red Hat Text",
+      "weight": "300 700",
+      "style": "normal",
+      "cssPath": "fonts/fonts.css",
+      "files": [
+        "fonts/RedHatText-VariableFont_wght.ttf"
+      ]
+    },
+    {
+      "family": "Breathing",
+      "weight": "400",
+      "style": "normal",
+      "cssPath": "fonts/fonts.css",
+      "files": [
+        "fonts/Breathing.woff2",
+        "fonts/Breathing.woff",
+        "fonts/Breathing.ttf",
+        "fonts/Breathing.otf"
+      ]
+    },
+    {
+      "family": "Breathing Swash",
+      "weight": "400",
+      "style": "normal",
+      "cssPath": "fonts/fonts.css",
+      "files": [
+        "fonts/Breathing_Swash.woff2",
+        "fonts/Breathing_Swash.woff",
+        "fonts/Breathing_Swash.ttf",
+        "fonts/Breathing_Swash.otf"
+      ]
+    }
+  ],
+  "brandFonts": [
+    {
+      "family": "Red Hat Display",
+      "status": "ok",
+      "tokens": [
+        "--font-display"
+      ],
+      "path": "fonts/fonts.css"
+    },
+    {
+      "family": "Red Hat Text",
+      "status": "ok",
+      "tokens": [
+        "--font-body"
+      ],
+      "path": "fonts/fonts.css"
+    },
+    {
+      "family": "Breathing",
+      "status": "ok",
+      "tokens": [
+        "--font-script"
+      ],
+      "path": "fonts/fonts.css"
+    },
+    {
+      "family": "Breathing Swash",
+      "status": "ok",
+      "tokens": [
+        "--font-script-swash"
+      ],
+      "path": "fonts/fonts.css"
+    },
+    {
+      "family": "JetBrains Mono",
+      "status": "ok",
+      "tokens": [
+        "--font-mono"
+      ],
+      "path": "colors_and_type.css"
+    }
+  ],
+  "source": "spa"
+}
