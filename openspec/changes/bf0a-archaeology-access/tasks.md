@@ -9,7 +9,7 @@ socket-blocked — the Mongo client is faked at the driver boundary.
 
 ## 1. Access seam
 
-- [ ] 1.1 Scaffold `packages/archaeology` as a workspace member and build the read-only client
+- [x] 1.1 Scaffold `packages/archaeology` as a workspace member and build the read-only client
       factory: connection from the documented env var names only, streamline-inherited driver
       and TLS/retry posture (cite the source path in the README and
       `docs/contracts/consumes.md`), refusal when the resolved user detectably holds write
