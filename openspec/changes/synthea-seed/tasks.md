@@ -34,7 +34,7 @@ Java in any test — unit tests cover overlay application and manifest verificat
 
 ## 3. Wave 2 — CI wiring
 
-- [ ] 3.1 `synthea-regen.yml` workflow (`workflow_dispatch` + schedule) calling
+- [x] 3.1 `synthea-regen.yml` workflow (`workflow_dispatch` + schedule) calling
       `task synthea:regen PROFILE=staging` and uploading the artifact; cat4 gate green
       (`main.yml` untouched, every `run:` resolves to a Taskfile target); README documents the
       Java prerequisite as regen-only. Tests: scaffold cat4 check passes; smoke-parse of the
