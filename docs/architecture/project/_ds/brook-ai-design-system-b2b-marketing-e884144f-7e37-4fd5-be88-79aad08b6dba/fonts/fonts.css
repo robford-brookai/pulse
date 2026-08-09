@@ -1,0 +1,73 @@
+/* Brook Design System — Typography
+ * Local brand fonts:
+ *   • Red Hat Display — headlines (SemiBold 600 primary)
+ *   • Red Hat Text    — body
+ *   • Breathing       — licensed script accent (base + swash cuts)
+ *   • JetBrains Mono  — mono/code, loaded from Google Fonts (no local file)
+ *
+ * Red Hat Display: static cuts declared first as fallback for print/PDF pipelines
+ * that don't handle variable fonts; the variable font is declared LAST so modern
+ * browsers prefer it (cascade: last matching @font-face wins for exact weight).
+ */
+
+/* ---------- JetBrains Mono (code / tokens) — Google Fonts ---------- */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* ---------- Red Hat Display — static cuts (fallback) ---------- */
+@font-face { font-family:'Red Hat Display'; src:url('./RedHatDisplay-Light.ttf')            format('truetype'); font-weight:300; font-style:normal; font-display:swap; }
+@font-face { font-family:'Red Hat Display'; src:url('./RedHatDisplay-LightItalic.ttf')      format('truetype'); font-weight:300; font-style:italic; font-display:swap; }
+@font-face { font-family:'Red Hat Display'; src:url('./RedHatDisplay-Regular.ttf')          format('truetype'); font-weight:400; font-style:normal; font-display:swap; }
+@font-face { font-family:'Red Hat Display'; src:url('./RedHatDisplay-Italic.ttf')           format('truetype'); font-weight:400; font-style:italic; font-display:swap; }
+@font-face { font-family:'Red Hat Display'; src:url('./RedHatDisplay-Medium.ttf')           format('truetype'); font-weight:500; font-style:normal; font-display:swap; }
+@font-face { font-family:'Red Hat Display'; src:url('./RedHatDisplay-MediumItalic.ttf')     format('truetype'); font-weight:500; font-style:italic; font-display:swap; }
+@font-face { font-family:'Red Hat Display'; src:url('./RedHatDisplay-SemiBold.ttf')         format('truetype'); font-weight:600; font-style:normal; font-display:swap; }
+@font-face { font-family:'Red Hat Display'; src:url('./RedHatDisplay-SemiBoldItalic.ttf')   format('truetype'); font-weight:600; font-style:italic; font-display:swap; }
+@font-face { font-family:'Red Hat Display'; src:url('./RedHatDisplay-Bold.ttf')             format('truetype'); font-weight:700; font-style:normal; font-display:swap; }
+@font-face { font-family:'Red Hat Display'; src:url('./RedHatDisplay-BoldItalic.ttf')       format('truetype'); font-weight:700; font-style:italic; font-display:swap; }
+@font-face { font-family:'Red Hat Display'; src:url('./RedHatDisplay-ExtraBold.ttf')        format('truetype'); font-weight:800; font-style:normal; font-display:swap; }
+@font-face { font-family:'Red Hat Display'; src:url('./RedHatDisplay-ExtraBoldItalic.ttf')  format('truetype'); font-weight:800; font-style:italic; font-display:swap; }
+@font-face { font-family:'Red Hat Display'; src:url('./RedHatDisplay-Black.ttf')            format('truetype'); font-weight:900; font-style:normal; font-display:swap; }
+@font-face { font-family:'Red Hat Display'; src:url('./RedHatDisplay-BlackItalic.ttf')      format('truetype'); font-weight:900; font-style:italic; font-display:swap; }
+
+/* ---------- Red Hat Display — variable font (preferred) ---------- */
+@font-face {
+  font-family: 'Red Hat Display';
+  src: url('./RedHatDisplay-VariableFont_wght.ttf') format('truetype-variations');
+  font-weight: 300 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ---------- Red Hat Text (body) ---------- */
+@font-face {
+  font-family: 'Red Hat Text';
+  src: url('./RedHatText-VariableFont_wght.ttf') format('truetype-variations');
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ---------- Breathing (brand script accent) ----------
+ * Licensed cut — use strictly 1–3 words, once per layout.
+ * Two files: Breathing (base) + Breathing Swash (decorative variant).
+ */
+@font-face {
+  font-family: 'Breathing';
+  src: url('./Breathing.woff2') format('woff2'),
+       url('./Breathing.woff')  format('woff'),
+       url('./Breathing.ttf')   format('truetype'),
+       url('./Breathing.otf')   format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Breathing Swash';
+  src: url('./Breathing_Swash.woff2') format('woff2'),
+       url('./Breathing_Swash.woff')  format('woff'),
+       url('./Breathing_Swash.ttf')   format('truetype'),
+       url('./Breathing_Swash.otf')   format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}

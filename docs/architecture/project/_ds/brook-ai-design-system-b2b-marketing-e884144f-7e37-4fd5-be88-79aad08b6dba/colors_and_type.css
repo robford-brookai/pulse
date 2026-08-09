@@ -1,0 +1,315 @@
+/* =========================================================================
+   Brook Design System — Colors & Type
+   Single source of truth for the visual language.
+   Based on BROOK_Guidelines_v1-2025.
+   ========================================================================= */
+
+@import url('./fonts/fonts.css');
+
+:root {
+
+  /* ---------- PRIMARY PALETTE (Core — from guidelines §3.1) ------------- */
+  --brook-bold-green:   #305007; /* Headlines, key points, emphasis     */
+  --brook-dark-green:   #1d280b; /* Body text on light / dark bg        */
+  --brook-vivid-green:  #54871a; /* Pop / stand-out                     */
+  --brook-light-green:  #f1f5ed; /* Light background / wash             */
+  --brook-vivid-blue:   #4873c2; /* Pop / data / secondary accent       */
+
+  /* ---------- EXTENDED FAMILIES (§3.1) ---------------------------------- */
+  /* Green family */
+  --brook-green-light:  #f1f5ed;
+  --brook-green-muted:  #849576;
+  --brook-green-vivid:  #54871a;
+  --brook-green-bold:   #305007;
+  --brook-green-dark:   #1d280b;
+
+  /* Blue family */
+  --brook-blue-light:   #edf5fa;
+  --brook-blue-muted:   #778ba8;
+  --brook-blue-vivid:   #4873c2;
+  --brook-blue-bold:    #284075;
+  --brook-blue-dark:    #1c2846;
+
+  /* Earth / Clay family */
+  --brook-earth-light:  #f7f3ec;
+  --brook-earth-muted:  #948272;
+  --brook-earth-vivid:  #9d6626;
+  --brook-earth-bold:   #5e3f19;
+  --brook-earth-dark:   #3c280e;
+
+  /* ---------- FULL REFERENCE SCALES (from export colors.json) ----------- */
+  /* Complete tonal ramps for utility use. Semantic aliases above map onto
+     these. Each family: 50 (lightest) → 950 (darkest), plus -muted variants
+     at 400–700 for desaturated surfaces, borders, and secondary text.        */
+
+  /* Blue / Primary */
+  --blue-50:        #f7fafc;
+  --blue-100:       #ebf1f5;
+  --blue-200:       #d1e5f8;
+  --blue-300:       #a4c8ed;
+  --blue-300-muted: #b6c9db;
+  --blue-400:       #79a4db;
+  --blue-400-muted: #91a6bf;
+  --blue-500:       #5888d0;
+  --blue-500-muted: #778ba8;
+  --blue-600:       #4873c2;  /* Vivid Blue — primary accent */
+  --blue-600-muted: #647596;
+  --blue-700:       #355bac;
+  --blue-700-muted: #4c5d82;
+  --blue-800:       #314f95;
+  --blue-900:       #284075;  /* Blue Bold */
+  --blue-950:       #1c2846;  /* Blue Dark */
+
+  /* Green Accent */
+  --green-50:        #f7faf4;
+  --green-100:       #eff4eb;
+  --green-200:       #deecd4;
+  --green-300:       #b8cfa7;
+  --green-300-muted: #bfc9b7;
+  --green-400:       #8eb275;
+  --green-400-muted: #9ead92;
+  --green-500:       #6f9c4b;
+  --green-500-muted: #849576;
+  --green-600:       #54871a;  /* Vivid Green */
+  --green-600-muted: #698059;
+  --green-700:       #40730a;
+  --green-700-muted: #526a44;
+  --green-800:       #396708;
+  --green-900:       #305007;  /* Bold Green */
+  --green-950:       #1e2e0a;  /* Dark Green (accent 950) */
+
+  /* Earth */
+  --earth-50:        #fcfbf7;
+  --earth-100:       #f7f3ec;
+  --earth-200:       #eee4d6;
+  --earth-300:       #d1b89b;
+  --earth-300-muted: #c7beb3;
+  --earth-400:       #c09e78;
+  --earth-400-muted: #ab9d8e;
+  --earth-500:       #b4722a;
+  --earth-500-muted: #948272;
+  --earth-600:       #9d6626;  /* Earth Vivid */
+  --earth-600-muted: #806a54;
+  --earth-700:       #8a5512;
+  --earth-700-muted: #6e5740;
+  --earth-800:       #784c13;
+  --earth-900:       #5e3f19;  /* Earth Bold */
+  --earth-950:       #3c280e;  /* Earth Dark */
+
+  /* ---------- NEUTRALS -------------------------------------------------- */
+  --brook-white:        #ffffff;
+  --brook-cream:        #faf8f3;
+  --brook-stone-50:     #f6f6f4;
+  --brook-stone-100:    #ececea;
+  --brook-stone-200:    #d8d8d4;
+  --brook-stone-300:    #b5b5ae;
+  --brook-stone-400:    #8a8a82;
+  --brook-stone-500:    #61615b;
+  --brook-stone-600:    #424240;
+  --brook-stone-900:    #1d1d1b;
+  --brook-black:        #0a0f04;
+
+  /* ---------- SEMANTIC TOKENS (functional aliases) ---------------------- */
+  /* Backgrounds */
+  --bg-page:            #ffffff;
+  --bg-subtle:          var(--brook-light-green);   /* wash panels       */
+  --bg-muted:           var(--brook-stone-50);
+  --bg-inverse:         var(--brook-dark-green);    /* dark section hero */
+  --bg-inverse-deep:    var(--brook-blue-dark);     /* alt dark          */
+  --bg-elevated:        #ffffff;                    /* cards              */
+
+  /* Foregrounds */
+  --fg-primary:         var(--brook-dark-green);    /* body copy         */
+  --fg-heading:         var(--brook-dark-green);
+  --fg-secondary:       #4a5a3d;                    /* sub-body          */
+  --fg-muted:           var(--brook-stone-500);
+  --fg-on-dark:         #f1f5ed;
+  --fg-on-dark-muted:   #b8c4a7;
+  --fg-link:            var(--brook-vivid-blue);
+  --fg-brand:           var(--brook-bold-green);
+  --fg-accent:          var(--brook-vivid-green);
+
+  /* Borders */
+  --border-subtle:      #e6ebe1;
+  --border-default:     #d3dcca;
+  --border-strong:      var(--brook-bold-green);
+  --border-inverse:     rgba(241, 245, 237, 0.18);
+
+  /* Status (extension, built from family) */
+  --status-success:     var(--brook-vivid-green);
+  --status-success-bg:  var(--brook-light-green);
+  --status-info:        var(--brook-vivid-blue);
+  --status-info-bg:     var(--brook-blue-light);
+  --status-warning:     #b6710e;
+  --status-warning-bg:  #fdf3e2;
+  --status-error:       #a62522;
+  --status-error-bg:    #fbecea;
+
+  /* ---------- CARE STREAM GRADIENTS (signature element) ----------------- */
+  --stream-blue-green:  linear-gradient(110deg,
+                          rgba(241,245,237,0) 0%,
+                          rgba(84,135,26,0.55) 28%,
+                          rgba(77,181,161,0.75) 52%,
+                          rgba(72,115,194,0.75) 80%,
+                          rgba(40,64,117,0.6) 100%); /* @kind color */
+  --stream-green:       linear-gradient(100deg,
+                          rgba(241,245,237,0.0) 0%,
+                          rgba(157,210,110,0.85) 40%,
+                          rgba(77,181,161,0.75) 75%,
+                          rgba(72,115,194,0.45) 100%); /* @kind color */
+  --stream-wash:        linear-gradient(135deg,
+                          #f4f9ef 0%, #e9f3e3 40%, #dfeef0 70%, #e7efff 100%); /* @kind color */
+  --stream-hero-wash:   radial-gradient(60% 80% at 80% 20%, rgba(72,115,194,0.22), transparent 70%),
+                        radial-gradient(70% 90% at 15% 90%, rgba(84,135,26,0.25), transparent 70%),
+                        #f1f5ed; /* @kind color */
+
+  /* ---------- OFFICIAL BROOK GRADIENT (use sparingly) ------------------- */
+  /* The painterly green→blue wash used for tentpole moments only.         */
+  /* Prefer the JPEG for pixel-accurate brand matching; CSS fallback below */
+  /* is available when an image can't be loaded.                           */
+  --brook-gradient-image: url('./assets/brand/brook-gradient.jpg'); /* @kind other */
+  --brook-gradient-css:   radial-gradient(80% 110% at 85% 20%, #3db9f2 0%, rgba(61,185,242,0) 55%),
+                          radial-gradient(70% 90% at 25% 75%, #3aa9e8 0%, rgba(58,169,232,0) 60%),
+                          radial-gradient(55% 70% at 40% 55%, #83d667 0%, rgba(131,214,103,0) 65%),
+                          linear-gradient(135deg, #f6fbf6 0%, #e9f4ef 35%, #c9eaf5 70%, #7fc8e6 100%); /* @kind color */
+
+  /* ---------- TYPOGRAPHY ------------------------------------------------ */
+  --font-display:       'Red Hat Display', 'Avenir Next', 'Avenir', system-ui, sans-serif;
+  --font-body:          'Red Hat Text', 'Red Hat Display', 'Avenir Next', system-ui, sans-serif;
+  --font-script:        'Breathing', 'Snell Roundhand', 'Apple Chancery', cursive;
+  --font-script-swash:  'Breathing Swash', 'Breathing', 'Snell Roundhand', cursive;
+  --font-mono:          'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Fluid type scale — headline uses Red Hat Display SemiBold (600) */
+  --fs-display-xl:      clamp(3.5rem, 6vw + 1rem, 6rem);     /* @kind spacing */
+  --fs-display-lg:      clamp(2.75rem, 4vw + 1rem, 4.25rem); /* @kind spacing */
+  --fs-h1:              clamp(2.25rem, 2vw + 1.25rem, 3.25rem); /* @kind spacing */
+  --fs-h2:              clamp(1.75rem, 1.2vw + 1.2rem, 2.375rem); /* @kind spacing */
+  --fs-h3:              clamp(1.375rem, 0.5vw + 1.1rem, 1.625rem); /* @kind spacing */
+  --fs-h4:              1.125rem; /* @kind spacing */
+  --fs-lead:            1.25rem; /* @kind spacing */
+  --fs-body:            1rem; /* @kind spacing */
+  --fs-small:           0.875rem; /* @kind spacing */
+  --fs-caption:         0.75rem; /* @kind spacing */
+  --fs-eyebrow:         0.75rem; /* @kind spacing */
+
+  --lh-tight:           1.08; /* @kind font */
+  --lh-snug:            1.2; /* @kind font */
+  --lh-normal:          1.5; /* @kind font */
+  --lh-relaxed:         1.65; /* @kind font */
+
+  --tracking-tight:     -0.02em;   /* @kind font */
+  --tracking-normal:    0; /* @kind font */
+  --tracking-wide:      0.08em;    /* @kind font */
+  --tracking-allcaps:   0.14em; /* @kind font */
+
+  /* ---------- SPACING (8pt grid) ---------------------------------------- */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  24px;
+  --space-6:  32px;
+  --space-7:  48px;
+  --space-8:  64px;
+  --space-9:  96px;
+  --space-10: 128px;
+
+  /* ---------- RADII ----------------------------------------------------- */
+  --radius-xs:  4px;
+  --radius-sm:  8px;
+  --radius-md:  12px;   /* standard card                                    */
+  --radius-lg:  20px;   /* large card / hero image                          */
+  --radius-xl:  32px;
+  --radius-pill:999px;  /* pill buttons, tags, tab bars                     */
+  --radius-full:9999px;
+
+  /* ---------- SHADOWS (soft, humane — no harsh drops) ------------------- */
+  --shadow-xs:   0 1px 2px rgba(29, 40, 11, 0.06);
+  --shadow-sm:   0 2px 6px rgba(29, 40, 11, 0.06), 0 1px 2px rgba(29, 40, 11, 0.04);
+  --shadow-md:   0 8px 20px -6px rgba(29, 40, 11, 0.10), 0 2px 6px rgba(29, 40, 11, 0.05);
+  --shadow-lg:   0 24px 48px -18px rgba(29, 40, 11, 0.22), 0 4px 10px rgba(29, 40, 11, 0.06);
+  --shadow-focus:0 0 0 3px rgba(72, 115, 194, 0.35);
+  --shadow-brand:0 18px 48px -20px rgba(48, 80, 7, 0.35);
+
+  /* ---------- MOTION ---------------------------------------------------- */
+  --ease-standard: cubic-bezier(0.3, 0.6, 0.2, 1); /* @kind other */
+  --ease-entrance: cubic-bezier(0.2, 0.8, 0.2, 1); /* @kind other */
+  --ease-exit:     cubic-bezier(0.4, 0.0, 0.6, 1); /* @kind other */
+  --dur-fast:      140ms; /* @kind other */
+  --dur-base:      220ms; /* @kind other */
+  --dur-slow:      420ms; /* @kind other */
+
+  /* ---------- LAYOUT ---------------------------------------------------- */
+  --content-max:      1200px; /* @kind spacing */
+  --content-narrow:   720px; /* @kind spacing */
+  --content-wide:     1440px; /* @kind spacing */
+  --gutter-x:         clamp(20px, 4vw, 48px); /* @kind spacing */
+}
+
+/* =========================================================================
+   SEMANTIC TYPE STYLES
+   Apply by element OR by class (e.g. .h1, .lead, .eyebrow).
+   ========================================================================= */
+
+html { font-family: var(--font-body); color: var(--fg-primary); }
+
+body {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-normal);
+  color: var(--fg-primary);
+  background: var(--bg-page);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+h1, .h1, h2, .h2, h3, .h3, h4, .h4 {
+  font-family: var(--font-display);
+  font-weight: 600; /* SemiBold — per guidelines */
+  color: var(--fg-heading);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--lh-tight);
+  text-wrap: balance;
+  margin: 0;
+}
+h1, .h1 { font-size: var(--fs-h1); }
+h2, .h2 { font-size: var(--fs-h2); line-height: var(--lh-snug); }
+h3, .h3 { font-size: var(--fs-h3); line-height: var(--lh-snug); letter-spacing: -0.01em; }
+h4, .h4 { font-size: var(--fs-h4); font-weight: 600; letter-spacing: 0; }
+
+.display-xl { font-family: var(--font-display); font-weight: 600; font-size: var(--fs-display-xl); line-height: 0.98; letter-spacing: -0.03em; }
+.display-lg { font-family: var(--font-display); font-weight: 600; font-size: var(--fs-display-lg); line-height: 1.02; letter-spacing: -0.025em; }
+
+p, .p { font-size: var(--fs-body); line-height: var(--lh-relaxed); color: var(--fg-primary); margin: 0; text-wrap: pretty; }
+.lead { font-size: var(--fs-lead); line-height: var(--lh-relaxed); color: var(--fg-secondary); }
+.small { font-size: var(--fs-small); }
+.caption { font-size: var(--fs-caption); color: var(--fg-muted); }
+
+.eyebrow {
+  font-family: var(--font-display);
+  font-size: var(--fs-eyebrow);
+  font-weight: 600;
+  letter-spacing: var(--tracking-allcaps);
+  text-transform: uppercase;
+  color: var(--fg-accent);
+}
+
+/* Breathing script accent — strictly 1-3 words, once per layout. */
+.script-accent {
+  font-family: var(--font-script);
+  font-weight: 400;
+  color: var(--brook-vivid-blue);
+  letter-spacing: 0;
+  /* intentionally inline-block so designers can offset/rotate per layout */
+  display: inline-block;
+}
+.script-accent--swash {
+  font-family: var(--font-script-swash);
+}
+
+a { color: var(--fg-link); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+a:hover { text-decoration-thickness: 2px; }
+
+code, kbd, pre, samp { font-family: var(--font-mono); font-size: 0.92em; }
