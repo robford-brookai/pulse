@@ -9,7 +9,7 @@ Java in any test — unit tests cover overlay application and manifest verificat
 
 ## 1. Wave 0 — scaffold and pins
 
-- [ ] 1.1 Scaffold `packages/synthea-seed` as a workspace member; pin Synthea JAR version (by
+- [x] 1.1 Scaffold `packages/synthea-seed` as a workspace member; pin Synthea JAR version (by
       checksum), module config, RNG seed, and the two population profiles (dev ~500, staging
       ~50k); define the checksum-manifest format. Tests: manifest format round-trips; pin
       config validates.

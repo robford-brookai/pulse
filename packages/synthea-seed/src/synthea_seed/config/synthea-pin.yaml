@@ -1,0 +1,43 @@
+# The determinism contract for every generated population (design.md decisions 1, 2, 4).
+#
+# Everything generation depends on is pinned here: the Synthea JAR by sha256, the module
+# configuration passed as Synthea properties, the RNG seeds, and the two population profiles.
+# Editing this file IS the re-pin — it is an explicit, reviewed change, never automatic, and
+# every edit invalidates the committed manifests, which must be re-authored via
+# `task synthea:regen PROFILE=<p> REPIN=1` from the CI runner (the manifest-authoring
+# platform of record; see the package README section in the repo README).
+jar:
+  version: v3.3.0
+  url: https://github.com/synthetichealth/synthea/releases/download/v3.3.0/synthea-with-dependencies.jar
+  sha256: 8ba04f7d73abadd5a377e41edf24c5c83935a1cb07c6d982cd5db731ef1cf445
+
+# RNG seeds: -s (population), -cs (clinician), and -r (reference date) — all three are needed
+# for repeatable runs; leaving any unset lets wall-clock time into the generation.
+seed: 20260809
+clinician_seed: 20260809
+reference_date: "20260809"
+
+# Module configuration, passed to Synthea as a properties file (-c). Deterministic output
+# needs stable UUIDs and a single exporter; timestamped folder names would defeat the
+# manifest by construction.
+properties:
+  exporter.fhir.export: "true"
+  exporter.csv.export: "false"
+  exporter.hospital.fhir.export: "true"
+  exporter.practitioner.fhir.export: "true"
+  exporter.baseDirectory: "output"
+  exporter.use_uuid_filenames: "true"
+  exporter.subfolders_by_id_substring: "false"
+  generate.append_numbers_to_person_names: "false"
+
+# Tier shapes fixed by runtime readiness §2: dev small enough to regenerate locally in
+# minutes, staging prod-shaped. Separate manifests, same seed discipline.
+profiles:
+  dev:
+    population: 500
+    state: Massachusetts
+    manifest: manifests/dev.manifest.json
+  staging:
+    population: 50000
+    state: Massachusetts
+    manifest: manifests/staging.manifest.json
