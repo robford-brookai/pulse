@@ -177,6 +177,18 @@ tasks:
     cmds:
       - uv run python -m pulse_core.catalog_release_cli {{if .APPLY}}--apply{{end}}
 
+  synthea:regen:
+    desc: Regenerate the PROFILE synthetic population from the pinned JAR and verify its manifest (Java required; REPIN=1 re-pins)
+    # Deterministic generation receipted by checksum manifest (synthea-seed change). Java is a
+    # prerequisite of this target only — never reached from `check`, which must stay green on
+    # runners without Java (spec: "Regeneration is a task, never part of the check gate").
+    # Divergence from the committed manifest exits nonzero naming the files; REPIN=1 is the
+    # explicit re-pin path and its manifest diff is a reviewed change.
+    requires:
+      vars: [PROFILE]
+    cmds:
+      - uv run python -m synthea_seed.regen --profile {{.PROFILE}} {{if .REPIN}}--repin{{end}}
+
   # `check` is the contract between a developer's machine and CI:
   # .github/workflows/main.yml invokes exactly this target. Keep it CI-safe — openspec and
   # openlore are npm globals that runners do not install, so they belong in `verify`, not here.

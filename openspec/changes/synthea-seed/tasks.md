@@ -18,7 +18,7 @@ Java in any test — unit tests cover overlay application and manifest verificat
 
 ## 2. Wave 1 — generation and fixtures
 
-- [ ] 2.1 Generation wrapper + `task synthea:regen PROFILE=<p>`: shell out to the pinned JAR,
+- [x] 2.1 Generation wrapper + `task synthea:regen PROFILE=<p>`: shell out to the pinned JAR,
       verify output against the profile's manifest, exit nonzero naming diverging files;
       manifest re-pin is explicit. Tests: verification logic against fixture trees (no
       generation run).
