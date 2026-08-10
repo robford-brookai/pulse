@@ -1,98 +1,116 @@
-# PULSE data priority — discussion guide, meeting 2026-08-10
+# PULSE — the event backbone for the brook.ai analytics platform
 
-Linear: DNA-900 · Prepared 2026-08-09 · Ground truth: `design/delivery/pulse-program-roadmap.md`, `design/migration/pulse-ledger-backfill-plan.md`, `openspec/changes/`
+Discussion guide for the engineering session, 2026-08-10 · Linear DNA-900 · Prepared 2026-08-09
+Audience: Engineering (Andrew, Carin, Eric, Constantine, David, Max) · Author: Rob Ford, Data
 
 ## TL;DR
 
-Phase 2 (Ingress) shipped as v2.0 on 2026-08-08 — all seven changes archived, all four sanctioned command sources live. The program now faces three competing data queues: Phase 3 projections (forward read surfaces), genesis and cutover prerequisites, and backfill history (BF-5, eight grains). The recommendation: run BF-0b archaeology and `environment-matrix` in parallel this week, because each one prices a different queue — BF-0b's CDC-window finding sets the evidence ceiling for every backfill grain, and the Twenty dev instance gates all of Phase 3. Ratify the backfill grain order as written, take the 24-month horizon (BF-D1), and defer nothing else that has an owner in the room. Four registered decisions have owners attending and can close in this meeting: BF-D1 (Oren + Tal), BF-D2 (Ford + Luke), BF-D3 (Tal), BF-D4 (Ethan).
+Every one of us has debugged the same incident: two dashboards disagree about how many patients are enrolled, and the argument takes a week because there is no record to appeal to — just competing SQL. PULSE (Patient Unified Ledger of State and Events) exists to make that incident impossible. It is an event backbone, not a new user interface: your systems keep their UIs and their databases, and when something true happens they declare it — one API call — onto an append-only, validated ledger. Analytics, dashboards, and operational screens all become projections of that one record. It runs entirely on the platform we already operate (Snowflake plus AWS under Duplo), adds zero vendors and roughly $200–350 a month, and it is not a proposal on a slide: the ledger and four live event sources shipped as v2.0 on 2026-08-08, on synthetic data, with demos you can watch fail-loudly today. The ask from this meeting is small and specific: endorse the backbone direction, try to break the design, and help pick the first system to declare events natively.
 
-## 1.0 Where the program stands (as of 2026-08-09)
+## 1.0 The problem you already know
 
-- v2.0 tagged 2026-08-08 on PR #187. Phase 2 complete: 7/7 changes archived between 2026-08-05 and 2026-08-08.
-- Live command sources: kanban webhook, Customer.io consent ingress, identity service, verdict relay. The producer-ingress CI gate (no producer schema names a catalog state) is in `task check`.
-- Open changes right now: `synthea-seed` (4/4 tasks executed, awaiting collect → verify → archive) and `bf0a-archaeology-access` (proposed, 0/2 tasks started).
-- Next release rung: v3.0 — Projections. Gate: Twenty dev instance (`environment-matrix`) plus decision D4 (catalog→Twenty generator, artifact vs live-apply).
+You have seen this bug. It is not in any one team's code, which is why no one team has fixed it.
 
-```
-Phase 2 close:        v2.0, 2026-08-08, PR #187
-Changes archived:     7/7 (2026-08-05 → 2026-08-08)
-Open changes:         synthea-seed (4/4 executed), bf0a-archaeology-access (0/2)
-Phase 3 gate:         Twenty dev instance + D4 — neither cleared
-Backfill horizon rec: 24 months (two annual cohort cycles)
-Estimated SPCS cost:  $175–350/month compute pool (2026-07-28 estimate)
-```
+- Patient lifecycle state — registered, enrolled, activated, withdrawn — is written by many systems and owned by none. Every consumer re-derives "current state" from side effects, at read time, with its own SQL.
+- Two reports, two definitions, two answers. The discrepancy surfaces weeks later in analytics, and there is no audit trail to say which one is right. The argument is unwinnable because the evidence does not exist.
+- Status fields get overwritten in place. We can know a patient is enrolled — but not since when, changed by whom, or on what evidence. History is simply gone.
+- Every new integration multiplies the mess: one more point-to-point sync with one more private idea of state.
 
-## 2.0 The question this meeting answers
+More engineering effort inside any single system cannot fix this, because the defect is between the systems: state is inferred everywhere instead of declared once. That is the whole disease, and it suggests its own cure.
 
-"Data priority" decomposes into three queues that compete for the same small team. They are not interchangeable — each delivers a different kind of metric truth.
+## 2.0 The idea — declare it once, project it everywhere
 
-| Queue | Delivers | Blocked on | First visible win |
-|---|---|---|---|
-| Phase 3 projections | Forward read surfaces — Twenty screens, Snowflake STG_EVENTS, Customer.io sync | Twenty dev instance, D4 | Ops sees live patient state in the CRM |
-| Genesis + cutover | Stock metrics correct at cutover day one — one seed event per live subject | `synthea-seed` archive, quarantine-reviewer role, genesis adjudication rules | Funnel position counts trusted |
-| Backfill history (BF-5) | Flow metrics — cohorts by start month, conversion, time-in-state | BF-0b evidence ceilings, BF-D1 horizon, BF-1/BF-2 identity | Board-grade cohort charts with a visible seam |
+PULSE is one rule applied ruthlessly:
 
-The scheduling insight from the backfill plan holds: cutover never waits on Stage 2 history. So the queues are parallel by design, and the meeting's job is to pick what the team touches first within each, not to rank the queues against each other.
+1. **Systems declare facts as events.** One API call: what happened (`patient.enrolled`), to whom, when, by which actor. Your UI, your database, your workflow — untouched.
+2. **The ledger keeps everything and lies about nothing.** Events are append-only, never overwritten. The write path validates every transition against a versioned state catalog — one YAML file, changed only by pull request — and rejects illegal ones with the reason and catalog version. Retries are safe by construction: the same idempotency key returns the original event instead of a duplicate.
+3. **Everything else is a projection.** Current state is computed once from the events and pushed out — to Snowflake for analytics, to webhooks for systems that react, to an operations screen for humans. If a projection is ever wrong, you rebuild it from the ledger. The record is permanent; the views are disposable.
 
-## 3.0 Decisions to close in the room
+That last property is the one worth pausing on. Today, when numbers disagree, we hold a debate. With a ledger, we hold a replay. "Reproducible state" turns every future data dispute from politics into a query.
 
-### 3.1 Registered decisions with owners attending
+## 3.0 It runs on what we already run
 
-| ID | Decision | Recommendation on the table | Owner |
-|---|---|---|---|
-| BF-D1 | Backfill horizon — how far back Stage 2 reaches | 24 months or the retention ceiling, whichever is shorter. Covers two annual cohort cycles. Frame for Oren: this is the complete-referral-record ask pointed backwards — guaranteed forward, best-effort with graded evidence backward | Oren + Tal |
-| BF-D2 | Evidence floors per metric — the minimum evidence class a metric counts | Cohort and funnel marts count E0–E3 with class as a visible dimension. E4-only subjects count in stocks, not flows. Board charts annotate the seam | Ford + Luke |
-| BF-D3 | Genesis re-anchoring vs quarantine-everything for illegal historical sequences | Genesis + gap facts. Quarantine reserved for current-state-unknowable | Tal |
-| BF-D4 | Billy import semantics — historical billing-investigation results | Both: E0 facts (decided-then, actor `billy_import`) and recomputation (computed-now). The divergence between them is itself a data-quality finding | Ethan |
+No new cloud account. No new vendor contract. No PHI leaving the perimeter we already defend.
 
-### 3.2 Grain priority — ratify or reorder
-
-The backfill plan §5 orders the eight grains by metric value per unit of reconstruction effort. Proposed for ratification as-is:
-
-| Priority | Grain | Expected evidence ceiling | Why this rank |
-|---|---|---|---|
-| 1 | Person + identifiers | E0–E1 | Root of the tree — nothing lands without a person key |
-| 2 | Enrollment | E1–E3 | Cohorts are enrollments by start month. This grain is the headline metric |
-| 3 | CommunicationConsent | E0 | Cleanest in the set — Customer.io keeps its own history. Early proving ground for the loader |
-| 4 | Consent | E0–E2 | Audit value, and a funnel stage since G3 |
-| 5 | Referral | E2–E3 | Pre-enrollment funnel — valuable, likely the lossiest |
-| 6 | Intervention + time facts | E0–E1 | Feeds historical billing recomputation, append-only |
-| 7 | Coverage, ProviderAffiliation, Contract | E0–E2 | Facts with periods, no state machines — low risk |
-| 8 | Device | E1–E2 | Remote-monitoring only, bounded population |
-
-One caveat to state aloud: the evidence-ceiling column is hypothesis until BF-0b reports. If the Mongo change-data-capture window turns out shallow, Enrollment drops from possible E0 to corroborated E1 via the satellite apps, and the cost of rank 2 rises. That is why BF-0b runs before any grain is elaborated.
-
-### 3.3 Phase 3 sequencing — what unblocks the most
-
-- `environment-matrix` is the single gate in front of all of Phase 3 (the Twenty dev instance) and it consumes `synthea-seed`, which is executed and one archive step from done. Propose it this week.
-- D4 (catalog→Twenty generator: artifact vs live-apply) is Ford's call and gates `pulse-app-scaffold`, the first Phase 3 change. It can close in this meeting or by end of week.
-- `snowflake-projection` and `customerio-projection` are gate-free once Phase 2 exited — they need no Twenty instance and can start ahead of the app scaffold if the team wants a Phase 3 change moving immediately.
-- Caution on `survey-engine-ingress`: the PX dependency carries a stated June–July delivery target that has already passed. Re-verify with Max Pengilly before sequencing anything against it.
-
-### 3.4 Roles and follow-ups that touch data priority
-
-- Quarantine reviewer must be named before genesis P0 — genesis is on the critical path to every stock metric.
-- Standing flags riding parent issues: program entry_gate/exclusivity fills owed by billing (DNA-862), board-vocabulary reconciliation and the patient×program grain question (DNA-872), mandatory idempotency-key tightening (DNA-801), SNOWFLAKE_* deploy secrets and database pin for `task catalog:release` (DNA-862).
-- G-2 (drift tolerance per family, Ethan + Luke) is not urgent today but gates cutover P0 exit — worth a calendar owner now.
-
-## 4.0 Recommended priority order
-
-Assumption, flagged: team capacity stays at current level and no new external dependency lands this week.
-
-1. Archive `synthea-seed` (mechanical — collect, verify, archive) and dispatch `bf0a-archaeology-access` (2 tasks, gate-free). Both are this-week items regardless of anything decided above.
-2. Run BF-0b archaeology as soon as BF-0a merges and Mongo read-only credentials exist. Its CDC-window finding is the only result that can reprice the backfill plan, so it precedes any grain elaboration.
-3. Propose `environment-matrix` to clear the Phase 3 gate, with D4 decided alongside.
-4. Start `snowflake-projection` as the first Phase 3 change — gate-free, and it lands the warehouse read contract that reconciliation sweeps and the funnel marts build on.
-5. Sequence BF-1/BF-2 (identity absorption and backfill run) behind the BF-0b report, in grain order.
-
-## 5.0 Suggested agenda (60 minutes)
-
-| Time | Item | Outcome |
+| Layer | What runs there | New or existing? |
 |---|---|---|
-| 0:00–0:05 | Phase 2 close and v2.0 recap | shared baseline |
-| 0:05–0:20 | BF-D1 horizon + grain-order ratification | two closed decisions |
-| 0:20–0:35 | BF-D2 floors, BF-D3 re-anchoring, BF-D4 Billy semantics | three closed decisions |
-| 0:35–0:50 | Phase 3 sequencing, D4, PX timeline | first Phase 3 change picked |
-| 0:50–1:00 | Roles (quarantine reviewer), standing flags, next check-in | owners named |
+| Producers | POCAR, Billy, PAP, Customer.io, the ops board, PX surveys — declaring events or observed by adapters | Existing, unchanged |
+| Write path | Command API: validation, idempotency, actor attribution | New, small, in the repo |
+| Ledger | Snowflake Postgres — inside the existing Snowflake BAA | Existing perimeter |
+| Transport | Outbox relay onto AWS EventBridge/SQS (the OCEAN stack, absorbed) | Existing, AWS under Duplo |
+| Analytics | Events and state land in Snowflake automatically; the warehouse independently re-verifies every transition | Existing — Snowflake |
+| Ops surface | Twenty (self-hosted open-source CRM) as one read-and-correct projection, on Snowpark Container Services | New container, existing perimeter |
 
-Pre-reads, in order of value: `design/migration/pulse-ledger-backfill-plan.md` §5 and §8, `design/delivery/pulse-program-roadmap.md` release ladder, `.planning/reports/2026-08-08-project-status.md`.
+Two sentences to say out loud, because they preempt the two likeliest misreadings:
+
+- **This is not a new UI, and nothing is being replaced.** Twenty is one projection — a screen where operations can see any patient's state and full history. It is about a hundred lines of custom TypeScript against a stock, unforked server. Delete it tomorrow and the ledger, the API, and the Snowflake layer do not notice.
+- **The ledger is the record; no CRM is the source of truth.** All writes go through the command API. The projection's status fields are read-only. This is the exact opposite of "adopt a CRM and pray."
+
+## 4.0 This is built, not pitched
+
+The concept has already survived contact with implementation. Everything below runs on synthetic data only (Synthea-generated patients) — a standing compliance gate keeps real patient data out until production controls are signed off.
+
+```
+v1.5 — Record   shipped 2026-08-04. Ledger schema, command API, catalog-
+                generated validation, idempotency, outbox relay. 16/16 tasks.
+v2.0 — Ingress  shipped 2026-08-08. Seven changes, ~80 PRs (#106-#187).
+Live sources    4: ops-board webhook (HMAC-signed drag -> attributed command,
+                invalid drag -> rejection receipt on the card), Customer.io
+                consent ingress, identity matcher (with a quarantine queue --
+                ambiguous humans are never auto-merged), verdict relay
+                (Snowflake billing verdicts declared back onto the ledger).
+Governance      state catalog v1.0.0 is authoritative; a CI gate fails any
+                producer schema that names a catalog state. Inference cannot
+                quietly creep back in -- the build goes red.
+Envelope        low thousands of events/day confirmed; SPCS compute pool
+                $175-350/month (2026-07-28 estimate); Twenty is AGPL-3.0,
+                self-hosted, unmodified core, $0 license.
+```
+
+## 5.0 Watch it work (or fail loudly) — demo menu
+
+Every demo is local, synthetic, and exits nonzero on any failed assertion — they are proofs, not tours.
+
+| Demo | Runtime | The moment that matters |
+|---|---|---|
+| 1 — Ledger core | ~10 min incl. Docker bring-up | An illegal transition is rejected with the catalog's reason and version. Then: independently folding the raw events reproduces the stored current state, byte for byte, after a history with backdates and reversals |
+| 2a — Kanban drag | ~5 min | A signed drag on the ops board becomes an attributed ledger command; an invalid drag bounces with a receipt and a card comment explaining why |
+| 2b — Identity matcher | ~5 min | Deterministic person matching, with genuine conflicts routed to quarantine instead of auto-merged |
+
+Recommendation for the meeting: run Demo 1 live. The rejection and the fold-equals-state assertion are the two moments this stops being slideware.
+
+## 6.0 The deal — what it asks, what you get
+
+**The ask is one API call, and even that is negotiable.** A system integrates in one of two ways:
+
+- **Native declaration** — call the command API when a business fact occurs. One endpoint family, per-service credentials, idempotent, attributed.
+- **Adapter ingress** — where touching the producer is not worth it yet, an adapter observes what the system already emits (webhooks, exports) and declares on its behalf with full provenance. Customer.io consent runs this way in v2.0 today. Adapters retire one event type at a time as native emission arrives — never a big-bang migration.
+
+**What you get back:**
+
+- One documented API and webhooks, instead of N point-to-point syncs each holding a private copy of state.
+- Complete, timestamped, attributed history in Snowflake. Cross-system questions — funnel conversion, time-in-state, cohorts — get one answer instead of a negotiation.
+- An immutable audit trail where every write names its actor. Compliance stops being a reconstruction exercise.
+- Fewer 2 a.m. arguments. When numbers disagree, the ledger settles it.
+
+## 7.0 The objections you should raise (and the honest answers)
+
+- **"Is this a rewrite of our apps?"** No. Producers keep their stack entirely. The integration is an API call, or nothing at all if an adapter watches instead.
+- **"Another service to babysit?"** Containers on Snowpark Container Services inside the Snowflake footprint we already pay for and defend, transport on the AWS stack already under Duplo. Monitors, SLOs, and paging are scheduled before any production traffic — not after the first incident.
+- **"What about the years of history?"** A separate, already-designed backfill program reconstructs it from the existing systems with per-event evidence grading — and it explicitly never blocks the forward path. Forward correctness does not wait on archaeology.
+- **"What if volume outgrows it?"** Confirmed volume is low thousands of events/day. If that ever changes by orders of magnitude, only the ingestion leg gets replaced — the event format, catalog, and Snowflake layer carry over unchanged.
+- **"Why is there a CRM in this picture at all?"** Because a three-person data team should not hand-build and operate a bespoke CRUD UI for ops. Twenty is bounded, unforked, and disposable by design. It is furniture, not foundation.
+
+## 8.0 What I want from this room
+
+1. **Pressure-test the shape.** Single validated write path, append-only ledger, projections everywhere else. Where does it break? What load, failure mode, or workflow does it not survive?
+2. **Name the first native declarer.** The best candidate has clean lifecycle semantics and an owner in this room. I have opinions; I would rather hear yours.
+3. **Max — PX surveys.** Survey responses as attributed events on this same write path is designed and slotted. What is the realistic PX timeline, and does the schema-validation plan still fit?
+4. **Duplo fit.** Anything about the SPCS-plus-EventBridge split that fights how we run services today? Better to hear it now than at deploy time.
+5. **Define the easy yes.** What proof would make this a comfortable endorsement for your team — a load test, a schema review, a deeper demo? Name it and it goes on my list.
+
+## 9.0 Next steps
+
+- Code and receipts: https://github.com/robford-brookai/pulse — the v1.5 and v2.0 releases carry the demo outputs; architecture docs live under `design/platform/`.
+- Offered follow-up: a one-hour hands-on session — Demo 1 end to end, plus a schema review of the command API — for anyone who wants to kick the tires personally.
+- The decision requested today: endorse the event-backbone direction for the brook.ai analytics platform, and name the first native-declaration candidate.
