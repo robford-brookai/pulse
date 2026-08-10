@@ -1,0 +1,22 @@
+# The quarantine-bound consent case (genesis-and-cutover.md §2; Gate B posture per the object
+# model §9): consent is the most audited artifact and gets no benefit of the doubt — recorded
+# granted in POCAR with no evidence_ref in the document store, it genesis-lands in the
+# quarantine review queue, never as granted. Synthetic patient; no PHI.
+format: synthea-seed/overlay@1
+fixture: quarantine_bound_consent
+design_ref: "design/migration/genesis-and-cutover.md §2 (consent gets no benefit of the doubt); rpc-object-model-assessment.md Gate B quarantine posture"
+description: >
+  A consent recorded granted in POCAR with no supporting evidence_ref: genesis must route it
+  to the quarantine review queue rather than declaring granted, exercising the Gate B
+  quarantine path end to end.
+patients:
+  - patient_id: brook-fx-consent-quarantine-0001
+    state:
+      consents:
+        - scope: care_program_participation
+          status: granted
+          recorded_in: pocar
+          evidence_ref: null
+      genesis_expectation:
+        disposition: quarantine
+        quarantine_reason: consent_without_evidence_ref

@@ -16,7 +16,7 @@ vars:
   # Lint reaches the absorbed package; typecheck and test do not yet. These are separate vars so
   # each target's scope is readable at the point of use — a var that names packages/ocean while
   # the command runs against src is a false claim about what CI verifies (task 1.3).
-  LINT_PATHS: src tests packages/pulse-ledger packages/pulse-core packages/verdict-relay packages/schedules packages/identity packages/consent-ingress packages/ocean
+  LINT_PATHS: src tests packages/pulse-ledger packages/pulse-core packages/verdict-relay packages/schedules packages/identity packages/consent-ingress packages/synthea-seed packages/ocean
   # Typecheck reaches ocean's libs but not its 16 services (task 1.4, DNA-779): the services
   # carry 217 mypy errors. Stated here rather than implied, so what CI verifies is readable
   # from this file.
@@ -28,7 +28,7 @@ vars:
   # top-level `src` package and imports itself as `from src.X`, and one interpreter cannot hold
   # sixteen different `src` packages in sys.modules. graph-projection moved from this list into
   # the loop with the rest. tests/test_taskfile_test_coverage.py pins this arrangement.
-  TESTED_PATHS: tests packages/pulse-ledger/tests packages/pulse-core/tests packages/verdict-relay/tests packages/schedules/tests packages/identity/tests packages/consent-ingress/tests packages/ocean/libs
+  TESTED_PATHS: tests packages/pulse-ledger/tests packages/pulse-core/tests packages/verdict-relay/tests packages/schedules/tests packages/identity/tests packages/consent-ingress/tests packages/synthea-seed/tests packages/ocean/libs
   # Coverage covers ocean-events because it is the envelope every consumer depends on, and it is
   # at 100%. ocean-broker joins it at task 2.2: the reason it was excluded — that 2.2 would throw
   # its tests away — expired when 2.2 landed EventBridgePublisher and the event catalog, which are
@@ -41,7 +41,7 @@ vars:
   # system); consent-ingress carries an 85% floor (S1.1 task 1.1, same tier as verdict-relay and
   # schedules). Each is enforced by the extra `coverage report` steps in `test` — the global
   # fail_under cannot express a per-package floor.
-  COV_PATHS: --cov=src/pkg_pulse --cov=packages/pulse-ledger/src --cov=packages/pulse-core/src --cov=packages/verdict-relay/src --cov=packages/schedules/src --cov=packages/identity/src --cov=packages/consent-ingress/src --cov=packages/ocean/libs/ocean-events/src --cov=packages/ocean/libs/ocean-broker/src
+  COV_PATHS: --cov=src/pkg_pulse --cov=packages/pulse-ledger/src --cov=packages/pulse-core/src --cov=packages/verdict-relay/src --cov=packages/schedules/src --cov=packages/identity/src --cov=packages/consent-ingress/src --cov=packages/synthea-seed/src --cov=packages/ocean/libs/ocean-events/src --cov=packages/ocean/libs/ocean-broker/src
   CHANGE: ""
   VISIBILITY: --private
 
@@ -118,6 +118,7 @@ tasks:
       - uv run pyright -p packages/schedules
       - uv run pyright -p packages/identity
       - uv run pyright -p packages/consent-ingress
+      - uv run pyright -p packages/synthea-seed
 
   # --- 4. Test ---
 
@@ -175,6 +176,18 @@ tasks:
     # (tests/test_catalog_release_deploy.py pins both).
     cmds:
       - uv run python -m pulse_core.catalog_release_cli {{if .APPLY}}--apply{{end}}
+
+  synthea:regen:
+    desc: Regenerate the PROFILE synthetic population from the pinned JAR and verify its manifest (Java required; REPIN=1 re-pins)
+    # Deterministic generation receipted by checksum manifest (synthea-seed change). Java is a
+    # prerequisite of this target only — never reached from `check`, which must stay green on
+    # runners without Java (spec: "Regeneration is a task, never part of the check gate").
+    # Divergence from the committed manifest exits nonzero naming the files; REPIN=1 is the
+    # explicit re-pin path and its manifest diff is a reviewed change.
+    requires:
+      vars: [PROFILE]
+    cmds:
+      - uv run python -m synthea_seed.regen --profile {{.PROFILE}} {{if .REPIN}}--repin{{end}}
 
   # `check` is the contract between a developer's machine and CI:
   # .github/workflows/main.yml invokes exactly this target. Keep it CI-safe — openspec and

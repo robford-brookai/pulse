@@ -11,6 +11,13 @@ task check
 
 Run `task` on its own to list every command, grouped by area and in workflow order.
 
+`task check` needs no Java. Java (17+) is a prerequisite of `task synthea:regen PROFILE=<p>`
+only — the deterministic synthetic-population regeneration in `packages/synthea-seed`, which
+shells out to the checksum-pinned Synthea JAR and verifies the output against the profile's
+committed manifest. Manifests are authored from the CI runner's output (`REPIN=1`, an explicit
+reviewed change); if a local run diverges, the manifest diff names the files and the CI
+artifact from `synthea-regen.yml` is the receipt of record.
+
 ## Status
 
 Latest program status: [`.planning/reports/2026-08-03-program-status.md`](.planning/reports/2026-08-03-program-status.md).
