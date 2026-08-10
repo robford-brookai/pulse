@@ -5,7 +5,7 @@ Audience: Engineering (Andrew, Carin, Eric, Constantine, David, Max) · Author: 
 
 ## TL;DR
 
-Every one of us has debugged the same incident: two dashboards disagree about how many patients are enrolled, and the argument takes a week because there is no record to appeal to — just competing SQL. PULSE (Patient Unified Ledger of State and Events) exists to make that incident impossible. It is an event backbone, not a new user interface: your systems keep their UIs and their databases, and when something true happens they declare it — one API call — onto an append-only, validated ledger. Analytics, dashboards, and operational screens all become projections of that one record. It runs entirely on the platform we already operate (Snowflake plus AWS under Duplo), adds zero vendors and roughly $200–350 a month, and it is not a proposal on a slide: the ledger and four live event sources shipped as v2.0 on 2026-08-08, on synthetic data, with demos you can watch fail-loudly today. The ask from this meeting is small and specific: endorse the backbone direction, try to break the design, and help pick the first system to declare events natively.
+Every one of us has debugged the same incident: two dashboards disagree about how many patients are enrolled, and the argument takes a week because there is no record to appeal to — just competing SQL. PULSE (Patient Unified Ledger of State and Events) exists to make that incident impossible. It is an event backbone, not a new user interface: your systems keep their UIs and their databases, and when something true happens they declare it — one API call — onto an append-only, validated ledger. Analytics, dashboards, and operational screens all become projections of that one record. It runs entirely on the platform we already operate (Snowflake plus AWS under Duplo), adds zero vendors and roughly $200–350 a month, and it is not a proposal on a slide: the ledger and four live event sources shipped as v2.0 on 2026-08-08, on synthetic data. To be clear about where it stands — this is not a pilot pitch. We are two phases into five, and the projection layer is next. What exists today is the hard part: the write path, the governance, and the event-sourcing core, and those run well enough to demo live (rehearsed green 2026-08-09). The ask from this meeting is small and specific: endorse the backbone direction, try to break the design, and help pick the first system to declare events natively.
 
 ## 1.0 The problem you already know
 
@@ -46,9 +46,9 @@ Two sentences to say out loud, because they preempt the two likeliest misreading
 - **This is not a new UI, and nothing is being replaced.** Twenty is one projection — a screen where operations can see any patient's state and full history. It is about a hundred lines of custom TypeScript against a stock, unforked server. Delete it tomorrow and the ledger, the API, and the Snowflake layer do not notice.
 - **The ledger is the record; no CRM is the source of truth.** All writes go through the command API. The projection's status fields are read-only. This is the exact opposite of "adopt a CRM and pray."
 
-## 4.0 This is built, not pitched
+## 4.0 Where this honestly stands
 
-The concept has already survived contact with implementation. Everything below runs on synthetic data only (Synthea-generated patients) — a standing compliance gate keeps real patient data out until production controls are signed off.
+Two of five phases are shipped. The foundation — ledger, write path, catalog governance, four ingress sources — is real and released. The projection layer (the Snowflake read contract, the ops screen, webhook consumers) is designed and queued, not built. So the demos below are not "watch the product" — they are "watch the hardest architectural claims hold under adversarial input." Everything runs on synthetic data only (Synthea-generated patients) — a standing compliance gate keeps real patient data out until production controls are signed off.
 
 ```
 v1.5 — Record   shipped 2026-08-04. Ledger schema, command API, catalog-
@@ -67,17 +67,40 @@ Envelope        low thousands of events/day confirmed; SPCS compute pool
                 self-hosted, unmodified core, $0 license.
 ```
 
-## 5.0 Watch it work (or fail loudly) — demo menu
+## 5.0 The demo — hard problems, solved elegantly
 
-Every demo is local, synthetic, and exits nonzero on any failed assertion — they are proofs, not tours.
+The demos are not product tours, because there is no product screen yet. Each one is a live proof of a problem that engineers know is genuinely hard, scripted so it exits nonzero if any assertion fails. Demo 1 was rehearsed end to end on 2026-08-09 and passed all four assertions — the receipt lines below are from that run.
 
-| Demo | Runtime | The moment that matters |
-|---|---|---|
-| 1 — Ledger core | ~10 min incl. Docker bring-up | An illegal transition is rejected with the catalog's reason and version. Then: independently folding the raw events reproduces the stored current state, byte for byte, after a history with backdates and reversals |
-| 2a — Kanban drag | ~5 min | A signed drag on the ops board becomes an attributed ledger command; an invalid drag bounces with a receipt and a card comment explaining why |
-| 2b — Identity matcher | ~5 min | Deterministic person matching, with genuine conflicts routed to quarantine instead of auto-merged |
+**Hard problem 1 — governance that cannot drift.** State machines rot because the rules live in prose and the enforcement lives in scattered code. Here, one YAML catalog is code-generated into the validation types, and the write path rejects an illegal transition with the rule and the version that killed it:
 
-Recommendation for the meeting: run Demo 1 live. The rejection and the fold-equals-state assertion are the two moments this stops being slideware.
+```
+[2/4] illegal command rejects with catalog reason + version
+  rejected: illegal transition for 'referral': 'received' -> 'outreach'
+  is not in the catalog adjacency (catalog 1.0.0)
+```
+
+Changing the business rules is a pull request to one file. CI regenerates the enforcement. There is no meeting where the code and the spec disagree.
+
+**Hard problem 2 — exactly-once writes over an at-least-once world.** Retries, timeouts, and double-clicks are where event systems corrupt. The same idempotency key submitted twice returns the original event, and exactly one event is stored:
+
+```
+[3/4] replay returns the original event id (exactly one event)
+  original event 0efaf5f7...; replay returned the same id; 1 event stored
+```
+
+**Hard problem 3 — provable state, even under messy history.** The strongest claim an event-sourced system can make: recompute state independently from the raw events and it must equal the stored answer. The demo runs a deliberately ugly history — forward events, a backdated correction, a reversal — then folds the events from scratch:
+
+```
+[4/4] independent fold equals current_state
+  independent fold ('closed', 2026-08-01T00:42:22Z, d69d41ac...)
+  == current_state (referral/demo1-fold-...)
+```
+
+This is the property that ends dashboard arguments. Anyone in the room can re-derive the answer.
+
+**Hard problem 4 (optional, +5 min) — humans in the loop without humans in the write path.** A cryptographically signed drag on the ops board becomes an attributed ledger command; an *invalid* drag is rejected and the rejection reason is written back onto the card, so the operator learns the rule instead of fighting it. And the identity matcher refuses to auto-merge ambiguous humans — genuine conflicts route to a quarantine queue for adjudication. Elegant failure is the feature: the system says no, says why, and keeps the receipt.
+
+Run order for the meeting: Demo 1 live (~10 minutes including Docker bring-up, already rehearsed), with 2a/2b held in reserve for the "but what about people" questions.
 
 ## 6.0 The deal — what it asks, what you get
 
