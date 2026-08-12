@@ -44,6 +44,21 @@ and collects malformed rows rather than aborting the run.
 | `streamline.cio_prod` | Snowflake schema, modeled | Customer.io export, delivered — no live Customer.io API pull in v1 ([ADR-0005](../adr/ADR-0005-customerio-consent-on-the-governed-path.md)) | same as above; this ingress reads whichever schema its `RowSource` is configured against |
 | `CONTRACT_COLUMNS` (pinned row contract) | fixture-pinned column set: `subject_key`, `channel`, `to_state`, `message_id`, `event_time` | `packages/consent-ingress/src/consent_ingress/row_source.py` | a row missing a contract column, or an `event_time` that fails to parse as a timezone-aware timestamp, is the only reason a row fails validation |
 
+### Mongo connection pattern (`bf0a-archaeology-access`)
+
+`packages/archaeology` inherits its Mongo connection posture from `brookai/streamline`'s CDC
+service rather than inventing one — the driver choice (sync `pymongo>=4.8` `MongoClient`), the
+bounded-timeout posture (`serverSelectionTimeoutMS`/`connectTimeoutMS`/`socketTimeoutMS`,
+streamline's defaults), TLS-on-by-default (Atlas), and fail-fast env-sourced config. This is a
+consumed *pattern*, read from source, never a side-clone: any drift from upstream is a documented
+divergence in the package README, not an accident. Two divergences are deliberate: credentials
+arrive as a secret-store reference (never a literal connection string), and `retryWrites` is off
+because the seam is read-only by charter.
+
+| Dependency | Kind | Source | Breakage risk |
+|---|---|---|---|
+| Mongo client construction pattern | source pattern (read, not imported) | `brookai/streamline`, `repos/dacorom/mongo-stream/src/config.py` and `src/watcher.py` | upstream changing its driver or timeout posture silently strands this copy — re-read the cited paths when streamline's CDC service changes; streamline publishes no contract for this surface, so the citation is the only pin |
+
 ### Event transport (runtime)
 
 With the Kafka → EventBridge migration

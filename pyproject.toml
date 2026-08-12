@@ -60,6 +60,7 @@ packages = ["src/pkg_pulse"]
 
 [tool.uv.workspace]
 members = [
+    "packages/archaeology",
     "packages/pulse-ledger",
     "packages/pulse-core",
     "packages/verdict-relay",
@@ -74,6 +75,7 @@ members = [
 ]
 
 [tool.uv.sources]
+archaeology = { workspace = true }
 pulse-ledger = { workspace = true }
 pulse-core = { workspace = true }
 verdict-relay = { workspace = true }
@@ -190,6 +192,7 @@ ignore = [
 
 # Package tests live under packages/*, which the "tests/*" pattern above does not reach.
 # Same exemption, same reason: pytest asserts are the point.
+"packages/archaeology/tests/**" = ["S101"]
 "packages/pulse-ledger/tests/**" = ["S101"]
 "packages/pulse-core/tests/**" = ["S101"]
 "packages/verdict-relay/tests/**" = ["S101"]

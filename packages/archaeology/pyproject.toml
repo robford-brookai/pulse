@@ -1,0 +1,38 @@
+[project]
+name = "archaeology"
+version = "0.1.0"
+description = "PULSE backfill archaeology — the single read-only access seam to the legacy Mongo cluster (BF-0a), later the bulk-extraction seam for BF-5"
+requires-python = ">=3.10,<4.0"
+dependencies = [
+    # Driver inherited from brookai/streamline's Mongo CDC service
+    # (repos/dacorom/mongo-stream/pyproject.toml pins pymongo>=4.8): same sync
+    # MongoClient, same bounded-timeout posture. Divergence from that pattern is a
+    # documented decision, not an accident — see README.md and
+    # docs/contracts/consumes.md.
+    "pymongo>=4.8",
+]
+
+[dependency-groups]
+dev = [
+    # Enforces the no-live-network posture: tests/conftest.py blocks sockets for
+    # every run that collects this package, flag or no flag — same pattern as
+    # verdict-relay, schedules, and consent-ingress.
+    "pytest-socket>=0.7.0",
+    # This package typechecks under pyright strict (see [tool.pyright] below);
+    # `task typecheck` runs it alongside the workspace mypy pass.
+    "pyright>=1.1.390",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/archaeology"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.pyright]
+include = ["src", "tests"]
+typeCheckingMode = "strict"
