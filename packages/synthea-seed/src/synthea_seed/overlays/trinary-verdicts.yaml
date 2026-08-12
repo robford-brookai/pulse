@@ -1,0 +1,43 @@
+# Trinary verdict cases (object model §3): evaluability is separate from judgment, and
+# unknown and no are different funnel facts. `indeterminate` carries its mandatory reason —
+# a record failing Gate B lands as indeterminate(insufficient_data), never as a negative
+# verdict, so eligible patients cannot silently vanish from counts. Every verdict carries
+# I3 lineage (rule_version, as_of). Synthetic patients; no PHI.
+format: synthea-seed/overlay@1
+fixture: trinary_verdicts
+design_ref: "design/migration/rpc-object-model-assessment.md §3 trinary outcomes, §5.4 qualification_verdict; mandatory regression fixtures (§7)"
+description: >
+  One patient per trinary outcome: positive, negative, and indeterminate with its mandatory
+  reason, plus the not-yet-run pending state on a billing episode — the four countable facts
+  the funnel must keep distinct.
+patients:
+  - patient_id: brook-fx-verdict-positive-0001
+    state:
+      verdicts:
+        - name: qualification_assessment
+          outcome: positive
+          rule_version: rules-2026.06.1
+          as_of: 2026-06-30
+  - patient_id: brook-fx-verdict-negative-0001
+    state:
+      verdicts:
+        - name: qualification_assessment
+          outcome: negative
+          rule_version: rules-2026.06.1
+          as_of: 2026-06-30
+  - patient_id: brook-fx-verdict-indeterminate-0001
+    state:
+      verdicts:
+        - name: qualification_assessment
+          outcome: indeterminate
+          reason: insufficient_data
+          rule_version: rules-2026.06.1
+          as_of: 2026-06-30
+  - patient_id: brook-fx-verdict-pending-0001
+    state:
+      billing_episodes:
+        - program: CCM
+          exclusivity_group: cms_care_management
+          month: 2026-06-01
+          status: open
+          qualification_verdict: pending

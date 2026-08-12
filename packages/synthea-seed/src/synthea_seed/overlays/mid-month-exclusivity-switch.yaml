@@ -1,0 +1,37 @@
+# The mandatory month-grain exclusivity regression fixture (object model §5.2, v0.7 change
+# log): a CCM enrollment ended June 15 followed by a PCM activation June 16 passes the
+# enrollment-grain concurrency check cleanly while leaving two same-group BillingEpisodes open
+# for June — the double-billing hole only the qualification verdict can adjudicate. Downstream
+# rule_version regression suites assert against exactly this shape. Synthetic patient; no PHI.
+format: synthea-seed/overlay@1
+fixture: mid_month_exclusivity_switch
+design_ref: "design/migration/rpc-object-model-assessment.md §5.2 — month-grain exclusivity; mandatory regression fixture (§7 test obligations)"
+description: >
+  Mid-month CCM-to-PCM program switch within one CMS exclusivity group: the enrollment-grain
+  check passes while two same-group billing episodes stay open for the same calendar month,
+  leaving adjudication to the month-grain qualification verdict.
+patients:
+  - patient_id: brook-fx-exclusivity-midmonth-0001
+    state:
+      enrollments:
+        - program: CCM
+          exclusivity_group: cms_care_management
+          status: ended
+          activated_on: 2026-01-05
+          ended_on: 2026-06-15
+          end_reason: program_switch
+        - program: PCM
+          exclusivity_group: cms_care_management
+          status: active
+          activated_on: 2026-06-16
+      billing_episodes:
+        - program: CCM
+          exclusivity_group: cms_care_management
+          month: 2026-06-01
+          status: open
+          qualification_verdict: pending
+        - program: PCM
+          exclusivity_group: cms_care_management
+          month: 2026-06-01
+          status: open
+          qualification_verdict: pending

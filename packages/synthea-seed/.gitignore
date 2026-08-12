@@ -1,0 +1,4 @@
+# Generated populations and the cached JAR are artifacts, never committed — the manifest is
+# the committed receipt, the workflow's artifact upload is the distribution channel.
+output/
+.jars/
