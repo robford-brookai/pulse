@@ -74,7 +74,7 @@ Synthetic data is generated, not hand-curated: a `synthea-seed` package in the m
 
 ### 2.3 Promotion path
 
-Catalog release → generated surfaces build in CI (D4's artifact posture, assumed resolved as recommended) → deploy to staging → staging smoke suite (command round-trips per state machine, kanban heal-back, projection freshness probe) → tagged promotion to prod. The same artifact promotes — nothing is regenerated between staging and prod.
+Catalog release → generated surfaces build in CI (D4's artifact posture — resolved as recommended 2026-08-12, DNA-908) → deploy to staging → staging smoke suite (command round-trips per state machine, kanban heal-back, projection freshness probe) → tagged promotion to prod. The same artifact promotes — nothing is regenerated between staging and prod.
 
 ## 3. People and process
 
