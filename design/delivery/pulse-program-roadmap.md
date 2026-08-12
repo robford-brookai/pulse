@@ -164,7 +164,7 @@ Gate: Phase 2 exit; Twenty dev instance from `environment-matrix`.
 
 | Change | Delivers | Gate |
 |---|---|---|
-| `pulse-app-scaffold` | Twenty app package (`create-twenty-app`), objects, roles, `project-domain-event` logic function, catalog → SELECT-options codegen | **D4** (artifact vs live-apply) |
+| `pulse-app-scaffold` | Twenty app package (`create-twenty-app`), objects, roles, `project-domain-event` logic function, catalog → SELECT-options codegen | ~~D4~~ closed 08-12: artifact split (DNA-908) |
 | `twenty-projection` | ledger-fed consumer: upserts on `(subject_id, ledger_seq)`, monotonic apply, heal-back write (closes D8 end-to-end), read-only status fields | `pulse-app-scaffold` |
 | `customerio-projection` | segment/attribute sync from ledger events | Phase 2 exit |
 | `snowflake-projection` | STG_EVENTS ledger contract (flat projection proven in S1.1 task 5.1) atop the existing `OCEAN_RAW.EVENTS` landing | Phase 2 exit |
@@ -262,7 +262,7 @@ byte-identical.
 
 | ID | Decision | Gates | Owner |
 |---|---|---|---|
-| D4 | Catalog→Twenty generator: artifact vs live-apply | `pulse-app-scaffold` codegen | Ford |
+| D4 | Catalog→Twenty generator: artifact vs live-apply — **closed 2026-08-12, DNA-908**: artifact split required (build ≠ publish; CI builds and validates the serialized Metadata API operation set, a separate deploy applies it, the same artifact promotes dev → staging → prod) | `pulse-app-scaffold` codegen ✅ unblocked | Ford |
 | D14 | SPCS vs EKS — **closed 2026-08-06, ADR-0004**: SPCS, gated on the one-day webhook-latency spike (EKS fallback is inside the decision) | `pulse-spcs-deployment` | Tal + Ford |
 | D15–D18 | Auth / idempotency / outbox / catalog SoR — **closed 2026-08-06, ADR-0004** (D15 HMAC + per-service credentials; D16/D17 ratify shipped behavior; D18 Snowflake SoR). D15's compliance-owner sign-off rides the §3.1 role-fill | D15: kanban ingress ✅ unblocked; D18: `catalog-authority` ✅ unblocked | ADR-0004 |
 | G-1 | Historical closed objects excluded from genesis | genesis scope | Tal |
@@ -314,7 +314,8 @@ board-vocabulary/catalog reconciliation and patient×program grain (DNA-872), pr
 entry_gate/exclusivity fills and ValueSet-binding widening (DNA-862), mandatory idempotency-key
 tightening (DNA-801), SNOWFLAKE_* deploy secrets + database pin for `task catalog:release`
 (DNA-862). **The midterm objective is met; the next rung is v3.0 — Projections**, gated on a
-Twenty dev instance (`environment-matrix`) and D4.
+Twenty dev instance (`environment-matrix`, DNA-909) — D4 closed 2026-08-12 (artifact split,
+DNA-908).
 
 **Longterm objective: v5.0 — Program done.** Everything after v2.0 is sequential and gated
 (Phase 3 needs Phase 2 exit + a Twenty dev instance; Phase 4 needs Phase 3 exit; genesis needs
