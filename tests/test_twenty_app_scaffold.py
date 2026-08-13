@@ -11,10 +11,13 @@ generator writes into, and two properties of the surface around them:
   mint as a reviewed diff, because a generator that mints its own identifiers recreates
   fields on every sync (design.md Decision 2). Whether the map *covers* the model is
   `packages/pulse-core/tests/test_twenty_model.py`'s gate, not this one;
-- none of the `twenty:*` targets is reachable from `task check`. Wiring them into the
-  gate is task 3.4's reviewed step, and it needs the `setup-node` step in `main.yml` to
-  land in the same commit — a `check` that shells out to `npm` on a runner with no node
-  is red CI, which is exactly what `docs/ci-lessons.md` exists to prevent.
+- none of the node-dependent `twenty:*` targets is reachable from `task check`. Wiring
+  them into the gate is task 3.4's reviewed step, and it needs the `setup-node` step in
+  `main.yml` to land in the same commit — a `check` that shells out to `npm` on a runner
+  with no node is red CI, which is exactly what `docs/ci-lessons.md` exists to prevent.
+  `twenty:validate` (task 2.3) is the exception and is pinned *into* `check`: it is
+  Python-only by construction, reading the generated TypeScript as data rather than
+  compiling it, so it needs no toolchain the runner lacks.
 """
 
 from __future__ import annotations
@@ -178,4 +181,17 @@ def test_twenty_targets_are_not_yet_in_check():
     assert not reached & set(_TWENTY_TARGETS), (
         f"`task check` already reaches {sorted(reached & set(_TWENTY_TARGETS))}; CI has no node "
         "step yet, so this is red CI. Wiring it in is task 3.4."
+    )
+
+
+def test_twenty_validate_is_in_check():
+    """Task 2.3: a drifted committed artifact must fail CI, which needs the gate to run there."""
+    tasks = _taskfile()["tasks"]
+    assert "twenty:validate" in tasks, "Taskfile.yml does not define twenty:validate"
+    cmds = " ".join(str(cmd) for cmd in tasks["twenty:validate"]["cmds"])
+    assert "npm" not in cmds and "npx" not in cmds, (
+        f"twenty:validate reaches the node toolchain: {cmds!r} — it runs in `check`, where CI has no node"
+    )
+    assert "twenty:validate" in _reachable("check"), (
+        "`task check` does not reach twenty:validate — the artifact gate would never run in CI"
     )
