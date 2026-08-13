@@ -54,7 +54,7 @@ golden files, logs, or receipts.
       direction, or UID key scheme propagates into every generated surface and is
       retrofit-expensive after first apply (UIDs are mint-once by spec).
 
-- [ ] 2.2 Generator `pulse_core/twenty_metadata.py`: read `state_catalog.yaml` through
+- [x] 2.2 Generator `pulse_core/twenty_metadata.py`: read `state_catalog.yaml` through
       `catalog_gen.load_catalog`, read the model definition and UID map, emit
       `packages/twenty-app/generated/options.ts`, `generated/projection-lookup.ts`, and the
       serialized Metadata API operation set artifact
