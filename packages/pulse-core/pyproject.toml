@@ -9,6 +9,14 @@ dependencies = [
     "pyyaml>=6.0",
 ]
 
+[dependency-groups]
+dev = [
+    # `tests/test_twenty_metadata.py` runs the whole generator with sockets disabled, which is how
+    # the "Generation is offline" scenario is asserted rather than assumed. Declared here so the
+    # dependency travels with the suite that needs it, the same pattern identity and schedules use.
+    "pytest-socket>=0.7.0",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

@@ -21,8 +21,19 @@ describe("twenty-app scaffold", () => {
     expect(Array.isArray(uidMap)).toBe(false);
     expect(uidMap).not.toBeNull();
     for (const key of Object.keys(uidMap as Record<string, unknown>)) {
-      // `<object>` / `<object>.<field>` / `<object>.<field>.<option>` — camelCase segments.
-      expect(key).toMatch(/^[a-z][A-Za-z0-9]*(\.[a-z][A-Za-z0-9_]*){0,2}$/);
+      // `<object>` / `<object>.<field>` / `<object>.<field>.<option>` — camelCase segments,
+      // except that an option *value* may itself contain a dot: an event-type option is
+      // `<subject>.<state>`, so `domainEvent.eventType.referral.received` is a well-formed
+      // three-part key with four segments. Keys are composed and looked up whole, never split.
+      const [object, field, ...option] = key.split(".");
+      expect(object).toMatch(/^[a-z][A-Za-z0-9]*$/);
+      if (field !== undefined) {
+        expect(field).toMatch(/^[a-z][A-Za-z0-9_]*$/);
+      }
+      expect(option.length).toBeLessThanOrEqual(2);
+      for (const segment of option) {
+        expect(segment).toMatch(/^[a-z][A-Za-z0-9_]*$/);
+      }
     }
   });
 
