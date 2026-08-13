@@ -90,6 +90,40 @@ Open Questions).
 |---|---|---|---|
 | `POST /rest/comments` | REST API (pinned, not live-verified) | Twenty; bearer token via `PULSE_LEDGER_TWENTY_API_TOKEN` | comment shape drift surfaces only at the Phase 3 live re-verification; until then, fixtures are the only pinned contract, same posture as the verdict mart row above |
 
+### Twenty Metadata API (`pulse-app-scaffold`, DNA-908)
+
+`pulse_core.twenty_metadata` serializes the Twenty workspace model — objects, fields, relations,
+SELECT options, roles — as a set of Metadata API operations, committed at
+`packages/twenty-app/artifact/operations.json`, and `pulse_core.twenty_deploy` applies that
+artifact to an instance. D4 (DNA-908, 2026-08-12) decided the split: build ≠ publish, and the same
+artifact promotes dev → staging → prod. So the consumed surface is the **operation-set shape**, not
+a live instance — CI builds and validates the artifact with no server reachable
+(`task twenty:validate`, `--disable-socket`).
+
+The artifact pins its own shape with two version keys, and nothing else stands in for them:
+`artifactVersion` (`1`) is the operation-set schema this repo serializes against, and
+`catalogVersion` (`1.0.0`) is the state-catalog release whose dimensions became SELECT options in
+that render. A change to either is a deliberate re-render, caught by the staleness check in
+`task check`, never a silent drift.
+
+The server-side half of the pin is the image: SPCS deploys the pinned upstream `twentycrm/twenty`
+tag, never a build from patched source (`design/platform/pulse-app-scaffold.md` §SPCS deployment —
+an image built from patched source is a fork, and AGPL §13 obligations attach). That tag is set in
+the SPCS service spec when the instance is provisioned; **no tag is pinned here yet, because no
+instance exists — DNA-909 (Twenty dev instance, manual provisioning) is the open dependency.**
+Upstream migrations can land on app-declared objects, so a tag bump is a deliberate event verified
+against a parallel instance, not a routine upgrade.
+
+| Dependency | Kind | Source | Breakage risk |
+|---|---|---|---|
+| Metadata API operation set | serialized artifact, pinned in this repo (`packages/twenty-app/artifact/operations.json`, keys `artifactVersion` / `catalogVersion`) | Twenty; shape decided by D4 / DNA-908 | our serialization is the only pinned contract until read-back runs — a shape drift upstream surfaces as a failed apply, not as bad data, because validate-before-apply refuses anything the schema rejects |
+| `twentycrm/twenty` image tag | pinned container image (SPCS) | upstream release, pinned in the SPCS service spec — unset until DNA-909 provisions the dev instance | an unpinned or bumped tag changes the server-side Metadata API shape under a fixed artifact; upgrades are tested against a parallel instance before promoting |
+
+Ground truth is the wave-3 read-back verification: apply the artifact to the dev instance and
+assert every operation's target present with its mapped `universalIdentifier`. It is gated on
+DNA-909 and runs before anything consumes the model, so until it passes the risk is bounded —
+nothing has applied the artifact anywhere. Same posture as the Twenty comment API entry above.
+
 ### Producer-policy gate (`producer-ingress-policy`, DNA-885–DNA-888)
 
 `tests/test_producer_ingress_policy.py` classifies `packages/ocean` producer source against the
