@@ -5,11 +5,12 @@ scope must equal executed scope. A package can exist on disk while nothing reach
 and this one is the repo's first TypeScript package, so it has its own path list
 (`workspaces` in the root `package.json`) and its own runner (`twenty:test`) rather than
 riding the Python ones. This gate pins both wirings, the pinned toolchain, the layout the
-generator writes into, and the two things that must *not* be true yet:
+generator writes into, and two properties of the surface around them:
 
-- `uid-map.json` stays empty until task 2.1 mints into it as a reviewed diff, because a
-  generator that mints its own identifiers recreates fields on every sync (design.md
-  Decision 2);
+- `uid-map.json` is a flat, sorted map of canonical UUIDs — task 2.1 landed the initial
+  mint as a reviewed diff, because a generator that mints its own identifiers recreates
+  fields on every sync (design.md Decision 2). Whether the map *covers* the model is
+  `packages/pulse-core/tests/test_twenty_model.py`'s gate, not this one;
 - none of the `twenty:*` targets is reachable from `task check`. Wiring them into the
   gate is task 3.4's reviewed step, and it needs the `setup-node` step in `main.yml` to
   land in the same commit — a `check` that shells out to `npm` on a runner with no node
@@ -21,6 +22,7 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
+from uuid import UUID
 
 import yaml
 
@@ -44,6 +46,13 @@ _LAYOUT = (
 _PINNED_DEV_DEPS = ("vitest", "typescript")
 
 _TWENTY_TARGETS = ("twenty:gen", "twenty:test", "twenty:deploy")
+
+
+def _is_canonical_uuid(value: object) -> bool:
+    try:
+        return isinstance(value, str) and str(UUID(value)) == value
+    except ValueError:
+        return False
 
 
 def _taskfile() -> dict:
@@ -125,13 +134,19 @@ def test_node_modules_is_ignored():
     assert "node_modules/" in (_REPO_ROOT / ".gitignore").read_text().splitlines()
 
 
-def test_uid_map_is_empty_but_valid():
-    """Empty-but-valid: a flat object, ready for task 2.1's reviewed mint."""
+def test_uid_map_is_a_flat_sorted_map_of_canonical_uuids():
+    """Task 2.1 landed the reviewed mint; this gate holds the file's shape, not its contents.
+
+    Coverage of the model + catalog surface is `packages/pulse-core/tests/test_twenty_model.py`'s
+    job — it is the side that knows what keys the model needs. Here: a flat object keyed by stable
+    name, sorted so a later mint reads as an append, and every value a canonical UUID string.
+    """
     uid_map = json.loads((_APP / "uid-map.json").read_text())
     assert isinstance(uid_map, dict), "uid-map.json must be a flat object keyed by stable name"
-    assert uid_map == {}, (
-        "uid-map.json carries entries; minting is task 2.1's reviewed diff, never a side effect of the scaffold"
-    )
+    assert uid_map, "uid-map.json is empty — task 2.1 minted the initial identifiers"
+    assert list(uid_map) == sorted(uid_map), "uid-map.json is unsorted; a mint should diff as an append"
+    malformed = sorted(key for key, value in uid_map.items() if not _is_canonical_uuid(value))
+    assert malformed == [], f"uid-map.json values are not canonical UUID strings: {malformed}"
 
 
 def test_a_vitest_spec_exists_for_the_runner_to_collect():
