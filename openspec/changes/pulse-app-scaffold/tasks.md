@@ -76,7 +76,7 @@ golden files, logs, or receipts.
       model without inventing shape, and the golden files it mints become the verifier every
       later task trusts.
 
-- [ ] 2.3 Artifact validation in `task check`: `pulse_core/twenty_validate.py` — operation-set
+- [x] 2.3 Artifact validation in `task check`: `pulse_core/twenty_validate.py` — operation-set
       schema validation, committed-artifact-matches-regeneration (staleness check), UID-map
       completeness, options ⊆ catalog states, and TS/artifact option-set equality — exposed as
       `task twenty:validate` and added to `task check`'s dependency list (Python-side only; no
