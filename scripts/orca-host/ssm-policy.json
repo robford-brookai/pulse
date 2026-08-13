@@ -1,0 +1,63 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "SendCommandToTenantHosts",
+      "Effect": "Allow",
+      "Action": "ssm:SendCommand",
+      "Resource": "arn:aws:ec2:us-east-1:173008660334:instance/*",
+      "Condition": {
+        "StringEquals": {
+          "ssm:resourceTag/TENANT_NAME": "dev01-brook"
+        }
+      }
+    },
+    {
+      "Sid": "SendCommandDocument",
+      "Effect": "Allow",
+      "Action": "ssm:SendCommand",
+      "Resource": "arn:aws:ssm:us-east-1::document/AWS-RunShellScript"
+    },
+    {
+      "Sid": "StartSessionOnTenantHosts",
+      "Effect": "Allow",
+      "Action": "ssm:StartSession",
+      "Resource": "arn:aws:ec2:us-east-1:173008660334:instance/*",
+      "Condition": {
+        "StringEquals": {
+          "ssm:resourceTag/TENANT_NAME": "dev01-brook"
+        }
+      }
+    },
+    {
+      "Sid": "StartSessionDocuments",
+      "Effect": "Allow",
+      "Action": "ssm:StartSession",
+      "Resource": [
+        "arn:aws:ssm:us-east-1::document/AWS-StartPortForwardingSession",
+        "arn:aws:ssm:us-east-1::document/AWS-StartSSHSession"
+      ]
+    },
+    {
+      "Sid": "ReadCommandResults",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:GetCommandInvocation",
+        "ssm:ListCommandInvocations",
+        "ssm:ListCommands",
+        "ssm:DescribeSessions",
+        "ssm:GetConnectionStatus"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ManageOwnSessions",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:TerminateSession",
+        "ssm:ResumeSession"
+      ],
+      "Resource": "arn:aws:ssm:us-east-1:173008660334:session/${aws:userid}-*"
+    }
+  ]
+}
