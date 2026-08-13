@@ -298,6 +298,30 @@ def test_consumes_md_registers_customerio_export() -> None:
         assert f"`{column}`" in consumes, f"consumes.md must name pinned column {column!r}"
 
 
+def test_consumes_md_registers_twenty_metadata_api() -> None:
+    """pulse-app-scaffold 3.5: the Metadata API the artifact serializes against is a named entry.
+
+    The entry must name the committed artifact path and the version keys the artifact pins its
+    shape with, and those values must equal the committed artifact's — a doc that pins a version
+    the artifact no longer carries is the drift this gate exists to catch. The upstream image tag
+    is named too, because that is what fixes the server-side shape at deploy time.
+    """
+    consumes = (ROOT / "docs/contracts/consumes.md").read_text()
+    artifact_path = "packages/twenty-app/artifact/operations.json"
+    assert artifact_path in consumes, f"consumes.md must name the artifact path {artifact_path!r}"
+    artifact = json.loads((ROOT / artifact_path).read_text())
+    for key in ("artifactVersion", "catalogVersion"):
+        assert f"`{key}`" in consumes, f"consumes.md must name the pinned version key {key!r}"
+        assert f"`{artifact[key]}`" in consumes, (
+            f"consumes.md must pin {key} to the committed artifact's value {artifact[key]!r}"
+        )
+    assert "twentycrm/twenty" in consumes, (
+        "consumes.md must name the pinned upstream image the Metadata API shape follows"
+    )
+    for issue in ("DNA-908", "DNA-909"):
+        assert issue in consumes, f"consumes.md must cross-link {issue}"
+
+
 def test_adr_log_is_append_only_and_seeded() -> None:
     adr_dir = ROOT / "docs/adr"
     numbered = sorted(p for p in adr_dir.glob("ADR-*.md") if not p.name.startswith("ADR-0000"))
