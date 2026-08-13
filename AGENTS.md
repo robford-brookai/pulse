@@ -55,8 +55,9 @@ Do NOT include:
 
 ### Quality
 
-- Run `task check` before committing — lint, typecheck, tests, docs build. This is exactly what
-  CI runs, so a green `check` means a green pipeline.
+- Run `task check` before committing — lint, typecheck, tests, the Twenty app suite, docs build.
+  This is exactly what CI runs, so a green `check` means a green pipeline. The Twenty app suite
+  needs node 22+ on PATH; CI installs it with a pinned setup-node step in `.github/workflows/main.yml`.
 - `task fmt` applies the formatting and fixable lint rules that `task lint` only reports.
 - `openlore drift` runs automatically via pre-commit hook — fix drift before pushing.
 - One task = one commit.
