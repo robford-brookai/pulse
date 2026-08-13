@@ -90,7 +90,7 @@ golden files, logs, or receipts.
 
 ## 3. Wave 2 — app source, deploy step, wiring
 
-- [ ] 3.1 TypeScript app model in `packages/twenty-app/src/`: `application-config.ts`, one
+- [x] 3.1 TypeScript app model in `packages/twenty-app/src/`: `application-config.ts`, one
       object file per model object importing its options from `generated/options.ts` and its
       `universalIdentifier`s from the UID map, role definitions, and the ops-facing saved
       views — hand-written files consuming generated arrays, never generated whole (design
