@@ -1,0 +1,11 @@
+{
+  "name": "pulse-workspace",
+  "private": true,
+  "description": "npm workspace root; the Python workspace is pyproject.toml's [tool.uv.workspace]",
+  "workspaces": [
+    "packages/twenty-app"
+  ],
+  "engines": {
+    "node": ">=22"
+  }
+}
