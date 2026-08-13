@@ -100,7 +100,7 @@ golden files, logs, or receipts.
       typechecks under `tsc --noEmit` via `task twenty:test`.
       `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2]`
 
-- [ ] 3.2 `src/logic-functions/project-domain-event.ts`: the handler behind an injected
+- [x] 3.2 `src/logic-functions/project-domain-event.ts`: the handler behind an injected
       client boundary — crosswalk resolution, first-event PatientProgram creation,
       per-dimension LWW guard, lookup apply from `generated/projection-lookup.ts`,
       unresolved-ref orphan stop, lookup-miss no-op.
