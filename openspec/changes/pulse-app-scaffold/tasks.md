@@ -130,7 +130,7 @@ golden files, logs, or receipts.
       response-body value (spec: "A failed operation's receipt is safe to attach").
       `[model: sonnet | deps: 2.3 | lane: repo_change | wave: 2]`
 
-- [ ] 3.4 CI wiring: add `twenty:test` (vitest + tsc) to `task check`, add a pinned
+- [x] 3.4 CI wiring: add `twenty:test` (vitest + tsc) to `task check`, add a pinned
       setup-node step to `.github/workflows/main.yml` — every `run:` command stays exactly
       `task check` (cat4 contract; read `docs/ci-lessons.md` first). `openspec`/`openlore`
       stay out of `check`, unchanged.
