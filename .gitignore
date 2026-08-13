@@ -211,6 +211,10 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
+# Node (packages/twenty-app, the npm workspace). package-lock.json is committed —
+# `npm ci` in `task twenty:test` reproduces from it.
+node_modules/
+
 # openlore analysis artifacts
 .openlore/
 

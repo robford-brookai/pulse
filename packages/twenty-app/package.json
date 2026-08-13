@@ -1,0 +1,16 @@
+{
+  "name": "@pulse/twenty-app",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Twenty app: the PULSE data model, roles, views, and projection logic as code",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
+  }
+}

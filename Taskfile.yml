@@ -107,6 +107,15 @@ tasks:
       - uv run ruff format {{.LINT_PATHS}} --check
       - uv run ruff check {{.LINT_PATHS}}
 
+  twenty:gen:
+    desc: Regenerate the Twenty app's generated surfaces and the Metadata API operation-set artifact
+    # Reads state_catalog.yaml, the model definition, and packages/twenty-app/uid-map.json;
+    # writes packages/twenty-app/generated/ and artifact/operations.json. Pure file
+    # transformation — no network, and no path that applies anything to a Twenty instance
+    # (that is twenty:deploy). A UID the map lacks is an error naming the key, never a mint.
+    cmds:
+      - uv run python -m pulse_core.twenty_metadata
+
   typecheck:
     desc: Type check — mypy on TYPED_PATHS (DNA-779), pyright on verdict-relay (s12), schedules (s13), identity (s14), consent-ingress (S1.1 task 1.1), archaeology (bf0a)
     cmds:
@@ -167,6 +176,18 @@ tasks:
     cmds:
       - uv run pytest {{.TESTED_PATHS}} --import-mode=importlib -m integration
 
+  twenty:test:
+    desc: Type check and run the Twenty app's vitest suite (packages/twenty-app; no server, no network)
+    # The repo's first TypeScript package, deliberately contained: vitest only, no bundler,
+    # no publishing. `npm ci` reproduces from the committed root package-lock.json and is
+    # skipped when node_modules is already present, so a repeat run is just the suite.
+    # Not part of `check` yet — that needs a pinned setup-node step in main.yml to land in
+    # the same commit, or `check` shells out to npm on a runner with no node.
+    cmds:
+      - '[ -d node_modules ] || npm ci'
+      - npm run typecheck --workspace=@pulse/twenty-app
+      - npm run test --workspace=@pulse/twenty-app
+
   # --- 5. Gate ---
 
   catalog:release:
@@ -190,6 +211,18 @@ tasks:
       vars: [PROFILE]
     cmds:
       - uv run python -m synthea_seed.regen --profile {{.PROFILE}} {{if .REPIN}}--repin{{end}}
+
+  twenty:deploy:
+    desc: Replay the validated Twenty artifact against TARGET (dev|staging|prod; needs that target's credential)
+    # Dumb by design: reads a validated artifact file and a target, replays the operation set
+    # idempotently (create-if-absent keyed on universalIdentifier, update-if-drifted, never
+    # delete), emits a receipt of operation counts. Zero generation logic — promotion is the
+    # same file, next target. URL and credential resolve from the environment, never code.
+    # Never reached from `check`: it needs credentials, same posture as catalog:release.
+    requires:
+      vars: [TARGET]
+    cmds:
+      - uv run python -m pulse_core.twenty_deploy --target {{.TARGET}}
 
   # `check` is the contract between a developer's machine and CI:
   # .github/workflows/main.yml invokes exactly this target. Keep it CI-safe — openspec and
