@@ -114,7 +114,7 @@ golden files, logs, or receipts.
       or dimension-isolation mistake silently corrupts projected state and only surfaces at
       reconciliation.
 
-- [ ] 3.3 Deploy CLI `pulse_core/twenty_deploy.py` + `task twenty:deploy`: artifact file +
+- [x] 3.3 Deploy CLI `pulse_core/twenty_deploy.py` + `task twenty:deploy`: artifact file +
       `--target` (URL/credential from environment, never code), validate-before-apply
       (refuses on any 2.3 validator failure), idempotent apply keyed on `universalIdentifier`
       (create-if-absent, update-if-drifted, never delete), `--dry-run` plan with fixture
