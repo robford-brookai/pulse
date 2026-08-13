@@ -140,7 +140,7 @@ golden files, logs, or receipts.
       `serial: workspace_roots` — edits CI workflow and `Taskfile.yml` `check`; the exact
       surface cat4 and ci-lessons exist for, never edited in parallel.
 
-- [ ] 3.5 Register the consumed surface: `docs/contracts/consumes.md` entry for the Twenty
+- [x] 3.5 Register the consumed surface: `docs/contracts/consumes.md` entry for the Twenty
       Metadata API — operation-set shape the artifact serializes against, pinned to the Twenty
       version the image pin will carry (per `pulse-app-scaffold.md` §SPCS: pinned upstream
       tag), cross-linking DNA-908 (D4) as the deciding record and DNA-909 as the instance
