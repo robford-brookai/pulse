@@ -190,6 +190,16 @@ tasks:
 
   # --- 5. Gate ---
 
+  twenty:validate:
+    desc: Validate the committed Twenty artifact — schema, staleness, UID map, options, TS parity
+    # Reached from `check` (unlike twenty:gen/test/deploy) because it is Python-only by
+    # construction: the generated TypeScript is compared by parsing it as data, never by
+    # shelling out to npm, so this stays green on a runner with no node (docs/ci-lessons.md).
+    # Reads three committed files and writes nothing — the drift it catches is fixed by
+    # `task twenty:gen`, never by this target.
+    cmds:
+      - uv run python -m pulse_core.twenty_validate
+
   catalog:release:
     desc: Print the catalog release plan (deploy artifact; APPLY=1 executes, needs Snowflake creds)
     # The deploy artifact for merges to main touching catalog/** (.github/workflows/
@@ -233,6 +243,7 @@ tasks:
       - task: lint
       - task: typecheck
       - task: test
+      - task: twenty:validate
       - task: workflow:lint
       - task: docs:lock-guard
       - task: docs:build
