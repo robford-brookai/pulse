@@ -35,7 +35,7 @@ golden files, logs, or receipts.
 
 ## 2. Wave 1 — generator and artifact
 
-- [ ] 2.1 Model definition and initial UID mint: encode the
+- [x] 2.1 Model definition and initial UID mint: encode the
       `design/platform/twenty-data-model.md` objects (Patient, Program, PatientProgram,
       Provider, Clinic, DomainEvent) as checked-in model-definition data in
       `pulse_core/twenty_model.py` — fields, types, relations (three nullable relations, no
