@@ -139,6 +139,34 @@ export interface ViewDefinition {
   readonly sorts: readonly ViewSort[];
 }
 
+/**
+ * What fires a logic function. Only the database-event trigger is declared, because it is the
+ * only one the projection uses: `domainEvent.created` (`design/platform/pulse-app-scaffold.md`).
+ */
+export interface DatabaseEventTriggerSettings {
+  readonly eventName: string;
+}
+
+/**
+ * A logic function carries no `universalIdentifier` here. The scaffold doc's sketch shows one,
+ * but the UID map is exactly the surface the artifact serializes (`uid_map_diff` fails on any
+ * key the model never asks for) and the operation set has no logic-function operation to key —
+ * the same reason the views carry none. Adding the field is a mint plus an artifact change,
+ * proposed in HANDOFF.md rather than drifted into.
+ */
+export interface LogicFunctionDefinition<TInput, TOutput> {
+  readonly name: string;
+  readonly timeoutSeconds: number;
+  readonly handler: (input: TInput) => Promise<TOutput>;
+  readonly databaseEventTriggerSettings: DatabaseEventTriggerSettings;
+}
+
+/** Any logic function, seen from the application config, which never calls one. */
+export type AnyLogicFunctionDefinition = LogicFunctionDefinition<
+  never,
+  unknown
+>;
+
 export interface ApplicationDefinition {
   readonly name: string;
   readonly label: string;
@@ -148,6 +176,7 @@ export interface ApplicationDefinition {
   readonly objects: readonly ObjectDefinition[];
   readonly roles: readonly RoleDefinition[];
   readonly views: readonly ViewDefinition[];
+  readonly logicFunctions: readonly AnyLogicFunctionDefinition[];
 }
 
 export const defineObject = <T extends ObjectDefinition>(definition: T): T =>
@@ -159,3 +188,6 @@ export const defineView = <T extends ViewDefinition>(definition: T): T =>
 export const defineApplication = <T extends ApplicationDefinition>(
   definition: T,
 ): T => definition;
+export const defineLogicFunction = <TInput, TOutput>(
+  definition: LogicFunctionDefinition<TInput, TOutput>,
+): LogicFunctionDefinition<TInput, TOutput> => definition;

@@ -13,6 +13,7 @@
  */
 
 import { defineApplication } from "./define";
+import { ALL_LOGIC_FUNCTIONS } from "./logic-functions";
 import { ALL_OBJECTS } from "./objects";
 import { ALL_ROLES, STAFF_ROLE } from "./roles";
 import { ALL_VIEWS } from "./views";
@@ -26,6 +27,7 @@ export const APPLICATION = defineApplication({
   objects: ALL_OBJECTS,
   roles: ALL_ROLES,
   views: ALL_VIEWS,
+  logicFunctions: ALL_LOGIC_FUNCTIONS,
 });
 
 export default APPLICATION;
