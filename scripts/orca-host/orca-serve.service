@@ -1,0 +1,45 @@
+# orca-serve.service — keep the Orca runtime up across reboots.
+#
+# Install:
+#   cp orca-serve.service /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now orca-serve
+#
+# Read the pairing code:
+#   journalctl -u orca-serve -n 50 --no-pager
+#
+# The advertised pairing address is the loopback port your Mac forwards to over
+# SSM. It must match localPortNumber in tunnel.sh, or the client dials a port
+# nothing is listening on.
+
+[Unit]
+Description=Orca headless runtime
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu
+
+Environment=ORCA_PORT=7331
+Environment=ORCA_PROJECT_ROOT=/home/ubuntu/workspace
+
+ExecStartPre=/bin/mkdir -p /home/ubuntu/workspace
+ExecStart=/usr/bin/orca-ide serve \
+  --port ${ORCA_PORT} \
+  --project-root ${ORCA_PROJECT_ROOT} \
+  --pairing-address ws://127.0.0.1:${ORCA_PORT} \
+  --json
+
+Restart=always
+RestartSec=5
+
+# Agent work is long-running. Do not let systemd reap it under memory pressure
+# before the OOM killer has a say.
+OOMPolicy=continue
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,18 @@
+# orca-idle-stop.timer — run the idle check every 10 minutes.
+#
+# The interval must match CHECK_MINUTES in idle-stop.sh, which multiplies it by
+# the consecutive-quiet count to decide when the idle window has elapsed.
+#
+#   cp orca-idle-stop.{timer,service} /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now orca-idle-stop.timer
+
+[Unit]
+Description=Check whether the Orca host is idle
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=10min
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target
