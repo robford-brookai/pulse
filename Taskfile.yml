@@ -181,8 +181,9 @@ tasks:
     # The repo's first TypeScript package, deliberately contained: vitest only, no bundler,
     # no publishing. `npm ci` reproduces from the committed root package-lock.json and is
     # skipped when node_modules is already present, so a repeat run is just the suite.
-    # Not part of `check` yet — that needs a pinned setup-node step in main.yml to land in
-    # the same commit, or `check` shells out to npm on a runner with no node.
+    # Reached from `check` (task 3.4), which is why main.yml's quality job sets node up
+    # before running it — a `check` that shells out to npm on a runner without node is red
+    # CI (docs/ci-lessons.md). tests/test_twenty_app_scaffold.py pins both halves together.
     cmds:
       - '[ -d node_modules ] || npm ci'
       - npm run typecheck --workspace=@pulse/twenty-app
@@ -237,13 +238,16 @@ tasks:
   # `check` is the contract between a developer's machine and CI:
   # .github/workflows/main.yml invokes exactly this target. Keep it CI-safe — openspec and
   # openlore are npm globals that runners do not install, so they belong in `verify`, not here.
+  # Node is different: main.yml's quality job installs it with a pinned setup-node step, so
+  # twenty:test is CI-safe by that provision rather than by needing no toolchain (task 3.4).
   check:
-    desc: All CI gates — lint, typecheck, tests, docs build (what main.yml runs)
+    desc: All CI gates — lint, typecheck, tests, Twenty app suite, docs build (what main.yml runs)
     cmds:
       - task: lint
       - task: typecheck
       - task: test
       - task: twenty:validate
+      - task: twenty:test
       - task: workflow:lint
       - task: docs:lock-guard
       - task: docs:build

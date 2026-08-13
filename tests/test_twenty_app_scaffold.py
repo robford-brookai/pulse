@@ -11,18 +11,21 @@ generator writes into, and two properties of the surface around them:
   mint as a reviewed diff, because a generator that mints its own identifiers recreates
   fields on every sync (design.md Decision 2). Whether the map *covers* the model is
   `packages/pulse-core/tests/test_twenty_model.py`'s gate, not this one;
-- none of the node-dependent `twenty:*` targets is reachable from `task check`. Wiring
-  them into the gate is task 3.4's reviewed step, and it needs the `setup-node` step in
-  `main.yml` to land in the same commit — a `check` that shells out to `npm` on a runner
-  with no node is red CI, which is exactly what `docs/ci-lessons.md` exists to prevent.
-  `twenty:validate` (task 2.3) is the exception and is pinned *into* `check`: it is
-  Python-only by construction, reading the generated TypeScript as data rather than
-  compiling it, so it needs no toolchain the runner lacks.
+- `twenty:test` is reachable from `task check` *and* the job that runs `task check` sets
+  node up first (task 3.4). The two halves are one fact: a `check` that shells out to
+  `npm` on a runner with no node is red CI, which is exactly what `docs/ci-lessons.md`
+  exists to prevent, so neither half is allowed to drift away from the other. The
+  credential- and JVM-dependent targets (`twenty:deploy`, `catalog:release`,
+  `synthea:regen`) stay out of `check` for the same reason inverted — the gate must be
+  runnable with nothing but the toolchain CI installs.
+  `twenty:validate` (task 2.3) needs no toolchain at all: it is Python-only by
+  construction, reading the generated TypeScript as data rather than compiling it.
 """
 
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from pathlib import Path
 from uuid import UUID
@@ -175,13 +178,74 @@ def test_twenty_test_runs_the_vitest_suite():
     assert "vitest" in cmds or "npm" in cmds, f"twenty:test does not invoke the node toolchain: {cmds!r}"
 
 
-def test_twenty_targets_are_not_yet_in_check():
-    """Task 3.4 wires these into `check` together with `main.yml`'s setup-node step."""
-    reached = _reachable("check")
-    assert not reached & set(_TWENTY_TARGETS), (
-        f"`task check` already reaches {sorted(reached & set(_TWENTY_TARGETS))}; CI has no node "
-        "step yet, so this is red CI. Wiring it in is task 3.4."
+def test_twenty_test_is_in_check():
+    """Task 3.4: the vitest + tsc suite is a CI gate, not a target someone remembers to run."""
+    assert "twenty:test" in _reachable("check"), (
+        "`task check` does not reach twenty:test — the app's suite and type check would never run in CI"
     )
+
+
+def test_credentialed_twenty_targets_stay_out_of_check():
+    """`check` must stay runnable with only the toolchain CI installs — no secrets, no target env."""
+    reached = _reachable("check")
+    for target in ("twenty:deploy", "catalog:release", "synthea:regen"):
+        assert target not in reached, (
+            f"`task check` reaches {target}, which needs credentials or a JVM; CI has neither by default"
+        )
+
+
+def _jobs_running_check() -> list[str]:
+    """Names of the main.yml jobs whose steps invoke `task check`."""
+    workflow = yaml.safe_load((_REPO_ROOT / ".github" / "workflows" / "main.yml").read_text())
+    return [
+        name
+        for name, job in (workflow.get("jobs") or {}).items()
+        if any(re.search(r"\btask\s+check\b", str(step.get("run", ""))) for step in job.get("steps") or [])
+    ]
+
+
+def test_every_job_running_check_sets_node_up_first():
+    """The other half of `twenty:test` in `check`: node has to be on the runner.
+
+    Asserted per job rather than per file — a second job that grows a `task check` step
+    without a node step is the same red CI, and would otherwise pass on the first job's.
+    """
+    workflow = yaml.safe_load((_REPO_ROOT / ".github" / "workflows" / "main.yml").read_text())
+    jobs = _jobs_running_check()
+    assert jobs, "no main.yml job runs `task check`"
+    for name in jobs:
+        steps = workflow["jobs"][name]["steps"]
+        node_index = next(
+            (i for i, step in enumerate(steps) if str(step.get("uses", "")).startswith("actions/setup-node@")),
+            None,
+        )
+        assert node_index is not None, (
+            f"main.yml job '{name}' runs `task check`, which reaches twenty:test, but never sets node up"
+        )
+        check_index = next(
+            i for i, step in enumerate(steps) if re.search(r"\btask\s+check\b", str(step.get("run", "")))
+        )
+        assert node_index < check_index, f"main.yml job '{name}' sets node up after running `task check`"
+
+
+def test_the_node_version_ci_installs_satisfies_the_workspace_engine():
+    """A runner on node 20 against an `engines: >=22` workspace fails inside npm, not in review."""
+    required = _root_package_json()["engines"]["node"]
+    match = re.search(r"(\d+)", required)
+    assert match, f"root package.json engines.node is unparseable: {required!r}"
+    floor = int(match.group(1))
+    workflow = yaml.safe_load((_REPO_ROOT / ".github" / "workflows" / "main.yml").read_text())
+    pinned = [
+        step["with"]["node-version"]
+        for job in workflow["jobs"].values()
+        for step in job.get("steps") or []
+        if str(step.get("uses", "")).startswith("actions/setup-node@")
+    ]
+    assert pinned, "no setup-node step in main.yml"
+    for version in pinned:
+        assert int(str(version).split(".")[0]) >= floor, (
+            f"main.yml installs node {version}, below the workspace's engines requirement {required}"
+        )
 
 
 def test_twenty_validate_is_in_check():

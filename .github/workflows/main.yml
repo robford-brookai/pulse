@@ -30,6 +30,19 @@ jobs:
           version: 3.x
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+      # `task check` reaches `twenty:test`, which runs npm against packages/twenty-app. Node is
+      # not on the runner's PATH for this workflow otherwise, and a `check` that shells out to a
+      # missing toolchain is the failure class docs/ci-lessons.md exists to prevent. Pinned to a
+      # commit SHA with the version in a comment, like every other action here; the node line
+      # tracks the workspace's `engines.node` (>=22) and its patch floats within that major, so a
+      # security patch is not a pin bump. tests/test_twenty_app_scaffold.py holds this step and
+      # `twenty:test`'s membership in `check` together — neither may drift without the other.
+      - name: Set up node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+
       # Must stay `task check` — tests/scaffold/cat4_ci_contract.py asserts every command in
       # this file resolves to a defined Taskfile target or a known tool. This step previously
       # ran `make check` against a repo with no Makefile, and every run failed for a week.

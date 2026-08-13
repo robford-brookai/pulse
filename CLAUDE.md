@@ -31,7 +31,7 @@ Fix a template-level bug in the template, not here — a fix applied downstream 
 
 ```bash
 task              # list commands, grouped by area, in workflow order
-task check        # lint, typecheck, tests, docs build — exactly what CI runs
+task check        # lint, typecheck, tests, Twenty app suite, docs build — exactly what CI runs
 task fmt          # apply formatting and fixable lint rules
 task test:all     # includes the slow scaffold gates (git sandbox, fresh-clone uv sync)
 task verify CHANGE=<id>   # check + openlore drift + openspec validate
