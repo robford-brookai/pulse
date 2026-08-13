@@ -2298,12 +2298,20 @@ dependencies = [
     { name = "pyyaml" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "pytest-socket" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "pyyaml", specifier = ">=6.0" },
 ]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest-socket", specifier = ">=0.7.0" }]
 
 [[package]]
 name = "pulse-ledger"

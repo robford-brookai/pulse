@@ -38,6 +38,10 @@ _LAYOUT = (
     "src/logic-functions",
     "src/views",
     "generated",
+    # The serialized Metadata API operation set task 2.2 emits and task 4.x deploys. It carries
+    # tracked content rather than a `.gitkeep`: the artifact itself is committed, because the
+    # deploy step reads a reviewed file and never regenerates one.
+    "artifact",
     "tests",
 )
 
