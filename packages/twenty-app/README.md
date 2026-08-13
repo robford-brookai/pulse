@@ -19,8 +19,17 @@ vitest only, no bundler, no publishing. Node is pinned in CI as a setup step.
 | `generated/` | `options.ts` and `projection-lookup.ts`, emitted from `state_catalog.yaml` |
 | `tests/` | vitest unit suite; no server, no network |
 | `uid-map.json` | `universalIdentifier` map, checked in, append-only |
+| `src/define.ts` | the `define*` surface the app source is written against |
+| `src/uid-map.ts` | `uid(key)` — the map read as data, erroring on a key it lacks |
 
 Entity detection is AST-based, so the folder names are convention rather than requirement.
+
+`src/define.ts` stands in for `twenty-sdk/define`, which the scaffold doc's examples import. The
+SDK's shape is only provable against a running server and none exists yet (DNA-909), so the types
+are declared locally: `tsc --noEmit` still rejects options on a non-SELECT field or a relation
+naming a field that is not one, and adopting the SDK later is a change of import path. Views and
+the application config carry no `universalIdentifier` — the UID map holds exactly the surface the
+artifact serializes, and the operation set has no view or application operation to key.
 
 ## `uid-map.json`
 
