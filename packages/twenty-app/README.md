@@ -46,3 +46,29 @@ task twenty:deploy TARGET=dev    # replay the validated artifact against a targe
 
 `twenty:gen` and the artifact checks join `task check` once CI carries a pinned
 `setup-node` step; until then they run on demand.
+
+## Deploying the artifact
+
+`twenty:deploy` (`pulse_core.twenty_deploy`) is the only path by which the artifact reaches
+an instance. It validates before it sends, applies idempotently keyed on
+`universalIdentifier` — create-if-absent, update-if-drifted, never delete — and prints a
+receipt of names, counts, and the artifact's sha256. Promotion is the same file, next target.
+
+Each target reads two environment variables, never anything in code or the artifact:
+
+| Target | URL | Credential |
+|---|---|---|
+| `dev` | `PULSE_TWENTY_DEV_URL` | `PULSE_TWENTY_DEV_TOKEN` |
+| `staging` | `PULSE_TWENTY_STAGING_URL` | `PULSE_TWENTY_STAGING_TOKEN` |
+| `prod` | `PULSE_TWENTY_PROD_URL` | `PULSE_TWENTY_PROD_TOKEN` |
+
+An unset variable is an error naming it, never a silent no-op. To see the plan without
+sending anything — no credential needed, in which case the plan is computed against an
+empty-state assumption:
+
+```bash
+uv run python -m pulse_core.twenty_deploy --target dev --dry-run
+```
+
+No instance exists yet: the Metadata API request shapes are this repo's pin, verified by
+read-back once DNA-909 provisions the dev instance (`docs/contracts/consumes.md`).
