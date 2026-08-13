@@ -21,7 +21,7 @@ golden files, logs, or receipts.
 
 ## 1. Wave 0 — scaffold
 
-- [ ] 1.1 Scaffold `packages/twenty-app` as a workspace member: package layout per
+- [x] 1.1 Scaffold `packages/twenty-app` as a workspace member: package layout per
       `design/platform/pulse-app-scaffold.md` (src/objects, src/roles, src/logic-functions,
       src/views, generated/, tests/), `package.json` with vitest + typescript pinned,
       `uid-map.json` created empty-but-valid, and Taskfile targets `twenty:gen`,
