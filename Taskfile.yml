@@ -235,6 +235,39 @@ tasks:
     cmds:
       - uv run python -m pulse_core.twenty_deploy --target {{.TARGET}}
 
+  ledger:image:
+    desc: Build the pulse-ledger service image (API + relay, one image) and tag it TAG (needs Docker)
+    # Build context is the repo root — pulse-core is a workspace sibling that
+    # packages/pulse-ledger/Dockerfile installs from a sibling path, not from PyPI. The image runs
+    # `python -m pulse_ledger.api_server` by default; a relay deployment overrides the command with
+    # `python -m pulse_ledger.relay_worker` (same image, task 4.5's other process).
+    # Never reached from `check`: it needs a Docker daemon and, on an arm64 dev machine, an
+    # emulated amd64 build — neither belongs on every runner (tests/test_ledger_deploy_targets.py
+    # pins this the same way tests/test_catalog_release_deploy.py pins catalog:release).
+    requires:
+      vars: [TAG]
+    cmds:
+      - docker buildx build --platform linux/amd64 -f packages/pulse-ledger/Dockerfile -t pulse-ledger:{{.TAG}} .
+
+  ledger:migrate:
+    desc: Run the ledger's Alembic migrations to head against DATABASE_URL (needs a real Postgres)
+    # The same sequence `test_migration_000*.py` exercises against a throwaway cluster; this is
+    # the deploy-time invocation against the real one. Never reached from `check`, which never
+    # touches a live database (this repo's no-live-network posture).
+    dir: packages/pulse-ledger/infra/postgres
+    cmds:
+      - uv run --project ../.. alembic upgrade head
+
+  ledger:deploy:
+    desc: Roll the pulse-ledger API/relay deployment to TAG on TARGET (needs that target's credential)
+    # Dumb by design, same posture as twenty:deploy: push the image `ledger:image` already built,
+    # then re-point TARGET's deployment at TAG. No generation logic lives here.
+    # Never reached from `check`: it needs registry and cluster credentials.
+    requires:
+      vars: [TAG, TARGET]
+    cmds:
+      - docker push pulse-ledger:{{.TAG}}
+
   # `check` is the contract between a developer's machine and CI:
   # .github/workflows/main.yml invokes exactly this target. Keep it CI-safe — openspec and
   # openlore are npm globals that runners do not install, so they belong in `verify`, not here.
