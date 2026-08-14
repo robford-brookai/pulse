@@ -12,9 +12,11 @@ import uidMap from "../uid-map.json";
 export const UID_MAP: Readonly<Record<string, string>> = uidMap;
 
 /**
- * `<object>` / `<object>.<field>` / `<object>.<field>.<option>`. An option value may itself
- * contain a dot (`domainEvent.eventType.referral.received`) — keys are composed and looked up
- * whole, never split back apart.
+ * `<object>` / `<object>.<field>` / `<object>.<field>.<option>`, plus the view family:
+ * `view.<view>` and, beneath it, `.navigation`, `.field.<field>`, `.filter.<field>`,
+ * `.sort.<field>`, `.group.<state>`. An option value may itself contain a dot
+ * (`domainEvent.eventType.referral.received`) — keys are composed and looked up whole, never
+ * split back apart.
  */
 export const uid = (key: string): string => {
   const identifier = UID_MAP[key];
@@ -25,19 +27,3 @@ export const uid = (key: string): string => {
   }
   return identifier;
 };
-
-/** The prefix a `pendingUid` placeholder carries. Never a UUID, so it cannot be mistaken for one. */
-export const PENDING_UID_PREFIX = "pending:";
-
-/**
- * A `universalIdentifier` the Twenty type requires and the map does not hold yet.
- *
- * Views are the only such surface today: `ViewManifestType` requires an identifier on the view
- * and on each field, filter, sort, and group, while `pulse_core.twenty_model` does not ask for
- * view keys yet and `check_uid_map` fails on any key the model never asks for. Minting first
- * would fail that check, so the call sites name the keys they will need and this returns a
- * visible placeholder until the model learns them (HANDOFF.md). On that day every one of these
- * becomes `uid` and this function goes away.
- */
-export const pendingUid = (key: string): string =>
-  UID_MAP[key] ?? `${PENDING_UID_PREFIX}${key}`;

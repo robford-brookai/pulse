@@ -20,11 +20,20 @@ describe("twenty-app scaffold", () => {
     expect(uidMap).toBeTypeOf("object");
     expect(Array.isArray(uidMap)).toBe(false);
     expect(uidMap).not.toBeNull();
+    // Two key families, each with its own grammar. The object family is
+    // `<object>` / `<object>.<field>` / `<object>.<field>.<option>` in camelCase, except that an
+    // option *value* may itself contain a dot: an event-type option is `<subject>.<state>`, so
+    // `domainEvent.eventType.referral.received` is a well-formed three-part key with four
+    // segments. The view family is `view.<slug>` in kebab-case, optionally followed by
+    // `navigation` or by a `<part>.<name>` pair. Keys are composed and looked up whole in both.
+    const VIEW_KEY =
+      /^view\.[a-z][a-z0-9-]*(\.navigation|\.(field|filter|sort)\.[a-z][A-Za-z0-9]*|\.group\.[a-z][a-z0-9_]*)?$/;
+
     for (const key of Object.keys(uidMap as Record<string, unknown>)) {
-      // `<object>` / `<object>.<field>` / `<object>.<field>.<option>` — camelCase segments,
-      // except that an option *value* may itself contain a dot: an event-type option is
-      // `<subject>.<state>`, so `domainEvent.eventType.referral.received` is a well-formed
-      // three-part key with four segments. Keys are composed and looked up whole, never split.
+      if (key.startsWith("view.")) {
+        expect(key).toMatch(VIEW_KEY);
+        continue;
+      }
       const [object, field, ...option] = key.split(".");
       expect(object).toMatch(/^[a-z][A-Za-z0-9]*$/);
       if (field !== undefined) {

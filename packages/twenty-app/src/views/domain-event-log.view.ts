@@ -8,10 +8,10 @@
  */
 
 import { defineView, ViewSortDirection, ViewType } from "../define";
-import { pendingUid, uid } from "../uid-map";
+import { uid } from "../uid-map";
 
 export const DOMAIN_EVENT_LOG_VIEW = defineView({
-  universalIdentifier: pendingUid("view.domain-event-log"),
+  universalIdentifier: uid("view.domain-event-log"),
   name: "Event Log",
   icon: "IconHistory",
   objectUniversalIdentifier: uid("domainEvent"),
@@ -19,25 +19,25 @@ export const DOMAIN_EVENT_LOG_VIEW = defineView({
   position: 1,
   fields: [
     {
-      universalIdentifier: pendingUid("view.domain-event-log.field.occurredAt"),
+      universalIdentifier: uid("view.domain-event-log.field.occurredAt"),
       fieldMetadataUniversalIdentifier: uid("domainEvent.occurredAt"),
       position: 0,
       isVisible: true,
     },
     {
-      universalIdentifier: pendingUid("view.domain-event-log.field.eventType"),
+      universalIdentifier: uid("view.domain-event-log.field.eventType"),
       fieldMetadataUniversalIdentifier: uid("domainEvent.eventType"),
       position: 1,
       isVisible: true,
     },
     {
-      universalIdentifier: pendingUid("view.domain-event-log.field.entityType"),
+      universalIdentifier: uid("view.domain-event-log.field.entityType"),
       fieldMetadataUniversalIdentifier: uid("domainEvent.entityType"),
       position: 2,
       isVisible: true,
     },
     {
-      universalIdentifier: pendingUid(
+      universalIdentifier: uid(
         "view.domain-event-log.field.entityRefId",
       ),
       fieldMetadataUniversalIdentifier: uid("domainEvent.entityRefId"),
@@ -45,7 +45,7 @@ export const DOMAIN_EVENT_LOG_VIEW = defineView({
       isVisible: true,
     },
     {
-      universalIdentifier: pendingUid(
+      universalIdentifier: uid(
         "view.domain-event-log.field.programCode",
       ),
       fieldMetadataUniversalIdentifier: uid("domainEvent.programCode"),
@@ -53,13 +53,13 @@ export const DOMAIN_EVENT_LOG_VIEW = defineView({
       isVisible: true,
     },
     {
-      universalIdentifier: pendingUid("view.domain-event-log.field.producer"),
+      universalIdentifier: uid("view.domain-event-log.field.producer"),
       fieldMetadataUniversalIdentifier: uid("domainEvent.producer"),
       position: 5,
       isVisible: true,
     },
     {
-      universalIdentifier: pendingUid("view.domain-event-log.field.actorType"),
+      universalIdentifier: uid("view.domain-event-log.field.actorType"),
       fieldMetadataUniversalIdentifier: uid("domainEvent.actorType"),
       position: 6,
       isVisible: true,
@@ -68,7 +68,7 @@ export const DOMAIN_EVENT_LOG_VIEW = defineView({
   filters: [],
   sorts: [
     {
-      universalIdentifier: pendingUid("view.domain-event-log.sort.occurredAt"),
+      universalIdentifier: uid("view.domain-event-log.sort.occurredAt"),
       fieldMetadataUniversalIdentifier: uid("domainEvent.occurredAt"),
       direction: ViewSortDirection.DESC,
     },

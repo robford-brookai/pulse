@@ -299,6 +299,39 @@ export interface ViewDefinition extends SyncableEntityOptions {
 }
 
 /**
+ * Navigation menu items, mirroring `twenty-shared/src/application/navigationMenuItemManifestType.ts`.
+ *
+ * A view the sidebar does not name is reachable only by URL, which for an ops surface is close to
+ * not existing. `navigationMenuItems` is its own top-level manifest collection alongside `views`
+ * (`manifestType.ts`), so the item is a separate entity with its own identifier rather than a
+ * property of the view it points at.
+ */
+
+export const NavigationMenuItemType = {
+  VIEW: "VIEW",
+  FOLDER: "FOLDER",
+  LINK: "LINK",
+  OBJECT: "OBJECT",
+  RECORD: "RECORD",
+  PAGE_LAYOUT: "PAGE_LAYOUT",
+} as const;
+export type NavigationMenuItemType =
+  (typeof NavigationMenuItemType)[keyof typeof NavigationMenuItemType];
+
+export interface NavigationMenuItemDefinition extends SyncableEntityOptions {
+  readonly type: NavigationMenuItemType;
+  readonly name?: string;
+  readonly icon?: string;
+  readonly color?: string;
+  readonly position: number;
+  readonly viewUniversalIdentifier?: string;
+  readonly link?: string;
+  readonly folderUniversalIdentifier?: string;
+  readonly targetObjectUniversalIdentifier?: string;
+  readonly pageLayoutUniversalIdentifier?: string;
+}
+
+/**
  * What fires a logic function. Only the database-event trigger is declared, because it is the
  * only one the projection uses: `domainEvent.created` (`design/platform/pulse-app-scaffold.md`).
  */
@@ -337,6 +370,7 @@ export interface ApplicationDefinition {
   readonly objects: readonly ObjectDefinition[];
   readonly roles: readonly RoleDefinition[];
   readonly views: readonly ViewDefinition[];
+  readonly navigationMenuItems: readonly NavigationMenuItemDefinition[];
   readonly logicFunctions: readonly AnyLogicFunctionDefinition[];
 }
 
@@ -346,6 +380,11 @@ export const defineRole = <T extends RoleDefinition>(definition: T): T =>
   definition;
 export const defineView = <T extends ViewDefinition>(definition: T): T =>
   definition;
+export const defineNavigationMenuItem = <
+  T extends NavigationMenuItemDefinition,
+>(
+  definition: T,
+): T => definition;
 export const defineApplication = <T extends ApplicationDefinition>(
   definition: T,
 ): T => definition;

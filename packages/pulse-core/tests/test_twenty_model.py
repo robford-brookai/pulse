@@ -18,6 +18,7 @@ regenerated" requirement on its input side: the map is data this module reads an
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import pytest
 from pulse_core import twenty_model as tm
@@ -352,6 +353,100 @@ def test_require_uid_names_the_missing_key_and_never_mints() -> None:
 def test_the_module_cli_passes_on_the_committed_tree(capsys: pytest.CaptureFixture[str]) -> None:
     assert tm.main() == 0
     assert "keys covered against catalog" in capsys.readouterr().out
+
+
+# --- 2b. Views declare an identifier surface, not a rendering ---------------------------------
+
+
+def _view(**overrides: Any) -> tm.ViewSpec:
+    """A minimal well-formed view over `thing.status`, for the rejection cases below."""
+    defaults: dict[str, Any] = {
+        "key": "thing-board",
+        "name": "Things",
+        "object": "thing",
+        "type": "TABLE",
+        "fields": ("status",),
+    }
+    return tm.ViewSpec(**(defaults | overrides))
+
+
+_STATUS = tm.FieldSpec(
+    name="status",
+    type="SELECT",
+    label="Status",
+    option_source="literal",
+    options=(tm.OptionSpec(value="open", label="Open"),),
+)
+
+
+def test_a_view_over_an_undefined_object_is_rejected() -> None:
+    with pytest.raises(ValidationError, match="over undefined object 'ghost'"):
+        tm.ModelDefinition(objects=(_object(_STATUS),), views=(_view(object="ghost"),))
+
+
+def test_a_view_naming_a_field_the_object_lacks_is_rejected() -> None:
+    """A view column is a UID key; a key for a field nobody declares provisions nothing."""
+    with pytest.raises(ValidationError, match=r"names thing\.ghost"):
+        tm.ModelDefinition(objects=(_object(_STATUS),), views=(_view(sorts=("ghost",)),))
+
+
+def test_group_by_is_set_exactly_on_kanban_views() -> None:
+    with pytest.raises(ValidationError, match="`group_by` is set exactly on KANBAN views"):
+        _view(type="KANBAN")
+    with pytest.raises(ValidationError, match="`group_by` is set exactly on KANBAN views"):
+        _view(group_by="status")
+
+
+def test_a_board_grouped_by_a_non_select_is_rejected() -> None:
+    """Columns are a SELECT's options; grouping by a TEXT field has no column set to derive."""
+    text = tm.FieldSpec(name="note", type="TEXT", label="Note")
+    with pytest.raises(ValidationError, match=r"groups by thing\.note, a TEXT"):
+        tm.ModelDefinition(
+            objects=(_object(_STATUS, text),),
+            views=(_view(type="KANBAN", group_by="note", fields=("note",)),),
+        )
+
+
+def test_duplicate_view_keys_are_rejected() -> None:
+    with pytest.raises(ValidationError, match=r"duplicate view keys \['thing-board'\]"):
+        tm.ModelDefinition(objects=(_object(_STATUS),), views=(_view(), _view(name="Other")))
+
+
+def test_uid_map_keys_carry_one_key_per_syncable_view_entity(catalog: Catalog) -> None:
+    model = tm.ModelDefinition(
+        objects=(_object(_STATUS),),
+        views=(_view(type="KANBAN", group_by="status", filters=("status",), sorts=("status",), navigation=True),),
+    )
+    keys = set(tm.uid_map_keys(model, catalog))
+    assert {
+        "view.thing-board",
+        "view.thing-board.navigation",
+        "view.thing-board.field.status",
+        "view.thing-board.filter.status",
+        "view.thing-board.sort.status",
+        "view.thing-board.group.open",
+    } <= keys
+
+
+def test_board_columns_follow_the_catalog_rather_than_a_hand_written_list(catalog: Catalog) -> None:
+    """A state ratified into `enrollment` becomes a column key with no edit to the view."""
+    states = tm.subject_states(catalog, "enrollment")
+    keys = set(tm.uid_map_keys(tm.TWENTY_MODEL, catalog))
+    assert {f"view.patient-program-lifecycle-board.group.{state}" for state in states} <= keys
+
+
+def test_the_denormalized_webhook_columns_are_declared() -> None:
+    """Twenty delivers `properties.after` — the flat entity — so a relation arrives as an id.
+
+    Without these two copies a status change cannot be resolved to a patient and a program
+    without a REST read-back on the delivery path.
+    """
+    patient_program = tm.TWENTY_MODEL.object("patientProgram")
+    assert patient_program is not None
+    for name in ("canonicalPatientId", "programCode"):
+        field = patient_program.field(name)
+        assert field is not None
+        assert field.type == "TEXT"
 
 
 # --- 3. Every identifier is a well-formed, unique UUID ----------------------------------------

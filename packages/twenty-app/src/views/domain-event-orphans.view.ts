@@ -14,10 +14,10 @@ import {
   ViewSortDirection,
   ViewType,
 } from "../define";
-import { pendingUid, uid } from "../uid-map";
+import { uid } from "../uid-map";
 
 export const DOMAIN_EVENT_ORPHANS_VIEW = defineView({
-  universalIdentifier: pendingUid("view.domain-event-orphans"),
+  universalIdentifier: uid("view.domain-event-orphans"),
   name: "Orphan Events",
   icon: "IconUnlink",
   objectUniversalIdentifier: uid("domainEvent"),
@@ -25,7 +25,7 @@ export const DOMAIN_EVENT_ORPHANS_VIEW = defineView({
   position: 2,
   fields: [
     {
-      universalIdentifier: pendingUid(
+      universalIdentifier: uid(
         "view.domain-event-orphans.field.occurredAt",
       ),
       fieldMetadataUniversalIdentifier: uid("domainEvent.occurredAt"),
@@ -33,7 +33,7 @@ export const DOMAIN_EVENT_ORPHANS_VIEW = defineView({
       isVisible: true,
     },
     {
-      universalIdentifier: pendingUid(
+      universalIdentifier: uid(
         "view.domain-event-orphans.field.eventType",
       ),
       fieldMetadataUniversalIdentifier: uid("domainEvent.eventType"),
@@ -41,7 +41,7 @@ export const DOMAIN_EVENT_ORPHANS_VIEW = defineView({
       isVisible: true,
     },
     {
-      universalIdentifier: pendingUid(
+      universalIdentifier: uid(
         "view.domain-event-orphans.field.entityType",
       ),
       fieldMetadataUniversalIdentifier: uid("domainEvent.entityType"),
@@ -49,7 +49,7 @@ export const DOMAIN_EVENT_ORPHANS_VIEW = defineView({
       isVisible: true,
     },
     {
-      universalIdentifier: pendingUid(
+      universalIdentifier: uid(
         "view.domain-event-orphans.field.entityRefSystem",
       ),
       fieldMetadataUniversalIdentifier: uid("domainEvent.entityRefSystem"),
@@ -57,7 +57,7 @@ export const DOMAIN_EVENT_ORPHANS_VIEW = defineView({
       isVisible: true,
     },
     {
-      universalIdentifier: pendingUid(
+      universalIdentifier: uid(
         "view.domain-event-orphans.field.entityRefId",
       ),
       fieldMetadataUniversalIdentifier: uid("domainEvent.entityRefId"),
@@ -65,7 +65,7 @@ export const DOMAIN_EVENT_ORPHANS_VIEW = defineView({
       isVisible: true,
     },
     {
-      universalIdentifier: pendingUid(
+      universalIdentifier: uid(
         "view.domain-event-orphans.field.programCode",
       ),
       fieldMetadataUniversalIdentifier: uid("domainEvent.programCode"),
@@ -73,7 +73,7 @@ export const DOMAIN_EVENT_ORPHANS_VIEW = defineView({
       isVisible: true,
     },
     {
-      universalIdentifier: pendingUid(
+      universalIdentifier: uid(
         "view.domain-event-orphans.field.producer",
       ),
       fieldMetadataUniversalIdentifier: uid("domainEvent.producer"),
@@ -85,7 +85,7 @@ export const DOMAIN_EVENT_ORPHANS_VIEW = defineView({
   // one of the three, so an event missing every one of them resolved to nothing.
   filters: [
     {
-      universalIdentifier: pendingUid(
+      universalIdentifier: uid(
         "view.domain-event-orphans.filter.patientProgram",
       ),
       fieldMetadataUniversalIdentifier: uid("domainEvent.patientProgram"),
@@ -93,7 +93,7 @@ export const DOMAIN_EVENT_ORPHANS_VIEW = defineView({
       value: "",
     },
     {
-      universalIdentifier: pendingUid(
+      universalIdentifier: uid(
         "view.domain-event-orphans.filter.provider",
       ),
       fieldMetadataUniversalIdentifier: uid("domainEvent.provider"),
@@ -101,7 +101,7 @@ export const DOMAIN_EVENT_ORPHANS_VIEW = defineView({
       value: "",
     },
     {
-      universalIdentifier: pendingUid(
+      universalIdentifier: uid(
         "view.domain-event-orphans.filter.clinic",
       ),
       fieldMetadataUniversalIdentifier: uid("domainEvent.clinic"),
@@ -111,7 +111,7 @@ export const DOMAIN_EVENT_ORPHANS_VIEW = defineView({
   ],
   sorts: [
     {
-      universalIdentifier: pendingUid(
+      universalIdentifier: uid(
         "view.domain-event-orphans.sort.occurredAt",
       ),
       fieldMetadataUniversalIdentifier: uid("domainEvent.occurredAt"),

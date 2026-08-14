@@ -9,10 +9,10 @@
  */
 
 import { defineView, ViewSortDirection, ViewType } from "../define";
-import { pendingUid, uid } from "../uid-map";
+import { uid } from "../uid-map";
 
 export const PATIENT_PROGRAM_STATUS_BOARD_VIEW = defineView({
-  universalIdentifier: pendingUid("view.patient-program-status-board"),
+  universalIdentifier: uid("view.patient-program-status-board"),
   name: "Program Status Board",
   icon: "IconTable",
   objectUniversalIdentifier: uid("patientProgram"),
@@ -20,7 +20,7 @@ export const PATIENT_PROGRAM_STATUS_BOARD_VIEW = defineView({
   position: 0,
   fields: [
     {
-      universalIdentifier: pendingUid(
+      universalIdentifier: uid(
         "view.patient-program-status-board.field.patient",
       ),
       fieldMetadataUniversalIdentifier: uid("patientProgram.patient"),
@@ -28,7 +28,7 @@ export const PATIENT_PROGRAM_STATUS_BOARD_VIEW = defineView({
       isVisible: true,
     },
     {
-      universalIdentifier: pendingUid(
+      universalIdentifier: uid(
         "view.patient-program-status-board.field.program",
       ),
       fieldMetadataUniversalIdentifier: uid("patientProgram.program"),
@@ -36,7 +36,7 @@ export const PATIENT_PROGRAM_STATUS_BOARD_VIEW = defineView({
       isVisible: true,
     },
     {
-      universalIdentifier: pendingUid(
+      universalIdentifier: uid(
         "view.patient-program-status-board.field.lifecycleStatus",
       ),
       fieldMetadataUniversalIdentifier: uid("patientProgram.lifecycleStatus"),
@@ -44,7 +44,7 @@ export const PATIENT_PROGRAM_STATUS_BOARD_VIEW = defineView({
       isVisible: true,
     },
     {
-      universalIdentifier: pendingUid(
+      universalIdentifier: uid(
         "view.patient-program-status-board.field.lifecycleStatusAsOf",
       ),
       fieldMetadataUniversalIdentifier: uid(
@@ -54,7 +54,7 @@ export const PATIENT_PROGRAM_STATUS_BOARD_VIEW = defineView({
       isVisible: true,
     },
     {
-      universalIdentifier: pendingUid(
+      universalIdentifier: uid(
         "view.patient-program-status-board.field.qualificationStatus",
       ),
       fieldMetadataUniversalIdentifier: uid(
@@ -64,7 +64,7 @@ export const PATIENT_PROGRAM_STATUS_BOARD_VIEW = defineView({
       isVisible: true,
     },
     {
-      universalIdentifier: pendingUid(
+      universalIdentifier: uid(
         "view.patient-program-status-board.field.qualificationStatusAsOf",
       ),
       fieldMetadataUniversalIdentifier: uid(
@@ -77,7 +77,7 @@ export const PATIENT_PROGRAM_STATUS_BOARD_VIEW = defineView({
   filters: [],
   sorts: [
     {
-      universalIdentifier: pendingUid(
+      universalIdentifier: uid(
         "view.patient-program-status-board.sort.lifecycleStatusAsOf",
       ),
       fieldMetadataUniversalIdentifier: uid(
