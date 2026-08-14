@@ -25,3 +25,19 @@ export const uid = (key: string): string => {
   }
   return identifier;
 };
+
+/** The prefix a `pendingUid` placeholder carries. Never a UUID, so it cannot be mistaken for one. */
+export const PENDING_UID_PREFIX = "pending:";
+
+/**
+ * A `universalIdentifier` the Twenty type requires and the map does not hold yet.
+ *
+ * Views are the only such surface today: `ViewManifestType` requires an identifier on the view
+ * and on each field, filter, sort, and group, while `pulse_core.twenty_model` does not ask for
+ * view keys yet and `check_uid_map` fails on any key the model never asks for. Minting first
+ * would fail that check, so the call sites name the keys they will need and this returns a
+ * visible placeholder until the model learns them (HANDOFF.md). On that day every one of these
+ * becomes `uid` and this function goes away.
+ */
+export const pendingUid = (key: string): string =>
+  UID_MAP[key] ?? `${PENDING_UID_PREFIX}${key}`;

@@ -234,21 +234,43 @@ describe("roles, views, and the application config", () => {
     }
   });
 
-  it("points every view and permission at an object the model defines", () => {
-    const names = new Set(ALL_OBJECTS.map((object) => object.nameSingular));
+  it("points every view at an object, and every view part at a field on that object", () => {
+    // Views address objects and fields by identifier, never by name (`ViewManifestType`), so
+    // this walks UUIDs: a view's `objectUniversalIdentifier` has to be an object the model
+    // defines, and every field, filter, sort, and kanban group-by has to name a field on that
+    // same object. Name-based checking would not have caught a UID pointed at the wrong object.
+    const objectByUid = new Map(
+      ALL_OBJECTS.map((object) => [object.universalIdentifier, object]),
+    );
+
     for (const view of ALL_VIEWS) {
-      expect(names.has(view.objectNameSingular), view.name).toBe(true);
-      const object = ALL_OBJECTS.find(
-        (candidate) => candidate.nameSingular === view.objectNameSingular,
+      const object = objectByUid.get(view.objectUniversalIdentifier);
+      expect(object, view.name).toBeDefined();
+      if (object === undefined) continue;
+
+      const fieldUids = new Set(
+        object.fields.map((field) => field.universalIdentifier),
       );
-      const fields = new Set(object?.fields.map((field) => field.name));
-      for (const field of [
-        ...view.visibleFields,
-        ...view.filters.map((filter) => filter.field),
-      ]) {
-        expect(fields.has(field), `${view.name}: ${field}`).toBe(true);
+      const referenced = [
+        ...(view.fields ?? []).map(
+          (field) => field.fieldMetadataUniversalIdentifier,
+        ),
+        ...(view.filters ?? []).map(
+          (filter) => filter.fieldMetadataUniversalIdentifier,
+        ),
+        ...(view.sorts ?? []).map(
+          (sort) => sort.fieldMetadataUniversalIdentifier,
+        ),
+        ...(view.mainGroupByFieldMetadataUniversalIdentifier === undefined
+          ? []
+          : [view.mainGroupByFieldMetadataUniversalIdentifier]),
+      ];
+      for (const fieldUid of referenced) {
+        expect(fieldUids.has(fieldUid), `${view.name}: ${fieldUid}`).toBe(true);
       }
     }
+
+    const names = new Set(ALL_OBJECTS.map((object) => object.nameSingular));
     for (const role of ALL_ROLES) {
       for (const permission of [
         ...role.objectPermissions,

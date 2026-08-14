@@ -8,29 +8,116 @@
  * state.
  */
 
-import { defineView } from "../define";
+import {
+  defineView,
+  ViewFilterOperand,
+  ViewSortDirection,
+  ViewType,
+} from "../define";
+import { pendingUid, uid } from "../uid-map";
 
 export const DOMAIN_EVENT_ORPHANS_VIEW = defineView({
-  name: "domain-event-orphans",
-  label: "Orphan Events",
+  universalIdentifier: pendingUid("view.domain-event-orphans"),
+  name: "Orphan Events",
   icon: "IconUnlink",
-  objectNameSingular: "domainEvent",
-  type: "TABLE",
-  visibleFields: [
-    "occurredAt",
-    "eventType",
-    "entityType",
-    "entityRefSystem",
-    "entityRefId",
-    "programCode",
-    "producer",
+  objectUniversalIdentifier: uid("domainEvent"),
+  type: ViewType.TABLE,
+  position: 2,
+  fields: [
+    {
+      universalIdentifier: pendingUid(
+        "view.domain-event-orphans.field.occurredAt",
+      ),
+      fieldMetadataUniversalIdentifier: uid("domainEvent.occurredAt"),
+      position: 0,
+      isVisible: true,
+    },
+    {
+      universalIdentifier: pendingUid(
+        "view.domain-event-orphans.field.eventType",
+      ),
+      fieldMetadataUniversalIdentifier: uid("domainEvent.eventType"),
+      position: 1,
+      isVisible: true,
+    },
+    {
+      universalIdentifier: pendingUid(
+        "view.domain-event-orphans.field.entityType",
+      ),
+      fieldMetadataUniversalIdentifier: uid("domainEvent.entityType"),
+      position: 2,
+      isVisible: true,
+    },
+    {
+      universalIdentifier: pendingUid(
+        "view.domain-event-orphans.field.entityRefSystem",
+      ),
+      fieldMetadataUniversalIdentifier: uid("domainEvent.entityRefSystem"),
+      position: 3,
+      isVisible: true,
+    },
+    {
+      universalIdentifier: pendingUid(
+        "view.domain-event-orphans.field.entityRefId",
+      ),
+      fieldMetadataUniversalIdentifier: uid("domainEvent.entityRefId"),
+      position: 4,
+      isVisible: true,
+    },
+    {
+      universalIdentifier: pendingUid(
+        "view.domain-event-orphans.field.programCode",
+      ),
+      fieldMetadataUniversalIdentifier: uid("domainEvent.programCode"),
+      position: 5,
+      isVisible: true,
+    },
+    {
+      universalIdentifier: pendingUid(
+        "view.domain-event-orphans.field.producer",
+      ),
+      fieldMetadataUniversalIdentifier: uid("domainEvent.producer"),
+      position: 6,
+      isVisible: true,
+    },
   ],
+  // All three empty at once, which is what "unresolvable" means: the handler resolves the ref to
+  // one of the three, so an event missing every one of them resolved to nothing.
   filters: [
-    { field: "patientProgram", operand: "isEmpty" },
-    { field: "provider", operand: "isEmpty" },
-    { field: "clinic", operand: "isEmpty" },
+    {
+      universalIdentifier: pendingUid(
+        "view.domain-event-orphans.filter.patientProgram",
+      ),
+      fieldMetadataUniversalIdentifier: uid("domainEvent.patientProgram"),
+      operand: ViewFilterOperand.IS_EMPTY,
+      value: "",
+    },
+    {
+      universalIdentifier: pendingUid(
+        "view.domain-event-orphans.filter.provider",
+      ),
+      fieldMetadataUniversalIdentifier: uid("domainEvent.provider"),
+      operand: ViewFilterOperand.IS_EMPTY,
+      value: "",
+    },
+    {
+      universalIdentifier: pendingUid(
+        "view.domain-event-orphans.filter.clinic",
+      ),
+      fieldMetadataUniversalIdentifier: uid("domainEvent.clinic"),
+      operand: ViewFilterOperand.IS_EMPTY,
+      value: "",
+    },
   ],
-  sorts: [{ field: "occurredAt", direction: "ASC" }],
+  sorts: [
+    {
+      universalIdentifier: pendingUid(
+        "view.domain-event-orphans.sort.occurredAt",
+      ),
+      fieldMetadataUniversalIdentifier: uid("domainEvent.occurredAt"),
+      direction: ViewSortDirection.ASC,
+    },
+  ],
 });
 
 export default DOMAIN_EVENT_ORPHANS_VIEW;
