@@ -19,6 +19,21 @@ Add the EKS node SG to `sg-0f2f6dfad100dd31f`'s inbound rules on 5432 before pro
 
 ### 1. Build and push the image
 
+**Do not run this on an arm64 developer Mac.** `task ledger:image`'s `linux/amd64` build
+segfaults under QEMU emulation on arm64 — it dies inside the emulated `uv` binary. This is a
+pre-existing limitation of the emulation, not a defect in `packages/pulse-ledger/Dockerfile`: the
+same failure hits the already-shipping `packages/ocean/services/event-store` Dockerfile under the
+same emulation. The tenant's EKS nodes are x86_64 and a developer Mac is arm64, so this image
+cannot be built *or* verified on a laptop at all.
+
+Build and push from an x86_64 host instead — either works, but prefer the first:
+
+- **The Orca cloud host** (`m7i.2xlarge`, native x86_64, already inside the tenant VPC with the
+  repo cloned) — the same host step 3 below already uses to run migrations. One host doing both
+  the image build/push and the migration is simpler than provisioning a second machine for this
+  alone.
+- **CI**, on an x86 runner, as the alternative.
+
 ```bash
 task ledger:image TAG=<tag>
 task ledger:deploy TAG=<tag> TARGET=dev01-brook
