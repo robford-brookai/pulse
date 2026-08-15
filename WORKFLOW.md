@@ -1,6 +1,6 @@
 # WORKFLOW — repo-ade ADE Stack v2
 
-**Status:** v2.0.5 — supersedes v1 WORKFLOW.md | **Owner:** Ford
+**Status:** v2.0.6 — supersedes v1 WORKFLOW.md | **Owner:** Ford
 **Scope:** The goal workflow for repo-ade-born repos (PULSE first), in three renderings: executable YAML (the source of truth), prose walkthrough, and diagram. The YAML block is parsed by `scripts/workflow.py` and read directly by agents via `orient()`. **Editing the YAML changes dispatch behavior. The prose and diagram are projections of the YAML — `task workflow:lint` fails if either names a step or gate the YAML does not define, or omits a step it does.** Same doctrine as the state catalog: one generative artifact, multiple emitted surfaces, CI fails on drift.
 
 > **Projections are checked, not generated.** An earlier revision said the prose and diagram
@@ -38,7 +38,7 @@ Out-of-lane work (operational discovery, destructive ops) is executed by the Ope
 
 ```yaml
 ade_workflow:
-  version: 2.0.5
+  version: 2.0.6
   source_of_truth: WORKFLOW.md            # this file, this block
   renderings: [prose_section_3, diagram_section_4]   # checked for correspondence, not generated
   parser: scripts/workflow.py             # thin glue; `task workflow:lint` validates this block
@@ -151,6 +151,24 @@ ade_workflow:
       idempotent (a no-op once already Done), and trivially correctable by hand if
       wrong, so the exemption still holds, on a documented basis rather than an
       implicit one.
+
+  decision_protocol:                       # where a decision must land to count as made
+    rule: >
+      A decision reached outside the artifacts — in a chat, a report, a review
+      thread — is not a decision until it is recorded where the tasks that inherit
+      it read it. Recording it is a change or a PR, never only a message.
+    homes:
+      - "architecture and technology commitments -> docs/adr/ (one decision per
+         ADR, alternatives with the reason each was not chosen)"
+      - "sequencing and entry gates -> design/delivery/pulse-program-roadmap.md"
+      - "conventions binding every agent -> AGENTS.md"
+      - "decisions scoped to one change -> that change's design.md"
+    record_carries: [answer, date_decided, what_it_gates]
+    rationale: >
+      A decision that exists only where it was made is the same hazard as an
+      unmade one: the tasks that inherit it cannot see it, so each one either
+      re-decides or guesses. The record carries what it gates so a task can tell
+      whether the decision anticipated its situation, not only what was chosen.
 
   steps:
     - id: propose
@@ -301,6 +319,8 @@ When the wave completes, **collect** gathers handoffs and the tier-economics sum
 
 Two narrow things may reach main without a PR, per `main_access`: mechanical state updates that carry no reviewable decision — checking off a completed task, Orca or worktree configuration — and repairing a red main, where waiting on review costs every worktree more than the review would catch. The conditions are what keep that from widening: `task check` green first, nothing under `specs/`, `src/` or `design/`, one focused commit, and a message that says why it skipped review. A checkbox flip after each of ~45 tasks is not reviewable content, and routing it through a PR mostly teaches people to merge their own PRs unread. The moment a push carries a decision, it is a PR again.
 
+Decisions themselves have a landing rule, per `decision_protocol`: a decision reached outside the artifacts — in a chat, a report, a review thread — is not a decision until it is recorded where the tasks that inherit it read it, and recording it is a change or a PR, never only a message. Architecture and technology commitments go to `docs/adr/`, sequencing and entry gates to the program roadmap, conventions binding every agent to `AGENTS.md`, and change-scoped decisions to that change's `design.md`. The record carries the answer, the date, and what it gates — a decision that exists only where it was made is the same hazard as an unmade one, because the tasks that inherit it cannot see it.
+
 ## 4. Diagram (projection of §2)
 
 ```mermaid
@@ -336,6 +356,8 @@ flowchart TB
 Sub-issue grain added (Linear parent/sub mapping to change/task, one-directional sync, Orca claims sub-issues). Model routing and the escalation ladder embedded in dispatch and execute. Gates made explicit objects with named blocking edges (hardening, MECE-extended, drift, approval). Lanes formalized so prod-touching and destructive work route out of Orca by rule instead of by memory. State-resolution order added so an agent landing mid-change computes its step deterministically. Edit protocol added: this YAML is the workflow, renderings regenerate, step ids are stable.
 
 ## Change log
+
+**v2.0.6 (2026-08-15):** **`decision_protocol` added** — where a decision must land to count as made. The rule: a decision reached outside the artifacts is not a decision until it is recorded where the tasks that inherit it read it, with named homes per decision kind (ADRs for architecture and technology commitments, the program roadmap for sequencing and entry gates, `AGENTS.md` for conventions binding every agent, the change's `design.md` for change-scoped decisions) and a required record shape (answer, date decided, what it gates). Ported from the cyad repo, where the same rule exists as a change-lifecycle requirement ("A pinned reservation is recorded where its dependent tasks read it") after a session in which reserved decisions pinned in conversation had to be chased back into the spec, the agent instructions, and the findings ledger before any dependent task could be dispatched. Pulse already had every home this rule names — what it lacked was the sentence making them mandatory: nothing said a decision made in a chat had to land anywhere, and `main_access` only governs *how* content reaches main, not *whether* a decision must become content at all.
 
 **v2.0.5 (2026-08-03):** **`dispatch` and `sync_linear` were ordered backwards**, which made `sync_linear` unrunnable at its declared position. `validate` handed to `sync_linear`, which handed to `dispatch` — but a sub-issue description *is* the dispatched work-order body, so sync cannot run before the files exist, and `scripts/linear_sync.py` enforces exactly that with a hard error: *"no work order at `work_orders/<id>/task-001.md` … run `task dispatch` before syncing."* Following the declared order, the step always failed. Found by dry-running the graph end to end; every other step passed. Two things make this worth recording rather than quietly fixing. First, the step's own `behavior` block already said "description = dispatched work-order body" — the dependency was stated one line above the `next:` edge that contradicted it. Second, **`state_resolution` had the correct order the whole time**: it checks `work_orders/<id>/ absent` → `dispatch` *before* `linear sub-issues out of sync` → `sync_linear`. An agent resolving its position got the right answer while an agent following `next:` edges got a broken one, and no gate compared them. Now `validate → dispatch → sync_linear → execute`, with a `requires:` field on `sync_linear` naming the precondition and a comment on `dispatch` explaining the order. Also fixed two stale references to the pre-v2.0.2 project name "PULSE / Declared-State Funnel" (grain map, prose §Sync-linear) — the real project is Pulse 1.0, which the YAML has pinned since v2.0.2.
 
