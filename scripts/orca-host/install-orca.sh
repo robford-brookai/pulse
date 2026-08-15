@@ -39,6 +39,25 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq curl ca-certificates git
 
+# The runtime shells out to `gh` for the Issues and PR work-items panel. It is
+# not in Ubuntu's archive, so it needs GitHub's own repo — without it the panel
+# fails whole with `spawn gh ENOENT` and reads as a dead connection rather than
+# a missing tool. Install to /usr/bin, not ~/.local/bin: the runtime spawns gh
+# directly, so it must resolve on the systemd unit's PATH.
+keyring=/usr/share/keyrings/githubcli-archive-keyring.gpg
+curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+  | dd of="$keyring" status=none || die "could not fetch the GitHub CLI keyring"
+chmod go+r "$keyring"
+printf 'deb [arch=%s signed-by=%s] https://cli.github.com/packages stable main\n' \
+  "$pkg_arch" "$keyring" > /etc/apt/sources.list.d/github-cli.list
+apt-get update -qq
+apt-get install -y -qq gh
+
+# gh still needs credentials before the panel populates; an unauthenticated gh
+# fails the same call with an auth error instead of ENOENT. Run once per host:
+#   sudo -u "$ORCA_USER" gh auth login
+command -v gh >/dev/null || die "gh not on PATH after install"
+
 # The .deb under-declares its Electron runtime dependencies. Without these it
 # installs cleanly and then dies at exec time on libgbm.so.1. Verified on
 # Ubuntu 22.04.5 with orca-ide 1.4.180.
