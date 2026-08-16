@@ -30,7 +30,7 @@ files under `openspec/specs/`.
 
 ## 1. Phase A — provision and probe (manual lanes; does not dispatch)
 
-- [ ] 1.1 Confirm the five unverified Duplo/AWS facts before any mutating call: the
+- [x] 1.1 Confirm the five unverified Duplo/AWS facts before any mutating call: the
       AgentPlatform value for EKS-linux, the LbType for ClusterIP, OtherDockerConfig key
       casing, ECR repo creation rights, and RDS SG ingress for the EKS node SG (confirmed
       absent today). Settle in the same pass whether the instance should be a Duplo Service
@@ -42,18 +42,18 @@ files under `openspec/specs/`.
       cost a rejected API call, not a broken deploy.
       `[model: sonnet | deps: — | lane: operational_discovery | wave: 0]`
 
-- [ ] 1.2 Create the `twenty` database and a least-privilege role on `duplodev01-brook-dev`,
+- [x] 1.2 Create the `twenty` database and a least-privilege role on `duplodev01-brook-dev`,
       and add the EKS node SG to the RDS security group on 5432.
       Verify: a psql connection from an in-cluster pod succeeds; the VPN /32 and existing
       subnet rules are unchanged.
       `[model: sonnet | deps: 1.1 | lane: destructive_ops | wave: 1]`
 
-- [ ] 1.3 Provision a dedicated Redis, not the shared tenant instance — BullMQ in a shared
+- [x] 1.3 Provision a dedicated Redis, not the shared tenant instance — BullMQ in a shared
       keyspace is a debugging hazard for no saving.
       Verify: reachable from the namespace; the shared instance's keyspace is untouched.
       `[model: sonnet | deps: 1.1 | lane: destructive_ops | wave: 1]`
 
-- [ ] 1.4 Deploy `twentycrm/twenty:v2.30.0` server + worker from the upstream manifests with
+- [x] 1.4 Deploy `twentycrm/twenty:v2.30.0` server + worker from the upstream manifests with
       the bundled db dropped, keeping server, worker, redis and ingress. Secrets come from the
       Duplo store, never a manifest. Set `OUTBOUND_HTTP_SAFE_MODE_ENABLED=false` — the webhook
       target is a private cluster IP — and record that in the runbook rather than leaving it an
@@ -61,19 +61,19 @@ files under `openspec/specs/`.
       Verify: `/healthz` green on the server; the worker runs with migrations and cron disabled.
       `[model: sonnet | deps: 1.2, 1.3 | lane: destructive_ops | wave: 2]`
 
-- [ ] 1.5 Ingress hostname on the shared ALB. **Admin step** — the tenant role is denied
+- [x] 1.5 Ingress hostname on the shared ALB. **Admin step** — the tenant role is denied
       `route53:*` and `acm:*`, and the existing certificate covers no name we want. Do not edit
       the listener in a way that disturbs the unrelated tenant services sharing it.
       Verify: the UI loads over HTTPS at the new name; other host-header rules still resolve.
       `[model: sonnet | deps: 1.4 | lane: destructive_ops | wave: 3]`
 
-- [ ] 1.6 Create the workspace and an API key (Settings → API & Webhooks). **The key is shown
+- [x] 1.6 Create the workspace and an API key (Settings → API & Webhooks). **The key is shown
       once.** Record it and the base URL in the Duplo store as `PULSE_TWENTY_DEV_URL` /
       `PULSE_TWENTY_DEV_TOKEN`.
       Verify: an authenticated REST call succeeds using only the stored values.
       `[model: sonnet | deps: 1.4 | lane: destructive_ops | wave: 3]`
 
-- [ ] 1.7 **The F1 gate.** Create an object through the Metadata API supplying a
+- [x] 1.7 **The F1 gate.** Create an object through the Metadata API supplying a
       `universalIdentifier`, then read it back. Does the UUID round-trip, or is it dropped
       because the field is `@HideField()` on the create input? Record the answer, the pinned
       version it was observed on, and the exact calls, in `HANDOFF.md` for
@@ -84,7 +84,7 @@ files under `openspec/specs/`.
 
 ## 2. Offline workstreams — F1-independent, dispatch now
 
-- [ ] 2.1 `packages/pulse-ledger/src/pulse_ledger/api_server.py`: process entrypoint mirroring
+- [x] 2.1 `packages/pulse-ledger/src/pulse_ledger/api_server.py`: process entrypoint mirroring
       the existing relay/relay-worker split, run as `python -m pulse_ledger.api_server`. Use a
       connection pool, not a shared connection — handlers are async and the committer holds a
       per-subject advisory lock for its transaction. Start the app through a factory so import
@@ -98,14 +98,14 @@ files under `openspec/specs/`.
       coverage floor.
       `[model: sonnet | deps: — | lane: repo_change | wave: 0]`
 
-- [ ] 2.2 `packages/pulse-ledger/Dockerfile` — one image, two commands, build context the repo
+- [x] 2.2 `packages/pulse-ledger/Dockerfile` — one image, two commands, build context the repo
       root because `pulse-core` is a workspace sibling. Build `--platform linux/amd64`
       explicitly: dev machines are arm64 and the nodes are x86. Create the ECR repo (none
       exists) and push.
       Test: the image starts and answers `/health` locally with no database reachable.
       `[model: sonnet | deps: 2.1 | lane: repo_change | wave: 1]`
 
-- [ ] 2.3 Role split and migration path: `infra/postgres/bootstrap_database.sql` using psql
+- [x] 2.3 Role split and migration path: `infra/postgres/bootstrap_database.sql` using psql
       variables and no literals, creating a login role owning nothing that inherits the NOLOGIN
       group role migration 0001 already defines, plus a separate migrator role holding the DDL
       rights the serving role lacks. Migrations run from the in-tenant Orca host — **not** an
@@ -116,7 +116,7 @@ files under `openspec/specs/`.
       event row and on DDL, while the migrator succeeds.
       `[model: sonnet | deps: — | lane: repo_change | wave: 0]`
 
-- [ ] 2.4 Reshape `packages/twenty-app/src/define.ts` to mirror Twenty's real
+- [x] 2.4 Reshape `packages/twenty-app/src/define.ts` to mirror Twenty's real
       `ViewManifestType` — offline, no new dependency, nothing published. Update the three
       existing views and `tests/model.test.ts`, which validates views by field name today. A
       half-migrated shape is worse than either end; the point of the stand-in is that adopting
@@ -139,6 +139,19 @@ files under `openspec/specs/`.
       no record ids or field values.
       `[model: sonnet | deps: — | lane: repo_change | wave: 0]`
 
+- [ ] 2.6 Reshape `pulse_core.twenty_deploy`'s metadata surface to the endpoints v2.30 actually
+      serves, per the DNA-909 provisioning receipt (2026-08-16): `/rest/metadata/relations` and
+      `/rest/metadata/roles` do not exist — the router parses those path segments as object ids
+      and answers 400 `"'relations' is not a valid UUID"`. Relations apply through the fields
+      surface (RELATION-type field payloads); roles live on the `/metadata` GraphQL, not REST.
+      Rework `COLLECTIONS`/`read_state`/`send` so the artifact's relation and role operations
+      apply through the real surfaces, keeping the create-if-absent/update-if-drifted posture
+      keyed on `universalIdentifier` (confirmed round-tripping on v2.30 — F1 positive).
+      Test: offline against recorded v2.30 response shapes — a state read that never touches
+      `/rest/metadata/relations` or `/roles`, relation ops planned onto the fields surface, role
+      ops onto the GraphQL surface, and the existing no-op/idempotency tests still green.
+      `[model: sonnet | deps: — | lane: repo_change | wave: 0]`
+
 ## 3. Apply the artifact (GATED: F1 probe, task 1.7)
 
 - [ ] 3.1 `task twenty:deploy TARGET=dev`, `--dry-run` first. This settles three of this repo's
@@ -148,7 +161,7 @@ files under `openspec/specs/`.
       Linear parent.
       Verify: two consecutive runs, the second all-no-op; any endpoint-shape correction written
       to `HANDOFF.md`.
-      `[model: sonnet | deps: 1.7 | lane: operational_discovery | wave: 5]`
+      `[model: sonnet | deps: 1.7, 2.6 | lane: operational_discovery | wave: 5]`
 
 ## 4. Capture the real delivery (GATED: workspace exists, task 1.6)
 
