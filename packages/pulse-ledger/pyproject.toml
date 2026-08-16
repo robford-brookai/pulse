@@ -9,12 +9,21 @@ dependencies = [
     # so one FastAPI is resolved for the workspace rather than two.
     "fastapi>=0.135.1",
     "sqlalchemy>=2.0",
-    "psycopg[binary]>=3.2",
+    # [pool] brings psycopg_pool: the command API server (api_server.py) hands each request its
+    # own connection rather than serialising on one shared connection behind commit_declaration's
+    # per-subject advisory lock.
+    "psycopg[binary,pool]>=3.2",
     "pulse-core",
     # The outbound Twenty comment adapter (`pulse_ledger.twenty.client`, kanban-ingress design
     # decision 6). Same major pulse-core already pins, so the workspace resolves one httpx.
     "httpx>=0.28.1",
 ]
+
+[project.optional-dependencies]
+# uvicorn is the command API server's process, not the library: identity, verdict-relay, and
+# schedules import pulse-ledger for its client/commit code and pull no ASGI server for it.
+# `packages/pulse-ledger/Dockerfile` is the one place this extra is installed.
+serve = ["uvicorn>=0.41.0"]
 
 [tool.uv.sources]
 pulse-core = { workspace = true }

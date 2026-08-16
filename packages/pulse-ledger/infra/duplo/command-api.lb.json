@@ -1,0 +1,8 @@
+{
+  "ReplicationControllerName": "pulse-ledger-api",
+  "LbType": 3,
+  "Port": "8000",
+  "Protocol": "tcp",
+  "IsInternal": true,
+  "IsNative": false
+}
