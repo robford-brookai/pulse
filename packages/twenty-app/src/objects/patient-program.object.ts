@@ -51,6 +51,28 @@ export const PATIENT_PROGRAM = defineObject({
         inverseField: "patientPrograms",
       },
     },
+    // Denormalized for the webhook path, and only for it. A Twenty webhook delivers
+    // `properties.after` — the flat ORM entity — so a relation arrives as `patientId` /
+    // `programId`, a foreign key, never a nested `patient` or `program` object. Without these two
+    // columns a consumer has to read the record back over REST per delivery, which puts a
+    // credential and a network failure on the hot path. Both values are pseudonymous identifiers:
+    // a spine ID and a program code, never anything that identifies a person.
+    {
+      universalIdentifier: uid("patientProgram.canonicalPatientId"),
+      name: "canonicalPatientId",
+      type: FieldType.TEXT,
+      label: "Canonical Patient ID",
+      description:
+        "Denormalized copy of `patient.canonicalPatientId`, so a webhook delivery resolves without a read-back.",
+    },
+    {
+      universalIdentifier: uid("patientProgram.programCode"),
+      name: "programCode",
+      type: FieldType.TEXT,
+      label: "Program Code",
+      description:
+        "Denormalized copy of `program.code`, so a webhook delivery resolves without a read-back.",
+    },
     {
       universalIdentifier: uid("patientProgram.lifecycleStatus"),
       name: "lifecycleStatus",

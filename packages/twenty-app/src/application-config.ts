@@ -7,13 +7,15 @@
  * log. `producer` and `app` are machine identities, granted deliberately to a key, never
  * inherited by a person on provisioning.
  *
- * The application carries no `universalIdentifier` for the same reason the views do not (see
- * `src/views/index.ts`): the UID map holds exactly the surface the artifact serializes, and
- * the operation set has no application-level operation to key.
+ * The application carries no `universalIdentifier`: the UID map holds exactly the surface the
+ * artifact serializes, and the operation set has no application-level operation to key. Views
+ * are the opposite case — Twenty requires an identifier on them, so they declare one and the
+ * map has yet to learn the keys (`src/views/index.ts`).
  */
 
 import { defineApplication } from "./define";
 import { ALL_LOGIC_FUNCTIONS } from "./logic-functions";
+import { ALL_NAVIGATION_MENU_ITEMS } from "./navigation";
 import { ALL_OBJECTS } from "./objects";
 import { ALL_ROLES, STAFF_ROLE } from "./roles";
 import { ALL_VIEWS } from "./views";
@@ -27,6 +29,7 @@ export const APPLICATION = defineApplication({
   objects: ALL_OBJECTS,
   roles: ALL_ROLES,
   views: ALL_VIEWS,
+  navigationMenuItems: ALL_NAVIGATION_MENU_ITEMS,
   logicFunctions: ALL_LOGIC_FUNCTIONS,
 });
 

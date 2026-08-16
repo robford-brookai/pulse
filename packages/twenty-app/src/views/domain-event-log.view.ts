@@ -7,25 +7,72 @@
  * arrived.
  */
 
-import { defineView } from "../define";
+import { defineView, ViewSortDirection, ViewType } from "../define";
+import { uid } from "../uid-map";
 
 export const DOMAIN_EVENT_LOG_VIEW = defineView({
-  name: "domain-event-log",
-  label: "Event Log",
+  universalIdentifier: uid("view.domain-event-log"),
+  name: "Event Log",
   icon: "IconHistory",
-  objectNameSingular: "domainEvent",
-  type: "TABLE",
-  visibleFields: [
-    "occurredAt",
-    "eventType",
-    "entityType",
-    "entityRefId",
-    "programCode",
-    "producer",
-    "actorType",
+  objectUniversalIdentifier: uid("domainEvent"),
+  type: ViewType.TABLE,
+  position: 1,
+  fields: [
+    {
+      universalIdentifier: uid("view.domain-event-log.field.occurredAt"),
+      fieldMetadataUniversalIdentifier: uid("domainEvent.occurredAt"),
+      position: 0,
+      isVisible: true,
+    },
+    {
+      universalIdentifier: uid("view.domain-event-log.field.eventType"),
+      fieldMetadataUniversalIdentifier: uid("domainEvent.eventType"),
+      position: 1,
+      isVisible: true,
+    },
+    {
+      universalIdentifier: uid("view.domain-event-log.field.entityType"),
+      fieldMetadataUniversalIdentifier: uid("domainEvent.entityType"),
+      position: 2,
+      isVisible: true,
+    },
+    {
+      universalIdentifier: uid(
+        "view.domain-event-log.field.entityRefId",
+      ),
+      fieldMetadataUniversalIdentifier: uid("domainEvent.entityRefId"),
+      position: 3,
+      isVisible: true,
+    },
+    {
+      universalIdentifier: uid(
+        "view.domain-event-log.field.programCode",
+      ),
+      fieldMetadataUniversalIdentifier: uid("domainEvent.programCode"),
+      position: 4,
+      isVisible: true,
+    },
+    {
+      universalIdentifier: uid("view.domain-event-log.field.producer"),
+      fieldMetadataUniversalIdentifier: uid("domainEvent.producer"),
+      position: 5,
+      isVisible: true,
+    },
+    {
+      universalIdentifier: uid("view.domain-event-log.field.actorType"),
+      fieldMetadataUniversalIdentifier: uid("domainEvent.actorType"),
+      position: 6,
+      isVisible: true,
+    },
   ],
   filters: [],
-  sorts: [{ field: "occurredAt", direction: "DESC" }],
+  sorts: [
+    {
+      universalIdentifier: uid("view.domain-event-log.sort.occurredAt"),
+      fieldMetadataUniversalIdentifier: uid("domainEvent.occurredAt"),
+      direction: ViewSortDirection.DESC,
+    },
+  ],
 });
 
 export default DOMAIN_EVENT_LOG_VIEW;
