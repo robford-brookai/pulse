@@ -303,6 +303,8 @@ def _failing_http_transport(status: int = 422) -> td.MetadataApiTransport:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.method == "GET":
             return httpx.Response(200, json={"data": []})
+        if request.url.path == td.GRAPHQL_PATH and "getRoles" in json.loads(request.content)["query"]:
+            return httpx.Response(200, json={"data": {"getRoles": []}})
         return httpx.Response(status, json={"error": "conflict", "record": {"name": SYNTHETIC_RECORD_VALUE}})
 
     return td.MetadataApiTransport(
@@ -355,7 +357,18 @@ def test_the_failure_receipt_names_the_operation_and_status(artifact: dict[str, 
     assert len(transport.sent) == 1
 
 
-# --- Transport shape ---------------------------------------------------------------------------
+# --- Transport shape (v2.30, DNA-909 provisioning receipt 2026-08-16) ---------------------------
+
+
+def _scripted_client(handler: Any) -> httpx.Client:
+    return httpx.Client(base_url="https://dev.invalid", transport=httpx.MockTransport(handler))
+
+
+def _real_transport(handler: Any) -> td.MetadataApiTransport:
+    return td.MetadataApiTransport(
+        target=td.Target(name="dev", url="https://dev.invalid", token=FAKE_CRED),
+        client=_scripted_client(handler),
+    )
 
 
 def test_the_transport_reads_and_writes_the_pinned_endpoints() -> None:
@@ -376,10 +389,7 @@ def test_the_transport_reads_and_writes_the_pinned_endpoints() -> None:
             )
         return httpx.Response(200, json={"data": {}})
 
-    transport = td.MetadataApiTransport(
-        target=td.Target(name="dev", url="https://dev.invalid", token=FAKE_CRED),
-        client=httpx.Client(base_url="https://dev.invalid", transport=httpx.MockTransport(handler)),
-    )
+    transport = _real_transport(handler)
     state = transport.read_state()
     assert state["u-1"].record_id == "rec-1"
     assert "id" not in state["u-1"].payload
@@ -393,7 +403,155 @@ def test_the_transport_reads_and_writes_the_pinned_endpoints() -> None:
     assert ("POST", f"{td.METADATA_ROOT}/objects") in seen
     assert ("PATCH", f"{td.METADATA_ROOT}/objects/rec-1") in seen
     assert {method for method, _ in seen} == {"GET", "POST", "PATCH"}
-    assert all(path.startswith(td.METADATA_ROOT) for _, path in seen)
+
+
+def test_a_state_read_never_touches_the_endpoints_v230_does_not_serve() -> None:
+    """DNA-909 receipt: `/rest/metadata/relations` and `/roles` answer 400 — never request them."""
+    seen: list[tuple[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append((request.method, request.url.path))
+        if request.method == "GET":
+            return httpx.Response(200, json={"data": []})
+        return httpx.Response(200, json={"data": {"getRoles": []}})
+
+    _real_transport(handler).read_state()
+
+    assert f"{td.METADATA_ROOT}/relations" not in {path for _, path in seen}
+    assert f"{td.METADATA_ROOT}/roles" not in {path for _, path in seen}
+    assert ("GET", f"{td.METADATA_ROOT}/objects") in seen
+    assert ("GET", f"{td.METADATA_ROOT}/fields") in seen
+    assert ("POST", td.GRAPHQL_PATH) in seen
+    assert len(seen) == 3
+
+
+def test_a_relation_op_plans_onto_the_fields_surface(artifact: dict[str, Any]) -> None:
+    """A relation is a RELATION-type field payload; there is no relations collection to address."""
+    relation = next(op for op in artifact["operations"] if op["operation"] == "createRelation")
+    payload = td.desired_payload(relation)
+
+    assert payload["type"] == "RELATION"
+    assert payload["universalIdentifier"] == relation["from"]["universalIdentifier"]
+    assert payload["objectNameSingular"] == relation["from"]["objectNameSingular"]
+    assert payload["name"] == relation["from"]["fieldName"]
+    assert payload["relation"]["type"] == relation["type"]
+    assert payload["relation"]["targetObjectNameSingular"] == relation["to"]["objectNameSingular"]
+    assert td.COLLECTIONS["createRelation"] == "fields"
+    assert "createRole" not in td.COLLECTIONS
+
+
+def test_a_relation_create_posts_a_relation_field_to_the_fields_surface(artifact: dict[str, Any]) -> None:
+    relation = next(op for op in artifact["operations"] if op["operation"] == "createRelation")
+    seen: list[tuple[str, str, dict[str, Any]]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append((request.method, request.url.path, json.loads(request.content)))
+        return httpx.Response(200, json={"data": {}})
+
+    item = td.PlanItem(
+        key=td.operation_key(relation),
+        kind="createRelation",
+        name=td.operation_name(relation),
+        payload=td.desired_payload(relation),
+    )
+    _real_transport(handler).send("create", item)
+
+    method, path, body = seen[0]
+    assert (method, path) == ("POST", f"{td.METADATA_ROOT}/fields")
+    assert body["type"] == "RELATION"
+    assert body["universalIdentifier"] == relation["from"]["universalIdentifier"]
+
+
+def test_role_ops_apply_through_the_metadata_graphql(artifact: dict[str, Any]) -> None:
+    role = next(op for op in artifact["operations"] if op["operation"] == "createRole")
+    seen: list[tuple[str, str, dict[str, Any]]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append((request.method, request.url.path, json.loads(request.content)))
+        return httpx.Response(200, json={"data": {}})
+
+    transport = _real_transport(handler)
+    item = td.PlanItem(
+        key=td.operation_key(role),
+        kind="createRole",
+        name=td.operation_name(role),
+        payload=td.desired_payload(role),
+    )
+    transport.send("create", item)
+    transport.send("update", td.PlanItem(**{**vars(item), "record_id": "role-rec-1"}))
+
+    create_method, create_path, create_body = seen[0]
+    assert (create_method, create_path) == ("POST", td.GRAPHQL_PATH)
+    assert "createOneRole" in create_body["query"]
+    assert create_body["variables"]["input"] == dict(item.payload)
+
+    update_method, update_path, update_body = seen[1]
+    assert (update_method, update_path) == ("POST", td.GRAPHQL_PATH)
+    assert "updateOneRole" in update_body["query"]
+    assert update_body["variables"]["id"] == "role-rec-1"
+    assert update_body["variables"]["update"] == dict(item.payload)
+
+
+def test_roles_read_back_from_the_graphql_surface() -> None:
+    role_record = {"id": "role-rec-1", "name": "producer", "label": "Event Producer"}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            return httpx.Response(200, json={"data": []})
+        assert "getRoles" in json.loads(request.content)["query"]
+        return httpx.Response(200, json={"data": {"getRoles": [role_record]}})
+
+    state = _real_transport(handler).read_state()
+
+    assert state["role:producer"].record_id == "role-rec-1"
+    assert "id" not in state["role:producer"].payload
+    assert state["role:producer"].payload["label"] == "Event Producer"
+
+
+def test_a_graphql_rejection_is_a_transport_error_without_the_body() -> None:
+    """GraphQL answers 200 with an `errors` list; the rejection surfaces, the body never does."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            return httpx.Response(200, json={"data": []})
+        return httpx.Response(200, json={"errors": [{"message": f"conflict on {SYNTHETIC_RECORD_VALUE}"}]})
+
+    with pytest.raises(td.TransportError) as raised:
+        _real_transport(handler).read_state()
+
+    assert SYNTHETIC_RECORD_VALUE not in str(raised.value)
+    assert not [name for name in vars(raised.value) if name != "status"]
+
+
+def test_reapply_over_the_real_transport_is_all_noops(artifact: dict[str, Any]) -> None:
+    """End to end on recorded v2.30 shapes: a target serving exactly what we send plans to no-ops."""
+    operations = artifact["operations"]
+    objects = [
+        {"id": f"rec-{i}", **td.desired_payload(op)}
+        for i, op in enumerate(operations)
+        if op["operation"] == "createObject"
+    ]
+    fields = [
+        {"id": f"rec-{i}", **td.desired_payload(op)}
+        for i, op in enumerate(operations)
+        if op["operation"] in ("createField", "createRelation")
+    ]
+    roles = [
+        {"id": f"rec-{i}", **td.desired_payload(op)}
+        for i, op in enumerate(operations)
+        if op["operation"] == "createRole"
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            listing = objects if request.url.path.endswith("objects") else fields
+            return httpx.Response(200, json={"data": listing})
+        return httpx.Response(200, json={"data": {"getRoles": roles}})
+
+    receipt = td.deploy(target="dev", artifact_path=ARTIFACT_PATH, transport=_real_transport(handler))
+
+    assert receipt.counts == {"create": 0, "update": 0, "noop": len(operations)}
+    assert receipt.failure is None
 
 
 def test_the_module_never_names_a_delete_verb() -> None:

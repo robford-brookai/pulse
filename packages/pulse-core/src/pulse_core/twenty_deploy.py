@@ -26,10 +26,13 @@ URL and credential resolve from the environment (`PULSE_TWENTY_<TARGET>_URL` /
 `PULSE_TWENTY_<TARGET>_TOKEN`), never from code and never from the artifact. Missing ones are an
 error naming the variables, never a silent no-op — the `catalog_release_cli` posture.
 
-The request/response shape below is *our* pin, not a live-verified contract: no Twenty instance
-exists until DNA-909 provisions one (`docs/contracts/consumes.md`). Every test drives a scripted
-transport under disabled sockets; wave 3's read-back verification is the ground truth, and a shape
-drift there changes this module's endpoints and nothing else.
+The request/response shapes below are pinned against the DNA-909 provisioning receipt
+(2026-08-16, v2.30): the metadata REST surface serves `objects` and `fields` only — relations
+apply as RELATION-type field payloads on the fields surface, roles through the `/metadata`
+GraphQL — and `universalIdentifier` round-trips (F1 positive). Every test drives a scripted
+transport under disabled sockets; wave 3's read-back (task 3.1) is the remaining ground truth for
+the exact body shapes, and a drift there changes this module's payload construction and nothing
+else.
 
 Run: uv run python -m pulse_core.twenty_deploy --target dev [--dry-run]   (task twenty:deploy)
 """
@@ -62,15 +65,36 @@ VERBS: tuple[Literal["create"], Literal["update"]] = ("create", "update")
 
 Verb = Literal["create", "update"]
 
-#: Path prefix for the Metadata API, and the collection each operation kind addresses. Pinned
-#: here, unverified against a live instance until DNA-909 — see the module docstring.
+#: Path prefix for the Metadata REST API, and the collection each REST-served kind addresses.
+#: Per the DNA-909 provisioning receipt (2026-08-16), v2.30 serves exactly two collections here:
+#: `objects` and `fields` — `/rest/metadata/relations` and `/rest/metadata/roles` do not exist
+#: (the router parses those segments as object ids and answers 400). A relation is a
+#: RELATION-type field payload on the fields surface; roles have no REST surface at all and are
+#: deliberately absent from this mapping — they apply through the metadata GraphQL below.
 METADATA_ROOT = "/rest/metadata"
 COLLECTIONS = {
     "createObject": "objects",
     "createField": "fields",
-    "createRelation": "relations",
-    "createRole": "roles",
+    "createRelation": "fields",
 }
+
+#: The metadata GraphQL endpoint — the only surface that serves roles on v2.30.
+GRAPHQL_PATH = "/metadata"
+
+#: The role read and writes, pinned as our shape until 3.1's live read-back. Selections mirror the
+#: artifact's role payload so drift comparison sees the keys it plans on.
+ROLES_QUERY = (
+    "query DeployReadRoles { getRoles { id name label description"
+    " objectPermissions { objectNameSingular canRead canCreate canUpdate canDelete }"
+    " fieldPermissions { objectNameSingular fieldName canRead canUpdate } } }"
+)
+CREATE_ROLE_MUTATION = (
+    "mutation DeployCreateRole($input: CreateRoleInput!) { createOneRole(createRoleInput: $input) { id } }"
+)
+UPDATE_ROLE_MUTATION = (
+    "mutation DeployUpdateRole($id: UUID!, $update: UpdateRolePayload!)"
+    " { updateOneRole(updateRoleInput: {id: $id, update: $update}) { id } }"
+)
 
 DEFAULT_TIMEOUT_SECONDS = 30.0
 
@@ -179,8 +203,43 @@ def operation_name(operation: Mapping[str, Any]) -> str:
     return f"createRole {operation['name']}"
 
 
+def relation_field_payload(operation: Mapping[str, Any]) -> dict[str, Any]:
+    """A relation operation as the fields surface takes it: a RELATION-type field on the from side.
+
+    v2.30 has no relations collection (DNA-909 receipt) — the from-side field carries the whole
+    relation, target end included, under the `relation` key. The key stays the from side's
+    `universalIdentifier`, so idempotence is unchanged: the field this payload creates reads back
+    from the fields listing under the same identifier.
+    """
+    from_end = operation["from"]
+    to_end = operation["to"]
+    payload = {
+        "universalIdentifier": from_end["universalIdentifier"],
+        "objectNameSingular": from_end["objectNameSingular"],
+        "name": from_end["fieldName"],
+        "label": from_end["label"],
+        "type": "RELATION",
+        "relation": {
+            "type": operation["type"],
+            "targetUniversalIdentifier": to_end["universalIdentifier"],
+            "targetObjectNameSingular": to_end["objectNameSingular"],
+            "targetFieldName": to_end["fieldName"],
+            "targetFieldLabel": to_end["label"],
+        },
+    }
+    if "isNullable" in from_end:
+        payload["isNullable"] = from_end["isNullable"]
+    return payload
+
+
 def desired_payload(operation: Mapping[str, Any]) -> dict[str, Any]:
-    """The operation as a request body: everything except the discriminator we route on."""
+    """The operation as a request body: everything except the discriminator we route on.
+
+    Relations are the one reshape: the artifact keeps its two-ended `createRelation` form, and the
+    body it plans and sends is the RELATION field payload the v2.30 fields surface actually takes.
+    """
+    if operation["operation"] == "createRelation":
+        return relation_field_payload(operation)
     return {key: value for key, value in operation.items() if key != "operation"}
 
 
@@ -293,10 +352,14 @@ def resolve_target(target: str, env: Mapping[str, str]) -> Target:
 
 
 class MetadataApiTransport:
-    """The Metadata API over HTTP: read the target's state, create or update one record.
+    """The metadata surfaces v2.30 actually serves: two REST collections and the GraphQL roles.
 
-    Two verbs and a read. The response body is consumed for the `id`/`universalIdentifier` pair it
-    carries on the read path, and dropped entirely on the failure path (see `TransportError`).
+    Two verbs and a read, same as before the DNA-909 receipt — only the routing changed. Objects
+    and fields (relations included, as RELATION-type fields) go over `/rest/metadata`; roles go
+    over the `/metadata` GraphQL, because no REST roles collection exists. Response bodies are
+    consumed for the `id`/`universalIdentifier` pairs they carry on the read path, and dropped
+    entirely on every failure path (see `TransportError`) — a GraphQL rejection answers 200 with
+    an `errors` list, and that body is dropped the same way.
     """
 
     def __init__(self, target: Target, client: httpx.Client | None = None) -> None:
@@ -311,21 +374,46 @@ class MetadataApiTransport:
         collection = f"{METADATA_ROOT}/{COLLECTIONS[kind]}"
         return collection if record_id is None else f"{collection}/{record_id}"
 
+    def _graphql(self, query: str, variables: Mapping[str, Any] | None = None) -> dict[str, Any]:
+        """One GraphQL call. An `errors` body is a rejection: pinned as status 400, body dropped."""
+        response = self._client.post(GRAPHQL_PATH, json={"query": query, "variables": dict(variables or {})})
+        if response.status_code >= httpx.codes.BAD_REQUEST:
+            raise TransportError(response.status_code)
+        body = response.json()
+        if body.get("errors"):
+            raise TransportError(httpx.codes.BAD_REQUEST)
+        data: dict[str, Any] = body.get("data") or {}
+        return data
+
     def read_state(self) -> dict[str, RemoteRecord]:
-        """Every record the target already carries, indexed by the key the plan is computed on."""
+        """Every record the target already carries, indexed by the key the plan is computed on.
+
+        Exactly three requests: the two REST listings that exist (`objects`, `fields` — a
+        RELATION-type field in the listing *is* a relation's state), and the roles GraphQL query.
+        Never `/rest/metadata/relations` or `/rest/metadata/roles` — v2.30 answers those with 400.
+        """
         state: dict[str, RemoteRecord] = {}
-        for kind, collection in sorted(COLLECTIONS.items()):
+        for collection in sorted(set(COLLECTIONS.values())):
             response = self._client.get(f"{METADATA_ROOT}/{collection}")
             if response.status_code >= httpx.codes.BAD_REQUEST:
                 raise TransportError(response.status_code)
             for record in response.json().get("data", ()):
                 payload = {name: value for name, value in record.items() if name != "id"}
-                key = operation_key({"operation": kind, **payload})
+                key = str(record["universalIdentifier"])
                 state[key] = RemoteRecord(record_id=str(record["id"]), payload=payload)
+        for role in self._graphql(ROLES_QUERY).get("getRoles") or ():
+            payload = {name: value for name, value in role.items() if name != "id"}
+            state[f"role:{role['name']}"] = RemoteRecord(record_id=str(role["id"]), payload=payload)
         return state
 
     def send(self, verb: Verb, item: PlanItem) -> None:
         """Apply one planned operation. Never called for a no-op, and never for anything else."""
+        if item.kind == "createRole":
+            if verb == "create":
+                self._graphql(CREATE_ROLE_MUTATION, {"input": dict(item.payload)})
+            else:
+                self._graphql(UPDATE_ROLE_MUTATION, {"id": item.record_id, "update": dict(item.payload)})
+            return
         response = (
             self._client.post(self._collection_url(item.kind), json=dict(item.payload))
             if verb == "create"
