@@ -139,7 +139,7 @@ files under `openspec/specs/`.
       no record ids or field values.
       `[model: sonnet | deps: — | lane: repo_change | wave: 0]`
 
-- [ ] 2.6 Reshape `pulse_core.twenty_deploy`'s metadata surface to the endpoints v2.30 actually
+- [x] 2.6 Reshape `pulse_core.twenty_deploy`'s metadata surface to the endpoints v2.30 actually
       serves, per the DNA-909 provisioning receipt (2026-08-16): `/rest/metadata/relations` and
       `/rest/metadata/roles` do not exist — the router parses those path segments as object ids
       and answers 400 `"'relations' is not a valid UUID"`. Relations apply through the fields
