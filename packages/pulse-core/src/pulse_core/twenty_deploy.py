@@ -13,7 +13,7 @@ Four properties, each of which a test pins:
   finding, before the target is even read.
 - **Idempotent, keyed on `universalIdentifier`.** Create when the key is absent, update when the
   payload drifted, no-op when identical. Roles carry no identifier in the artifact, so their key
-  is `role:<name>` — also stable, also named in the artifact.
+  is `role:<label>` — also stable, also named in the artifact (the live Role type has no name).
 - **Never delete.** Not "we do not call delete" but "there is no verb to call": `VERBS` is
   `("create", "update")` and the transport exposes nothing else, so a key present on the target
   and absent from the artifact is left alone by construction.
@@ -53,7 +53,7 @@ import httpx
 from pulse_core.catalog_gen import load_catalog
 from pulse_core.twenty_metadata import ARTIFACT_PATH
 from pulse_core.twenty_model import TWENTY_MODEL, load_uid_map
-from pulse_core.twenty_validate import check_schema, validate
+from pulse_core.twenty_validate import check_schema, encode_option_value, validate
 
 #: The targets a promotion walks, in order. A name outside this tuple is an error rather than an
 #: ad-hoc environment: an unlisted target has no reviewed credential pair.
@@ -81,12 +81,18 @@ COLLECTIONS = {
 #: The metadata GraphQL endpoint — the only surface that serves roles on v2.30.
 GRAPHQL_PATH = "/metadata"
 
-#: The role read and writes, pinned as our shape until 3.1's live read-back. Selections mirror the
-#: artifact's role payload so drift comparison sees the keys it plans on.
+#: The role read and writes, corrected against the live dev instance (4.1 read-back,
+#: 2026-08-16). The live `Role` type has no `name` — a role's stable identity is its `label` —
+#: and its permission records reference metadata by id (`objectMetadataId`/`fieldMetadataId`),
+#: not by name. Permissions apply through their own upsert mutations, never through the role
+#: create/update inputs, which take scalars only.
 ROLES_QUERY = (
-    "query DeployReadRoles { getRoles { id name label description"
-    " objectPermissions { objectNameSingular canRead canCreate canUpdate canDelete }"
-    " fieldPermissions { objectNameSingular fieldName canRead canUpdate } } }"
+    "query DeployReadRoles { getRoles { id label description canUpdateAllSettings"
+    " canReadAllObjectRecords canUpdateAllObjectRecords canSoftDeleteAllObjectRecords"
+    " canDestroyAllObjectRecords"
+    " objectPermissions { objectMetadataId canReadObjectRecords canUpdateObjectRecords"
+    " canSoftDeleteObjectRecords canDestroyObjectRecords }"
+    " fieldPermissions { objectMetadataId fieldMetadataId canReadFieldValue canUpdateFieldValue } } }"
 )
 CREATE_ROLE_MUTATION = (
     "mutation DeployCreateRole($input: CreateRoleInput!) { createOneRole(createRoleInput: $input) { id } }"
@@ -94,6 +100,27 @@ CREATE_ROLE_MUTATION = (
 UPDATE_ROLE_MUTATION = (
     "mutation DeployUpdateRole($id: UUID!, $update: UpdateRolePayload!)"
     " { updateOneRole(updateRoleInput: {id: $id, update: $update}) { id } }"
+)
+UPSERT_OBJECT_PERMISSIONS_MUTATION = (
+    "mutation DeployUpsertObjectPermissions($input: UpsertObjectPermissionsInput!)"
+    " { upsertObjectPermissions(upsertObjectPermissionsInput: $input) { objectMetadataId } }"
+)
+UPSERT_FIELD_PERMISSIONS_MUTATION = (
+    "mutation DeployUpsertFieldPermissions($input: UpsertFieldPermissionsInput!)"
+    " { upsertFieldPermissions(upsertFieldPermissionsInput: $input) { fieldMetadataId } }"
+)
+
+#: The scalar half of a role payload — what `createOneRole`/`updateOneRole` accept. The
+#: permission lists ride the same payload for planning, and the transport splits them out to
+#: the upsert mutations at send time.
+ROLE_SCALARS = (
+    "label",
+    "description",
+    "canUpdateAllSettings",
+    "canReadAllObjectRecords",
+    "canUpdateAllObjectRecords",
+    "canSoftDeleteAllObjectRecords",
+    "canDestroyAllObjectRecords",
 )
 
 DEFAULT_TIMEOUT_SECONDS = 30.0
@@ -135,7 +162,11 @@ class RemoteRecord:
 
 @dataclass(frozen=True)
 class PlanItem:
-    """One artifact operation resolved against the target's state."""
+    """One artifact operation resolved against the target's state.
+
+    `payload` is what drift is computed on and what an update sends; `create_extras` is the
+    create-only remainder the server requires but never reads back (a relation's target end).
+    """
 
     key: str
     kind: str
@@ -143,6 +174,7 @@ class PlanItem:
     payload: Mapping[str, Any]
     record_id: str | None = None
     verb: Verb | None = None
+    create_extras: Mapping[str, Any] | None = None
 
 
 class Transport(Protocol):
@@ -187,7 +219,9 @@ def operation_key(operation: Mapping[str, Any]) -> str:
         return str(uid)
     if operation["operation"] == "createRelation":
         return str(operation["from"]["universalIdentifier"])
-    return f"role:{operation['name']}"
+    # The live Role type has no `name` (4.1 read-back) — the label is the identity that
+    # round-trips, and it is equally stable and equally named in the artifact.
+    return f"role:{operation['label']}"
 
 
 def operation_name(operation: Mapping[str, Any]) -> str:
@@ -204,43 +238,138 @@ def operation_name(operation: Mapping[str, Any]) -> str:
 
 
 def relation_field_payload(operation: Mapping[str, Any]) -> dict[str, Any]:
-    """A relation operation as the fields surface takes it: a RELATION-type field on the from side.
+    """A relation operation as the fields surface round-trips it: a RELATION field, from side.
 
-    v2.30 has no relations collection (DNA-909 receipt) — the from-side field carries the whole
-    relation, target end included, under the `relation` key. The key stays the from side's
-    `universalIdentifier`, so idempotence is unchanged: the field this payload creates reads back
-    from the fields listing under the same identifier.
+    v2.30 has no relations collection (DNA-909 receipt) — the from-side field carries the
+    relation, and the key stays the from side's `universalIdentifier`, so idempotence is
+    unchanged. Only the keys the fields listing reports back live here (4.1 first contact);
+    the target end rides `relation_creation_extras` at create time, because the listing never
+    echoes it and comparing on it would plan a phantom update forever.
     """
     from_end = operation["from"]
-    to_end = operation["to"]
     payload = {
         "universalIdentifier": from_end["universalIdentifier"],
         "objectNameSingular": from_end["objectNameSingular"],
         "name": from_end["fieldName"],
         "label": from_end["label"],
         "type": "RELATION",
-        "relation": {
-            "type": operation["type"],
-            "targetUniversalIdentifier": to_end["universalIdentifier"],
-            "targetObjectNameSingular": to_end["objectNameSingular"],
-            "targetFieldName": to_end["fieldName"],
-            "targetFieldLabel": to_end["label"],
-        },
     }
     if "isNullable" in from_end:
         payload["isNullable"] = from_end["isNullable"]
     return payload
 
 
+def relation_creation_extras(operation: Mapping[str, Any]) -> dict[str, Any]:
+    """The create-only half of a relation: the target end, as `relationCreationPayload`.
+
+    The live server requires it on create and never reads it back (4.1 first contact) — the
+    inverse field it creates carries a server-minted identifier, so the artifact's to-side
+    `universalIdentifier` cannot be applied (identifiers are immutable; HANDOFF.md). Names
+    stay environment-independent; the transport resolves the target object's metadata id.
+    """
+    to_end = operation["to"]
+    return {
+        "relationCreationPayload": {
+            "type": operation["type"],
+            "targetObjectNameSingular": to_end["objectNameSingular"],
+            "targetFieldLabel": to_end["label"],
+            "targetFieldIcon": "IconRelationOneToMany",
+        }
+    }
+
+
+def role_payload(operation: Mapping[str, Any]) -> dict[str, Any]:
+    """A role operation in the terms the live server round-trips (4.1 read-back, 2026-08-16).
+
+    Environment-independent on purpose — permissions name objects and fields by
+    `objectNameSingular`/`fieldName`, and the transport resolves those to the target's metadata
+    ids at send time — so the same artifact plans identically against every target.
+
+    Three semantic translations, none lossless:
+
+    - The artifact's `name` is dropped: the live Role type has none, so the label is the
+      identity (see `operation_key`).
+    - There is no object-level create permission on v2.30 — record creation rides the update
+      permission — so `canUpdateObjectRecords` is `canCreate or canUpdate`. And the server
+      refuses write-without-read (`CANNOT_GIVE_WRITING_PERMISSION_ON_NON_READABLE_OBJECT`), so
+      read is implied by any write grant. A create-only grant (the producer role) therefore
+      also grants update and read; flagged in HANDOFF.md.
+    - Field permissions can only restrict, never grant (live rule): a permission carries
+      `canReadFieldValue`/`canUpdateFieldValue` only when the artifact denies it, and an
+      entry that restricts nothing is not sent at all.
+
+    The all-records flags are always explicit and always false: this model grants per-object,
+    and leaving a flag to a server-side default could silently over-grant.
+    """
+    object_permissions = sorted(
+        (
+            {
+                "objectNameSingular": permission["objectNameSingular"],
+                "canReadObjectRecords": permission["canRead"] or permission["canCreate"] or permission["canUpdate"],
+                "canUpdateObjectRecords": permission["canCreate"] or permission["canUpdate"],
+                "canSoftDeleteObjectRecords": permission["canDelete"],
+                "canDestroyObjectRecords": False,
+            }
+            for permission in operation["objectPermissions"]
+        ),
+        key=lambda permission: str(permission["objectNameSingular"]),
+    )
+    field_permissions = []
+    for permission in operation["fieldPermissions"]:
+        restrictions = {
+            flag: False
+            for flag, allowed in (
+                ("canReadFieldValue", permission["canRead"]),
+                ("canUpdateFieldValue", permission["canUpdate"]),
+            )
+            if not allowed
+        }
+        if restrictions:
+            field_permissions.append({
+                "objectNameSingular": permission["objectNameSingular"],
+                "fieldName": permission["fieldName"],
+                **restrictions,
+            })
+    field_permissions.sort(key=lambda permission: (str(permission["objectNameSingular"]), str(permission["fieldName"])))
+    return {
+        "label": operation["label"],
+        "description": operation["description"],
+        "canUpdateAllSettings": False,
+        "canReadAllObjectRecords": False,
+        "canUpdateAllObjectRecords": False,
+        "canSoftDeleteAllObjectRecords": False,
+        "canDestroyAllObjectRecords": False,
+        "objectPermissions": object_permissions,
+        "fieldPermissions": field_permissions,
+    }
+
+
 def desired_payload(operation: Mapping[str, Any]) -> dict[str, Any]:
     """The operation as a request body: everything except the discriminator we route on.
 
-    Relations are the one reshape: the artifact keeps its two-ended `createRelation` form, and the
-    body it plans and sends is the RELATION field payload the v2.30 fields surface actually takes.
+    Three reshapes, all toward what v2.30 actually serves: a relation plans and sends as the
+    RELATION field payload the fields surface takes, a role plans in the label-keyed,
+    restriction-only permission terms of the metadata GraphQL (see `role_payload`), and a
+    SELECT field's option values encode to the UPPER_SNAKE_CASE tokens the live server
+    stores (see `encode_option_value` — the artifact keeps the catalog vocabulary).
     """
     if operation["operation"] == "createRelation":
         return relation_field_payload(operation)
-    return {key: value for key, value in operation.items() if key != "operation"}
+    if operation["operation"] == "createRole":
+        return role_payload(operation)
+    payload = {key: value for key, value in operation.items() if key != "operation"}
+    if payload.get("options"):
+        payload["options"] = [
+            {**option, "value": encode_option_value(str(option["value"]))} for option in payload["options"]
+        ]
+        if isinstance(payload.get("defaultValue"), str):
+            # A SELECT default names an option value — same encoding, inside the SQL-ish quotes.
+            payload["defaultValue"] = f"'{encode_option_value(payload['defaultValue'].strip(chr(39)))}'"
+    if payload.get("isUnique"):
+        # Live rule (4.1 first contact): a unique field cannot carry a default — two records on
+        # the default would collide on the unique index, and the server refuses the create.
+        payload.pop("defaultValue", None)
+    return payload
 
 
 # --- Plan --------------------------------------------------------------------------------------
@@ -272,6 +401,9 @@ def plan(operations: tuple[Mapping[str, Any], ...], state: Mapping[str, RemoteRe
                 payload=payload,
                 record_id=None if current is None else current.record_id,
                 verb=verb,
+                create_extras=relation_creation_extras(operation)
+                if operation["operation"] == "createRelation"
+                else None,
             )
         )
     return tuple(items)
@@ -369,6 +501,11 @@ class MetadataApiTransport:
             headers={"Authorization": f"Bearer {target.token}"},
             timeout=DEFAULT_TIMEOUT_SECONDS,
         )
+        # name ↔ metadata-id maps, filled by `read_state` (which `deploy` always runs first).
+        self._object_ids: dict[str, str] = {}
+        self._field_ids: dict[tuple[str, str], str] = {}
+        self._object_names: dict[str, str] = {}
+        self._field_names: dict[str, tuple[str, str]] = {}
 
     def _collection_url(self, kind: str, record_id: str | None = None) -> str:
         collection = f"{METADATA_ROOT}/{COLLECTIONS[kind]}"
@@ -391,36 +528,177 @@ class MetadataApiTransport:
         Exactly three requests: the two REST listings that exist (`objects`, `fields` — a
         RELATION-type field in the listing *is* a relation's state), and the roles GraphQL query.
         Never `/rest/metadata/relations` or `/rest/metadata/roles` — v2.30 answers those with 400.
+
+        The listings double as the id maps role permissions need: the plan names objects and
+        fields by name (environment-independent), the server by metadata id, and this read is
+        where the two meet. Objects are read first because a live field record carries
+        `objectMetadataId`, not `objectNameSingular` (4.1 read-back) — the field's payload is
+        enriched with the name the plan compares on. Roles translate the same way.
         """
         state: dict[str, RemoteRecord] = {}
-        for collection in sorted(set(COLLECTIONS.values())):
-            response = self._client.get(f"{METADATA_ROOT}/{collection}")
-            if response.status_code >= httpx.codes.BAD_REQUEST:
-                raise TransportError(response.status_code)
-            for record in response.json().get("data", ()):
+        listings: dict[str, list[dict[str, Any]]] = {}
+        for collection in ("objects", "fields"):
+            listings[collection] = self._list_all(collection)
+        self._remember_id_maps(listings["objects"], listings["fields"])
+        for collection in ("objects", "fields"):
+            for record in listings[collection]:
                 payload = {name: value for name, value in record.items() if name != "id"}
+                if collection == "fields" and "objectMetadataId" in payload:
+                    object_id = str(payload["objectMetadataId"])
+                    payload["objectNameSingular"] = self._object_names.get(object_id, object_id)
+                if isinstance(payload.get("options"), list):
+                    # The listing decorates options with server-side keys (`id`, `color`) the
+                    # artifact never names — reduce to the declared keys so a matching SELECT
+                    # compares equal instead of planning a phantom update (4.1 first contact).
+                    payload["options"] = [
+                        {name: option.get(name) for name in ("universalIdentifier", "value", "label", "position")}
+                        for option in sorted(payload["options"], key=lambda option: option.get("position") or 0)
+                    ]
                 key = str(record["universalIdentifier"])
                 state[key] = RemoteRecord(record_id=str(record["id"]), payload=payload)
         for role in self._graphql(ROLES_QUERY).get("getRoles") or ():
-            payload = {name: value for name, value in role.items() if name != "id"}
-            state[f"role:{role['name']}"] = RemoteRecord(record_id=str(role["id"]), payload=payload)
+            state[f"role:{role['label']}"] = RemoteRecord(
+                record_id=str(role["id"]), payload=self._role_remote_payload(role)
+            )
         return state
+
+    def _list_all(self, collection: str) -> list[dict[str, Any]]:
+        """One collection, every page. The live listings cap at 200 records and cursor-paginate
+        (4.1 first contact: a workspace ships 560 standard fields before ours land) — a single
+        unpaginated GET would silently truncate the state and turn no-ops into failed creates."""
+        records: list[dict[str, Any]] = []
+        cursor: str | None = None
+        while True:
+            params: dict[str, str] = {"limit": "200"}
+            if cursor is not None:
+                params["starting_after"] = cursor
+            response = self._client.get(f"{METADATA_ROOT}/{collection}", params=params)
+            if response.status_code >= httpx.codes.BAD_REQUEST:
+                raise TransportError(response.status_code)
+            body = response.json()
+            records.extend(body.get("data", ()))
+            page_info = body.get("pageInfo") or {}
+            cursor = page_info.get("endCursor")
+            if not page_info.get("hasNextPage") or cursor is None:
+                return records
+
+    def _remember_id_maps(self, objects: list[dict[str, Any]], fields: list[dict[str, Any]]) -> None:
+        """Cache the name ↔ metadata-id maps role permissions and field enrichment translate through.
+
+        A live field record names its object by `objectMetadataId`; a test fixture may name it
+        directly by `objectNameSingular`. Both resolve to the same map key.
+        """
+        self._object_ids = {str(record["nameSingular"]): str(record["id"]) for record in objects}
+        self._object_names = {record_id: name for name, record_id in self._object_ids.items()}
+        self._field_ids = {}
+        for record in fields:
+            object_id = str(record.get("objectMetadataId", ""))
+            object_name = str(record.get("objectNameSingular") or self._object_names.get(object_id, object_id))
+            self._field_ids[(object_name, str(record["name"]))] = str(record["id"])
+        self._field_names = {record_id: names for names, record_id in self._field_ids.items()}
+
+    def _role_remote_payload(self, role: Mapping[str, Any]) -> dict[str, Any]:
+        """One role as the plan compares it: ids back to names, restriction flags only when set."""
+        object_permissions = sorted(
+            (
+                {
+                    "objectNameSingular": self._object_names.get(
+                        str(permission["objectMetadataId"]), str(permission["objectMetadataId"])
+                    ),
+                    "canReadObjectRecords": permission["canReadObjectRecords"],
+                    "canUpdateObjectRecords": permission["canUpdateObjectRecords"],
+                    "canSoftDeleteObjectRecords": permission["canSoftDeleteObjectRecords"],
+                    "canDestroyObjectRecords": permission["canDestroyObjectRecords"],
+                }
+                for permission in role.get("objectPermissions") or ()
+            ),
+            key=lambda permission: str(permission["objectNameSingular"]),
+        )
+        field_permissions = []
+        for permission in role.get("fieldPermissions") or ():
+            object_name, field_name = self._field_names.get(
+                str(permission["fieldMetadataId"]), ("", str(permission["fieldMetadataId"]))
+            )
+            restrictions = {
+                flag: False for flag in ("canReadFieldValue", "canUpdateFieldValue") if permission.get(flag) is False
+            }
+            if restrictions:
+                field_permissions.append({"objectNameSingular": object_name, "fieldName": field_name, **restrictions})
+        field_permissions.sort(
+            key=lambda permission: (str(permission["objectNameSingular"]), str(permission["fieldName"]))
+        )
+        return {
+            name: value for name, value in role.items() if name not in ("id", "objectPermissions", "fieldPermissions")
+        } | {"objectPermissions": object_permissions, "fieldPermissions": field_permissions}
 
     def send(self, verb: Verb, item: PlanItem) -> None:
         """Apply one planned operation. Never called for a no-op, and never for anything else."""
         if item.kind == "createRole":
-            if verb == "create":
-                self._graphql(CREATE_ROLE_MUTATION, {"input": dict(item.payload)})
-            else:
-                self._graphql(UPDATE_ROLE_MUTATION, {"id": item.record_id, "update": dict(item.payload)})
+            self._send_role(verb, item)
             return
+        body = dict(item.payload)
+        if verb == "create" and item.create_extras is not None:
+            body |= item.create_extras
+            if "relationCreationPayload" in body:
+                creation = dict(body["relationCreationPayload"])
+                creation["targetObjectMetadataId"] = self._object_ids[str(creation.pop("targetObjectNameSingular"))]
+                body["relationCreationPayload"] = creation
+        # The fields surface takes `objectMetadataId`, not the plan's environment-independent
+        # `objectNameSingular` (4.1 first contact) — translate at this boundary only.
+        if item.kind in ("createField", "createRelation") and "objectNameSingular" in body:
+            body["objectMetadataId"] = self._object_ids[str(body.pop("objectNameSingular"))]
         response = (
-            self._client.post(self._collection_url(item.kind), json=dict(item.payload))
+            self._client.post(self._collection_url(item.kind), json=body)
             if verb == "create"
-            else self._client.patch(self._collection_url(item.kind, item.record_id), json=dict(item.payload))
+            else self._client.patch(self._collection_url(item.kind, item.record_id), json=body)
         )
         if response.status_code >= httpx.codes.BAD_REQUEST:
             raise TransportError(response.status_code)
+
+    def _send_role(self, verb: Verb, item: PlanItem) -> None:
+        """A role lands in up to three mutations: the scalar create/update, then the upserts.
+
+        The role inputs take scalars only (live shape, 4.1); the permission lists apply through
+        `upsertObjectPermissions`/`upsertFieldPermissions` against the role's id — returned by
+        the create, carried on the plan item for an update. Permission names resolve to this
+        target's metadata ids through the maps `read_state` cached.
+        """
+        scalars = {name: item.payload[name] for name in ROLE_SCALARS}
+        if verb == "create":
+            created = self._graphql(CREATE_ROLE_MUTATION, {"input": scalars})
+            role_id = str((created.get("createOneRole") or {}).get("id"))
+        else:
+            self._graphql(UPDATE_ROLE_MUTATION, {"id": item.record_id, "update": scalars})
+            role_id = str(item.record_id)
+        object_permissions = [
+            {
+                "objectMetadataId": self._object_ids[str(permission["objectNameSingular"])],
+                **{name: value for name, value in permission.items() if name != "objectNameSingular"},
+            }
+            for permission in item.payload["objectPermissions"]
+        ]
+        if object_permissions:
+            self._graphql(
+                UPSERT_OBJECT_PERMISSIONS_MUTATION,
+                {"input": {"roleId": role_id, "objectPermissions": object_permissions}},
+            )
+        field_permissions = [
+            {
+                "objectMetadataId": self._object_ids[str(permission["objectNameSingular"])],
+                "fieldMetadataId": self._field_ids[
+                    (str(permission["objectNameSingular"]), str(permission["fieldName"]))
+                ],
+                **{
+                    name: value for name, value in permission.items() if name not in ("objectNameSingular", "fieldName")
+                },
+            }
+            for permission in item.payload["fieldPermissions"]
+        ]
+        if field_permissions:
+            self._graphql(
+                UPSERT_FIELD_PERMISSIONS_MUTATION,
+                {"input": {"roleId": role_id, "fieldPermissions": field_permissions}},
+            )
 
 
 # --- Deploy ------------------------------------------------------------------------------------

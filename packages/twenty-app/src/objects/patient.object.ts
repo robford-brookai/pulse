@@ -32,12 +32,6 @@ export const PATIENT = defineObject({
       defaultValue: "''",
     },
     {
-      universalIdentifier: uid("patient.name"),
-      name: "name",
-      type: FieldType.FULL_NAME,
-      label: "Name",
-    },
-    {
       universalIdentifier: uid("patient.sfdcId"),
       name: "sfdcId",
       type: FieldType.TEXT,

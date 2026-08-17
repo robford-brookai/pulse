@@ -175,10 +175,11 @@ def test_drift_is_an_update_not_a_recreate(artifact: dict[str, Any]) -> None:
     assert [verb for verb, _ in transport.sent] == ["update"]
 
 
-def test_a_role_is_keyed_on_its_name(artifact: dict[str, Any]) -> None:
-    """Roles carry no `universalIdentifier` in the artifact; their identity key is their name."""
+def test_a_role_is_keyed_on_its_label(artifact: dict[str, Any]) -> None:
+    """Roles carry no `universalIdentifier`, and the live Role type has no `name` (4.1 read-back):
+    the label is the identity that round-trips."""
     role = next(operation for operation in artifact["operations"] if operation["operation"] == "createRole")
-    assert td.operation_key(role) == f"role:{role['name']}"
+    assert td.operation_key(role) == f"role:{role['label']}"
 
 
 # --- Promotion ---------------------------------------------------------------------------------
@@ -426,51 +427,103 @@ def test_a_state_read_never_touches_the_endpoints_v230_does_not_serve() -> None:
 
 
 def test_a_relation_op_plans_onto_the_fields_surface(artifact: dict[str, Any]) -> None:
-    """A relation is a RELATION-type field payload; there is no relations collection to address."""
+    """A relation is a RELATION-type field payload; there is no relations collection to address.
+
+    The comparable payload carries only what the fields listing reads back; the target end is
+    create-only (`relation_creation_extras`) because the server never echoes it (4.1).
+    """
     relation = next(op for op in artifact["operations"] if op["operation"] == "createRelation")
     payload = td.desired_payload(relation)
+    extras = td.relation_creation_extras(relation)
 
     assert payload["type"] == "RELATION"
     assert payload["universalIdentifier"] == relation["from"]["universalIdentifier"]
     assert payload["objectNameSingular"] == relation["from"]["objectNameSingular"]
     assert payload["name"] == relation["from"]["fieldName"]
-    assert payload["relation"]["type"] == relation["type"]
-    assert payload["relation"]["targetObjectNameSingular"] == relation["to"]["objectNameSingular"]
+    assert "relation" not in payload
+    assert extras["relationCreationPayload"]["type"] == relation["type"]
+    assert extras["relationCreationPayload"]["targetObjectNameSingular"] == relation["to"]["objectNameSingular"]
     assert td.COLLECTIONS["createRelation"] == "fields"
     assert "createRole" not in td.COLLECTIONS
 
 
 def test_a_relation_create_posts_a_relation_field_to_the_fields_surface(artifact: dict[str, Any]) -> None:
     relation = next(op for op in artifact["operations"] if op["operation"] == "createRelation")
+    objects, fields = _artifact_listings(artifact)
     seen: list[tuple[str, str, dict[str, Any]]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            listing = objects if request.url.path.endswith("objects") else fields
+            return httpx.Response(200, json={"data": listing})
+        if request.url.path == td.GRAPHQL_PATH:
+            return httpx.Response(200, json={"data": {"getRoles": []}})
         seen.append((request.method, request.url.path, json.loads(request.content)))
         return httpx.Response(200, json={"data": {}})
 
+    transport = _real_transport(handler)
+    transport.read_state()  # primes the name ↔ metadata-id maps, as every deploy does
     item = td.PlanItem(
         key=td.operation_key(relation),
         kind="createRelation",
         name=td.operation_name(relation),
         payload=td.desired_payload(relation),
+        create_extras=td.relation_creation_extras(relation),
     )
-    _real_transport(handler).send("create", item)
+    transport.send("create", item)
 
     method, path, body = seen[0]
     assert (method, path) == ("POST", f"{td.METADATA_ROOT}/fields")
     assert body["type"] == "RELATION"
     assert body["universalIdentifier"] == relation["from"]["universalIdentifier"]
+    # The live fields surface takes objects by metadata id, never by name (4.1).
+    assert "objectNameSingular" not in body
+    assert body["objectMetadataId"] == f"obj-{relation['from']['objectNameSingular']}"
+    creation = body["relationCreationPayload"]
+    assert creation["targetObjectMetadataId"] == f"obj-{relation['to']['objectNameSingular']}"
+    assert "targetObjectNameSingular" not in creation
+    assert creation["type"] == relation["type"]
+
+
+def _artifact_listings(artifact: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """The two REST listings a target serves after this artifact was applied, ids included."""
+    operations = artifact["operations"]
+    objects = [
+        {"id": f"obj-{td.desired_payload(op)['nameSingular']}", **td.desired_payload(op)}
+        for op in operations
+        if op["operation"] == "createObject"
+    ]
+    fields = [
+        {"id": f"fld-{i}", **td.desired_payload(op)}
+        for i, op in enumerate(operations)
+        if op["operation"] in ("createField", "createRelation")
+    ]
+    return objects, fields
 
 
 def test_role_ops_apply_through_the_metadata_graphql(artifact: dict[str, Any]) -> None:
-    role = next(op for op in artifact["operations"] if op["operation"] == "createRole")
-    seen: list[tuple[str, str, dict[str, Any]]] = []
+    """A role lands as scalar create/update plus permission upserts, ids resolved from the target.
+
+    Live shape (4.1 read-back): `createOneRole`/`updateOneRole` take scalars only, and the
+    permission lists go to `upsertObjectPermissions`/`upsertFieldPermissions` keyed on the
+    role's id and this target's metadata ids.
+    """
+    role = next(op for op in artifact["operations"] if op["operation"] == "createRole" and op["fieldPermissions"])
+    objects, fields = _artifact_listings(artifact)
+    graphql_bodies: list[dict[str, Any]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        seen.append((request.method, request.url.path, json.loads(request.content)))
-        return httpx.Response(200, json={"data": {}})
+        if request.method == "GET":
+            listing = objects if request.url.path.endswith("objects") else fields
+            return httpx.Response(200, json={"data": listing})
+        body = json.loads(request.content)
+        graphql_bodies.append(body)
+        if "getRoles" in body["query"]:
+            return httpx.Response(200, json={"data": {"getRoles": []}})
+        return httpx.Response(200, json={"data": {"createOneRole": {"id": "role-rec-1"}}})
 
     transport = _real_transport(handler)
+    transport.read_state()  # primes the name ↔ metadata-id maps, as every deploy does
     item = td.PlanItem(
         key=td.operation_key(role),
         kind="createRole",
@@ -478,34 +531,91 @@ def test_role_ops_apply_through_the_metadata_graphql(artifact: dict[str, Any]) -
         payload=td.desired_payload(role),
     )
     transport.send("create", item)
+
+    create_body = next(body for body in graphql_bodies if "createOneRole" in body["query"])
+    assert set(create_body["variables"]["input"]) == set(td.ROLE_SCALARS)
+    assert create_body["variables"]["input"]["label"] == role["label"]
+
+    upsert_objects = next(body for body in graphql_bodies if "upsertObjectPermissions" in body["query"])
+    assert upsert_objects["variables"]["input"]["roleId"] == "role-rec-1"
+    sent_permissions = upsert_objects["variables"]["input"]["objectPermissions"]
+    assert all(permission["objectMetadataId"].startswith("obj-") for permission in sent_permissions)
+    assert all("objectNameSingular" not in permission for permission in sent_permissions)
+
+    upsert_fields = next(body for body in graphql_bodies if "upsertFieldPermissions" in body["query"])
+    assert upsert_fields["variables"]["input"]["roleId"] == "role-rec-1"
+    sent_field_permissions = upsert_fields["variables"]["input"]["fieldPermissions"]
+    assert all(permission["fieldMetadataId"].startswith("fld-") for permission in sent_field_permissions)
+    # The live rule: field permissions only restrict — no grant flag is ever sent.
+    assert all(permission.get("canUpdateFieldValue") is False for permission in sent_field_permissions)
+    assert all("canReadFieldValue" not in permission for permission in sent_field_permissions)
+
+    graphql_bodies.clear()
     transport.send("update", td.PlanItem(**{**vars(item), "record_id": "role-rec-1"}))
-
-    create_method, create_path, create_body = seen[0]
-    assert (create_method, create_path) == ("POST", td.GRAPHQL_PATH)
-    assert "createOneRole" in create_body["query"]
-    assert create_body["variables"]["input"] == dict(item.payload)
-
-    update_method, update_path, update_body = seen[1]
-    assert (update_method, update_path) == ("POST", td.GRAPHQL_PATH)
-    assert "updateOneRole" in update_body["query"]
+    update_body = next(body for body in graphql_bodies if "updateOneRole" in body["query"])
     assert update_body["variables"]["id"] == "role-rec-1"
-    assert update_body["variables"]["update"] == dict(item.payload)
+    assert set(update_body["variables"]["update"]) == set(td.ROLE_SCALARS)
+    assert any("upsertObjectPermissions" in body["query"] for body in graphql_bodies)
 
 
 def test_roles_read_back_from_the_graphql_surface() -> None:
-    role_record = {"id": "role-rec-1", "name": "producer", "label": "Event Producer"}
+    """A read-back role translates into the plan's terms: label key, ids back to names,
+    restriction flags kept only when the server actually restricts."""
+    role_record = {
+        "id": "role-rec-1",
+        "label": "Event Producer",
+        "description": "d",
+        "canUpdateAllSettings": False,
+        "canReadAllObjectRecords": False,
+        "canUpdateAllObjectRecords": False,
+        "canSoftDeleteAllObjectRecords": False,
+        "canDestroyAllObjectRecords": False,
+        "objectPermissions": [
+            {
+                "objectMetadataId": "obj-domainEvent",
+                "canReadObjectRecords": False,
+                "canUpdateObjectRecords": True,
+                "canSoftDeleteObjectRecords": False,
+                "canDestroyObjectRecords": False,
+            }
+        ],
+        "fieldPermissions": [
+            {
+                "objectMetadataId": "obj-domainEvent",
+                "fieldMetadataId": "fld-1",
+                "canReadFieldValue": None,
+                "canUpdateFieldValue": False,
+            }
+        ],
+    }
+    objects = [{"id": "obj-domainEvent", "universalIdentifier": "u-1", "nameSingular": "domainEvent"}]
+    fields = [{"id": "fld-1", "universalIdentifier": "u-2", "objectNameSingular": "domainEvent", "name": "payload"}]
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.method == "GET":
-            return httpx.Response(200, json={"data": []})
+            listing = objects if request.url.path.endswith("objects") else fields
+            return httpx.Response(200, json={"data": listing})
         assert "getRoles" in json.loads(request.content)["query"]
         return httpx.Response(200, json={"data": {"getRoles": [role_record]}})
 
     state = _real_transport(handler).read_state()
 
-    assert state["role:producer"].record_id == "role-rec-1"
-    assert "id" not in state["role:producer"].payload
-    assert state["role:producer"].payload["label"] == "Event Producer"
+    payload = state["role:Event Producer"].payload
+    assert state["role:Event Producer"].record_id == "role-rec-1"
+    assert "id" not in payload
+    assert payload["label"] == "Event Producer"
+    assert payload["objectPermissions"] == [
+        {
+            "objectNameSingular": "domainEvent",
+            "canReadObjectRecords": False,
+            "canUpdateObjectRecords": True,
+            "canSoftDeleteObjectRecords": False,
+            "canDestroyObjectRecords": False,
+        }
+    ]
+    assert payload["fieldPermissions"] == [
+        {"objectNameSingular": "domainEvent", "fieldName": "payload", "canUpdateFieldValue": False}
+    ]
 
 
 def test_a_graphql_rejection_is_a_transport_error_without_the_body() -> None:
@@ -524,23 +634,38 @@ def test_a_graphql_rejection_is_a_transport_error_without_the_body() -> None:
 
 
 def test_reapply_over_the_real_transport_is_all_noops(artifact: dict[str, Any]) -> None:
-    """End to end on recorded v2.30 shapes: a target serving exactly what we send plans to no-ops."""
+    """End to end on live-verified v2.30 shapes: a target serving what we send plans to no-ops."""
     operations = artifact["operations"]
-    objects = [
-        {"id": f"rec-{i}", **td.desired_payload(op)}
-        for i, op in enumerate(operations)
-        if op["operation"] == "createObject"
-    ]
-    fields = [
-        {"id": f"rec-{i}", **td.desired_payload(op)}
-        for i, op in enumerate(operations)
-        if op["operation"] in ("createField", "createRelation")
-    ]
-    roles = [
-        {"id": f"rec-{i}", **td.desired_payload(op)}
-        for i, op in enumerate(operations)
-        if op["operation"] == "createRole"
-    ]
+    objects, fields = _artifact_listings(artifact)
+    object_ids = {record["nameSingular"]: record["id"] for record in objects}
+    field_ids = {(record["objectNameSingular"], record["name"]): record["id"] for record in fields}
+
+    def _as_served_role(index: int, op: dict[str, Any]) -> dict[str, Any]:
+        """The desired role payload as the live getRoles query reports it: names become ids,
+        and the read always carries both field-permission flags (unrestricted ones as None)."""
+        desired = td.desired_payload(op)
+        return {
+            "id": f"role-rec-{index}",
+            **{name: value for name, value in desired.items() if name not in ("objectPermissions", "fieldPermissions")},
+            "objectPermissions": [
+                {
+                    "objectMetadataId": object_ids[p["objectNameSingular"]],
+                    **{name: value for name, value in p.items() if name != "objectNameSingular"},
+                }
+                for p in desired["objectPermissions"]
+            ],
+            "fieldPermissions": [
+                {
+                    "objectMetadataId": object_ids[p["objectNameSingular"]],
+                    "fieldMetadataId": field_ids[(p["objectNameSingular"], p["fieldName"])],
+                    "canReadFieldValue": p.get("canReadFieldValue"),
+                    "canUpdateFieldValue": p.get("canUpdateFieldValue"),
+                }
+                for p in desired["fieldPermissions"]
+            ],
+        }
+
+    roles = [_as_served_role(i, op) for i, op in enumerate(operations) if op["operation"] == "createRole"]
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.method == "GET":

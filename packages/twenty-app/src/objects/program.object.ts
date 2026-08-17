@@ -21,12 +21,6 @@ export const PROGRAM = defineObject({
       isUnique: true,
     },
     {
-      universalIdentifier: uid("program.name"),
-      name: "name",
-      type: FieldType.TEXT,
-      label: "Name",
-    },
-    {
       universalIdentifier: uid("program.patientPrograms"),
       name: "patientPrograms",
       type: FieldType.RELATION,

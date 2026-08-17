@@ -52,7 +52,14 @@ COMMITTED_PATHS = (OPTIONS_PATH, PROJECTION_LOOKUP_PATH, ARTIFACT_PATH)
 
 #: The checks `validate` runs. Named so a test can assert none is orphaned — a validator nobody
 #: calls gates nothing, which is the failure mode this whole module exists to prevent.
-CHECK_NAMES = ("schema", "current", "uid_map", "options_against_catalog", "options_ts_against_artifact")
+CHECK_NAMES = (
+    "schema",
+    "current",
+    "uid_map",
+    "options_against_catalog",
+    "options_ts_against_artifact",
+    "option_encoding_bijective",
+)
 
 Findings = tuple[str, ...]
 
@@ -254,6 +261,39 @@ def check_options_against_catalog(artifact: dict[str, Any], model: ModelDefiniti
     return tuple(findings)
 
 
+def encode_option_value(value: str) -> str:
+    """A catalog option value as the live Metadata API stores it (4.1 first contact, 2026-08-16).
+
+    v2.30 validates SELECT option values as UPPER_CASE snake — the catalog's dotted lowercase
+    vocabulary (`referral.received`) is rejected as sent. The catalog stays the only vocabulary;
+    this encoding is a serialization detail of one surface, applied at the deploy plan boundary
+    and never written back into repo files. It is not inherently injective (`a.b` and `a_b`
+    collide), so `check_option_encoding` proves it bijective over the actual artifact and fails
+    the validation gate if a future catalog value would collide.
+    """
+    return value.upper().replace(".", "_")
+
+
+def check_option_encoding(artifact: dict[str, Any]) -> Findings:
+    """No two option values of one field collide once encoded for the live server.
+
+    A collision would make two catalog states indistinguishable on the target — the deploy
+    would apply, and the ledger would silently lose a distinction. Refused here, before any
+    operation is planned.
+    """
+    findings: list[str] = []
+    for key, values in sorted(_artifact_field_options(artifact).items()):
+        by_encoded: dict[str, list[str]] = {}
+        for value in values:
+            by_encoded.setdefault(encode_option_value(value), []).append(value)
+        findings.extend(
+            f"option encoding: {key} values {sorted(originals)} collide as {encoded!r} on the live server"
+            for encoded, originals in sorted(by_encoded.items())
+            if len(originals) > 1
+        )
+    return tuple(findings)
+
+
 # --- TypeScript against the artifact -----------------------------------------------------------
 
 _CONST_START = re.compile(r"^export const (?P<const>\w+): readonly GeneratedOption\[\] = \[$")
@@ -396,6 +436,7 @@ def validate_verbose(model: ModelDefinition, catalog: Catalog, uid_map: dict[str
         "uid_map": check_uid_map(uid_map, model, catalog),
         "options_against_catalog": check_options_against_catalog(artifact, model, catalog),
         "options_ts_against_artifact": check_options_ts_against_artifact(committed.get(OPTIONS_PATH, ""), artifact),
+        "option_encoding_bijective": check_option_encoding(artifact),
     }
 
 

@@ -21,12 +21,6 @@ export const PROVIDER = defineObject({
     "Registry anchor for a clinician. Carries no catalog-backed state at v1.",
   fields: [
     {
-      universalIdentifier: uid("provider.name"),
-      name: "name",
-      type: FieldType.FULL_NAME,
-      label: "Name",
-    },
-    {
       universalIdentifier: uid("provider.sfdcId"),
       name: "sfdcId",
       type: FieldType.TEXT,

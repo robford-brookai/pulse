@@ -235,6 +235,18 @@ tasks:
     cmds:
       - uv run python -m pulse_core.twenty_deploy --target {{.TARGET}}
 
+  twenty:verify:
+    desc: Verify the deployed Twenty artifact by read-back against TARGET (dev|staging|prod; needs that target's credential)
+    # The 4.1 verification receipt: every artifact operation present on the target under its
+    # mapped universalIdentifier, then a re-apply asserting all no-ops. Exits nonzero on any
+    # mismatch; the printed receipt (names, counts, checksum — no workspace data) is the
+    # artifact to attach. Live-only, so never reached from `check` — same posture as
+    # twenty:deploy.
+    requires:
+      vars: [TARGET]
+    cmds:
+      - uv run python -m pulse_core.twenty_verify --target {{.TARGET}}
+
   twenty:seed:
     desc: Load the committed synthetic seed projection into TARGET (dev|staging|prod; needs that target's credential)
     # Reads the committed, checksummed projection (pulse_core/generated/twenty_seed_dev.json) and
