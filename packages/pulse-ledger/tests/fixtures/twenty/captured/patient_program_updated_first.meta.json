@@ -1,0 +1,22 @@
+{
+  "capturedFrom": "twenty-dev.cloud.brook.ai, twentycrm/twenty:v2.30.0",
+  "capturedAt": "2026-08-17",
+  "note": "First drag: PENDING_START -> ACTIVE. Receiver answered 500; no retry ever arrived (>15 min).",
+  "headers": {
+    "X-Twenty-Webhook-Timestamp": "1786939945743",
+    "X-Twenty-Webhook-Signature": "ee2a2b4e2398a0615864f642546636b0d2c6f73a02e561a731e74b4961f4b57e",
+    "X-Twenty-Webhook-Nonce": "00000000000000000000000000000000",
+    "Content-Type": "application/json",
+    "User-Agent": "axios/1.19.0"
+  },
+  "signing": {
+    "algorithm": "HMAC-SHA256, hex digest, no version affixes",
+    "message": "f\"{timestamp}:\" + raw_request_body_bytes",
+    "timestampUnit": "milliseconds since epoch",
+    "testSecret": "pulse-test-secret-do-not-use-in-any-environment",
+    "provenance": "re-signed with the test secret above; the live signature is not committed",
+    "observedSignaturePrefix": "e40cf5c9",
+    "byteExactness": "body stored as .raw so no JSON formatter can rewrite it; the signature covers these exact bytes and any reserialization invalidates it"
+  },
+  "bodyFile": "patient_program_updated_first.body.raw"
+}
