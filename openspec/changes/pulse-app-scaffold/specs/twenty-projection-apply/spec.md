@@ -66,3 +66,10 @@ additionally treat a lookup miss as a logged no-op, never a crash.
 - **GIVEN** an event whose type has no row in the projection lookup
 - **WHEN** the handler runs
 - **THEN** it completes without error and writes no state
+
+#### Scenario: A resolved event with no lookup row is still bound to its target
+
+- **GIVEN** an event whose type has no row in the projection lookup and whose reference resolves
+- **WHEN** the handler runs
+- **THEN** the event's relation is set to the resolved target, no status field or `...AsOf` is
+  written, and the event does not appear in the orphan view
