@@ -45,6 +45,7 @@ import time
 import uuid
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -59,6 +60,7 @@ from pulse_core.twenty_deploy import (
     TransportError,
     resolve_target,
 )
+from pulse_core.twenty_validate import encode_option_value
 
 SEED_PATH = Path(__file__).parent / "generated" / "twenty_seed_dev.json"
 SEED_FORMAT = "pulse-core/twenty-seed@1"
@@ -102,6 +104,15 @@ class SeedObject:
     plural: str
     key_fields: tuple[str, ...]
     relations: tuple[RelationSpec, ...] = ()
+    #: SELECT-typed fields: encoded to the live server's UPPER_SNAKE tokens at the plan
+    #: boundary (twenty_validate.encode_option_value — the deploy-side convention, 4.1 first
+    #: contact 2026-08-16). The projection keeps catalog vocabulary; remote state already
+    #: carries encoded tokens, so drift comparison happens in encoded space.
+    select_fields: tuple[str, ...] = ()
+    #: DATETIME-typed fields: normalized to the server's canonical millisecond form
+    #: ("...T09:00:00.000Z") at the plan boundary, so a projection stamp written without
+    #: milliseconds is not re-patched as drift on every run.
+    datetime_fields: tuple[str, ...] = ()
 
 
 #: Load order — parents strictly before children, so a child's relation always resolves against a
@@ -112,12 +123,24 @@ SEED_OBJECTS: tuple[SeedObject, ...] = (
     SeedObject(
         plural="patientPrograms",
         key_fields=("canonicalPatientId", "programCode"),
+        select_fields=("lifecycleStatus", "qualificationStatus"),
+        datetime_fields=("lifecycleStatusAsOf", "qualificationStatusAsOf"),
         relations=(
             RelationSpec(field="patientId", parent="patients", local="canonicalPatientId"),
             RelationSpec(field="programId", parent="programs", local="programCode"),
         ),
     ),
 )
+
+
+def _canonical_datetime(value: str) -> str:
+    """A timestamp as the live server echoes it back — UTC, millisecond precision, Z suffix.
+
+    v2.30 canonicalizes DATETIME values to "%Y-%m-%dT%H:%M:%S.000Z" on read-back (observed
+    2026-08-17); comparing in that space keeps a re-run a noop instead of a perpetual patch.
+    """
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(UTC)
+    return parsed.strftime("%Y-%m-%dT%H:%M:%S.") + f"{parsed.microsecond // 1000:03d}Z"
 
 
 def mint_canonical_patient_id(source_record_id: str) -> str:
@@ -205,6 +228,18 @@ def _index_remote(obj: SeedObject, records: Sequence[RemoteRecord]) -> dict[str,
         if all(record.payload.get(name) for name in obj.key_fields):
             index[natural_key(obj, record.payload)] = record
     return index
+
+
+def _wire_fields(obj: SeedObject, raw: Mapping[str, Any]) -> dict[str, Any]:
+    """One record's fields as the live server stores them — SELECTs encoded, DATETIMEs canonical."""
+    fields = dict(raw)
+    for name in obj.select_fields:
+        if name in fields:
+            fields[name] = encode_option_value(str(fields[name]))
+    for name in obj.datetime_fields:
+        if name in fields:
+            fields[name] = _canonical_datetime(str(fields[name]))
+    return fields
 
 
 def _resolve_relations(
@@ -314,7 +349,11 @@ class RestRecordsTransport:
         if response.status_code >= httpx.codes.BAD_REQUEST:
             raise TransportError(response.status_code)
         created = []
-        for record in response.json().get("data", {}).get(plural, ()):
+        # Live shape (verified 2026-08-17): batch create answers under "create" + capitalized
+        # plural ("createPatients"), not the bare plural the original pin guessed.
+        batch_key = f"create{plural[0].upper()}{plural[1:]}"
+        body = response.json().get("data", {})
+        for record in body.get(batch_key) or body.get(plural) or ():
             payload = {name: value for name, value in record.items() if name != "id"}
             created.append(RemoteRecord(record_id=str(record["id"]), payload=payload))
         return tuple(created)
@@ -407,7 +446,7 @@ def seed(
         creates: list[dict[str, Any]] = []
         updates: list[tuple[str, dict[str, Any]]] = []
         for record in projection.records[obj.plural]:
-            fields = dict(record["fields"])
+            fields = _wire_fields(obj, record["fields"])
             fields |= _resolve_relations(obj, fields, parents, strict=strict)
             current = remote.get(natural_key(obj, fields))
             if current is None:
