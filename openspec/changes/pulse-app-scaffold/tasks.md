@@ -158,7 +158,7 @@ golden files, logs, or receipts.
 run against the dev instance with synthetic data only; neither touches staging or prod
 (promotion beyond dev is `environment-matrix`).
 
-- [ ] 4.1 Apply the artifact to the dev instance and verify by read-back: `task twenty:deploy`
+- [x] 4.1 Apply the artifact to the dev instance and verify by read-back: `task twenty:deploy`
       `--target dev` with the committed artifact, then schema read-back through the Metadata
       API asserting every artifact operation's target present with its mapped
       `universalIdentifier` (spec: "Read-back matches the artifact"); re-apply immediately and

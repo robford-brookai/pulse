@@ -154,7 +154,7 @@ files under `openspec/specs/`.
 
 ## 3. Apply the artifact (GATED: F1 probe, task 1.7)
 
-- [ ] 3.1 `task twenty:deploy TARGET=dev`, `--dry-run` first. This settles three of this repo's
+- [x] 3.1 `task twenty:deploy TARGET=dev`, `--dry-run` first. This settles three of this repo's
       guesses at once: whether the relations and roles metadata endpoints exist in the pinned
       shapes, and whether the response envelope is what `twenty_deploy` assumes. Re-apply and
       assert an all-no-op receipt. Attach the receipt — names, counts, checksum only — to the
