@@ -165,7 +165,7 @@ files under `openspec/specs/`.
 
 ## 4. Capture the real delivery (GATED: workspace exists, task 1.6)
 
-- [ ] 4.1 Register a webhook through the metadata GraphQL mutation — there is no manifest
+- [x] 4.1 Register a webhook through the metadata GraphQL mutation — there is no manifest
       webhook type, so it cannot ship in the app. Narrow `operations` to the mapped object's
       `.updated` event rather than the default wildcard, which makes the unmapped-object no-op a
       defensive path instead of the common case. Set the client-supplied secret equal to the
@@ -173,7 +173,7 @@ files under `openspec/specs/`.
       Verify: exactly one webhook registered, scoped to the one operation.
       `[model: sonnet | deps: 1.6 | lane: destructive_ops | wave: 4]`
 
-- [ ] 4.2 Point the webhook at a throwaway capture receiver, change a `lifecycleStatus`, and
+- [x] 4.2 Point the webhook at a throwaway capture receiver, change a `lifecycleStatus`, and
       record the exact header and body bytes. Commit as a synthetic fixture — this is the
       artifact that retires the pin. Trigger a redelivery and capture that too: whether a retry
       re-signs with a fresh timestamp is what decides if `record.updatedAt` suffices as an
