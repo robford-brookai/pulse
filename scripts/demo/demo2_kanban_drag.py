@@ -21,16 +21,13 @@ payloads (task 1.1):
 3. A tampered signature is rejected as unauthenticated before any processing — a 401, no committer
    call (twenty-webhook-auth spec: "A tampered body is rejected without processing").
 
-**The board-vocabulary reconciliation (HANDOFF.md, task 2.1; read before touching this script).**
-The fixtures' `lifecycleStatus` columns (`registered`/`enrolled`/`activated`) are Twenty's v1.1
-board projection, not a ratified catalog state set for `enrollment` (whose real states are
-`pending_start`/`active`/`on_hold`/`ended`) — task 2.1 flagged this rather than silently pretending
-the fixtures live in catalog vocabulary, and task 3.2 built its fake committer against the board's
-own adjacency rather than the generated catalog for exactly that reason. This script's
-`BoardVocabularyCommitter` does the same, deliberately, so its "invalid drag" is a decision the
-route itself makes against a real (if fixture-scoped) adjacency, not a hardcoded rejection. Demo 2
-therefore demonstrates the rejection-feedback wiring honestly, not a `to_state` ratified against
-the real `enrollment` catalog — that ratification is still open (see HANDOFF.md).
+**The board vocabulary (settled by the 4.2 capture; task 5.2).** The fixtures now carry the wire
+encoding Twenty actually sends (`ACTIVE`, `PENDING_START` — UPPER_SNAKE per
+`pulse_core.twenty_validate.encode_option_value`), and the mapping decodes them to the ratified
+`enrollment` catalog states (`pending_start`/`active`/`on_hold`/`ended`). This script's
+`BoardVocabularyCommitter` restates that adjacency rather than importing the generated catalog,
+so its "invalid drag" is a decision the route itself makes against a real adjacency, not a
+hardcoded rejection — the same seam `test_twenty_rejection_feedback.py` fakes at.
 
 PHI posture: every receipt and comment printed below is built exclusively from `IllegalTransitionError`
 fields, a card reference, and a disposition — the same fields the route itself is restricted to
@@ -94,14 +91,15 @@ def _now() -> datetime:
     return datetime.now(tz=timezone.utc)
 
 
-#: The fixture board's own adjacency (`fixtures/twenty/README.md`), not the ratified `enrollment`
-#: catalog — see the module docstring's reconciliation note. Identical in shape to
+#: The `enrollment` catalog adjacency the fixtures are written in (`fixtures/twenty/README.md`) —
+#: see the module docstring's vocabulary note. Identical in shape to
 #: `test_twenty_rejection_feedback.py`'s `FIXTURE_ADJACENCY`, restated here rather than imported
 #: from a test module this script otherwise avoids depending on.
 FIXTURE_ADJACENCY: Mapping[str, frozenset[str]] = {
-    "registered": frozenset({"enrolled"}),
-    "enrolled": frozenset({"activated"}),
-    "activated": frozenset(),
+    "pending_start": frozenset({"active", "ended"}),
+    "active": frozenset({"on_hold", "ended"}),
+    "on_hold": frozenset({"active", "ended"}),
+    "ended": frozenset(),
 }
 
 
@@ -121,7 +119,7 @@ def _current_state(to_state: str) -> str:
     the "prior" state off the board's own vocabulary rather than folding a real ledger history,
     since this demo commits nothing to a database.
     """
-    return {"enrolled": "registered", "registered": "activated", "activated": "enrolled"}[to_state]
+    return {"active": "pending_start", "pending_start": "active", "on_hold": "active", "ended": "active"}[to_state]
 
 
 class BoardVocabularyCommitter:

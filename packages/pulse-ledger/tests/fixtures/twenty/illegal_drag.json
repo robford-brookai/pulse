@@ -1,39 +1,43 @@
 {
-  "eventId": "evt-twenty-fixture-illegal-drag-0001",
-  "eventType": "record.updated",
+  "targetUrl": "https://pulse.example/webhooks/twenty",
+  "eventName": "patientProgram.updated",
   "objectMetadata": {
-    "nameSingular": "patientProgram",
-    "namePlural": "patientPrograms"
+    "id": "objmeta-patientprogram-0000-0000-0001",
+    "nameSingular": "patientProgram"
   },
-  "workspaceMember": {
-    "id": "wsm-0002-canary-nurse",
-    "name": {
-      "firstName": "Canary",
-      "lastName": "CareCoordinator"
-    }
+  "workspaceId": "workspace-pulse-dev-0000-0001",
+  "webhookId": "webhook-pulse-dev-0000-0001",
+  "eventDate": "2026-08-06T15:10:00.044Z",
+  "record": {
+    "name": "Canary IllegalDrag",
+    "id": "twenty-record-patientprogram-0002",
+    "createdAt": "2026-08-01T09:05:00.000Z",
+    "createdBy": {
+      "source": "API",
+      "workspaceMemberId": null,
+      "name": "pulse-dev",
+      "context": {}
+    },
+    "deletedAt": null,
+    "position": -19,
+    "updatedAt": "2026-08-06T15:10:00.031Z",
+    "updatedBy": {
+      "source": "MANUAL",
+      "workspaceMemberId": "wsm-0001-canary-nurse",
+      "name": "Canary CareCoordinator",
+      "context": {}
+    },
+    "searchVector": "",
+    "programId": "twenty-record-program-0001",
+    "programCode": "rpm",
+    "canonicalPatientId": "DIM_PATIENT_CONFORMED-000102",
+    "lifecycleStatus": "PENDING_START",
+    "lifecycleStatusAsOf": "2026-08-03T09:00:00.000Z",
+    "qualificationStatus": "QUALIFIED",
+    "patientId": "twenty-record-patient-0002",
+    "qualificationStatusAsOf": "2026-08-03T09:00:00.000Z"
   },
   "updatedFields": [
-    {
-      "name": "lifecycleStatus",
-      "before": "activated",
-      "after": "registered"
-    }
-  ],
-  "record": {
-    "id": "twenty-record-patientprogram-0002",
-    "lifecycleStatus": "registered",
-    "lifecycleStatusAsOf": "2026-08-06T15:10:00Z",
-    "patient": {
-      "id": "twenty-record-patient-0002",
-      "canonicalPatientId": "DIM_PATIENT_CONFORMED-000102",
-      "name": {
-        "firstName": "Canary",
-        "lastName": "IllegalDrag"
-      }
-    },
-    "program": {
-      "id": "twenty-record-program-0001",
-      "code": "diabetes-mgmt"
-    }
-  }
+    "lifecycleStatus"
+  ]
 }

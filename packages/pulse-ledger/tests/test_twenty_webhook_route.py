@@ -81,7 +81,7 @@ class RecordingCommitter:
             recorded_at=NOW,
             rule_version="appendix-c-v0.7",
             outbox_seq=len(self._by_key) + 1,
-            state=FoldedState(state="enrolled", effective_at=NOW, recorded_at=NOW, event_id=event_id),
+            state=FoldedState(state="active", effective_at=NOW, recorded_at=NOW, event_id=event_id),
         )
         if idempotency_key is not None:
             self._by_key[idempotency_key] = result
@@ -153,7 +153,8 @@ class TestAValidlySignedDragCommits:
         assert declaration.event_type == "declare_transition"
         assert declaration.subject_type == "enrollment"
         assert declaration.subject_key == FIXTURE_CANONICAL_ID
-        assert declaration.to_state == "enrolled"
+        # The wire carried `ACTIVE`; the mapping decodes to the catalog's own vocabulary.
+        assert declaration.to_state == "active"
 
     def test_the_idempotency_key_reaches_the_committer(
         self, client: TestClient, secret: str, committer: RecordingCommitter
@@ -329,7 +330,7 @@ class TestTheStructuredDispositionLog:
         assert TWENTY_WEBHOOK_PATH in logged
         assert "disposition=committed" in logged
         assert FIXTURE_CANONICAL_ID in logged
-        assert "to_state=enrolled" in logged
+        assert "to_state=active" in logged
 
     def test_no_disposition_logs_payload_content(
         self, client: TestClient, secret: str, caplog: pytest.LogCaptureFixture

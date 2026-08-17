@@ -53,14 +53,11 @@ def _demographic_strings() -> list[str]:
     payload = load_fixture_json("illegal_drag")
     assert isinstance(payload, dict)
     record = payload["record"]
-    member = payload["workspaceMember"]
     return [
-        member["name"]["firstName"],
-        member["name"]["lastName"],
-        record["patient"]["name"]["firstName"],
-        record["patient"]["name"]["lastName"],
-        record["patient"]["canonicalPatientId"],
-        payload["eventId"],
+        record["name"],
+        record["updatedBy"]["name"],
+        record["canonicalPatientId"],
+        record["patientId"],
     ]
 
 
