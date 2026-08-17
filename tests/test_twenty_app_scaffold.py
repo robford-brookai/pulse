@@ -55,7 +55,7 @@ _LAYOUT = (
 #: function of the day it ran.
 _PINNED_DEV_DEPS = ("vitest", "typescript")
 
-_TWENTY_TARGETS = ("twenty:gen", "twenty:test", "twenty:deploy")
+_TWENTY_TARGETS = ("twenty:gen", "twenty:test", "twenty:deploy", "twenty:seed")
 
 
 def _is_canonical_uuid(value: object) -> bool:
@@ -188,7 +188,7 @@ def test_twenty_test_is_in_check():
 def test_credentialed_twenty_targets_stay_out_of_check():
     """`check` must stay runnable with only the toolchain CI installs — no secrets, no target env."""
     reached = _reachable("check")
-    for target in ("twenty:deploy", "catalog:release", "synthea:regen"):
+    for target in ("twenty:deploy", "twenty:seed", "catalog:release", "synthea:regen"):
         assert target not in reached, (
             f"`task check` reaches {target}, which needs credentials or a JVM; CI has neither by default"
         )
