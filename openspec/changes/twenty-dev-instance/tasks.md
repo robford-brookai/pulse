@@ -183,7 +183,7 @@ files under `openspec/specs/`.
 
 ## 5. Adapt pulse to the real contract (GATED: capture, task 4.2)
 
-- [ ] 5.1 `auth.py`: read Twenty's header names; `sign()` becomes a bare hex HMAC-SHA256 over
+- [x] 5.1 `auth.py`: read Twenty's header names; `sign()` becomes a bare hex HMAC-SHA256 over
       `{timestamp}:{body}` with no version affixes; freshness reads milliseconds. Keep the
       freshness window, constant-time comparison, and dual-secret rotation — sound and
       format-independent. Keep signing the raw request bytes, never a re-serialization of a
