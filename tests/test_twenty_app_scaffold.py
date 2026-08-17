@@ -53,9 +53,16 @@ _LAYOUT = (
 
 #: Pinned exactly, not as ranges — a floating vitest or tsc makes the suite's result a
 #: function of the day it ran.
-_PINNED_DEV_DEPS = ("vitest", "typescript")
+_PINNED_DEV_DEPS = ("vitest", "typescript", "twenty-sdk")
 
-_TWENTY_TARGETS = ("twenty:gen", "twenty:test", "twenty:deploy", "twenty:seed")
+_TWENTY_TARGETS = (
+    "twenty:gen",
+    "twenty:test",
+    "twenty:deploy",
+    "twenty:seed",
+    "twenty:app:build",
+    "twenty:app:publish",
+)
 
 
 def _is_canonical_uuid(value: object) -> bool:
@@ -188,7 +195,14 @@ def test_twenty_test_is_in_check():
 def test_credentialed_twenty_targets_stay_out_of_check():
     """`check` must stay runnable with only the toolchain CI installs — no secrets, no target env."""
     reached = _reachable("check")
-    for target in ("twenty:deploy", "twenty:seed", "catalog:release", "synthea:regen"):
+    for target in (
+        "twenty:deploy",
+        "twenty:seed",
+        "twenty:app:build",
+        "twenty:app:publish",
+        "catalog:release",
+        "synthea:regen",
+    ):
         assert target not in reached, (
             f"`task check` reaches {target}, which needs credentials or a JVM; CI has neither by default"
         )
