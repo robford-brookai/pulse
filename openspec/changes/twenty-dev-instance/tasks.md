@@ -215,7 +215,7 @@ files under `openspec/specs/`.
 
 ## 6. The Twenty surface (GATED: F1 answer shapes 6.1 and 6.3)
 
-- [ ] 6.1 Teach `pulse_core.twenty_model` the view UID keys (`view.<name>`,
+- [x] 6.1 Teach `pulse_core.twenty_model` the view UID keys (`view.<name>`,
       `view.<name>.group.<state>`, `view.<name>.field.<field>`), then `task twenty:gen`, then
       mint into `uid-map.json` as a reviewed diff. Order matters: the UID-map check fails on any
       key the model does not ask for, so model keys land first, never the reverse.
@@ -224,7 +224,7 @@ files under `openspec/specs/`.
       `[model: sonnet | deps: 2.4, 5.3 | lane: repo_change | wave: 8]`
       `serial: uid_map` — mints into `uid-map.json`; must not share a wave with 5.3.
 
-- [ ] 6.2 Add the KANBAN view and its `defineNavigationMenuItem` — without the nav item the
+- [x] 6.2 Add the KANBAN view and its `defineNavigationMenuItem` — without the nav item the
       board is unreachable from the sidebar, and for a demo whose point is dragging a card,
       unreachable equals nonexistent. Derive columns from the generated lifecycle-status options
       rather than hand-writing them, so a new catalog state becomes a column with no hand edit.
