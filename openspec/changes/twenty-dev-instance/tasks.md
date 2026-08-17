@@ -194,7 +194,7 @@ files under `openspec/specs/`.
       the fixtures are a matched pair and reverting one alone leaves the suite red.
       `[model: sonnet | deps: 4.2 | lane: repo_change | wave: 6]`
 
-- [ ] 5.2 `mapping.py`: gate on `eventName` ending `.updated`; read `updatedFields` as a name
+- [x] 5.2 `mapping.py`: gate on `eventName` ending `.updated`; read `updatedFields` as a name
       list with values from the flat `record`; flat `workspaceMemberId`; `record.updatedAt` as
       logical time in place of the absent event id. Resolve the effective-time question (F3)
       deliberately — a UI drag stamps no as-of field, so derive from the record's own timestamp
