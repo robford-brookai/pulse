@@ -192,7 +192,7 @@ class TestSignFixture:
     def test_a_stale_signature_is_outside_the_freshness_window(self) -> None:
         body = load_fixture_bytes("legal_drag")
         headers = sign_fixture("s3cret-enough-for-a-test-000000", body, now=NOW, kind="stale")
-        signed_at = datetime.fromtimestamp(int(headers[TIMESTAMP_HEADER]), tz=timezone.utc)
+        signed_at = datetime.fromtimestamp(int(headers[TIMESTAMP_HEADER]) / 1000, tz=timezone.utc)
         assert NOW - signed_at > SIGNATURE_FRESHNESS
         with pytest.raises(Exception, match="freshness"):
             verify_signature(
@@ -213,6 +213,6 @@ class TestStaleTimestampIsBeforeFreshnessCutoff:
     def test_stale_timestamp_predates_now_minus_freshness(self) -> None:
         body = load_fixture_bytes("legal_drag")
         headers = sign_fixture("s3cret-enough-for-a-test-000000", body, now=NOW, kind="stale")
-        signed_at = datetime.fromtimestamp(int(headers[TIMESTAMP_HEADER]), tz=timezone.utc)
+        signed_at = datetime.fromtimestamp(int(headers[TIMESTAMP_HEADER]) / 1000, tz=timezone.utc)
         assert signed_at < NOW - SIGNATURE_FRESHNESS
         assert signed_at > NOW - SIGNATURE_FRESHNESS - timedelta(minutes=1)

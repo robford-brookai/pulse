@@ -32,9 +32,34 @@ FIXTURE_NAMES: tuple[str, ...] = (
 )
 
 
+#: The real deliveries captured from the live dev instance (task 4.2), re-signed with the test
+#: secret their `.meta.json` documents. These are the signing contract's ground truth; the named
+#: cases above remain the envelope cases.
+CAPTURED_NAMES: tuple[str, ...] = (
+    "patient_program_updated_first",
+    "patient_program_updated_second",
+)
+
+CAPTURED_DIR = FIXTURES_DIR / "captured"
+
+
 class UnknownFixtureError(LookupError):
     def __init__(self, name: str) -> None:
         super().__init__(f"no Twenty webhook fixture named {name!r}; known names: {list(FIXTURE_NAMES)}")
+
+
+def load_captured_delivery(name: str) -> tuple[bytes, dict]:
+    """A captured delivery's raw body bytes and its recorded metadata (headers, signing recipe).
+
+    The body ships as `.body.raw` because the signature covers these exact bytes — reserializing
+    them (or letting a JSON formatter near the file) invalidates it. Callers verify against the
+    bytes as returned, never a re-dump.
+    """
+    if name not in CAPTURED_NAMES:
+        raise UnknownFixtureError(name)
+    meta = json.loads((CAPTURED_DIR / f"{name}.meta.json").read_text())
+    body = (CAPTURED_DIR / meta["bodyFile"]).read_bytes()
+    return body, meta
 
 
 #: `malformed_body` is deliberately not valid JSON, so it is not named `.json` — pre-commit's
@@ -76,16 +101,18 @@ def sign_fixture(secret: str, body: bytes, *, now: datetime, kind: SignatureKind
       signature," not a corrupted hex string `hmac.compare_digest` would catch just the same.
     - `stale`: signed over `body` correctly, but timestamped just past `SIGNATURE_FRESHNESS` — a
       correctly signed request outside the freshness window.
+
+    Timestamps are milliseconds since the epoch, as Twenty stamps them (task 4.2's capture).
     """
     if kind == "valid":
-        timestamp = str(int(now.timestamp()))
+        timestamp = str(int(now.timestamp() * 1000))
         return {TIMESTAMP_HEADER: timestamp, SIGNATURE_HEADER: sign(secret, timestamp, body)}
     if kind == "tampered":
-        timestamp = str(int(now.timestamp()))
+        timestamp = str(int(now.timestamp() * 1000))
         return {TIMESTAMP_HEADER: timestamp, SIGNATURE_HEADER: sign(secret, timestamp, body + b" ")}
     if kind == "stale":
         stale_at = now - SIGNATURE_FRESHNESS - timedelta(seconds=1)
-        timestamp = str(int(stale_at.timestamp()))
+        timestamp = str(int(stale_at.timestamp() * 1000))
         return {TIMESTAMP_HEADER: timestamp, SIGNATURE_HEADER: sign(secret, timestamp, body)}
     msg = f"unknown signature kind: {kind!r}"
     raise ValueError(msg)
