@@ -19,6 +19,7 @@ nav:
       - Catalog-release: runbooks/catalog-release.md
       - Twenty-webhook: runbooks/twenty-webhook.md
       - Pulse-command-api-deploy: runbooks/pulse-command-api-deploy.md
+      - Twenty-artifact-promotion: runbooks/twenty-artifact-promotion.md
 plugins:
   - search
   - mkdocstrings:
