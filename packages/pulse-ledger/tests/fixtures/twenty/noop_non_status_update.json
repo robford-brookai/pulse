@@ -1,40 +1,43 @@
 {
-  "eventId": "evt-twenty-fixture-noop-non-status-0001",
-  "eventType": "record.updated",
+  "targetUrl": "https://pulse.example/webhooks/twenty",
+  "eventName": "patientProgram.updated",
   "objectMetadata": {
-    "nameSingular": "patientProgram",
-    "namePlural": "patientPrograms"
+    "id": "objmeta-patientprogram-0000-0000-0001",
+    "nameSingular": "patientProgram"
   },
-  "workspaceMember": {
-    "id": "wsm-0006-canary-nurse",
-    "name": {
-      "firstName": "Canary",
-      "lastName": "CareCoordinator"
-    }
+  "workspaceId": "workspace-pulse-dev-0000-0001",
+  "webhookId": "webhook-pulse-dev-0000-0001",
+  "eventDate": "2026-08-06T15:18:00.017Z",
+  "record": {
+    "name": "Canary NoopNonStatus",
+    "id": "twenty-record-patientprogram-0006",
+    "createdAt": "2026-08-01T09:25:00.000Z",
+    "createdBy": {
+      "source": "API",
+      "workspaceMemberId": null,
+      "name": "pulse-dev",
+      "context": {}
+    },
+    "deletedAt": null,
+    "position": -15,
+    "updatedAt": "2026-08-06T15:18:00.009Z",
+    "updatedBy": {
+      "source": "MANUAL",
+      "workspaceMemberId": "wsm-0001-canary-nurse",
+      "name": "Canary CareCoordinator",
+      "context": {}
+    },
+    "searchVector": "",
+    "programId": "twenty-record-program-0001",
+    "programCode": "rpm",
+    "canonicalPatientId": "DIM_PATIENT_CONFORMED-000106",
+    "lifecycleStatus": "ACTIVE",
+    "lifecycleStatusAsOf": "2026-08-03T09:00:00.000Z",
+    "qualificationStatus": "QUALIFIED",
+    "patientId": "twenty-record-patient-0006",
+    "qualificationStatusAsOf": "2026-08-06T15:18:00.009Z"
   },
   "updatedFields": [
-    {
-      "name": "qualificationStatus",
-      "before": "pending",
-      "after": "qualified"
-    }
-  ],
-  "record": {
-    "id": "twenty-record-patientprogram-0006",
-    "lifecycleStatus": "enrolled",
-    "qualificationStatus": "qualified",
-    "qualificationStatusAsOf": "2026-08-06T15:35:00Z",
-    "patient": {
-      "id": "twenty-record-patient-0006",
-      "canonicalPatientId": "DIM_PATIENT_CONFORMED-000106",
-      "name": {
-        "firstName": "Canary",
-        "lastName": "NoopNonStatus"
-      }
-    },
-    "program": {
-      "id": "twenty-record-program-0001",
-      "code": "diabetes-mgmt"
-    }
-  }
+    "qualificationStatus"
+  ]
 }

@@ -1,8 +1,9 @@
-"""Task 1.1: the fixture loader validates fixture shape.
+"""The fixture loader validates fixture shape — the shape Twenty v2.30 actually sends.
 
 No live network anywhere — every payload here is a file on disk, and this suite only ever reads
 it. `twenty_fixtures.py` owns the loading and signing; this file only asserts that what it loads
-looks like what `README.md` promises.
+looks like what `README.md` promises: the captured envelope (`fixtures/twenty/captured/`) bent
+along one axis per case.
 """
 
 from __future__ import annotations
@@ -26,8 +27,8 @@ NOW = datetime(2026, 8, 6, 16, 0, tzinfo=timezone.utc)
 #: Every non-malformed fixture is a JSON object; only `malformed_body` is deliberately not.
 _PARSEABLE_NAMES = tuple(name for name in FIXTURE_NAMES if name != "malformed_body")
 
-#: Fixtures whose top-level `eventType` is `record.updated` and which carry a `patientProgram`
-#: record — the ones a board mapping could plausibly turn into a command.
+#: Fixtures whose `eventName` is `patientProgram.updated` — the ones a board mapping could
+#: plausibly turn into a command.
 _PATIENT_PROGRAM_UPDATE_NAMES = (
     "legal_drag",
     "illegal_drag",
@@ -54,79 +55,113 @@ class TestParseableFixtureShape:
         assert isinstance(body, dict)
 
     @pytest.mark.parametrize("name", _PARSEABLE_NAMES)
-    def test_it_carries_an_event_id_and_type(self, name: str) -> None:
+    def test_the_discriminator_is_an_object_qualified_event_name(self, name: str) -> None:
+        # The captured envelope's discriminator: `eventName` of the form `{object}.{action}`.
+        # There is no bare `eventType` and no per-delivery `eventId` — Twenty sends neither.
         body = load_fixture_json(name)
         assert isinstance(body, dict)
-        assert isinstance(body["eventId"], str) and body["eventId"]
-        assert body["eventType"] in {"record.created", "record.updated", "record.deleted"}
+        event_name = body["eventName"]
+        assert isinstance(event_name, str)
+        obj, _, action = event_name.rpartition(".")
+        assert obj == body["objectMetadata"]["nameSingular"]
+        assert action in {"created", "updated", "deleted"}
+        assert "eventType" not in body
+        assert "eventId" not in body
+
+    @pytest.mark.parametrize("name", _PARSEABLE_NAMES)
+    def test_the_record_is_flat_and_stamped(self, name: str) -> None:
+        # The flat ORM entity: scalar/FK fields plus the createdBy/updatedBy actor blocks — no
+        # nested related records — and always its own `updatedAt`.
+        body = load_fixture_json(name)
+        assert isinstance(body, dict)
+        record = body["record"]
+        assert isinstance(record["id"], str) and record["id"]
+        assert isinstance(record["updatedAt"], str) and record["updatedAt"]
+        nested = {key for key, value in record.items() if isinstance(value, dict)}
+        assert nested <= {"createdBy", "updatedBy"}
 
     @pytest.mark.parametrize("name", _PATIENT_PROGRAM_UPDATE_NAMES)
-    def test_mapped_board_updates_carry_the_status_field_old_and_new_value(self, name: str) -> None:
+    def test_updated_fields_is_a_list_of_field_names(self, name: str) -> None:
+        # A string array, never objects with before/after pairs — values live on the record.
         body = load_fixture_json(name)
         assert isinstance(body, dict)
-        updated_fields = {field["name"]: field for field in body["updatedFields"]}
-        assert "lifecycleStatus" in updated_fields or "qualificationStatus" in updated_fields
-        touched = updated_fields.get("lifecycleStatus") or updated_fields["qualificationStatus"]
-        assert touched["before"] != touched["after"]
+        updated_fields = body["updatedFields"]
+        assert isinstance(updated_fields, list) and updated_fields
+        assert all(isinstance(entry, str) for entry in updated_fields)
+        for entry in updated_fields:
+            assert entry in body["record"]
 
 
 class TestLegalAndIllegalDrag:
     def test_legal_drag_moves_forward_and_carries_the_canonical_id(self) -> None:
         body = load_fixture_json("legal_drag")
         assert isinstance(body, dict)
-        field = body["updatedFields"][0]
-        assert (field["before"], field["after"]) == ("registered", "enrolled")
-        assert body["record"]["patient"]["canonicalPatientId"]
-        assert body["workspaceMember"]["id"]
+        assert body["updatedFields"] == ["lifecycleStatus"]
+        # The wire value is Twenty's storage encoding of catalog `active` — a legal move from
+        # `pending_start`.
+        assert body["record"]["lifecycleStatus"] == "ACTIVE"
+        assert body["record"]["canonicalPatientId"]
+        assert body["record"]["updatedBy"]["workspaceMemberId"]
 
     def test_illegal_drag_moves_backward(self) -> None:
         body = load_fixture_json("illegal_drag")
         assert isinstance(body, dict)
-        field = body["updatedFields"][0]
-        assert (field["before"], field["after"]) == ("activated", "registered")
+        # `pending_start` is not reachable from `active` in the catalog's enrollment adjacency.
+        assert body["updatedFields"] == ["lifecycleStatus"]
+        assert body["record"]["lifecycleStatus"] == "PENDING_START"
+
+    def test_select_values_arrive_in_the_wire_encoding(self) -> None:
+        # UPPER_SNAKE on the wire (`encode_option_value`), lowercase in the catalog — asserted so
+        # a fixture hand-edited back to catalog vocabulary fails loudly here rather than quietly
+        # skewing every downstream suite.
+        for name in ("legal_drag", "illegal_drag"):
+            body = load_fixture_json(name)
+            assert isinstance(body, dict)
+            value = body["record"]["lifecycleStatus"]
+            assert value == value.upper()
 
 
 class TestRedeliveryDuplicate:
-    def test_it_shares_the_legal_drags_event_id(self) -> None:
-        legal = load_fixture_json("legal_drag")
-        duplicate = load_fixture_json("redelivery_duplicate")
-        assert isinstance(legal, dict) and isinstance(duplicate, dict)
-        assert duplicate["eventId"] == legal["eventId"]
-
     def test_it_is_byte_identical_to_the_legal_drag(self) -> None:
         assert load_fixture_bytes("redelivery_duplicate") == load_fixture_bytes("legal_drag")
 
+    def test_it_shares_the_legal_drags_updated_at(self) -> None:
+        # There is no delivery id: `record.updatedAt` is the idempotency source (D16), so sharing
+        # it is what makes this fixture a redelivery rather than a second drag.
+        legal = load_fixture_json("legal_drag")
+        duplicate = load_fixture_json("redelivery_duplicate")
+        assert isinstance(legal, dict) and isinstance(duplicate, dict)
+        assert duplicate["record"]["updatedAt"] == legal["record"]["updatedAt"]
+
 
 class TestMissingCanonicalId:
-    def test_the_patient_carries_no_canonical_id_field(self) -> None:
+    def test_the_record_carries_no_canonical_id_field(self) -> None:
         body = load_fixture_json("missing_canonical_id")
         assert isinstance(body, dict)
-        assert "canonicalPatientId" not in body["record"]["patient"]
+        assert "canonicalPatientId" not in body["record"]
         # It is otherwise a mapped, status-field drag — refused for its missing id, not for
         # looking like noise.
-        field = body["updatedFields"][0]
-        assert field["name"] == "lifecycleStatus"
+        assert body["updatedFields"] == ["lifecycleStatus"]
 
 
 class TestNonDragNoise:
     def test_create_has_no_updated_fields(self) -> None:
         body = load_fixture_json("noop_create")
         assert isinstance(body, dict)
-        assert body["eventType"] == "record.created"
+        assert body["eventName"] == "patientProgram.created"
         assert "updatedFields" not in body
 
     def test_delete_has_no_updated_fields(self) -> None:
         body = load_fixture_json("noop_delete")
         assert isinstance(body, dict)
-        assert body["eventType"] == "record.deleted"
+        assert body["eventName"] == "patientProgram.deleted"
         assert "updatedFields" not in body
 
     def test_non_status_update_does_not_touch_lifecycle_status(self) -> None:
         body = load_fixture_json("noop_non_status_update")
         assert isinstance(body, dict)
-        touched_fields = {field["name"] for field in body["updatedFields"]}
-        assert "lifecycleStatus" not in touched_fields
-        assert "qualificationStatus" in touched_fields
+        assert "lifecycleStatus" not in body["updatedFields"]
+        assert "qualificationStatus" in body["updatedFields"]
 
     def test_unmapped_object_is_not_a_patient_program(self) -> None:
         body = load_fixture_json("noop_unmapped_object")
@@ -151,18 +186,19 @@ class TestPhiCanaries:
     def test_every_fixture_carries_a_recognizable_fake_demographic(self, name: str) -> None:
         assert b"Canary" in load_fixture_bytes(name)
 
-    def test_canary_last_names_are_distinct_per_case_where_the_case_is_a_distinct_person(self) -> None:
-        # redelivery_duplicate is deliberately the same person as legal_drag (same delivery,
-        # replayed) — every other case is its own synthetic patient.
+    def test_canary_titles_are_distinct_per_case_where_the_case_is_a_distinct_record(self) -> None:
+        # The flat record's `name` (the card title Twenty stores on the row) is the per-case
+        # canary. redelivery_duplicate is deliberately the same record as legal_drag (same
+        # delivery, replayed) — every other case is its own synthetic row.
         distinguishable = [n for n in _PARSEABLE_NAMES if n != "redelivery_duplicate"]
-        last_names = set()
+        titles = set()
         for name in distinguishable:
             body = load_fixture_json(name)
             assert isinstance(body, dict)
-            record = body["record"]
-            person = record.get("patient", record)
-            last_names.add(person["name"]["lastName"])
-        assert len(last_names) == len(distinguishable)
+            title = body["record"]["name"]
+            assert title.startswith("Canary ")
+            titles.add(title)
+        assert len(titles) == len(distinguishable)
 
 
 class TestSignFixture:

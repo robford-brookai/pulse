@@ -1,38 +1,42 @@
 {
-  "eventId": "evt-twenty-fixture-missing-canonical-0001",
-  "eventType": "record.updated",
+  "targetUrl": "https://pulse.example/webhooks/twenty",
+  "eventName": "patientProgram.updated",
   "objectMetadata": {
-    "nameSingular": "patientProgram",
-    "namePlural": "patientPrograms"
+    "id": "objmeta-patientprogram-0000-0000-0001",
+    "nameSingular": "patientProgram"
   },
-  "workspaceMember": {
-    "id": "wsm-0003-canary-nurse",
-    "name": {
-      "firstName": "Canary",
-      "lastName": "CareCoordinator"
-    }
+  "workspaceId": "workspace-pulse-dev-0000-0001",
+  "webhookId": "webhook-pulse-dev-0000-0001",
+  "eventDate": "2026-08-06T15:12:00.008Z",
+  "record": {
+    "name": "Canary MissingCanonical",
+    "id": "twenty-record-patientprogram-0003",
+    "createdAt": "2026-08-01T09:10:00.000Z",
+    "createdBy": {
+      "source": "API",
+      "workspaceMemberId": null,
+      "name": "pulse-dev",
+      "context": {}
+    },
+    "deletedAt": null,
+    "position": -18,
+    "updatedAt": "2026-08-06T15:12:00.002Z",
+    "updatedBy": {
+      "source": "MANUAL",
+      "workspaceMemberId": "wsm-0001-canary-nurse",
+      "name": "Canary CareCoordinator",
+      "context": {}
+    },
+    "searchVector": "",
+    "programId": "twenty-record-program-0001",
+    "programCode": "rpm",
+    "lifecycleStatus": "ACTIVE",
+    "lifecycleStatusAsOf": "2026-08-03T09:00:00.000Z",
+    "qualificationStatus": "QUALIFIED",
+    "patientId": "twenty-record-patient-0003",
+    "qualificationStatusAsOf": "2026-08-03T09:00:00.000Z"
   },
   "updatedFields": [
-    {
-      "name": "lifecycleStatus",
-      "before": "registered",
-      "after": "enrolled"
-    }
-  ],
-  "record": {
-    "id": "twenty-record-patientprogram-0003",
-    "lifecycleStatus": "enrolled",
-    "lifecycleStatusAsOf": "2026-08-06T15:20:00Z",
-    "patient": {
-      "id": "twenty-record-patient-0003",
-      "name": {
-        "firstName": "Canary",
-        "lastName": "MissingCanonical"
-      }
-    },
-    "program": {
-      "id": "twenty-record-program-0001",
-      "code": "diabetes-mgmt"
-    }
-  }
+    "lifecycleStatus"
+  ]
 }

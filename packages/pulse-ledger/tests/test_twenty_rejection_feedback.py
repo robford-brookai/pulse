@@ -58,18 +58,19 @@ FIXTURE_DEMOGRAPHICS = (
 
 #: What `illegal_drag.json` maps to: the backwards drag, its card, and the subject behind it.
 ILLEGAL_CARD_REF = "patientProgram:twenty-record-patientprogram-0002"
-ILLEGAL_FROM_STATE = "activated"
-ILLEGAL_TO_STATE = "registered"
+ILLEGAL_FROM_STATE = "active"
+ILLEGAL_TO_STATE = "pending_start"
 ILLEGAL_SUBJECT_TYPE = "enrollment"
 
-#: The board vocabulary the fixtures are written in, and the one edge that is legal in it. The
-#: fake committer decides against this rather than the generated catalog: the fixtures project a
-#: Twenty board's column names, and what is under test is the route's handling of a refusal, not
-#: which refusals the catalog issues (that is `test_validation.py`'s).
+#: The enrollment vocabulary the fixtures are written in (decoded off the wire's UPPER_SNAKE by
+#: the mapping), and which edges are legal in it. The fake committer decides against this rather
+#: than the generated catalog: what is under test is the route's handling of a refusal, not which
+#: refusals the catalog issues (that is `test_validation.py`'s).
 FIXTURE_ADJACENCY: Mapping[str, frozenset[str]] = {
-    "registered": frozenset({"enrolled"}),
-    "enrolled": frozenset({"activated"}),
-    "activated": frozenset(),
+    "pending_start": frozenset({"active", "ended"}),
+    "active": frozenset({"on_hold", "ended"}),
+    "on_hold": frozenset({"active", "ended"}),
+    "ended": frozenset(),
 }
 
 _EVENT_ID_BASE = uuid.UUID("018f5a1e-1111-7000-8000-000000000000").int
@@ -81,7 +82,7 @@ def _current_state(to_state: str) -> str:
     The real committer folds this out of the ledger; the fake reads it back off the fixture's own
     board vocabulary so the receipt's `from_state` is a real value rather than a constant.
     """
-    return {"enrolled": "registered", "registered": "activated", "activated": "enrolled"}[to_state]
+    return {"active": "pending_start", "pending_start": "active", "on_hold": "active", "ended": "active"}[to_state]
 
 
 class CatalogCommitter:

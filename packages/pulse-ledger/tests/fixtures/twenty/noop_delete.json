@@ -1,32 +1,40 @@
 {
-  "eventId": "evt-twenty-fixture-noop-delete-0001",
-  "eventType": "record.deleted",
+  "targetUrl": "https://pulse.example/webhooks/twenty",
+  "eventName": "patientProgram.deleted",
   "objectMetadata": {
-    "nameSingular": "patientProgram",
-    "namePlural": "patientPrograms"
+    "id": "objmeta-patientprogram-0000-0000-0001",
+    "nameSingular": "patientProgram"
   },
-  "workspaceMember": {
-    "id": "wsm-0005-canary-nurse",
-    "name": {
-      "firstName": "Canary",
-      "lastName": "CareCoordinator"
-    }
-  },
+  "workspaceId": "workspace-pulse-dev-0000-0001",
+  "webhookId": "webhook-pulse-dev-0000-0001",
+  "eventDate": "2026-08-06T15:16:00.033Z",
   "record": {
+    "name": "Canary NoopDelete",
     "id": "twenty-record-patientprogram-0005",
-    "lifecycleStatus": "activated",
-    "lifecycleStatusAsOf": "2026-08-06T15:30:00Z",
-    "patient": {
-      "id": "twenty-record-patient-0005",
-      "canonicalPatientId": "DIM_PATIENT_CONFORMED-000105",
-      "name": {
-        "firstName": "Canary",
-        "lastName": "NoopDelete"
-      }
+    "createdAt": "2026-08-01T09:20:00.000Z",
+    "createdBy": {
+      "source": "API",
+      "workspaceMemberId": null,
+      "name": "pulse-dev",
+      "context": {}
     },
-    "program": {
-      "id": "twenty-record-program-0001",
-      "code": "diabetes-mgmt"
-    }
+    "deletedAt": "2026-08-06T15:16:00.025Z",
+    "position": -16,
+    "updatedAt": "2026-08-06T15:16:00.025Z",
+    "updatedBy": {
+      "source": "MANUAL",
+      "workspaceMemberId": "wsm-0001-canary-nurse",
+      "name": "Canary CareCoordinator",
+      "context": {}
+    },
+    "searchVector": "",
+    "programId": "twenty-record-program-0001",
+    "programCode": "rpm",
+    "canonicalPatientId": "DIM_PATIENT_CONFORMED-000105",
+    "lifecycleStatus": "ENDED",
+    "lifecycleStatusAsOf": "2026-08-03T09:00:00.000Z",
+    "qualificationStatus": "QUALIFIED",
+    "patientId": "twenty-record-patient-0005",
+    "qualificationStatusAsOf": "2026-08-03T09:00:00.000Z"
   }
 }
