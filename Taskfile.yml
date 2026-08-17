@@ -247,6 +247,25 @@ tasks:
     cmds:
       - uv run python -m pulse_core.twenty_verify --target {{.TARGET}}
 
+  twenty:verify:live:
+    desc: Run the five projection cases against TARGET's live server (dev|staging|prod; needs that target's credential)
+    # The 4.2 verification receipt: the same five cases the unit suite runs with a faked client,
+    # run against a live server with the real one, so a projection defect that only appears
+    # against real SELECT storage, real relation columns, or real defaults is caught. Exits
+    # nonzero on any failed assertion; the JSON the run prints (case names, outcome statuses,
+    # catalog values — no record ids, no response bodies) is the artifact to attach. Its fixtures
+    # are synthetic and namespaced per run, and the run deletes them again.
+    # Live-only, so never reached from `check` — same posture as twenty:deploy and twenty:verify.
+    # The suite lives behind its own vitest config for the same reason: `task check`'s runner
+    # includes tests/ and cannot collect it.
+    requires:
+      vars: [TARGET]
+    env:
+      PULSE_LIVE_TARGET: "{{.TARGET}}"
+    cmds:
+      - '[ -d node_modules ] || npm ci'
+      - npm run test:live --workspace=@pulse/twenty-app
+
   twenty:seed:
     desc: Load the committed synthetic seed projection into TARGET (dev|staging|prod; needs that target's credential)
     # Reads the committed, checksummed projection (pulse_core/generated/twenty_seed_dev.json) and

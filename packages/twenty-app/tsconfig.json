@@ -21,6 +21,8 @@
     "src",
     "generated",
     "tests",
-    "vitest.config.ts"
+    "live",
+    "vitest.config.ts",
+    "vitest.live.config.ts"
   ]
 }
