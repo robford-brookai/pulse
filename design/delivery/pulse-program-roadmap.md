@@ -164,7 +164,7 @@ Gate: Phase 2 exit; Twenty dev instance from `environment-matrix`.
 
 | Change | Delivers | Gate |
 |---|---|---|
-| `pulse-app-scaffold` | Twenty app package (`create-twenty-app`), objects, roles, `project-domain-event` logic function, catalog → SELECT-options codegen | ~~D4~~ closed 08-12: artifact split (DNA-908) |
+| `pulse-app-scaffold` | Twenty app package, objects, roles, `project-domain-event` logic function, catalog → SELECT-options codegen, artifact deploy + live dev read-back | ✅ shipped — archived `2026-08-17-pulse-app-scaffold` (DNA-918); ~~D4~~ closed 08-12: artifact split (DNA-908) |
 | `twenty-projection` | ledger-fed consumer: upserts on `(subject_id, ledger_seq)`, monotonic apply, heal-back write (closes D8 end-to-end), read-only status fields | `pulse-app-scaffold` |
 | `customerio-projection` | segment/attribute sync from ledger events | Phase 2 exit |
 | `snowflake-projection` | STG_EVENTS ledger contract (flat projection proven in S1.1 task 5.1) atop the existing `OCEAN_RAW.EVENTS` landing | Phase 2 exit |
