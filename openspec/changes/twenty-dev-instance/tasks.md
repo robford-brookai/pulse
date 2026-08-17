@@ -243,6 +243,48 @@ files under `openspec/specs/`.
       unreachable from `check`; `task check` green.
       `[model: sonnet | deps: 6.2 | lane: repo_change | wave: 10]`
 
+- [ ] 6.4 Full entity port to `twenty-sdk` shapes, so `twenty:app:publish` actually builds
+      (decision: Rob, 2026-08-17, on issue #223 — full port over a views/nav-only split).
+      7.2's first live publish falsified 6.3's delivered path twice: the CLI's manifest
+      builder detects entities syntactically (`export default defineApplication({...})`
+      inline — the const-then-default form in `application-config.ts` is invisible to it),
+      and after that fix it still dies (`t.errors is not iterable`) on entities defined
+      through the local `src/define.ts` shim. Port every entity file to real
+      `twenty-sdk/define` imports — the five families 4.2's evaluation measured: permissions
+      keyed by `universalIdentifier` (all three role files); relation fields without the
+      `relation: {targetObject, inverseField}` member; mutable option arrays (drop
+      `readonly` from the generated-array boundary types or copy at the call site); SDK view
+      and navigation type names (`ViewConfig`, `ViewGroupManifest`, …); `defineApplication`
+      identity-only with entities derived from the file tree (delete the `ALL_*` arrays,
+      inline every entity file's default export). Keep the UID map authoritative: explicit
+      `universalIdentifier` on every entity, so the SDK derives none. Bump the app version
+      (publish rejects equal-or-lower semver). In the same commit, fix the Taskfile hazard
+      7.2 found: `npx twenty` resolves to a squatted npm package (an IP-geolocation tool)
+      whenever the local bin is missing — call `node_modules/.bin/twenty` (or
+      `npm exec --no-install twenty --`) in `twenty:app:build`/`twenty:app:publish`, after
+      an unconditional `npm ci` guard.
+      Tests: `task twenty:test` (tsc + vitest) green over the ported sources; the existing
+      UID-resolution and generated-options-import tests still pass unchanged (they pin what
+      the port must not break); `node_modules/.bin/twenty dev:build packages/twenty-app`
+      exits 0 and emits `.twenty/output/manifest.json` whose objects, roles, and views match
+      the app source (a script-asserted manifest smoke test, offline per the 4.2 finding);
+      the reachability test still holds both `twenty:app:*` targets out of `check`.
+      `[model: opus | deps: 6.3 | lane: repo_change | wave: 13]`
+      `serial: workspace_roots` — edits `Taskfile.yml` (the npx fix) alongside the port.
+      Opus: five interlocking type-shape families across every entity file, where a wrong
+      permission key or relation direction ships a wrong live schema on first publish.
+
+- [ ] 6.5 Fix demo3's falsified view-read pin: 7.2's live contact showed no `getCoreViews`
+      on `/graphql` — views are served by `getViews` on `/metadata`, and the live `View`
+      type carries **no `universalIdentifier` field**, so assertion 2 cannot match by UID.
+      Re-key the view match on (`objectMetadataId` resolved from the live patientProgram
+      object, `type == KANBAN`, `name` equal to the app view's name), keep assertions 2–3
+      otherwise unchanged, and update the script's endpoint-pin comments to say "verified
+      live 2026-08-17" instead of "unverified until 7.2".
+      Tests: the smoke test still parses; a unit test over a faked `getViews` payload (the
+      live shape, synthetic values) covers match-found, no-match, and two-matches.
+      `[model: sonnet | deps: 6.4 | lane: repo_change | wave: 14]`
+
 ## 7. The round trip (GATED: everything above)
 
 - [x] 7.1 `scripts/demo/demo3_live_kanban_drag.py`, following the existing demo's conventions —
