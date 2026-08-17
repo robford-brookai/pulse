@@ -19,12 +19,6 @@ export const CLINIC = defineObject({
     "Registry anchor for a referring or participating clinic. Carries no catalog-backed state at v1.",
   fields: [
     {
-      universalIdentifier: uid("clinic.name"),
-      name: "name",
-      type: FieldType.TEXT,
-      label: "Name",
-    },
-    {
       universalIdentifier: uid("clinic.sfdcId"),
       name: "sfdcId",
       type: FieldType.TEXT,

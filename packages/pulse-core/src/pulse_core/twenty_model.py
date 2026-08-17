@@ -477,7 +477,6 @@ PATIENT = ObjectSpec(
             is_unique=True,
             default_value="''",
         ),
-        FieldSpec(name="name", type="FULL_NAME", label="Name"),
         FieldSpec(
             name="sfdcId", type="TEXT", label="Salesforce ID", description="External ID, system `sfdc`.", is_unique=True
         ),
@@ -507,7 +506,6 @@ PROGRAM = ObjectSpec(
             description="Stable program ID carried in the envelope `program` field.",
             is_unique=True,
         ),
-        FieldSpec(name="name", type="TEXT", label="Name"),
         FieldSpec(
             name="patientPrograms",
             type="RELATION",
@@ -599,7 +597,6 @@ PROVIDER = ObjectSpec(
     icon="IconStethoscope",
     description="Registry anchor for a clinician. Carries no catalog-backed state at v1.",
     fields=(
-        FieldSpec(name="name", type="FULL_NAME", label="Name"),
         FieldSpec(name="sfdcId", type="TEXT", label="Salesforce ID", description="External ID, system `sfdc`."),
         FieldSpec(name="npi", type="TEXT", label="NPI", description="External ID, system `npi`."),
         FieldSpec(
@@ -631,7 +628,6 @@ CLINIC = ObjectSpec(
     icon="IconBuildingHospital",
     description="Registry anchor for a referring or participating clinic. Carries no catalog-backed state at v1.",
     fields=(
-        FieldSpec(name="name", type="TEXT", label="Name"),
         FieldSpec(name="sfdcId", type="TEXT", label="Salesforce ID", description="External ID, system `sfdc`."),
         FieldSpec(
             name="lifecycleStatus",
