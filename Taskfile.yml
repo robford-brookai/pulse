@@ -279,6 +279,35 @@ tasks:
     cmds:
       - uv run python -m pulse_core.twenty_seed --target {{.TARGET}}
 
+  twenty:app:build:
+    desc: Build the Twenty app and its generated API client against TARGET (dev|staging|prod; needs that target's remote)
+    # `twenty dev:build` generates the typed API client from the active remote, so even the
+    # build half of the SDK toolchain is credentialed — hence TARGET, and hence never reached
+    # from `check` (tests/test_twenty_app_scaffold.py pins it out, same posture as
+    # twenty:deploy). The remote must exist first: run `twenty:app:publish` once, or add it by
+    # hand with the remote:add line that target runs.
+    requires:
+      vars: [TARGET]
+    cmds:
+      - '[ -d node_modules ] || npm ci'
+      - npx twenty --remote {{.TARGET}} dev:build packages/twenty-app
+
+  twenty:app:publish:
+    desc: Build and publish the Twenty app to TARGET's server registry (dev|staging|prod; needs that target's credential)
+    # Publishes to the server registry (--private), never npm. The remote is (re-)added
+    # non-interactively first, resolving URL and credential from the same environment surface
+    # as twenty:deploy (`PULSE_TWENTY_<TARGET>_URL` / `PULSE_TWENTY_<TARGET>_TOKEN`) — the CLI
+    # writes them into a per-user config file, which is exactly why this is a developer/CD
+    # step and never reached from `check`. The server rejects an equal or lower semver, so
+    # bump `version` in packages/twenty-app/package.json in the same change as the model edit
+    # being published — the failed publish names the version, not the cause.
+    requires:
+      vars: [TARGET]
+    cmds:
+      - '[ -d node_modules ] || npm ci'
+      - npx twenty remote:add --as {{.TARGET}} --url "$PULSE_TWENTY_{{upper .TARGET}}_URL" --api-key "$PULSE_TWENTY_{{upper .TARGET}}_TOKEN"
+      - npx twenty app:publish --private --remote {{.TARGET}} packages/twenty-app
+
   ledger:image:
     desc: Build the pulse-ledger service image (API + relay, one image) and tag it TAG (needs Docker)
     # Build context is the repo root — pulse-core is a workspace sibling that
