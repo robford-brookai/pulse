@@ -232,7 +232,7 @@ files under `openspec/specs/`.
       Test: column set equals the catalog's state set, asserted from the generated options.
       `[model: sonnet | deps: 6.1 | lane: repo_change | wave: 9]`
 
-- [ ] 6.3 Adopt `twenty-sdk` pinned exactly, regenerate the lockfile, and add
+- [x] 6.3 Adopt `twenty-sdk` pinned exactly, regenerate the lockfile, and add
       `twenty:app:build` / `twenty:app:publish` requiring `TARGET`, both out of `check`. Bump the
       app version on every publish — the server rejects an equal or lower semver. Add the remote
       non-interactively; credentials land in a user config file, so this is a developer/CD step,
@@ -245,7 +245,7 @@ files under `openspec/specs/`.
 
 ## 7. The round trip (GATED: everything above)
 
-- [ ] 7.1 `scripts/demo/demo3_live_kanban_drag.py`, following the existing demo's conventions —
+- [x] 7.1 `scripts/demo/demo3_live_kanban_drag.py`, following the existing demo's conventions —
       `build_arg_parser()`, clean `--help`, nonzero on any failed assertion, out of `check`, with
       a companion smoke test that only checks it parses so CI never needs a server. Asserts, in
       order: UID round-trip; the view exists, is KANBAN, and groups on the right field; column
