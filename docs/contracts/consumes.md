@@ -108,21 +108,35 @@ that render. A change to either is a deliberate re-render, caught by the stalene
 
 The server-side half of the pin is the image: SPCS deploys the pinned upstream `twentycrm/twenty`
 tag, never a build from patched source (`design/platform/pulse-app-scaffold.md` §SPCS deployment —
-an image built from patched source is a fork, and AGPL §13 obligations attach). That tag is set in
-the SPCS service spec when the instance is provisioned; **no tag is pinned here yet, because no
-instance exists — DNA-909 (Twenty dev instance, manual provisioning) is the open dependency.**
-Upstream migrations can land on app-declared objects, so a tag bump is a deliberate event verified
-against a parallel instance, not a routine upgrade.
+an image built from patched source is a fork, and AGPL §13 obligations attach). The dev instance
+(DNA-909, provisioned 2026-08-16) runs upstream **v2.30.0**, and every live-verified claim below
+is pinned to that version. Upstream migrations can land on app-declared objects, so a tag bump is
+a deliberate event verified against a parallel instance, not a routine upgrade.
 
 | Dependency | Kind | Source | Breakage risk |
 |---|---|---|---|
-| Metadata API operation set | serialized artifact, pinned in this repo (`packages/twenty-app/artifact/operations.json`, keys `artifactVersion` / `catalogVersion`) | Twenty; shape decided by D4 / DNA-908 | our serialization is the only pinned contract until read-back runs — a shape drift upstream surfaces as a failed apply, not as bad data, because validate-before-apply refuses anything the schema rejects |
-| `twentycrm/twenty` image tag | pinned container image (SPCS) | upstream release, pinned in the SPCS service spec — unset until DNA-909 provisions the dev instance | an unpinned or bumped tag changes the server-side Metadata API shape under a fixed artifact; upgrades are tested against a parallel instance before promoting |
+| Metadata API operation set | serialized artifact, pinned in this repo (`packages/twenty-app/artifact/operations.json`, keys `artifactVersion` / `catalogVersion`) | Twenty; shape decided by D4 / DNA-908 | **live-verified against dev (v2.30.0, 2026-08-17)**: all 49 operations read back under their mapped `universalIdentifier`s, immediate re-apply all no-ops — a shape drift upstream surfaces as a failed apply, not as bad data, because validate-before-apply refuses anything the schema rejects |
+| `twentycrm/twenty` image tag | pinned container image (SPCS) | upstream release, pinned in the SPCS service spec — dev runs v2.30.0 (DNA-909) | an unpinned or bumped tag changes the server-side Metadata API shape under a fixed artifact; upgrades are tested against a parallel instance before promoting |
 
-Ground truth is the wave-3 read-back verification: apply the artifact to the dev instance and
-assert every operation's target present with its mapped `universalIdentifier`. It is gated on
-DNA-909 and runs before anything consumes the model, so until it passes the risk is bounded —
-nothing has applied the artifact anywhere. Same posture as the Twenty comment API entry above.
+Ground truth is the read-back verification (`pulse_core.twenty_verify`, `task twenty:verify
+TARGET=dev`): every artifact operation's target present with its mapped `universalIdentifier`,
+then an all-no-op re-apply. It passed against dev on 2026-08-17 (pulse-app-scaffold 4.1, receipt
+checksum `4a47b973…` on DNA-918) and re-runs on any tag bump before promoting.
+
+### Twenty core REST API (`pulse-app-scaffold` 4.2, live-verified v2.30.0)
+
+`packages/twenty-app/src/live/rest-core-api.ts` (the live `CoreApiClient` behind
+`project-domain-event`) and `pulse_core.twenty_seed` consume Twenty's core record surface:
+`GET/POST /rest/<plural>`, `PATCH`/`DELETE /rest/<plural>/<id>`. The pinned shape, confirmed by
+the 4.2 live run rather than assumed: relation columns write and read **flat** (`patientId`,
+never nested `{"patient": {"id": …}}` — the nested form is a 400); `filter=<field>[eq]:<value>`
+is comma-joined AND with no quoting (the client refuses values containing `,` `:` `[` `]` rather
+than escaping); SELECT values are stored UPPER_SNAKE-encoded (`referral.received` →
+`REFERRAL_RECEIVED`, see the `twenty-artifact-deploy` spec).
+
+| Dependency | Kind | Source | Breakage risk |
+|---|---|---|---|
+| core REST record surface | REST API, live-verified against dev v2.30.0 (2026-08-17) | Twenty; bearer token per target environment | grammar and relation-column drift surfaces at the client boundary (refused values, 400s), never as silent misreads; re-verified by `task twenty:verify:live TARGET=dev` on any tag bump |
 
 ### Producer-policy gate (`producer-ingress-policy`, DNA-885–DNA-888)
 
