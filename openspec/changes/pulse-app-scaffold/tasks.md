@@ -170,7 +170,7 @@ run against the dev instance with synthetic data only; neither touches staging o
       Gate: DNA-909. First live contact — runs alone before 4.2 so a metadata defect is
       isolated from function behavior.
 
-- [ ] 4.2 Live logic-function verification and the promotion runbook: install the app surface
+- [x] 4.2 Live logic-function verification and the promotion runbook: install the app surface
       on dev per the scaffold doc's dev loop, exercise `project-domain-event` for the five
       3.2 cases against the live server (`dev:function:exec` or synthetic DomainEvent
       creates), record the create-twenty-app manifest evaluation (design Decision 1: can
