@@ -1,0 +1,22 @@
+{
+  "capturedFrom": "twenty-dev.cloud.brook.ai, twentycrm/twenty:v2.30.0",
+  "capturedAt": "2026-08-17",
+  "note": "Genuine second drag on the same record: ACTIVE -> ON_HOLD, distinct record.updatedAt.",
+  "headers": {
+    "X-Twenty-Webhook-Timestamp": "1786940298384",
+    "X-Twenty-Webhook-Signature": "14dd3c6522bdcd3159eaa33e4f9f31966c9271e2e67f4cd42e811b593a9f690b",
+    "X-Twenty-Webhook-Nonce": "00000000000000000000000000000000",
+    "Content-Type": "application/json",
+    "User-Agent": "axios/1.19.0"
+  },
+  "signing": {
+    "algorithm": "HMAC-SHA256, hex digest, no version affixes",
+    "message": "f\"{timestamp}:\" + raw_request_body_bytes",
+    "timestampUnit": "milliseconds since epoch",
+    "testSecret": "pulse-test-secret-do-not-use-in-any-environment",
+    "provenance": "re-signed with the test secret above; the live signature is not committed",
+    "observedSignaturePrefix": "5f9c9547",
+    "byteExactness": "body stored as .raw so no JSON formatter can rewrite it; the signature covers these exact bytes and any reserialization invalidates it"
+  },
+  "bodyFile": "patient_program_updated_second.body.raw"
+}
