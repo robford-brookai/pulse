@@ -126,7 +126,7 @@ files under `openspec/specs/`.
       Test: `task twenty:test` green with views asserted by identifier rather than name.
       `[model: sonnet | deps: — | lane: repo_change | wave: 0]`
 
-- [ ] 2.5 `pulse_core.twenty_seed` + `task twenty:seed TARGET=dev`, reusing `twenty_deploy`'s
+- [x] 2.5 `pulse_core.twenty_seed` + `task twenty:seed TARGET=dev`, reusing `twenty_deploy`'s
       target resolution and receipt posture verbatim. Source is a committed, checksummed
       deterministic projection at `pulse_core/generated/twenty_seed_dev.json` (~20 patients) —
       not a live generator run, which needs Java, an untracked output tree, and produces no

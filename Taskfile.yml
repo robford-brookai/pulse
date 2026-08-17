@@ -247,6 +247,19 @@ tasks:
     cmds:
       - uv run python -m pulse_core.twenty_verify --target {{.TARGET}}
 
+  twenty:seed:
+    desc: Load the committed synthetic seed projection into TARGET (dev|staging|prod; needs that target's credential)
+    # Reads the committed, checksummed projection (pulse_core/generated/twenty_seed_dev.json) and
+    # upserts it idempotently — create-if-absent and patch-if-drifted on natural keys, never
+    # delete — chunked and paced to the instance's limits. No generator toolchain: the projection
+    # is the source, so seeding reproduces from a fresh clone. Target URL and credential resolve
+    # from the environment (twenty:deploy's resolution, reused verbatim). Never reached from
+    # `check`: it needs credentials, same posture as twenty:deploy and catalog:release.
+    requires:
+      vars: [TARGET]
+    cmds:
+      - uv run python -m pulse_core.twenty_seed --target {{.TARGET}}
+
   ledger:image:
     desc: Build the pulse-ledger service image (API + relay, one image) and tag it TAG (needs Docker)
     # Build context is the repo root — pulse-core is a workspace sibling that
