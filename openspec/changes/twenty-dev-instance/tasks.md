@@ -204,7 +204,7 @@ files under `openspec/specs/`.
       effective time is refused; a redelivery replays.
       `[model: sonnet | deps: 4.2 | lane: repo_change | wave: 6]`
 
-- [ ] 5.3 Add `canonicalPatientId` and `programCode` as TEXT on `patientProgram` (model change →
+- [x] 5.3 Add `canonicalPatientId` and `programCode` as TEXT on `patientProgram` (model change →
       `task twenty:gen` → mint UIDs → validate). Required because the webhook record is flat; the
       alternative, a REST read-back per drag, adds a credential and a failure mode to the hot
       path. Both are pseudonymous identifiers, not PHI. Re-point the mapping's canonical and
