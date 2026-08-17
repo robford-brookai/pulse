@@ -36,8 +36,9 @@ connection: generation is a pure file transformation.
 The artifact SHALL be byte-identical across repeated runs over the same inputs, and CI
 (`task check`) SHALL validate it: schema-valid operation set, regeneration matches the
 committed artifact, generated options equal the catalog's states for each mapped dimension,
-and the TypeScript options surface and the artifact carry identical option sets. A mismatch
-SHALL fail the check.
+the TypeScript options surface and the artifact carry identical option sets, and no two
+catalog values in one dimension collide under the deploy-boundary option encoding (see
+`twenty-artifact-deploy`). A mismatch SHALL fail the check.
 
 #### Scenario: Re-render is byte-identical
 

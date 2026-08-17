@@ -58,6 +58,39 @@ under disabled sockets with a fixture transport.
 - **WHEN** the deploy step runs with `--dry-run` under disabled sockets
 - **THEN** the plan prints, exit status is zero, and the transport records zero mutating calls
 
+### Requirement: SELECT option values apply encoded, with the catalog as the only vocabulary
+
+Twenty v2.30 validates SELECT option values as UPPER_SNAKE_CASE, so the catalog's dotted
+lowercase vocabulary is rejected as sent. The deploy step SHALL encode option values at the
+plan boundary (`value.upper()` with `.` → `_`) and SHALL NOT write encoded values into any
+repo file: the catalog remains the only vocabulary, and artifact validation SHALL fail when
+two catalog values would collide after encoding. Consumers reading the live schema or raw
+record values SHALL expect the encoded tokens (e.g. `referral.received` is stored as
+`REFERRAL_RECEIVED`), and deploy receipts SHALL state the encoding in force.
+
+#### Scenario: Two catalog values colliding after encoding fail validation
+
+- **GIVEN** a catalog carrying two values in one dimension that encode to the same
+  UPPER_SNAKE token
+- **WHEN** artifact validation runs
+- **THEN** validation fails naming the collision, and no artifact is produced
+
+### Requirement: Permissions apply within the live model's expressiveness
+
+Twenty v2.30 exposes no object-level create permission distinct from update (create rides
+`canUpdateObjectRecords`), refuses write-without-read, and accepts field permissions only as
+restrictions. The deploy step SHALL map the artifact's declared role grants onto that surface
+— a declared create-only grant applies as read+update, a `canRead: true` field grant is
+omitted rather than sent — and SHALL apply permission lists through the role-keyed upsert
+surfaces, never as role scalars.
+
+#### Scenario: A create-only grant applies as the closest live-expressible grant
+
+- **GIVEN** an artifact whose producer role declares create-only on DomainEvent
+- **WHEN** the deploy step computes its plan against a scripted transport
+- **THEN** the applied object permission grants read and update on DomainEvent, and no field
+  permission granting read is sent
+
 ### Requirement: Receipts carry names and counts, never workspace data
 
 Deploy receipts and error output SHALL carry object/field/option names, operation counts, and
@@ -86,3 +119,11 @@ transport.
 - **WHEN** the schema is read back through the Metadata API
 - **THEN** every object, field, and option in the artifact is present with its mapped
   `universalIdentifier`, and the verification receipt is attached to the change's Linear parent
+
+#### Scenario: Relations verify on the from side
+
+- **GIVEN** an applied artifact whose relations carry identifiers for both sides
+- **WHEN** read-back verification runs
+- **THEN** each relation is verified by its from-side `universalIdentifier` (the operation
+  key); the server mints the inverse field's identifier, so the artifact's to-side identifier
+  is not asserted against the live schema

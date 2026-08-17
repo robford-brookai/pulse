@@ -57,6 +57,16 @@ See proposal.md — Why. Constraints that shape the approach:
    *Alternative considered:* wait for the instance and build CLI-first. Rejected — it serializes
    the whole phase behind a manual provisioning step for no spec benefit, and D4 explicitly
    permits the own-generator path.
+   *Correction (wave 3, task 4.2):* the stated reason was wrong about `dev:build` specifically —
+   evaluated against `twenty-sdk@2.30.0`, `dev:build` runs offline with no server and emits
+   `.twenty/output/manifest.json`; it is `app:publish`/`app:install` that need a running server.
+   The decision's outcome stands on the measured evidence instead: the manifest is a desired-state
+   document (server-side diffing at install), not an operation set (client-side deterministic
+   plan, reviewable offline); porting to the SDK costs ~50 typecheck errors in five families plus
+   a node ^24.5/yarn ^4 engines move; and the SDK covers surfaces our artifact deliberately
+   excludes (logic functions, views, navigation) — adopted for exactly those under
+   twenty-dev-instance 6.3, disjoint from this artifact contract. See
+   `handoffs/pulse-app-scaffold/pulse-app-scaffold-task-011.md` for the full evaluation.
 2. **`universalIdentifier`s live in `packages/twenty-app/uid-map.json`, checked in, append-only.**
    Keyed by `<object>` / `<object>.<field>` / `<object>.<field>.<option>`. The generator reads
    the map; a key it needs but does not find is a **generation error instructing a mint**, never
