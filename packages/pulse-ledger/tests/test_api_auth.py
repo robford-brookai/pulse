@@ -406,7 +406,7 @@ class TestTwentyWebhookRoute:
         assert response.headers["WWW-Authenticate"].startswith("Signature")
 
     def test_enabled_it_rejects_a_bad_signature(self, signed_client: TestClient) -> None:
-        timestamp = str(int(datetime.now(tz=timezone.utc).timestamp()))
+        timestamp = str(int(datetime.now(tz=timezone.utc).timestamp() * 1000))
         response = signed_client.post(
             TWENTY_WEBHOOK_PATH,
             content=b"{}",
@@ -416,7 +416,7 @@ class TestTwentyWebhookRoute:
 
     def test_enabled_it_rejects_a_stale_signature(self, signed_client: TestClient) -> None:
         stale = datetime.now(tz=timezone.utc) - timedelta(hours=1)
-        timestamp = str(int(stale.timestamp()))
+        timestamp = str(int(stale.timestamp() * 1000))
         response = signed_client.post(
             TWENTY_WEBHOOK_PATH,
             content=b"{}",
@@ -431,7 +431,7 @@ class TestTwentyWebhookRoute:
         behind it.
         """
         body = b'{"card":"synthetic"}'
-        timestamp = str(int(datetime.now(tz=timezone.utc).timestamp()))
+        timestamp = str(int(datetime.now(tz=timezone.utc).timestamp() * 1000))
         response = signed_client.post(
             TWENTY_WEBHOOK_PATH,
             content=body,
@@ -454,7 +454,7 @@ class TestTwentyWebhookRotationOverHttp:
     @staticmethod
     def _post(client: TestClient, secret: str) -> int:
         body = b'{"card":"synthetic"}'
-        timestamp = str(int(datetime.now(tz=timezone.utc).timestamp()))
+        timestamp = str(int(datetime.now(tz=timezone.utc).timestamp() * 1000))
         response = client.post(
             TWENTY_WEBHOOK_PATH,
             content=body,

@@ -8,9 +8,11 @@ Two credential paths, and only two:
   rejected, whoever it names. One documented behaviour, no mode switch — the command-api spec's
   scenario offers "rejected or committed as the credential's actor", and rejecting is the choice
   a writer can notice and fix, where a silent overwrite hides a misconfigured producer forever.
-- **The Twenty webhook** (D8) is signed, not bearer-authenticated: a shared secret, an HMAC over
-  `{version}:{timestamp}:{body}`, and a freshness window so a captured request cannot be replayed
-  tomorrow. `verify_signature` is the whole middleware; the route it guards ships disabled
+- **The Twenty webhook** (D8) is signed, not bearer-authenticated: a shared secret, a bare hex
+  HMAC-SHA256 over `{timestamp}:{body}` with a millisecond timestamp — Twenty's own wire format,
+  fixed in its sender with no configuration hook (task 4.2's capture), so this repo adapts rather
+  than negotiating — and a freshness window so a captured request cannot be replayed tomorrow.
+  `verify_signature` is the whole middleware; the route it guards ships disabled
   (`TwentyWebhookConfig`, off unless the environment says otherwise) and turns on in S2.
 
 Credential *values* live in the environment and nowhere else — not in code, not in fixtures, not
@@ -64,9 +66,11 @@ BACKFILL_ACTOR_ID = "backfill"
 #: The fields a credential decides. A body may not carry them — see `Writer.attribute`.
 CREDENTIAL_DERIVED_FIELDS = ("actor_type", "actor_id", "actor_authority", "producer")
 
-SIGNATURE_VERSION = "v1"
-SIGNATURE_HEADER = "X-Pulse-Signature"
-TIMESTAMP_HEADER = "X-Pulse-Timestamp"
+SIGNATURE_HEADER = "X-Twenty-Webhook-Signature"
+TIMESTAMP_HEADER = "X-Twenty-Webhook-Timestamp"
+#: Sent by Twenty alongside the signature, read by nothing here on purpose: Twenty regenerates
+#: the nonce per delivery attempt, so it is neither a replay guard nor an idempotency key.
+NONCE_HEADER = "X-Twenty-Webhook-Nonce"
 SIGNATURE_FRESHNESS = timedelta(minutes=5)
 
 _TRUTHY = frozenset({"1", "true", "yes", "on"})
@@ -119,7 +123,8 @@ class StaleSignatureError(SignatureError):
     def __init__(self) -> None:
         super().__init__(
             f"signature timestamp is missing, unreadable, or outside the "
-            f"{int(SIGNATURE_FRESHNESS.total_seconds())}s freshness window"
+            f"{int(SIGNATURE_FRESHNESS.total_seconds())}s freshness window "
+            f"(milliseconds since the epoch expected)"
         )
 
 
@@ -291,9 +296,13 @@ def bearer_token(header: str | None) -> str:
 
 
 def sign(secret: str, timestamp: str, body: bytes) -> str:
-    """The signature a Twenty webhook is expected to carry, `{version}={hex}`."""
-    message = f"{SIGNATURE_VERSION}:{timestamp}:".encode() + body
-    return f"{SIGNATURE_VERSION}={hmac.new(secret.encode(), message, hashlib.sha256).hexdigest()}"
+    """The signature Twenty's sender computes: bare hex HMAC-SHA256 over `{timestamp}:{body}`.
+
+    No version affix on the message or the digest, and `body` is the raw request bytes as
+    received — never a re-serialization of a parsed body, so verification survives any future
+    middleware between the socket and this function.
+    """
+    return hmac.new(secret.encode(), f"{timestamp}:".encode() + body, hashlib.sha256).hexdigest()
 
 
 def verify_signature(
@@ -319,11 +328,15 @@ def verify_signature(
 
 
 def _is_fresh(timestamp: str | None, *, now: datetime, freshness: timedelta) -> bool:
+    """Twenty stamps milliseconds since the epoch; reading them as seconds would put every
+    genuine delivery tens of millennia in the future and reject it as stale."""
     if timestamp is None:
         return False
     try:
-        signed_at = datetime.fromtimestamp(int(timestamp), tz=timezone.utc)
-    except (TypeError, ValueError):
+        signed_at = datetime.fromtimestamp(int(timestamp) / 1000, tz=timezone.utc)
+    except (TypeError, ValueError, OverflowError, OSError):
+        # OverflowError/OSError: a value past the platform's datetime range — an
+        # attacker-controlled header lands in the stale bucket, never in a 500.
         return False
     return abs(now - signed_at) <= freshness
 
