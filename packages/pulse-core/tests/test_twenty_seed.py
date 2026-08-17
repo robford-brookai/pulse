@@ -182,7 +182,7 @@ class TestProjectionRefusals:
         """A record that would refuse its first drag never reaches the workspace."""
         records = {
             "programs": [{"fields": {"code": "rpm", "name": "RPM"}}],
-            "patients": [{"fields": {"canonicalPatientId": "cp-1", "name": {"firstName": "A", "lastName": "B"}}}],
+            "patients": [{"fields": {"canonicalPatientId": "cp-1", "name": "A B"}}],
             "patientPrograms": [
                 {
                     "fields": {
@@ -290,10 +290,7 @@ class TestLimits:
         """Spec: "A large population is loaded within rate limits" — 70 patients → 60 + 10."""
         records = {
             "programs": [],
-            "patients": [
-                {"fields": {"canonicalPatientId": f"cp-{i:03d}", "name": {"firstName": "S", "lastName": f"T{i}"}}}
-                for i in range(70)
-            ],
+            "patients": [{"fields": {"canonicalPatientId": f"cp-{i:03d}", "name": f"S T{i}"}} for i in range(70)],
             "patientPrograms": [],
         }
         path = _write_projection(tmp_path / "seed.json", records)
@@ -464,3 +461,39 @@ class TestCli:
         code = ts.main(["--target", "dev", "--source", str(path), "--dry-run"], env={})
         assert code == 1
         assert "checksum" in capsys.readouterr().out
+
+
+def test_select_values_encode_at_the_plan_boundary(tmp_path: Path) -> None:
+    """Live shape (4.1 first contact, 2026-08-16): SELECT values are UPPER_SNAKE on the wire.
+
+    The projection keeps catalog vocabulary; the loader encodes at the plan boundary, and an
+    encoded remote record is a noop rather than drift.
+    """
+    records = {
+        "programs": [{"fields": {"code": "rpm", "name": "RPM"}}],
+        "patients": [{"fields": {"canonicalPatientId": "cp-1", "name": "A B"}}],
+        "patientPrograms": [
+            {
+                "fields": {
+                    "canonicalPatientId": "cp-1",
+                    "programCode": "rpm",
+                    "lifecycleStatus": "pending_start",
+                    "lifecycleStatusAsOf": "2026-08-01T09:00:00Z",
+                    "qualificationStatus": "open",
+                    "qualificationStatusAsOf": "2026-08-01T09:00:00Z",
+                }
+            }
+        ],
+    }
+    path = _write_projection(tmp_path / "seed.json", records)
+    fake = _FakeRecords()
+    receipt = ts.seed(target="dev", source_path=path, transport=fake)
+    assert receipt.failure is None
+    sent = fake.state["patientPrograms"][0].payload
+    assert sent["lifecycleStatus"] == "PENDING_START"
+    assert sent["qualificationStatus"] == "OPEN"
+
+    # a second run against the encoded created state is all-noop, not drift
+    receipt2 = ts.seed(target="dev", source_path=path, transport=fake)
+    assert receipt2.failure is None
+    assert receipt2.objects["patientPrograms"] == {"create": 0, "update": 0, "noop": 1}
