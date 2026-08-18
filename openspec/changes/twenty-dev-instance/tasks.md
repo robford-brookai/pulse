@@ -314,6 +314,22 @@ files under `openspec/specs/`.
       `serial: catalog_generated_surfaces` — regenerates `generated/options.ts` and the
       golden files, the standing serial lane for generated surfaces.
 
+- [ ] 6.7 Rejection commentary on the live surface: replace the `POST /rest/comments` pin.
+      7.2's live run (assertion 9, receipts on #223) falsified the kanban-ingress guess —
+      v2.30 has **no `comment` object** (`object 'comments' not found`); the record-attached
+      commentary surface is a `note` plus a `noteTarget` binding it to the record. Rework
+      `pulse_ledger.twenty.client` to create a note (`POST /rest/notes`, title carrying the
+      rejection reason code, body the receipt text — identifiers, states, and reason codes
+      only, never payload values) and a `noteTarget` (`POST /rest/noteTargets`,
+      `noteId` + `patientProgramId` flat per the verified relation-column convention), and
+      demo3's `count_comments` to count `noteTargets` filtered by the record id. Keep the
+      client's degrade-never-block posture and the receipt-is-safe-to-attach guarantee
+      exactly as specced in `twenty-webhook-auth`/kanban-ingress scenarios.
+      Tests: scripted-transport tests for note+target creation (both calls, flat keys, no
+      body echo on failure); demo3 unit suite gains a faked noteTargets count; the smoke
+      test still parses. `task check` green.
+      `[model: sonnet | deps: 6.6 | lane: repo_change | wave: 16]`
+
 ## 7. The round trip (GATED: everything above)
 
 - [x] 7.1 `scripts/demo/demo3_live_kanban_drag.py`, following the existing demo's conventions —
