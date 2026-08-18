@@ -223,7 +223,10 @@ class TwentyCommentClient:
         if not object_name or not record_id:
             raise MalformedCardRefError(card_ref)
 
-        note_response = self._post_with_retry(NOTES_PATH, {"title": title, "body": body}, card_ref)
+        # Live v2.30 pin (demo3 assertion 9, 2026-08-18): `note` has no `body` field — the
+        # rich-text column is `bodyV2`, created as `{"markdown": ...}` (server converts to
+        # blocknote on write; a flat string is rejected).
+        note_response = self._post_with_retry(NOTES_PATH, {"title": title, "bodyV2": {"markdown": body}}, card_ref)
         note_id = _created_note_id(note_response)
         if note_id is None:
             raise CommentPostError(
@@ -234,7 +237,7 @@ class TwentyCommentClient:
             )
         self._post_with_retry(NOTE_TARGETS_PATH, {"noteId": note_id, f"{object_name}Id": record_id}, card_ref)
 
-    def _post_with_retry(self, path: str, payload: Mapping[str, str], card_ref: str) -> httpx.Response:
+    def _post_with_retry(self, path: str, payload: Mapping[str, object], card_ref: str) -> httpx.Response:
         """One create with the shared retry posture; returns the successful response."""
         attempt = 0
         while True:
