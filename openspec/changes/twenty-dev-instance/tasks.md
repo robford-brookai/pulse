@@ -314,7 +314,7 @@ files under `openspec/specs/`.
       `serial: catalog_generated_surfaces` — regenerates `generated/options.ts` and the
       golden files, the standing serial lane for generated surfaces.
 
-- [ ] 6.7 Rejection commentary on the live surface: replace the `POST /rest/comments` pin.
+- [x] 6.7 Rejection commentary on the live surface: replace the `POST /rest/comments` pin.
       7.2's live run (assertion 9, receipts on #223) falsified the kanban-ingress guess —
       v2.30 has **no `comment` object** (`object 'comments' not found`); the record-attached
       commentary surface is a `note` plus a `noteTarget` binding it to the record. Rework
