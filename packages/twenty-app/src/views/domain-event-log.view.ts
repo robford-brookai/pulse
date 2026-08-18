@@ -7,10 +7,10 @@
  * arrived.
  */
 
-import { defineView, ViewSortDirection, ViewType } from "../define";
+import { defineView, ViewSortDirection, ViewType } from "twenty-sdk/define";
 import { uid } from "../uid-map";
 
-export const DOMAIN_EVENT_LOG_VIEW = defineView({
+export default defineView({
   universalIdentifier: uid("view.domain-event-log"),
   name: "Event Log",
   icon: "IconHistory",
@@ -74,5 +74,3 @@ export const DOMAIN_EVENT_LOG_VIEW = defineView({
     },
   ],
 });
-
-export default DOMAIN_EVENT_LOG_VIEW;

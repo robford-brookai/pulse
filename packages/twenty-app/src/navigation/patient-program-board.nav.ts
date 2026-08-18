@@ -7,19 +7,22 @@
  *
  * It is a separate manifest entity (`navigationMenuItems`, alongside `views`), which is why it
  * carries its own identifier and points at the board's by UUID.
+ *
+ * The default export is the inline call: the CLI's manifest builder detects entities
+ * syntactically, and the const-then-default form is invisible to it.
  */
 
-import { defineNavigationMenuItem, NavigationMenuItemType } from "../define";
+import {
+  defineNavigationMenuItem,
+  NavigationMenuItemType,
+} from "twenty-sdk/define";
 import { uid } from "../uid-map";
-import { PATIENT_PROGRAM_LIFECYCLE_BOARD_UID } from "../views/patient-program-lifecycle-board.view";
 
-export const PATIENT_PROGRAM_BOARD_NAV_ITEM = defineNavigationMenuItem({
+export default defineNavigationMenuItem({
   universalIdentifier: uid("view.patient-program-lifecycle-board.navigation"),
   type: NavigationMenuItemType.VIEW,
   name: "Lifecycle Board",
   icon: "IconLayoutKanban",
   position: 0,
-  viewUniversalIdentifier: PATIENT_PROGRAM_LIFECYCLE_BOARD_UID,
+  viewUniversalIdentifier: uid("view.patient-program-lifecycle-board"),
 });
-
-export default PATIENT_PROGRAM_BOARD_NAV_ITEM;

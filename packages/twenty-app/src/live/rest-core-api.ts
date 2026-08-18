@@ -36,13 +36,20 @@ import type {
   CoreFilter,
   CoreRecord,
 } from "../logic-functions/core-api";
-import { ALL_OBJECTS } from "../objects";
+import CLINIC from "../objects/clinic.object";
+import DOMAIN_EVENT from "../objects/domain-event.object";
+import PATIENT_PROGRAM from "../objects/patient-program.object";
+import PATIENT from "../objects/patient.object";
+import PROGRAM from "../objects/program.object";
+import PROVIDER from "../objects/provider.object";
 
 const REST_ROOT = "rest";
 
 /** Object name → REST collection, read off the model rather than pluralized by rule. */
 const PLURALS: ReadonlyMap<string, string> = new Map(
-  ALL_OBJECTS.map((object) => [object.nameSingular, object.namePlural]),
+  [PATIENT, PROGRAM, PATIENT_PROGRAM, PROVIDER, CLINIC, DOMAIN_EVENT].map(
+    ({ config }) => [config.nameSingular, config.namePlural],
+  ),
 );
 
 /** The REST collection one modeled object lives in. An unmodeled name is an error. */

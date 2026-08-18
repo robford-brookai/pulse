@@ -296,10 +296,11 @@ def check_option_encoding(artifact: dict[str, Any]) -> Findings:
 
 # --- TypeScript against the artifact -----------------------------------------------------------
 
-_CONST_START = re.compile(r"^export const (?P<const>\w+): readonly GeneratedOption\[\] = \[$")
+_CONST_START = re.compile(r"^export const (?P<const>\w+): GeneratedOption\[\] = \[$")
 _OPTION_LINE = re.compile(
     r'^\s*\{ value: "(?P<value>[^"]*)", label: "(?P<label>[^"]*)", '
-    r'position: (?P<position>\d+), universalIdentifier: "(?P<uid>[^"]*)" \},$'
+    r'position: (?P<position>\d+), universalIdentifier: "(?P<uid>[^"]*)", '
+    r'id: "(?P<id>[^"]*)", color: "(?P<color>[^"]*)" \},$'
 )
 _INDEX_START = re.compile(r"^export const OPTIONS_BY_FIELD")
 _INDEX_LINE = re.compile(r'^\s*"(?P<key>[^"]+)": (?P<const>\w+),$')

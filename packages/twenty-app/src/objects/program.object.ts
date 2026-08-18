@@ -1,9 +1,14 @@
-/** Program — a care program. Programs are configuration, not schema (I6). */
+/**
+ * Program — a care program. Programs are configuration, not schema (I6).
+ *
+ * The default export is the inline `defineObject({...})` call: the CLI's manifest builder
+ * detects entities syntactically, and the const-then-default form is invisible to it.
+ */
 
-import { defineObject, FieldType, RelationType } from "../define";
+import { defineObject, FieldType, RelationType } from "twenty-sdk/define";
 import { uid } from "../uid-map";
 
-export const PROGRAM = defineObject({
+export default defineObject({
   universalIdentifier: uid("program"),
   nameSingular: "program",
   namePlural: "programs",
@@ -25,13 +30,11 @@ export const PROGRAM = defineObject({
       name: "patientPrograms",
       type: FieldType.RELATION,
       label: "Patient Programs",
-      relation: {
-        type: RelationType.ONE_TO_MANY,
-        targetObject: "patientProgram",
-        inverseField: "program",
-      },
+      relationTargetObjectMetadataUniversalIdentifier: uid("patientProgram"),
+      relationTargetFieldMetadataUniversalIdentifier: uid(
+        "patientProgram.program",
+      ),
+      universalSettings: { relationType: RelationType.ONE_TO_MANY },
     },
   ],
 });
-
-export default PROGRAM;

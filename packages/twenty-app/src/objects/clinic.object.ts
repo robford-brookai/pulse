@@ -2,13 +2,16 @@
  * Clinic — registry anchor for a referring or participating clinic. Same v1 posture as
  * Provider: no catalog-backed dimension yet, so `lifecycleStatus` carries a model-fixed
  * vocabulary that the generator still owns.
+ *
+ * The default export is the inline `defineObject({...})` call: the CLI's manifest builder
+ * detects entities syntactically, and the const-then-default form is invisible to it.
  */
 
 import { CLINIC_LIFECYCLE_STATUS_OPTIONS } from "../../generated/options";
-import { defineObject, FieldType, RelationType } from "../define";
+import { defineObject, FieldType, RelationType } from "twenty-sdk/define";
 import { uid } from "../uid-map";
 
-export const CLINIC = defineObject({
+export default defineObject({
   universalIdentifier: uid("clinic"),
   nameSingular: "clinic",
   namePlural: "clinics",
@@ -47,13 +50,9 @@ export const CLINIC = defineObject({
       name: "domainEvents",
       type: FieldType.RELATION,
       label: "Domain Events",
-      relation: {
-        type: RelationType.ONE_TO_MANY,
-        targetObject: "domainEvent",
-        inverseField: "clinic",
-      },
+      relationTargetObjectMetadataUniversalIdentifier: uid("domainEvent"),
+      relationTargetFieldMetadataUniversalIdentifier: uid("domainEvent.clinic"),
+      universalSettings: { relationType: RelationType.ONE_TO_MANY },
     },
   ],
 });
-
-export default CLINIC;

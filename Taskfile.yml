@@ -286,11 +286,16 @@ tasks:
     # from `check` (tests/test_twenty_app_scaffold.py pins it out, same posture as
     # twenty:deploy). The remote must exist first: run `twenty:app:publish` once, or add it by
     # hand with the remote:add line that target runs.
+    #
+    # `node_modules/.bin/twenty` after an unconditional `npm ci`, never `npx twenty`: the npm
+    # name `twenty` is squatted (an IP-geolocation tool), and npx silently falls back to it
+    # whenever the local bin is missing — a stale node_modules that predates the twenty-sdk
+    # dependency passes the `[ -d node_modules ]` guard and still has no local bin (7.2).
     requires:
       vars: [TARGET]
     cmds:
-      - '[ -d node_modules ] || npm ci'
-      - npx twenty --remote {{.TARGET}} dev:build packages/twenty-app
+      - npm ci
+      - node_modules/.bin/twenty --remote {{.TARGET}} dev:build packages/twenty-app
 
   twenty:app:publish:
     desc: Build and publish the Twenty app to TARGET's server registry (dev|staging|prod; needs that target's credential)
@@ -301,12 +306,13 @@ tasks:
     # step and never reached from `check`. The server rejects an equal or lower semver, so
     # bump `version` in packages/twenty-app/package.json in the same change as the model edit
     # being published — the failed publish names the version, not the cause.
+    # Same npx hazard as twenty:app:build: the local bin or nothing.
     requires:
       vars: [TARGET]
     cmds:
-      - '[ -d node_modules ] || npm ci'
-      - npx twenty remote:add --as {{.TARGET}} --url "$PULSE_TWENTY_{{upper .TARGET}}_URL" --api-key "$PULSE_TWENTY_{{upper .TARGET}}_TOKEN"
-      - npx twenty app:publish --private --remote {{.TARGET}} packages/twenty-app
+      - npm ci
+      - node_modules/.bin/twenty remote:add --as {{.TARGET}} --url "$PULSE_TWENTY_{{upper .TARGET}}_URL" --api-key "$PULSE_TWENTY_{{upper .TARGET}}_TOKEN"
+      - node_modules/.bin/twenty app:publish --private --remote {{.TARGET}} packages/twenty-app
 
   ledger:image:
     desc: Build the pulse-ledger service image (API + relay, one image) and tag it TAG (needs Docker)

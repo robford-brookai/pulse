@@ -9,111 +9,125 @@
  * restating a derivation.
  *
  * No role grants delete on anything — DomainEvent is append-only by policy, and entity records
- * are archived rather than removed.
+ * are archived rather than removed. Twenty has no create-without-update permission: an object's
+ * `canUpdateObjectRecords` covers create and update together, so "reads and edits entity
+ * records" grants both at once, which is what the old `canCreate`/`canUpdate` pair meant here.
+ *
+ * `defineApplicationRole`, not `defineRole`: this is the role a newly-provisioned member gets
+ * (the SDK's replacement for the config-level `defaultRole`), because staff is the
+ * least-capable role a human can hold.
+ *
+ * The default export is the inline call: the CLI's manifest builder detects entities
+ * syntactically, and the const-then-default form is invisible to it.
  */
 
-import { defineRole } from "../define";
+import { defineApplicationRole } from "twenty-sdk/define";
+import { uid } from "../uid-map";
 
-export const STAFF_ROLE = defineRole({
-  name: "staff",
+export default defineApplicationRole({
+  // Minted 2026-08-17 (task 6.4). Role identifiers live here rather than in uid-map.json
+  // because `uid_map_diff` rejects any key the Python model never asks for; moving the role
+  // family into the map is proposed in HANDOFF.md.
+  universalIdentifier: "c367c6f6-756a-421c-8908-fe6c2ca560b9",
   label: "Ops and Clinical Staff",
   description:
     "Reads and edits entity records; status fields and the event log are read-only.",
+  canBeAssignedToUsers: true,
+  canBeAssignedToAgents: false,
+  canBeAssignedToApiKeys: false,
   objectPermissions: [
     {
-      objectNameSingular: "clinic",
-      canRead: true,
-      canCreate: true,
-      canUpdate: true,
-      canDelete: false,
+      objectUniversalIdentifier: uid("clinic"),
+      canReadObjectRecords: true,
+      canUpdateObjectRecords: true,
+      canSoftDeleteObjectRecords: false,
+      canDestroyObjectRecords: false,
     },
     {
-      objectNameSingular: "patient",
-      canRead: true,
-      canCreate: true,
-      canUpdate: true,
-      canDelete: false,
+      objectUniversalIdentifier: uid("patient"),
+      canReadObjectRecords: true,
+      canUpdateObjectRecords: true,
+      canSoftDeleteObjectRecords: false,
+      canDestroyObjectRecords: false,
     },
     {
-      objectNameSingular: "patientProgram",
-      canRead: true,
-      canCreate: true,
-      canUpdate: true,
-      canDelete: false,
+      objectUniversalIdentifier: uid("patientProgram"),
+      canReadObjectRecords: true,
+      canUpdateObjectRecords: true,
+      canSoftDeleteObjectRecords: false,
+      canDestroyObjectRecords: false,
     },
     {
-      objectNameSingular: "program",
-      canRead: true,
-      canCreate: true,
-      canUpdate: true,
-      canDelete: false,
+      objectUniversalIdentifier: uid("program"),
+      canReadObjectRecords: true,
+      canUpdateObjectRecords: true,
+      canSoftDeleteObjectRecords: false,
+      canDestroyObjectRecords: false,
     },
     {
-      objectNameSingular: "provider",
-      canRead: true,
-      canCreate: true,
-      canUpdate: true,
-      canDelete: false,
+      objectUniversalIdentifier: uid("provider"),
+      canReadObjectRecords: true,
+      canUpdateObjectRecords: true,
+      canSoftDeleteObjectRecords: false,
+      canDestroyObjectRecords: false,
     },
     // Read the log, never write it: the producer role is the only create path.
     {
-      objectNameSingular: "domainEvent",
-      canRead: true,
-      canCreate: false,
-      canUpdate: false,
-      canDelete: false,
+      objectUniversalIdentifier: uid("domainEvent"),
+      canReadObjectRecords: true,
+      canUpdateObjectRecords: false,
+      canSoftDeleteObjectRecords: false,
+      canDestroyObjectRecords: false,
     },
   ],
   fieldPermissions: [
     {
-      objectNameSingular: "clinic",
-      fieldName: "lifecycleStatus",
-      canRead: true,
-      canUpdate: false,
+      objectUniversalIdentifier: uid("clinic"),
+      fieldUniversalIdentifier: uid("clinic.lifecycleStatus"),
+      canReadFieldValue: true,
+      canUpdateFieldValue: false,
     },
     {
-      objectNameSingular: "clinic",
-      fieldName: "lifecycleStatusAsOf",
-      canRead: true,
-      canUpdate: false,
+      objectUniversalIdentifier: uid("clinic"),
+      fieldUniversalIdentifier: uid("clinic.lifecycleStatusAsOf"),
+      canReadFieldValue: true,
+      canUpdateFieldValue: false,
     },
     {
-      objectNameSingular: "patientProgram",
-      fieldName: "lifecycleStatus",
-      canRead: true,
-      canUpdate: false,
+      objectUniversalIdentifier: uid("patientProgram"),
+      fieldUniversalIdentifier: uid("patientProgram.lifecycleStatus"),
+      canReadFieldValue: true,
+      canUpdateFieldValue: false,
     },
     {
-      objectNameSingular: "patientProgram",
-      fieldName: "lifecycleStatusAsOf",
-      canRead: true,
-      canUpdate: false,
+      objectUniversalIdentifier: uid("patientProgram"),
+      fieldUniversalIdentifier: uid("patientProgram.lifecycleStatusAsOf"),
+      canReadFieldValue: true,
+      canUpdateFieldValue: false,
     },
     {
-      objectNameSingular: "patientProgram",
-      fieldName: "qualificationStatus",
-      canRead: true,
-      canUpdate: false,
+      objectUniversalIdentifier: uid("patientProgram"),
+      fieldUniversalIdentifier: uid("patientProgram.qualificationStatus"),
+      canReadFieldValue: true,
+      canUpdateFieldValue: false,
     },
     {
-      objectNameSingular: "patientProgram",
-      fieldName: "qualificationStatusAsOf",
-      canRead: true,
-      canUpdate: false,
+      objectUniversalIdentifier: uid("patientProgram"),
+      fieldUniversalIdentifier: uid("patientProgram.qualificationStatusAsOf"),
+      canReadFieldValue: true,
+      canUpdateFieldValue: false,
     },
     {
-      objectNameSingular: "provider",
-      fieldName: "lifecycleStatus",
-      canRead: true,
-      canUpdate: false,
+      objectUniversalIdentifier: uid("provider"),
+      fieldUniversalIdentifier: uid("provider.lifecycleStatus"),
+      canReadFieldValue: true,
+      canUpdateFieldValue: false,
     },
     {
-      objectNameSingular: "provider",
-      fieldName: "lifecycleStatusAsOf",
-      canRead: true,
-      canUpdate: false,
+      objectUniversalIdentifier: uid("provider"),
+      fieldUniversalIdentifier: uid("provider.lifecycleStatusAsOf"),
+      canReadFieldValue: true,
+      canUpdateFieldValue: false,
     },
   ],
 });
-
-export default STAFF_ROLE;

@@ -7,6 +7,9 @@
  * correction 2). Twenty has no polymorphic relation: the event carries three nullable
  * relations with exactly one populated, and none populated is the orphan case
  * (`src/views/domain-event-orphans.view.ts`).
+ *
+ * The default export is the inline `defineObject({...})` call: the CLI's manifest builder
+ * detects entities syntactically, and the const-then-default form is invisible to it.
  */
 
 import {
@@ -15,10 +18,10 @@ import {
   DOMAIN_EVENT_ENTITY_TYPE_OPTIONS,
   DOMAIN_EVENT_EVENT_TYPE_OPTIONS,
 } from "../../generated/options";
-import { defineObject, FieldType, RelationType } from "../define";
+import { defineObject, FieldType, RelationType } from "twenty-sdk/define";
 import { uid } from "../uid-map";
 
-export const DOMAIN_EVENT = defineObject({
+export default defineObject({
   universalIdentifier: uid("domainEvent"),
   nameSingular: "domainEvent",
   namePlural: "domainEvents",
@@ -165,10 +168,13 @@ export const DOMAIN_EVENT = defineObject({
       label: "Patient Program",
       description:
         "Target for patient events; empty when the ref does not resolve (orphan view).",
-      relation: {
-        type: RelationType.MANY_TO_ONE,
-        targetObject: "patientProgram",
-        inverseField: "domainEvents",
+      relationTargetObjectMetadataUniversalIdentifier: uid("patientProgram"),
+      relationTargetFieldMetadataUniversalIdentifier: uid(
+        "patientProgram.domainEvents",
+      ),
+      universalSettings: {
+        relationType: RelationType.MANY_TO_ONE,
+        joinColumnName: "patientProgramId",
       },
     },
     {
@@ -176,10 +182,13 @@ export const DOMAIN_EVENT = defineObject({
       name: "provider",
       type: FieldType.RELATION,
       label: "Provider",
-      relation: {
-        type: RelationType.MANY_TO_ONE,
-        targetObject: "provider",
-        inverseField: "domainEvents",
+      relationTargetObjectMetadataUniversalIdentifier: uid("provider"),
+      relationTargetFieldMetadataUniversalIdentifier: uid(
+        "provider.domainEvents",
+      ),
+      universalSettings: {
+        relationType: RelationType.MANY_TO_ONE,
+        joinColumnName: "providerId",
       },
     },
     {
@@ -187,13 +196,14 @@ export const DOMAIN_EVENT = defineObject({
       name: "clinic",
       type: FieldType.RELATION,
       label: "Clinic",
-      relation: {
-        type: RelationType.MANY_TO_ONE,
-        targetObject: "clinic",
-        inverseField: "domainEvents",
+      relationTargetObjectMetadataUniversalIdentifier: uid("clinic"),
+      relationTargetFieldMetadataUniversalIdentifier: uid(
+        "clinic.domainEvents",
+      ),
+      universalSettings: {
+        relationType: RelationType.MANY_TO_ONE,
+        joinColumnName: "clinicId",
       },
     },
   ],
 });
-
-export default DOMAIN_EVENT;

@@ -6,16 +6,19 @@
  * Each dimension carries its own `<field>AsOf` guard. One pair per dimension is what makes the
  * LWW guard per-dimension rather than per-row: a qualification event never touches
  * `lifecycleStatusAsOf`.
+ *
+ * The default export is the inline `defineObject({...})` call: the CLI's manifest builder
+ * detects entities syntactically, and the const-then-default form is invisible to it.
  */
 
 import {
   PATIENT_PROGRAM_LIFECYCLE_STATUS_OPTIONS,
   PATIENT_PROGRAM_QUALIFICATION_STATUS_OPTIONS,
 } from "../../generated/options";
-import { defineObject, FieldType, RelationType } from "../define";
+import { defineObject, FieldType, RelationType } from "twenty-sdk/define";
 import { uid } from "../uid-map";
 
-export const PATIENT_PROGRAM = defineObject({
+export default defineObject({
   universalIdentifier: uid("patientProgram"),
   nameSingular: "patientProgram",
   namePlural: "patientPrograms",
@@ -33,10 +36,13 @@ export const PATIENT_PROGRAM = defineObject({
       // A required relation is enforced by the foreign key; Twenty has no literal default for
       // one, so `isNullable: false` stands alone here.
       isNullable: false,
-      relation: {
-        type: RelationType.MANY_TO_ONE,
-        targetObject: "patient",
-        inverseField: "patientPrograms",
+      relationTargetObjectMetadataUniversalIdentifier: uid("patient"),
+      relationTargetFieldMetadataUniversalIdentifier: uid(
+        "patient.patientPrograms",
+      ),
+      universalSettings: {
+        relationType: RelationType.MANY_TO_ONE,
+        joinColumnName: "patientId",
       },
     },
     {
@@ -45,10 +51,13 @@ export const PATIENT_PROGRAM = defineObject({
       type: FieldType.RELATION,
       label: "Program",
       isNullable: false,
-      relation: {
-        type: RelationType.MANY_TO_ONE,
-        targetObject: "program",
-        inverseField: "patientPrograms",
+      relationTargetObjectMetadataUniversalIdentifier: uid("program"),
+      relationTargetFieldMetadataUniversalIdentifier: uid(
+        "program.patientPrograms",
+      ),
+      universalSettings: {
+        relationType: RelationType.MANY_TO_ONE,
+        joinColumnName: "programId",
       },
     },
     // Denormalized for the webhook path, and only for it. A Twenty webhook delivers
@@ -114,13 +123,11 @@ export const PATIENT_PROGRAM = defineObject({
       name: "domainEvents",
       type: FieldType.RELATION,
       label: "Domain Events",
-      relation: {
-        type: RelationType.ONE_TO_MANY,
-        targetObject: "domainEvent",
-        inverseField: "patientProgram",
-      },
+      relationTargetObjectMetadataUniversalIdentifier: uid("domainEvent"),
+      relationTargetFieldMetadataUniversalIdentifier: uid(
+        "domainEvent.patientProgram",
+      ),
+      universalSettings: { relationType: RelationType.ONE_TO_MANY },
     },
   ],
 });
-
-export default PATIENT_PROGRAM;
