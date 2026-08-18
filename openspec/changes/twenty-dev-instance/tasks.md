@@ -285,6 +285,35 @@ files under `openspec/specs/`.
       live shape, synthetic values) covers match-found, no-match, and two-matches.
       `[model: sonnet | deps: 6.4 | lane: repo_change | wave: 14]`
 
+- [ ] 6.6 Package the app as the composable surface, and key kanban columns with the live
+      option encoding. 7.2's live install (2026-08-17, receipts on #223) settled the design
+      question: a full-model `app:install` collides wholesale with the artifact-applied
+      workspace metadata (45 ENTITY_ALREADY_EXISTS / 40 FIELD_ALREADY_EXISTS — an app cannot
+      adopt workspace-owned entities), while a views-only package **installs cleanly and its
+      views bind to workspace-owned objects and fields** (probe: `@pulse/twenty-app` v0.1.1
+      live on dev, Lifecycle Board present and grouped). So the packaged app carries exactly
+      the disjoint surface the 4.2 evaluation recommended — views, navigation, the
+      `project-domain-event` logic function, and one placeholder app-owned default role
+      (label `PULSE App Default`, UID `9c1f7d64-2f4e-4f5a-9b6a-0f4c2d8e7a11`, grants
+      nothing — the SDK requires a default role and the artifact's roles are label-keyed
+      live with no UID to reference) — while objects and roles stay artifact-owned. Keep the
+      6.4-ported object/role sources for the model tests; exclude them from the built
+      manifest (the CLI derives entities from the file tree, so split the app path or the
+      tree accordingly, without breaking `tests/manifest.test.ts`).
+      Second half, the demo3 assertion-3 finding: the live board's columns were keyed with
+      catalog-vocabulary values (`active`) while the artifact deploy stores options
+      UPPER_SNAKE-encoded (`ACTIVE`) — cards could never land in their column. Emit
+      `encodedValue` (the deploy-boundary `encode_option_value` result) alongside `value` in
+      `generated/options.ts`, key every kanban `viewGroups.fieldValue` on it, and bump the
+      app version so republish is accepted.
+      Tests: manifest smoke test asserts the built manifest carries views/nav/logic-function
+      and the placeholder role ONLY (no objects, no other roles); golden files updated for
+      `encodedValue`; a vitest pin that every kanban view group fieldValue equals the encoded
+      form of a catalog state; `task check` green.
+      `[model: sonnet | deps: 6.4, 6.5 | lane: repo_change | wave: 15]`
+      `serial: catalog_generated_surfaces` — regenerates `generated/options.ts` and the
+      golden files, the standing serial lane for generated surfaces.
+
 ## 7. The round trip (GATED: everything above)
 
 - [x] 7.1 `scripts/demo/demo3_live_kanban_drag.py`, following the existing demo's conventions —
