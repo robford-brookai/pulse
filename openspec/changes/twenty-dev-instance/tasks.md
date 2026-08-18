@@ -285,7 +285,7 @@ files under `openspec/specs/`.
       live shape, synthetic values) covers match-found, no-match, and two-matches.
       `[model: sonnet | deps: 6.4 | lane: repo_change | wave: 14]`
 
-- [ ] 6.6 Package the app as the composable surface, and key kanban columns with the live
+- [x] 6.6 Package the app as the composable surface, and key kanban columns with the live
       option encoding. 7.2's live install (2026-08-17, receipts on #223) settled the design
       question: a full-model `app:install` collides wholesale with the artifact-applied
       workspace metadata (45 ENTITY_ALREADY_EXISTS / 40 FIELD_ALREADY_EXISTS — an app cannot
