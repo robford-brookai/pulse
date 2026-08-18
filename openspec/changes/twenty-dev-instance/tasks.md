@@ -274,7 +274,7 @@ files under `openspec/specs/`.
       Opus: five interlocking type-shape families across every entity file, where a wrong
       permission key or relation direction ships a wrong live schema on first publish.
 
-- [ ] 6.5 Fix demo3's falsified view-read pin: 7.2's live contact showed no `getCoreViews`
+- [x] 6.5 Fix demo3's falsified view-read pin: 7.2's live contact showed no `getCoreViews`
       on `/graphql` — views are served by `getViews` on `/metadata`, and the live `View`
       type carries **no `universalIdentifier` field**, so assertion 2 cannot match by UID.
       Re-key the view match on (`objectMetadataId` resolved from the live patientProgram
