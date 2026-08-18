@@ -312,9 +312,10 @@ DISPOSITION_REJECTED = "rejected"
 #: response is a 500 — a delivery that was not handled must not read to Twenty as handled.
 DISPOSITION_ERROR = "error"
 
-#: Injected like `Committer`: anything that posts one comment body on one Twenty card, raising on
-#: permanent failure. `TwentyCommentClient.create_comment` in the running service, a fake in tests.
-CommentPoster = Callable[[str, str], None]
+#: Injected like `Committer`: anything that attaches one titled commentary body to one Twenty card
+#: — (card ref, title, body), raising on permanent failure. `TwentyCommentClient.create_comment`
+#: (a note plus its noteTarget binding, task 6.7) in the running service, a fake in tests.
+CommentPoster = Callable[[str, str, str], None]
 
 
 class CommentAdapterNotConfiguredError(RuntimeError):
@@ -329,7 +330,7 @@ class CommentAdapterNotConfiguredError(RuntimeError):
         super().__init__("no Twenty comment adapter is configured for this app")
 
 
-def _unconfigured_comment_poster(card_ref: str, body: str) -> None:
+def _unconfigured_comment_poster(card_ref: str, title: str, body: str) -> None:
     raise CommentAdapterNotConfiguredError()
 
 
@@ -394,7 +395,7 @@ def _post_rejection_comment(receipt: RejectionReceipt, post_comment: CommentPost
     for `logger.exception`, and the frame it would serialise holds the payload.
     """
     try:
-        post_comment(receipt.card_ref, format_rejection_comment(receipt))
+        post_comment(receipt.card_ref, receipt.reason, format_rejection_comment(receipt))
     except Exception as exc:
         logger.warning(
             "%s comment_post_failed card=%s error=%s",

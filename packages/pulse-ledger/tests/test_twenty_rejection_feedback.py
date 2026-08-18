@@ -143,14 +143,14 @@ class RecordingCommentPoster:
 
     def __init__(self, *, fail: bool = False) -> None:
         self.fail = fail
-        self.posts: list[tuple[str, str]] = []
+        self.posts: list[tuple[str, str, str]] = []
 
     @property
     def bodies(self) -> list[str]:
-        return [body for _, body in self.posts]
+        return [body for _, _, body in self.posts]
 
-    def __call__(self, card_ref: str, body: str) -> None:
-        self.posts.append((card_ref, body))
+    def __call__(self, card_ref: str, title: str, body: str) -> None:
+        self.posts.append((card_ref, title, body))
         if self.fail:
             raise CommentPostError(card_ref, attempts=4, status_code=503)
 
@@ -259,7 +259,7 @@ class TestTheRejectionPostsOneComment:
             catalog_version=str(body["catalog_version"]),
         )
 
-        assert comment_poster.posts == [(ILLEGAL_CARD_REF, format_rejection_comment(receipt))]
+        assert comment_poster.posts == [(ILLEGAL_CARD_REF, receipt.reason, format_rejection_comment(receipt))]
 
     def test_the_comment_body_carries_the_states_and_the_reason(
         self, client: TestClient, secret: str, comment_poster: RecordingCommentPoster
