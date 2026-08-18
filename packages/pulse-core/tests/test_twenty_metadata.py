@@ -21,6 +21,7 @@ import pytest
 from pulse_core import twenty_metadata as tmg
 from pulse_core import twenty_model as tm
 from pulse_core.catalog_gen import Catalog, load_catalog
+from pulse_core.twenty_model import encode_option_value
 from pytest_socket import disable_socket, enable_socket
 
 _ENTITY_OBJECTS = ("patient", "program", "patientProgram", "provider", "clinic")
@@ -183,6 +184,18 @@ def test_the_typescript_options_equal_the_artifact_options(rendered: dict[Path, 
     assert from_ts == from_artifact
 
 
+def test_every_generated_option_carries_the_encoding_the_live_server_stores(rendered: dict[Path, str]) -> None:
+    """Task 6.6: `encodedValue` is the deploy boundary's own result, emitted beside `value`.
+
+    The artifact keeps the catalog vocabulary and `twenty_deploy` encodes at the wire; anything
+    keyed on a *stored* value — a kanban column's `fieldValue` above all — needs the encoded form.
+    Demo3's assertion 3 found the live board keyed on `value`, a board no card could reach.
+    """
+    pairs = re.findall(r'value: "(.+?)", encodedValue: "(.+?)"', rendered[tmg.OPTIONS_PATH])
+    assert pairs, "generated/options.ts emits no encodedValue"
+    assert [(value, encoded) for value, encoded in pairs if encoded != encode_option_value(value)] == []
+
+
 def _parse_options_ts(source: str) -> dict[str, list[tuple[str, str]]]:
     """Read the generated TypeScript as data — the same trick task 2.3's validator needs."""
     parsed: dict[str, list[tuple[str, str]]] = {}
@@ -192,7 +205,9 @@ def _parse_options_ts(source: str) -> dict[str, list[tuple[str, str]]]:
         if heading:
             key = heading.group(1)
             parsed[key] = []
-        entry = re.search(r'value: "(.+?)", label: ".*?", position: \d+, universalIdentifier: "(.+?)"', line)
+        entry = re.search(
+            r'value: "(.+?)", encodedValue: ".*?", label: ".*?", position: \d+, universalIdentifier: "(.+?)"', line
+        )
         if entry and key is not None:
             parsed[key].append((entry.group(1), entry.group(2)))
     return parsed

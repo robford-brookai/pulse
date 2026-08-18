@@ -3,7 +3,7 @@
  *
  * The board is the drag surface: moving a card is a `lifecycleStatus` write, which Twenty
  * delivers as a webhook the ledger turns into an event. That is why `canonicalPatientId` and
- * `programCode` are denormalized onto the object (see `src/objects/patient-program.object.ts`) —
+ * `programCode` are denormalized onto the object (see `packages/twenty-model/objects/patient-program.object.ts`) —
  * the delivery carries the flat entity, so the drag has to resolve to a patient and a program
  * without a read-back.
  *
@@ -30,13 +30,19 @@ import { uid } from "../uid-map";
  * One column per option, in the generated order. `position` is re-derived from the index rather
  * than copied from the option: a view group's position orders columns on this board, while an
  * option's position orders the picklist — they agree today and are not the same number.
+ *
+ * `fieldValue` is `encodedValue`, not `value`: a view group matches the value the server *stores*,
+ * and `twenty_deploy` re-encodes every option UPPER_SNAKE at the wire, so a column keyed `active`
+ * against a stored `ACTIVE` is a column no card can ever enter. Demo3's assertion 3 found exactly
+ * that on the live board. The UID key stays on `value` — it is a stable name, not a wire value,
+ * and re-keying it would recreate every column.
  */
 const lifecycleGroups = (): ViewGroupManifest[] =>
   PATIENT_PROGRAM_LIFECYCLE_STATUS_OPTIONS.map((option, index) => ({
     universalIdentifier: uid(
       `view.patient-program-lifecycle-board.group.${option.value}`,
     ),
-    fieldValue: option.value,
+    fieldValue: option.encodedValue,
     position: index,
     isVisible: true,
   }));

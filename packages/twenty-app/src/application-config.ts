@@ -4,8 +4,10 @@
  * manifest entry, so this config carries no `objects`/`roles`/`views` arrays for a reviewer to
  * hold in sync with the files (task 6.4; the arrays it used to carry are deleted, not moved).
  *
- * The default role lives with the role itself: `src/roles/staff.role.ts` is declared with
- * `defineApplicationRole`, the SDK's replacement for a config-level `defaultRole` name.
+ * The default role lives with the role itself: `src/roles/app-default.role.ts` is declared with
+ * `defineApplicationRole`, the SDK's replacement for a config-level `defaultRole` name. Since
+ * task 6.6 that is a placeholder granting nothing — the roles that grant anything are
+ * artifact-owned and deliberately outside this app path (`packages/twenty-model/roles/`).
  *
  * `export default defineApplication({...})` inline, never const-then-default: the CLI's
  * manifest builder detects the config syntactically and the indirect form is invisible to it —

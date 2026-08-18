@@ -35,14 +35,23 @@ import yaml
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _APP = _REPO_ROOT / "packages" / "twenty-app"
 
+#: The artifact-owned half of the model, deliberately outside the app path (task 6.6): the CLI
+#: derives an app's entities by globbing `**/*.ts` under the app path, and an app that declares
+#: objects the workspace already owns fails to install wholesale (7.2, 45 ENTITY_ALREADY_EXISTS).
+#: Objects and the three real roles are applied by `twenty:deploy` from the artifact instead, so
+#: they live here, still typechecked and still covered by the app's model suite.
+_MODEL = _REPO_ROOT / "packages" / "twenty-model"
+
 #: The layout `design/platform/pulse-app-scaffold.md` promises. Every one ships a tracked
 #: `.gitkeep`: git cannot track an empty directory, and a fresh clone must carry the tree
 #: the generator writes into (the cat1 delivery-class rule).
 _LAYOUT = (
-    "src/objects",
+    # The app path's own tree: the composable surface plus the placeholder default role the SDK
+    # requires. `src/objects` and the real roles moved to `packages/twenty-model/` in task 6.6.
     "src/roles",
     "src/logic-functions",
     "src/views",
+    "src/navigation",
     "generated",
     # The serialized Metadata API operation set task 2.2 emits and task 4.x deploys. It carries
     # tracked content rather than a `.gitkeep`: the artifact itself is committed, because the
@@ -132,6 +141,32 @@ def test_layout_exists_and_reaches_a_fresh_clone():
         assert _tracked(keep) or any(
             _tracked(f"packages/twenty-app/{relative}/{p.name}") for p in directory.iterdir()
         ), f"{relative} has no tracked content — a fresh clone would not have the directory"
+
+
+def test_the_model_sources_live_outside_the_app_path():
+    """Task 6.6: the packaged app's surface is disjoint from the artifact's, by file tree.
+
+    The CLI globs `**/*.ts` under the app path and treats every inline `export default
+    defineObject(...)` / `defineRole(...)` as an entity to publish. 7.2's live install proved an
+    app cannot adopt workspace-owned entities — the full-model publish returned 45
+    ENTITY_ALREADY_EXISTS and 40 FIELD_ALREADY_EXISTS — so the exclusion has to be the tree
+    itself. `packages/twenty-app/tests/manifest.test.ts` asserts the resulting manifest; this is
+    the same fact where a Python-only CI run can see it.
+    """
+    for relative in ("objects", "roles"):
+        directory = _MODEL / relative
+        assert directory.is_dir(), f"packages/twenty-model/{relative} missing"
+        assert any(_tracked(f"packages/twenty-model/{relative}/{p.name}") for p in directory.iterdir()), (
+            f"packages/twenty-model/{relative} has no tracked content — a fresh clone would not have it"
+        )
+
+    inline_entity = re.compile(r"^export default define(Object|Role)\(\{$", re.MULTILINE)
+    stowaways = sorted(
+        str(path.relative_to(_REPO_ROOT))
+        for path in _APP.rglob("*.ts")
+        if ".twenty" not in path.parts and "node_modules" not in path.parts and inline_entity.search(path.read_text())
+    )
+    assert stowaways == [], f"object/role sources inside the app path would publish and collide: {stowaways}"
 
 
 def test_dev_toolchain_is_pinned_exactly():

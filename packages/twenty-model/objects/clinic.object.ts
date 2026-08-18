@@ -7,9 +7,9 @@
  * detects entities syntactically, and the const-then-default form is invisible to it.
  */
 
-import { CLINIC_LIFECYCLE_STATUS_OPTIONS } from "../../generated/options";
+import { CLINIC_LIFECYCLE_STATUS_OPTIONS } from "../../twenty-app/generated/options";
 import { defineObject, FieldType, RelationType } from "twenty-sdk/define";
-import { uid } from "../uid-map";
+import { uid } from "../../twenty-app/src/uid-map";
 
 export default defineObject({
   universalIdentifier: uid("clinic"),

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { FieldType } from "twenty-sdk/define";
+import { FieldType, ViewType } from "twenty-sdk/define";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -10,15 +10,16 @@ import {
 import APPLICATION from "../src/application-config";
 import PROJECT_DOMAIN_EVENT from "../src/logic-functions/project-domain-event";
 import PATIENT_PROGRAM_BOARD_NAV_ITEM from "../src/navigation/patient-program-board.nav";
-import CLINIC from "../src/objects/clinic.object";
-import DOMAIN_EVENT from "../src/objects/domain-event.object";
-import PATIENT_PROGRAM from "../src/objects/patient-program.object";
-import PATIENT from "../src/objects/patient.object";
-import PROGRAM from "../src/objects/program.object";
-import PROVIDER from "../src/objects/provider.object";
-import APP_ROLE from "../src/roles/app.role";
-import PRODUCER_ROLE from "../src/roles/producer.role";
-import STAFF_ROLE from "../src/roles/staff.role";
+import CLINIC from "../../twenty-model/objects/clinic.object";
+import DOMAIN_EVENT from "../../twenty-model/objects/domain-event.object";
+import PATIENT_PROGRAM from "../../twenty-model/objects/patient-program.object";
+import PATIENT from "../../twenty-model/objects/patient.object";
+import PROGRAM from "../../twenty-model/objects/program.object";
+import PROVIDER from "../../twenty-model/objects/provider.object";
+import APP_ROLE from "../../twenty-model/roles/app.role";
+import PRODUCER_ROLE from "../../twenty-model/roles/producer.role";
+import STAFF_ROLE from "../../twenty-model/roles/staff.role";
+import APP_DEFAULT_ROLE from "../src/roles/app-default.role";
 import { UID_MAP } from "../src/uid-map";
 import DOMAIN_EVENT_LOG_VIEW from "../src/views/domain-event-log.view";
 import DOMAIN_EVENT_ORPHANS_VIEW from "../src/views/domain-event-orphans.view";
@@ -34,8 +35,17 @@ import PATIENT_PROGRAM_STATUS_BOARD_VIEW from "../src/views/patient-program-stat
 // says, plus the one syntactic property the CLI's manifest builder demands: every entity
 // file's default export is the inline `define*({...})` call (the const-then-default form is
 // invisible to it — 7.2's first live publish).
+//
+// Since task 6.6 the model spans two trees, and the split is load-bearing: the objects and the
+// three real roles are artifact-owned and live in `packages/twenty-model/`, outside the app path
+// the CLI globs, so the packaged app cannot claim entities the workspace already owns. They are
+// still the model this suite checks — the artifact deploys them — so both roots are walked here.
+// `tests/manifest.test.ts` is the other side: what the built manifest does and does not carry.
 
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
+const modelRoot = fileURLToPath(
+  new URL("../../twenty-model/", import.meta.url),
+);
 
 // One list per entity kind, in the order the deleted `ALL_*` arrays carried (the model
 // definition's order). The application config no longer names entities — the CLI derives them
@@ -48,7 +58,15 @@ const OBJECT_RESULTS = [
   CLINIC,
   DOMAIN_EVENT,
 ] as const;
-const ROLE_RESULTS = [PRODUCER_ROLE, STAFF_ROLE, APP_ROLE] as const;
+// The three artifact-owned roles plus the app's placeholder default. The placeholder is in the
+// list on purpose: "no role grants delete" and "every permission names a defined object" have to
+// hold for it too, and they hold vacuously only for as long as it stays empty.
+const ROLE_RESULTS = [
+  PRODUCER_ROLE,
+  STAFF_ROLE,
+  APP_ROLE,
+  APP_DEFAULT_ROLE,
+] as const;
 const VIEW_RESULTS = [
   PATIENT_PROGRAM_STATUS_BOARD_VIEW,
   PATIENT_PROGRAM_LIFECYCLE_BOARD_VIEW,
@@ -110,47 +128,63 @@ describe("the SDK accepts every definition", () => {
   it("exports every entity as the inline define* call the CLI detects", () => {
     // Syntactic, because the CLI's detection is: `export default defineX({...})` inline is an
     // entity, a const re-exported as default is not. A file that drifts back builds an empty
-    // manifest that publishes nothing.
+    // manifest that publishes nothing. Both roots: detection is what makes the artifact-owned
+    // sources real entities too, they are simply outside the path the CLI globs.
     const entityFiles = [
-      "src/application-config.ts",
-      "src/logic-functions/project-domain-event.ts",
-      "src/navigation/patient-program-board.nav.ts",
-      "src/objects/clinic.object.ts",
-      "src/objects/domain-event.object.ts",
-      "src/objects/patient-program.object.ts",
-      "src/objects/patient.object.ts",
-      "src/objects/program.object.ts",
-      "src/objects/provider.object.ts",
-      "src/roles/app.role.ts",
-      "src/roles/producer.role.ts",
-      "src/roles/staff.role.ts",
-      "src/views/domain-event-log.view.ts",
-      "src/views/domain-event-orphans.view.ts",
-      "src/views/patient-program-lifecycle-board.view.ts",
-      "src/views/patient-program-status-board.view.ts",
+      `${packageRoot}src/application-config.ts`,
+      `${packageRoot}src/logic-functions/project-domain-event.ts`,
+      `${packageRoot}src/navigation/patient-program-board.nav.ts`,
+      `${packageRoot}src/roles/app-default.role.ts`,
+      `${packageRoot}src/views/domain-event-log.view.ts`,
+      `${packageRoot}src/views/domain-event-orphans.view.ts`,
+      `${packageRoot}src/views/patient-program-lifecycle-board.view.ts`,
+      `${packageRoot}src/views/patient-program-status-board.view.ts`,
+      `${modelRoot}objects/clinic.object.ts`,
+      `${modelRoot}objects/domain-event.object.ts`,
+      `${modelRoot}objects/patient-program.object.ts`,
+      `${modelRoot}objects/patient.object.ts`,
+      `${modelRoot}objects/program.object.ts`,
+      `${modelRoot}objects/provider.object.ts`,
+      `${modelRoot}roles/app.role.ts`,
+      `${modelRoot}roles/producer.role.ts`,
+      `${modelRoot}roles/staff.role.ts`,
     ];
     for (const source of entityFiles) {
-      const text = readFileSync(`${packageRoot}${source}`, "utf8");
+      const text = readFileSync(source, "utf8");
       expect(text, source).toMatch(/^export default define\w+\(\{$/m);
       expect(text, source).not.toMatch(/^export default [A-Z_]+;/m);
     }
   });
 
-  it("declares the default role with defineApplicationRole, and only staff with it", () => {
-    // The SDK's replacement for the deleted config-level `defaultRole` name: the role a
-    // newly-provisioned member gets is the one declared with `defineApplicationRole`.
+  it("declares the app's default role with defineApplicationRole, and only that one", () => {
+    // The SDK requires exactly one `defineApplicationRole` per app and it must be inside the app
+    // path — it is what `defaultRoleUniversalIdentifier` resolves to. Since task 6.6 that is the
+    // placeholder that grants nothing; the real roles are the artifact's, applied by
+    // `twenty:deploy` and keyed by label, so a second `defineApplicationRole` anywhere would
+    // either lose the placeholder or publish a role the workspace already owns.
+    expect(
+      readFileSync(`${packageRoot}src/roles/app-default.role.ts`, "utf8"),
+    ).toMatch(/^export default defineApplicationRole\(\{$/m);
     for (const source of [
-      "src/roles/staff.role.ts",
-      "src/roles/producer.role.ts",
-      "src/roles/app.role.ts",
+      `${modelRoot}roles/staff.role.ts`,
+      `${modelRoot}roles/producer.role.ts`,
+      `${modelRoot}roles/app.role.ts`,
     ]) {
-      const text = readFileSync(`${packageRoot}${source}`, "utf8");
-      const expected =
-        source === "src/roles/staff.role.ts"
-          ? /^export default defineApplicationRole\(\{$/m
-          : /^export default defineRole\(\{$/m;
-      expect(text, source).toMatch(expected);
+      expect(readFileSync(source, "utf8"), source).toMatch(
+        /^export default defineRole\(\{$/m,
+      );
     }
+  });
+
+  it("grants the placeholder default role nothing at all", () => {
+    // Its whole job is to satisfy the SDK. A permission added here would put the access model in
+    // two places — the artifact's roles and the app's — which is the collision task 6.6 removed.
+    const role = APP_DEFAULT_ROLE.config;
+    expect(role.objectPermissions ?? []).toStrictEqual([]);
+    expect(role.fieldPermissions ?? []).toStrictEqual([]);
+    expect(role.canBeAssignedToUsers ?? false).toBe(false);
+    expect(role.canReadAllObjectRecords ?? false).toBe(false);
+    expect(role.canUpdateAllObjectRecords ?? false).toBe(false);
   });
 });
 
@@ -210,8 +244,8 @@ describe("object files against the UID map", () => {
     }
   });
 
-  it("keeps the five identifiers minted outside the map canonical, unique, and disjoint from it", () => {
-    // The application, the three roles, and the logic function: entities the SDK requires an
+  it("keeps every identifier minted outside the map canonical, unique, and disjoint from it", () => {
+    // The application, the four roles, and the logic function: entities the SDK requires an
     // identifier on, in families `uid_map_diff` would reject as orphans (HANDOFF.md proposes
     // the map learn them). Until then this is their collision check.
     const CANONICAL_UUID =
@@ -302,15 +336,15 @@ describe("SELECT options come from generated code", () => {
     // `application-config.ts` is exempt from the inline-UUID check alone: its identifier is one
     // of the five deliberately minted outside the map (checked above), not a drifted option UID.
     const sources = [
-      "src/uid-map.ts",
+      `${packageRoot}src/uid-map.ts`,
       ...ALL_OBJECTS.map(
         (object) =>
-          `src/objects/${object.nameSingular.replace(/([A-Z])/g, "-$1").toLowerCase()}.object.ts`,
+          `${modelRoot}objects/${object.nameSingular.replace(/([A-Z])/g, "-$1").toLowerCase()}.object.ts`,
       ),
     ];
 
     for (const source of sources) {
-      const text = readFileSync(`${packageRoot}${source}`, "utf8");
+      const text = readFileSync(source, "utf8");
       expect(text, source).not.toMatch(/value:\s*["']/);
       expect(text, source).not.toMatch(
         /universalIdentifier:\s*["'][0-9a-f]{8}-/,
@@ -498,11 +532,36 @@ describe("roles, views, and the application config", () => {
     // view file, and a `fieldValue` that is not a catalog state cannot occur.
     const board = PATIENT_PROGRAM_LIFECYCLE_BOARD_VIEW.config;
     expect(board.groups?.map((group) => group.fieldValue)).toStrictEqual(
-      PATIENT_PROGRAM_LIFECYCLE_STATUS_OPTIONS.map((option) => option.value),
+      PATIENT_PROGRAM_LIFECYCLE_STATUS_OPTIONS.map(
+        (option) => option.encodedValue,
+      ),
     );
     expect(board.mainGroupByFieldMetadataUniversalIdentifier).toBe(
       UID_MAP["patientProgram.lifecycleStatus"],
     );
+  });
+
+  it("keys every kanban column on the value the server stores, not the catalog's", () => {
+    // Demo3's assertion 3: the live board's columns were `active` while the deploy stores
+    // `ACTIVE` (`twenty_validate.encode_option_value` at the wire), so no card could reach a
+    // column. Every KANBAN view, not just today's one — a second board keyed on `value` is the
+    // same silent failure, and it fails visually rather than loudly.
+    const kanbans = ALL_VIEWS.filter((view) => view.type === ViewType.KANBAN);
+    expect(kanbans.length).toBeGreaterThan(0);
+
+    const encodedStates = new Map(
+      Object.values(OPTIONS_BY_FIELD)
+        .flat()
+        .map((option) => [option.encodedValue, option.value]),
+    );
+    for (const view of kanbans) {
+      for (const group of view.groups ?? []) {
+        expect(
+          encodedStates.has(group.fieldValue),
+          `${view.name}: ${group.fieldValue}`,
+        ).toBe(true);
+      }
+    }
   });
 
   it("names the board in the sidebar, or the drag surface is URL-only", () => {

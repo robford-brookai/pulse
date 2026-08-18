@@ -18,12 +18,12 @@ import PROJECT_DOMAIN_EVENT, {
   RELATION_FIELD,
   type DomainEventRecord,
 } from "../src/logic-functions/project-domain-event";
-import CLINIC_OBJECT from "../src/objects/clinic.object";
-import DOMAIN_EVENT_OBJECT from "../src/objects/domain-event.object";
-import PATIENT_PROGRAM_OBJECT from "../src/objects/patient-program.object";
-import PATIENT_OBJECT from "../src/objects/patient.object";
-import PROGRAM_OBJECT from "../src/objects/program.object";
-import PROVIDER_OBJECT from "../src/objects/provider.object";
+import CLINIC_OBJECT from "../../twenty-model/objects/clinic.object";
+import DOMAIN_EVENT_OBJECT from "../../twenty-model/objects/domain-event.object";
+import PATIENT_PROGRAM_OBJECT from "../../twenty-model/objects/patient-program.object";
+import PATIENT_OBJECT from "../../twenty-model/objects/patient.object";
+import PROGRAM_OBJECT from "../../twenty-model/objects/program.object";
+import PROVIDER_OBJECT from "../../twenty-model/objects/provider.object";
 
 // The `ALL_*` arrays are deleted (task 6.4: the CLI derives entities from the file tree), so
 // the structural checks below walk the define* results' `.config` directly.

@@ -13,18 +13,17 @@
  * `canUpdateObjectRecords` covers create and update together, so "reads and edits entity
  * records" grants both at once, which is what the old `canCreate`/`canUpdate` pair meant here.
  *
- * `defineApplicationRole`, not `defineRole`: this is the role a newly-provisioned member gets
- * (the SDK's replacement for the config-level `defaultRole`), because staff is the
- * least-capable role a human can hold.
- *
- * The default export is the inline call: the CLI's manifest builder detects entities
- * syntactically, and the const-then-default form is invisible to it.
+ * `defineRole`, and no longer `defineApplicationRole`: since task 6.6 the roles are
+ * artifact-owned and live outside the packaged app's path, so nothing here declares the app's
+ * default role. The app carries its own placeholder default instead
+ * (`packages/twenty-app/src/roles/app-default.role.ts`) — staff is still the least-capable role
+ * a human can hold, but it is the artifact's to grant, and the artifact keys roles by label.
  */
 
-import { defineApplicationRole } from "twenty-sdk/define";
-import { uid } from "../uid-map";
+import { defineRole } from "twenty-sdk/define";
+import { uid } from "../../twenty-app/src/uid-map";
 
-export default defineApplicationRole({
+export default defineRole({
   // Minted 2026-08-17 (task 6.4). Role identifiers live here rather than in uid-map.json
   // because `uid_map_diff` rejects any key the Python model never asks for; moving the role
   // family into the map is proposed in HANDOFF.md.

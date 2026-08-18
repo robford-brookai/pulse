@@ -17,7 +17,7 @@
  *    event type projects anything: a registry-anchor event (`referral.received`) belongs to its
  *    pair, and leaving it unbound would put it in the orphan view, falsely reporting a
  *    crosswalk gap. The relations are the only DomainEvent fields the app role may write
- *    (`src/roles/app.role.ts`) — the envelope is immutable.
+ *    (`packages/twenty-model/roles/app.role.ts`) — the envelope is immutable.
  * 4. **Lookup** the event type in `generated/projection-lookup.ts`. A miss is a logged no-op,
  *    never a crash: the lookup covers the dimensions the model projects, and the catalog holds
  *    more event types than that by design.
@@ -186,7 +186,7 @@ const resolveEntity = async (
  * (Patient, `programCode`) → the PatientProgram row, created on the first event for the pair.
  *
  * The Program itself is looked up, never created: the projection pairs identities that already
- * exist and invents neither (`src/roles/app.role.ts` grants it read-only on Patient and
+ * exist and invents neither (`packages/twenty-model/roles/app.role.ts` grants it read-only on Patient and
  * Program). An unknown program code is therefore an orphan, not a new program.
  */
 const resolvePatientProgram = async (

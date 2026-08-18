@@ -345,6 +345,23 @@ def resolve_options(field: FieldSpec, catalog: Catalog) -> tuple[OptionSpec, ...
     return tuple(OptionSpec(value=value, label=_label(value)) for value in event_type_registry(catalog))
 
 
+def encode_option_value(value: str) -> str:
+    """A catalog option value as the live Metadata API stores it (4.1 first contact, 2026-08-16).
+
+    v2.30 validates SELECT option values as UPPER_CASE snake — the catalog's dotted lowercase
+    vocabulary (`referral.received`) is rejected as sent. The catalog stays the only vocabulary;
+    this encoding is a serialization detail of one surface, applied at the deploy plan boundary
+    and never written back into repo files. It is not inherently injective (`a.b` and `a_b`
+    collide), so `twenty_validate.check_option_encoding` proves it bijective over the actual
+    artifact and fails the validation gate if a future catalog value would collide.
+
+    It lives here rather than in `twenty_validate` because `twenty_metadata` emits the encoded
+    form into `generated/options.ts` (task 6.6) and `twenty_validate` imports `twenty_metadata` —
+    the other direction is an import cycle. `twenty_validate` re-exports it under its old name.
+    """
+    return value.upper().replace(".", "_")
+
+
 def validate_against_catalog(model: ModelDefinition, catalog: Catalog) -> None:
     """Every declared dimension names a catalog subject, and every SELECT default is an option.
 

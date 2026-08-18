@@ -39,6 +39,7 @@ from pulse_core.twenty_model import (
     ModelDefinition,
     ObjectSpec,
     OptionSpec,
+    encode_option_value,
     load_uid_map,
     require_uid,
     resolve_options,
@@ -187,6 +188,14 @@ def render_options_ts(model: ModelDefinition, catalog: Catalog, uid_map: dict[st
         " * is what `tests/model.test.ts` pins), `id` repeats the minted `universalIdentifier` so the",
         " * server never derives an option identity, and `color` is presentation minted here from a",
         " * fixed palette by position — the artifact deliberately does not carry it.",
+        " *",
+        " * `encodedValue` is the same option as the live server stores it: v2.30 validates SELECT",
+        " * option values as UPPER_CASE snake, so `twenty_deploy` re-encodes every value at the",
+        " * deploy boundary (`twenty_validate.encode_option_value`) and the record rows carry the",
+        " * encoded form. `value` stays the catalog vocabulary and remains the only thing to reason",
+        " * with; `encodedValue` is what any surface keyed on a stored value — a kanban column's",
+        " * `fieldValue`, a REST filter — has to use. Demo3's assertion 3 found the board keyed on",
+        " * `value`, where no card could ever land.",
         " */",
         "",
         "export type GeneratedOptionColor =",
@@ -194,6 +203,7 @@ def render_options_ts(model: ModelDefinition, catalog: Catalog, uid_map: dict[st
         "",
         "export interface GeneratedOption {",
         "  readonly value: string;",
+        "  readonly encodedValue: string;",
         "  readonly label: string;",
         "  readonly position: number;",
         "  readonly universalIdentifier: string;",
@@ -214,7 +224,8 @@ def render_options_ts(model: ModelDefinition, catalog: Catalog, uid_map: dict[st
             index.append((key, constant))
             lines.extend(["", f"// {key}", f"export const {constant}: GeneratedOption[] = ["])
             lines.extend(
-                f'  {{ value: "{option.value}", label: "{option.label}", position: {position}, '
+                f'  {{ value: "{option.value}", encodedValue: "{encode_option_value(option.value)}", '
+                f'label: "{option.label}", position: {position}, '
                 f'universalIdentifier: "{_option_uid(uid_map, obj, field, option)}", '
                 f'id: "{_option_uid(uid_map, obj, field, option)}", color: "{_option_color(position)}" }},'
                 for position, option in enumerate(options, start=1)

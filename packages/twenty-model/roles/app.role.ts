@@ -18,7 +18,7 @@
 
 import { defineRole } from "twenty-sdk/define";
 import DOMAIN_EVENT from "../objects/domain-event.object";
-import { uid } from "../uid-map";
+import { uid } from "../../twenty-app/src/uid-map";
 
 type FieldPermission = NonNullable<
   Parameters<typeof defineRole>[0]["fieldPermissions"]
