@@ -1,35 +1,62 @@
 # twenty-app
 
 The Twenty app: the PULSE data model, roles, views, and projection logic declared as
-TypeScript in this repo and compiled into a serialized Metadata API operation set. Stock
-Twenty server, no fork — see `design/platform/pulse-app-scaffold.md` for why cloning
-`twentyhq/twenty` is the contributor path and not ours.
+TypeScript in this repo. Stock Twenty server, no fork — see
+`design/platform/pulse-app-scaffold.md` for why cloning `twentyhq/twenty` is the contributor
+path and not ours.
 
 This is the repo's first TypeScript package. It is deliberately contained: one package,
-vitest only, no bundler, no publishing. Node is pinned in CI as a setup step.
+vitest only, no bundler. Node is pinned in CI as a setup step.
+
+## Two surfaces, two owners
+
+The model reaches a workspace by two different paths, and they are disjoint on purpose.
+
+- **The artifact** — objects, fields, options, and the three real roles — is applied by
+  `task twenty:deploy` from `artifact/operations.json`, which this repo generates and validates.
+  Its TypeScript sources live in `packages/twenty-model/`, *outside* this package.
+- **The packaged app** — views, navigation, the `project-domain-event` logic function, and one
+  placeholder default role — is published by `task twenty:app:publish` and installed by the
+  server.
+
+They are split because an app cannot adopt entities the workspace already owns: a full-model
+install returns `ENTITY_ALREADY_EXISTS` for every object the artifact deployed. A views-only
+package installs cleanly, and its views bind to the workspace-owned objects and fields by
+`universalIdentifier` — which is why both halves read the same `uid-map.json`.
+
+The split is enforced by the file tree, because that is what the CLI reads: it globs `**/*.ts`
+under the app path and publishes every inline `export default defineObject(...)` it finds. So an
+object source moved back under `packages/twenty-app/` would rejoin the manifest and break the
+install. Two gates hold it — `tests/manifest.test.ts` (what the built manifest carries) and
+`tests/test_twenty_app_scaffold.py` (what the tree contains).
 
 ## Layout
 
 | Path | Holds |
 |---|---|
-| `src/objects/` | `defineObject` — Patient, Program, PatientProgram, Provider, Clinic, DomainEvent |
-| `src/roles/` | `defineRole` — single-writer enforcement |
-| `src/logic-functions/` | `defineLogicFunction` — `project-domain-event` |
 | `src/views/` | `defineView` — ops-facing saved views |
+| `src/navigation/` | `defineNavigationMenuItem` — the sidebar entry for the board |
+| `src/logic-functions/` | `defineLogicFunction` — `project-domain-event` |
+| `src/roles/` | the placeholder `defineApplicationRole` the SDK requires; grants nothing |
+| `src/application-config.ts` | `defineApplication` — identity only |
 | `generated/` | `options.ts` and `projection-lookup.ts`, emitted from `state_catalog.yaml` |
+| `artifact/` | `operations.json` — the serialized Metadata API operation set |
 | `tests/` | vitest unit suite; no server, no network |
 | `uid-map.json` | `universalIdentifier` map, checked in, append-only |
-| `src/define.ts` | the `define*` surface the app source is written against |
 | `src/uid-map.ts` | `uid(key)` — the map read as data, erroring on a key it lacks |
+| `../twenty-model/` | `defineObject` and the three `defineRole`s — artifact-owned |
 
-Entity detection is AST-based, so the folder names are convention rather than requirement.
+Entity detection is syntactic: `export default define*({...})` written inline is an entity, and a
+const re-exported as the default is invisible to the CLI. Folder names are convention; the
+default-export form is not.
 
-`src/define.ts` stands in for `twenty-sdk/define`, which the scaffold doc's examples import. The
-SDK's shape is only provable against a running server and none exists yet (DNA-909), so the types
-are declared locally: `tsc --noEmit` still rejects options on a non-SELECT field or a relation
-naming a field that is not one, and adopting the SDK later is a change of import path. Views and
-the application config carry no `universalIdentifier` — the UID map holds exactly the surface the
-artifact serializes, and the operation set has no view or application operation to key.
+## Kanban columns and the option encoding
+
+Twenty's Metadata API stores SELECT option values UPPER_SNAKE (`ACTIVE`), while the catalog's
+vocabulary is lowercase and dotted (`active`, `referral.received`). `generated/options.ts`
+carries both — `value` for reasoning, `encodedValue` for anything keyed on a *stored* value. A
+kanban view group is exactly that, so every column's `fieldValue` is the encoded form; keyed on
+`value`, the columns render and no card can ever land in one.
 
 ## `uid-map.json`
 

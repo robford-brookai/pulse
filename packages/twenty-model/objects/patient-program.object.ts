@@ -1,7 +1,7 @@
 /**
  * PatientProgram — one row per patient x program, the patient-state grain and the only
  * projection target (D2). `project-domain-event` writes the status pairs here; staff read them
- * (see `src/roles/staff.role.ts`).
+ * (see `packages/twenty-model/roles/staff.role.ts`).
  *
  * Each dimension carries its own `<field>AsOf` guard. One pair per dimension is what makes the
  * LWW guard per-dimension rather than per-row: a qualification event never touches
@@ -14,9 +14,9 @@
 import {
   PATIENT_PROGRAM_LIFECYCLE_STATUS_OPTIONS,
   PATIENT_PROGRAM_QUALIFICATION_STATUS_OPTIONS,
-} from "../../generated/options";
+} from "../../twenty-app/generated/options";
 import { defineObject, FieldType, RelationType } from "twenty-sdk/define";
-import { uid } from "../uid-map";
+import { uid } from "../../twenty-app/src/uid-map";
 
 export default defineObject({
   universalIdentifier: uid("patientProgram"),

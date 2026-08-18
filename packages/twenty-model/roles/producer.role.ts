@@ -13,7 +13,7 @@
  */
 
 import { defineRole } from "twenty-sdk/define";
-import { uid } from "../uid-map";
+import { uid } from "../../twenty-app/src/uid-map";
 
 export default defineRole({
   // Minted 2026-08-17 (task 6.4); see staff.role.ts for why not uid-map.json.

@@ -15,6 +15,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import { OPTIONS_BY_FIELD } from "../generated/options";
 import {
   CoreApiError,
   createRestCoreApiClient,
@@ -85,6 +86,20 @@ describe("the SELECT transport encoding", () => {
     // lowercase vocabulary is a transport-boundary translation, never a repo-side rename.
     expect(encodeOptionValue("referral.received")).toBe("REFERRAL_RECEIVED");
     expect(encodeOptionValue("active")).toBe("ACTIVE");
+  });
+
+  it("agrees with the encoding the generator emits, option for option", () => {
+    // Two implementations of one rule: this client's, for values that need not be options, and
+    // `pulse_core.twenty_model.encode_option_value`, whose result task 6.6 emits as
+    // `encodedValue`. They must not drift — a kanban column keyed on `encodedValue` and a write
+    // encoded here have to land on the same token, or a drag writes into no column at all.
+    const options = Object.values(OPTIONS_BY_FIELD).flat();
+    expect(options.length).toBeGreaterThan(0);
+    for (const option of options) {
+      expect(option.encodedValue, option.value).toBe(
+        encodeOptionValue(option.value),
+      );
+    }
   });
 
   it("decodes a stored token back to the catalog value it came from", () => {

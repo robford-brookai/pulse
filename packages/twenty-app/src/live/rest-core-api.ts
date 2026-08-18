@@ -36,12 +36,12 @@ import type {
   CoreFilter,
   CoreRecord,
 } from "../logic-functions/core-api";
-import CLINIC from "../objects/clinic.object";
-import DOMAIN_EVENT from "../objects/domain-event.object";
-import PATIENT_PROGRAM from "../objects/patient-program.object";
-import PATIENT from "../objects/patient.object";
-import PROGRAM from "../objects/program.object";
-import PROVIDER from "../objects/provider.object";
+import CLINIC from "../../../twenty-model/objects/clinic.object";
+import DOMAIN_EVENT from "../../../twenty-model/objects/domain-event.object";
+import PATIENT_PROGRAM from "../../../twenty-model/objects/patient-program.object";
+import PATIENT from "../../../twenty-model/objects/patient.object";
+import PROGRAM from "../../../twenty-model/objects/program.object";
+import PROVIDER from "../../../twenty-model/objects/provider.object";
 
 const REST_ROOT = "rest";
 
@@ -67,13 +67,18 @@ export const restPlural = (objectNameSingular: string): string => {
 export const encodeOptionValue = (value: string): string =>
   value.toUpperCase().replaceAll(".", "_");
 
-/** `<object>.<field>` → stored token → catalog value, built once from the generated options. */
+/**
+ * `<object>.<field>` → stored token → catalog value, built once from the generated options.
+ *
+ * Keyed on the generated `encodedValue` rather than on `encodeOptionValue(option.value)`: since
+ * task 6.6 the generator emits the encoding the deploy actually applies, so decoding reads it
+ * instead of re-deriving it. `encodeOptionValue` stays for the write path, where the value being
+ * sent is not necessarily one of the options; `tests/rest-core-api.test.ts` pins the two agree.
+ */
 const DECODERS: ReadonlyMap<string, ReadonlyMap<string, string>> = new Map(
   Object.entries(OPTIONS_BY_FIELD).map(([key, options]) => [
     key,
-    new Map(
-      options.map((option) => [encodeOptionValue(option.value), option.value]),
-    ),
+    new Map(options.map((option) => [option.encodedValue, option.value])),
   ]),
 );
 

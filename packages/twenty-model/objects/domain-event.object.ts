@@ -1,6 +1,6 @@
 /**
  * DomainEvent — the append-only event log. Never updated, never deleted (immutability policy;
- * enforced by the role set in `src/roles/`, verified by the Snowflake mutation-audit view).
+ * enforced by the role set in `packages/twenty-model/roles/`, verified by the Snowflake mutation-audit view).
  *
  * `recorded_at` in the data-model doc is Twenty's base `createdAt` and is therefore not
  * declared. `evidence` and `payload` are `RAW_JSON` with no TEXT fallback (scaffold-doc
@@ -17,9 +17,9 @@ import {
   DOMAIN_EVENT_ENTITY_REF_SYSTEM_OPTIONS,
   DOMAIN_EVENT_ENTITY_TYPE_OPTIONS,
   DOMAIN_EVENT_EVENT_TYPE_OPTIONS,
-} from "../../generated/options";
+} from "../../twenty-app/generated/options";
 import { defineObject, FieldType, RelationType } from "twenty-sdk/define";
-import { uid } from "../uid-map";
+import { uid } from "../../twenty-app/src/uid-map";
 
 export default defineObject({
   universalIdentifier: uid("domainEvent"),

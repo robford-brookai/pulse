@@ -11,7 +11,7 @@
  */
 
 import { defineObject, FieldType, RelationType } from "twenty-sdk/define";
-import { uid } from "../uid-map";
+import { uid } from "../../twenty-app/src/uid-map";
 
 export default defineObject({
   universalIdentifier: uid("patient"),
