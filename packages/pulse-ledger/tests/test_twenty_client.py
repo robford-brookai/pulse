@@ -151,7 +151,7 @@ def test_posting_creates_a_note_then_a_note_target_with_flat_keys() -> None:
     assert note_request.url.path == NOTES_PATH
     assert note_request.headers["Authorization"] == f"Bearer {TOKEN}"
     note_wire = json.loads(note_request.content)
-    assert note_wire == {"title": RECEIPT.reason, "body": body}
+    assert note_wire == {"title": RECEIPT.reason, "bodyV2": {"markdown": body}}
 
     target_request = requests[1]
     assert target_request.method == "POST"
@@ -169,11 +169,12 @@ def test_the_note_body_is_the_receipt_text_and_carries_no_payload_field() -> Non
     client.create_comment(CARD_REF, RECEIPT.reason, body)
 
     note_wire = json.loads(requests[0].content)
-    assert "activated" in note_wire["body"]
-    assert "registered" in note_wire["body"]
-    assert "transition_not_permitted" in note_wire["body"]
+    note_body = note_wire["bodyV2"]["markdown"]
+    assert "activated" in note_body
+    assert "registered" in note_body
+    assert "transition_not_permitted" in note_body
     for leaked in _demographic_strings():
-        assert leaked not in note_wire["body"]
+        assert leaked not in note_body
         assert leaked not in note_wire["title"]
 
 

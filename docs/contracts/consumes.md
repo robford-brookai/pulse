@@ -90,7 +90,7 @@ client boundary, never as a silent misread.
 
 | Dependency | Kind | Source | Breakage risk |
 |---|---|---|---|
-| `POST /rest/notes` + `POST /rest/noteTargets` | REST API (surface live-verified 2026-08-17; these two creates pinned, not yet exercised live) | Twenty; bearer token via `PULSE_LEDGER_TWENTY_API_TOKEN` | create-shape drift surfaces as `CommentPostError` on the rejection-feedback leg, which degrades feedback and never rejection correctness; re-verified by demo3's assertion 9 on the next live run |
+| `POST /rest/notes` + `POST /rest/noteTargets` | REST API (creates live-verified 2026-08-18: `note` carries no `body` field — rich text is `bodyV2` created as `{"markdown": …}`, server-converted to blocknote; target binds via the flat `<objectName>Id` column) | Twenty; bearer token via `PULSE_LEDGER_TWENTY_API_TOKEN` | create-shape drift surfaces as `CommentPostError` on the rejection-feedback leg, which degrades feedback and never rejection correctness; re-verified by demo3's assertion 9 |
 
 ### Twenty Metadata API (`pulse-app-scaffold`, DNA-908)
 
