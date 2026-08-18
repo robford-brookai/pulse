@@ -243,7 +243,7 @@ files under `openspec/specs/`.
       unreachable from `check`; `task check` green.
       `[model: sonnet | deps: 6.2 | lane: repo_change | wave: 10]`
 
-- [ ] 6.4 Full entity port to `twenty-sdk` shapes, so `twenty:app:publish` actually builds
+- [x] 6.4 Full entity port to `twenty-sdk` shapes, so `twenty:app:publish` actually builds
       (decision: Rob, 2026-08-17, on issue #223 — full port over a views/nav-only split).
       7.2's first live publish falsified 6.3's delivered path twice: the CLI's manifest
       builder detects entities syntactically (`export default defineApplication({...})`
