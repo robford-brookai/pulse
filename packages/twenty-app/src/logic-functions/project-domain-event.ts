@@ -36,7 +36,7 @@
  */
 
 import { PROJECTION_LOOKUP } from "../../generated/projection-lookup";
-import { defineLogicFunction } from "../define";
+import { defineLogicFunction } from "twenty-sdk/define";
 import { foreignKey, type CoreApiClient, type CoreRecord } from "./core-api";
 
 /**
@@ -306,17 +306,16 @@ export const handler = async ({
 };
 
 /**
- * No `universalIdentifier`, for the reason the views carry none (`src/views/index.ts`): the UID
- * map is exactly the surface the artifact serializes, and the operation set carries objects,
- * fields, relations, and roles — there is no logic-function operation to key. One gets minted
- * the same reviewed way everything else does on the day the artifact learns to carry the
- * function (HANDOFF.md).
+ * The default export is the inline call: the CLI's manifest builder detects entities
+ * syntactically, and the const-then-default form is invisible to it.
  */
-export const PROJECT_DOMAIN_EVENT = defineLogicFunction({
+export default defineLogicFunction({
+  // Minted 2026-08-17 (task 6.4): the SDK requires an identifier on a logic function. It lives
+  // here rather than in uid-map.json because `uid_map_diff` rejects any key the Python model
+  // never asks for; moving it into the map is proposed in HANDOFF.md.
+  universalIdentifier: "767312d9-690b-4148-8269-2117ce402a54",
   name: "project-domain-event",
   timeoutSeconds: 10,
   handler,
   databaseEventTriggerSettings: { eventName: "domainEvent.created" },
 });
-
-export default PROJECT_DOMAIN_EVENT;

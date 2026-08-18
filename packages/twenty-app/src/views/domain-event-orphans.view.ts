@@ -13,10 +13,10 @@ import {
   ViewFilterOperand,
   ViewSortDirection,
   ViewType,
-} from "../define";
+} from "twenty-sdk/define";
 import { uid } from "../uid-map";
 
-export const DOMAIN_EVENT_ORPHANS_VIEW = defineView({
+export default defineView({
   universalIdentifier: uid("view.domain-event-orphans"),
   name: "Orphan Events",
   icon: "IconUnlink",
@@ -119,5 +119,3 @@ export const DOMAIN_EVENT_ORPHANS_VIEW = defineView({
     },
   ],
 });
-
-export default DOMAIN_EVENT_ORPHANS_VIEW;

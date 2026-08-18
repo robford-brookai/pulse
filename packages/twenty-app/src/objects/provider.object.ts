@@ -4,13 +4,16 @@
  * generator still emits (`provider.lifecycleStatus` in `generated/options.ts`) rather than a
  * literal written here. Contract events stay lookup-miss no-ops until the catalog grows a
  * provider dimension.
+ *
+ * The default export is the inline `defineObject({...})` call: the CLI's manifest builder
+ * detects entities syntactically, and the const-then-default form is invisible to it.
  */
 
 import { PROVIDER_LIFECYCLE_STATUS_OPTIONS } from "../../generated/options";
-import { defineObject, FieldType, RelationType } from "../define";
+import { defineObject, FieldType, RelationType } from "twenty-sdk/define";
 import { uid } from "../uid-map";
 
-export const PROVIDER = defineObject({
+export default defineObject({
   universalIdentifier: uid("provider"),
   nameSingular: "provider",
   namePlural: "providers",
@@ -56,13 +59,11 @@ export const PROVIDER = defineObject({
       name: "domainEvents",
       type: FieldType.RELATION,
       label: "Domain Events",
-      relation: {
-        type: RelationType.ONE_TO_MANY,
-        targetObject: "domainEvent",
-        inverseField: "provider",
-      },
+      relationTargetObjectMetadataUniversalIdentifier: uid("domainEvent"),
+      relationTargetFieldMetadataUniversalIdentifier: uid(
+        "domainEvent.provider",
+      ),
+      universalSettings: { relationType: RelationType.ONE_TO_MANY },
     },
   ],
 });
-
-export default PROVIDER;

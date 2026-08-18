@@ -8,10 +8,10 @@
  * lifecycle kanban is a separate view, not this one wearing a kanban icon.
  */
 
-import { defineView, ViewSortDirection, ViewType } from "../define";
+import { defineView, ViewSortDirection, ViewType } from "twenty-sdk/define";
 import { uid } from "../uid-map";
 
-export const PATIENT_PROGRAM_STATUS_BOARD_VIEW = defineView({
+export default defineView({
   universalIdentifier: uid("view.patient-program-status-board"),
   name: "Program Status Board",
   icon: "IconTable",
@@ -87,5 +87,3 @@ export const PATIENT_PROGRAM_STATUS_BOARD_VIEW = defineView({
     },
   ],
 });
-
-export default PATIENT_PROGRAM_STATUS_BOARD_VIEW;

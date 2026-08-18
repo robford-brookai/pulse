@@ -12,6 +12,9 @@
  * ratified into the catalog becomes a column on the next `task twenty:gen` with no edit here. The
  * one thing a hand-written column list would add is the chance of a `fieldValue` that is not a
  * catalog state, which is exactly the bug this derivation cannot have.
+ *
+ * The default export is the inline `defineView({...})` call: the CLI's manifest builder detects
+ * entities syntactically, and the const-then-default form is invisible to it.
  */
 
 import { PATIENT_PROGRAM_LIFECYCLE_STATUS_OPTIONS } from "../../generated/options";
@@ -19,20 +22,16 @@ import {
   defineView,
   ViewSortDirection,
   ViewType,
-  type ViewGroupDefinition,
-} from "../define";
+  type ViewGroupManifest,
+} from "twenty-sdk/define";
 import { uid } from "../uid-map";
-
-export const PATIENT_PROGRAM_LIFECYCLE_BOARD_UID = uid(
-  "view.patient-program-lifecycle-board",
-);
 
 /**
  * One column per option, in the generated order. `position` is re-derived from the index rather
  * than copied from the option: a view group's position orders columns on this board, while an
  * option's position orders the picklist — they agree today and are not the same number.
  */
-const lifecycleGroups = (): readonly ViewGroupDefinition[] =>
+const lifecycleGroups = (): ViewGroupManifest[] =>
   PATIENT_PROGRAM_LIFECYCLE_STATUS_OPTIONS.map((option, index) => ({
     universalIdentifier: uid(
       `view.patient-program-lifecycle-board.group.${option.value}`,
@@ -42,8 +41,8 @@ const lifecycleGroups = (): readonly ViewGroupDefinition[] =>
     isVisible: true,
   }));
 
-export const PATIENT_PROGRAM_LIFECYCLE_BOARD_VIEW = defineView({
-  universalIdentifier: PATIENT_PROGRAM_LIFECYCLE_BOARD_UID,
+export default defineView({
+  universalIdentifier: uid("view.patient-program-lifecycle-board"),
   name: "Lifecycle Board",
   icon: "IconLayoutKanban",
   objectUniversalIdentifier: uid("patientProgram"),
@@ -116,5 +115,3 @@ export const PATIENT_PROGRAM_LIFECYCLE_BOARD_VIEW = defineView({
     },
   ],
 });
-
-export default PATIENT_PROGRAM_LIFECYCLE_BOARD_VIEW;

@@ -4,12 +4,16 @@
  *
  * Base fields (`id`, `createdAt`, `updatedAt`, `createdBy`, `deletedAt`) are added by Twenty
  * and are never declared here (scaffold-doc correction 1).
+ *
+ * The default export is the inline `defineObject({...})` call, not a named const re-exported —
+ * the CLI's manifest builder detects entities syntactically, and the const-then-default form is
+ * invisible to it (7.2's first live publish).
  */
 
-import { defineObject, FieldType, RelationType } from "../define";
+import { defineObject, FieldType, RelationType } from "twenty-sdk/define";
 import { uid } from "../uid-map";
 
-export const PATIENT = defineObject({
+export default defineObject({
   universalIdentifier: uid("patient"),
   nameSingular: "patient",
   namePlural: "patients",
@@ -58,13 +62,11 @@ export const PATIENT = defineObject({
       name: "patientPrograms",
       type: FieldType.RELATION,
       label: "Patient Programs",
-      relation: {
-        type: RelationType.ONE_TO_MANY,
-        targetObject: "patientProgram",
-        inverseField: "patient",
-      },
+      relationTargetObjectMetadataUniversalIdentifier: uid("patientProgram"),
+      relationTargetFieldMetadataUniversalIdentifier: uid(
+        "patientProgram.patient",
+      ),
+      universalSettings: { relationType: RelationType.ONE_TO_MANY },
     },
   ],
 });
-
-export default PATIENT;

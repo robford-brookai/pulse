@@ -1,6 +1,6 @@
 {
   "name": "@pulse/twenty-app",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "Twenty app: the PULSE data model, roles, views, and projection logic as code",
