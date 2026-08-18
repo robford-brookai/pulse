@@ -11,7 +11,9 @@ Nine assertions, in order:
 
 1.  UID round-trip — the live `patientProgram` object and its `lifecycleStatus` field carry the
     `universalIdentifier` values `uid-map.json` minted (the F1 answer, held on v2.30).
-2.  The lifecycle board exists, is KANBAN, and groups on the `lifecycleStatus` field.
+2.  The lifecycle board exists, is KANBAN, and groups on the `lifecycleStatus` field. The board
+    is identified by (live `patientProgram` object id, `KANBAN`, the app view's name) — the live
+    `View` type carries no `universalIdentifier`, so a UID match is not available here.
 3.  Column parity — the board's groups are exactly the catalog's `enrollment` states.
 4.  Seed counts — every record in the committed projection is present in the workspace.
 5.  As-of stamps — every seeded board record carries non-null status as-of stamps.
@@ -42,11 +44,13 @@ active → ...`), keeping card and ledger in lockstep. If someone drags the sele
 between runs — or re-seeds, which resets the card but not the ledger — the two diverge and the
 legal leg fails with the catalog's receipt; rerun with a different `--card-index`.
 
-**Endpoint pins (unverified until 7.2's first live contact).** The metadata REST reads reuse
-`twenty_deploy`'s verified surface. Three shapes are pinned here the same way that module pinned
-its own before first contact, each marked inline: the core-view GraphQL read, the webhook listing
-on the metadata GraphQL, and the comment listing on `/rest/comments` (the shape
-`pulse_ledger.twenty.client` posts).
+**Endpoint pins.** The metadata REST reads reuse `twenty_deploy`'s verified surface. Three further
+shapes are pinned here, each marked inline. The view read was **verified live 2026-08-17** by
+7.2's first contact, which falsified the original pin twice: there is no `getCoreViews` on
+`/graphql` — views are served by `getViews` on the metadata GraphQL — and the live `View` type
+exposes no `universalIdentifier`, so the board is matched by object id, type and name instead.
+The webhook listing and the comment listing on `/rest/comments` (the shape
+`pulse_ledger.twenty.client` posts) were not exercised by that contact and stay unverified.
 
 **PHI posture.** All seeded data is synthetic, and this script still handles it as if it were
 not: the drag card is selected by index into a sorted-by-id list, never by name; workspace reads
@@ -119,8 +123,13 @@ STATUS_FIELD = "lifecycleStatus"
 SUBJECT_TYPE = "enrollment"
 MAPPED_OPERATION = f"{BOARD_OBJECT}.updated"
 
-#: UID-map keys for the board (task 6.1's vocabulary).
+#: The board's key in the app's vocabulary (task 6.1) — a label for receipts and failure messages,
+#: no longer a live lookup: the live `View` type carries no `universalIdentifier`.
 VIEW_KEY = "view.patient-program-lifecycle-board"
+
+#: The board's `name` as `packages/twenty-app/src/views/patient-program-lifecycle-board.view.ts`
+#: publishes it. Restated rather than imported, for the same reason as `BOARD_OBJECT` above.
+VIEW_NAME = "Lifecycle Board"
 
 #: The fields a workspace read is projected down to, per seeded object — Twenty's internal id
 #: plus the pseudonymous natural-key fields, status values, and stamps the assertions need.
@@ -138,19 +147,21 @@ PROJECTED_FIELDS: Mapping[str, tuple[str, ...]] = {
     ),
 }
 
-#: Endpoint pin (unverified until 7.2's first live contact): the board is read over the core
-#: GraphQL's view surface. Selected fields are the ones assertions 2 and 3 compare.
-CORE_VIEWS_QUERY = (
-    "query Demo3Views { getCoreViews { id universalIdentifier name type objectMetadataId"
+#: Endpoint pin (verified live 2026-08-17): views are served by `getViews` on the metadata
+#: GraphQL — there is no `getCoreViews` on `/graphql` — and the live `View` type exposes no
+#: `universalIdentifier`. Selected fields are the ones assertions 2 and 3 compare.
+VIEWS_QUERY = (
+    "query Demo3Views { getViews { id name type objectMetadataId"
     " mainGroupByFieldMetadataId viewGroups { fieldValue isVisible } } }"
 )
 
-#: Endpoint pin (unverified until 7.2's first live contact): webhooks read over the metadata
-#: GraphQL, the surface task 4.1 registered through.
+#: Endpoint pin (unverified — 7.2's live contact did not exercise this surface): webhooks read
+#: over the metadata GraphQL, the surface task 4.1 registered through.
 WEBHOOKS_QUERY = "query Demo3Webhooks { webhooks { id targetUrl operations } }"
 
-#: Endpoint pin (unverified until 7.2's first live contact): the comment listing, mirroring the
-#: shape `pulse_ledger.twenty.client` posts (`POST /rest/comments` with `cardRef`/`body`).
+#: Endpoint pin (unverified — 7.2's live contact did not exercise this surface): the comment
+#: listing, mirroring the shape `pulse_ledger.twenty.client` posts (`POST /rest/comments` with
+#: `cardRef`/`body`).
 COMMENTS_PLURAL = "comments"
 
 
@@ -374,11 +385,12 @@ def _drag_payload(card: ProjectedRecord, wire_state: str, updated_at: str) -> di
 # --- The nine assertions --------------------------------------------------------------------------
 
 
-def step_uid_round_trip(twenty: TwentyReader, uid_map: dict[str, str]) -> str:
+def step_uid_round_trip(twenty: TwentyReader, uid_map: dict[str, str]) -> tuple[str, str]:
     """1/9: the live object and status field carry the minted universalIdentifiers (F1, held).
 
-    Returns the status field's internal metadata id — assertion 2 compares the view's group-by
-    against it, because the view record names fields by internal id, not by name.
+    Returns the object's and the status field's internal metadata ids — assertion 2 keys on both,
+    because a live view record names its object and its group-by field by internal id, and carries
+    no `universalIdentifier` of its own to match on.
     """
     objects = {str(record.get("nameSingular")): record for record in twenty.metadata_records("objects")}
     _check(BOARD_OBJECT in objects, f"object {BOARD_OBJECT!r} is not in the workspace")
@@ -404,17 +416,32 @@ def step_uid_round_trip(twenty: TwentyReader, uid_map: dict[str, str]) -> str:
         f"live {fields[0].get('universalIdentifier')!r} != minted {expected_field_uid!r}",
     )
     _print_receipt("uid_round_trip", {"object": BOARD_OBJECT, "field": STATUS_FIELD, "round_tripped": True})
-    return str(fields[0]["id"])
+    return object_id, str(fields[0]["id"])
 
 
-def step_view_shape(twenty: TwentyReader, uid_map: dict[str, str], status_field_id: str) -> dict[str, Any]:
+def match_board_views(views: Sequence[Mapping[str, Any]], object_metadata_id: str) -> list[Mapping[str, Any]]:
+    """Every live view that is this board: the board object, KANBAN, and the app view's name.
+
+    The three together stand in for the UID match the live `View` type cannot support — object id
+    alone would also take the table view, and name alone is not scoped to an object.
+    """
+    return [
+        view
+        for view in views
+        if str(view.get("objectMetadataId")) == object_metadata_id
+        and str(view.get("type")) == "KANBAN"
+        and str(view.get("name")) == VIEW_NAME
+    ]
+
+
+def step_view_shape(twenty: TwentyReader, object_metadata_id: str, status_field_id: str) -> dict[str, Any]:
     """2/9: the board exists, is KANBAN, and groups on the status field. Returns the view record."""
-    view_uid = require_uid(uid_map, VIEW_KEY)
-    views = twenty.graphql("/graphql", CORE_VIEWS_QUERY).get("getCoreViews") or []
-    matches = [view for view in views if str(view.get("universalIdentifier")) == view_uid]
+    views = twenty.graphql(GRAPHQL_PATH, VIEWS_QUERY).get("getViews") or []
+    matches = match_board_views(views, object_metadata_id)
     _check(len(matches) == 1, f"expected exactly one live view for {VIEW_KEY!r}, found {len(matches)}")
+    # The KANBAN check lives in the match itself: the type is part of what identifies this board
+    # now that no UID does.
     view = matches[0]
-    _check(str(view.get("type")) == "KANBAN", f"view {VIEW_KEY!r} has type {view.get('type')!r}, expected KANBAN")
     _check(
         str(view.get("mainGroupByFieldMetadataId")) == status_field_id,
         f"view {VIEW_KEY!r} groups on field id {view.get('mainGroupByFieldMetadataId')!r}, "
@@ -697,10 +724,10 @@ def main(argv: list[str] | None = None, env: Mapping[str, str] | None = None) ->
 
     try:
         print("\n[1/9] universalIdentifier round-trips on the live object and field")
-        status_field_id = step_uid_round_trip(twenty, uid_map)
+        object_id, status_field_id = step_uid_round_trip(twenty, uid_map)
 
         print("\n[2/9] the lifecycle board exists, is KANBAN, and groups on the status field")
-        view = step_view_shape(twenty, uid_map, status_field_id)
+        view = step_view_shape(twenty, object_id, status_field_id)
 
         print("\n[3/9] the board's columns are exactly the catalog's states")
         step_column_parity(view)
