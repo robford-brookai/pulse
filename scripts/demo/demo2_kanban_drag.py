@@ -170,10 +170,10 @@ class RecordingCommentPoster:
     """
 
     def __init__(self) -> None:
-        self.posts: list[tuple[str, str]] = []
+        self.posts: list[tuple[str, str, str]] = []
 
-    def __call__(self, card_ref: str, body: str) -> None:
-        self.posts.append((card_ref, body))
+    def __call__(self, card_ref: str, title: str, body: str) -> None:
+        self.posts.append((card_ref, title, body))
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -234,9 +234,10 @@ def step_rejected_drag(client: TestClient, secret: str, comment_poster: Recordin
     _check(bool(payload.get("catalog_version")), "rejection receipt carried no catalog version")
 
     _check(len(comment_poster.posts) == 1, f"expected exactly one card comment, found {len(comment_poster.posts)}")
-    card_ref, comment_body = comment_poster.posts[0]
-    print(json.dumps({"step": "rejection_comment", "card_ref": card_ref, "body": comment_body}))
+    card_ref, comment_title, comment_body = comment_poster.posts[0]
+    print(json.dumps({"step": "rejection_comment", "card_ref": card_ref, "title": comment_title, "body": comment_body}))
     _check(card_ref == payload.get("card_ref"), "the comment was posted to a different card than the receipt names")
+    _check(comment_title == payload.get("reason"), "the comment title is not the receipt's coded reason")
 
 
 def step_tampered_signature(client: TestClient, secret: str, committer: BoardVocabularyCommitter) -> None:

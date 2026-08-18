@@ -21,8 +21,8 @@ Nine assertions, in order:
 7.  A legal drag commits with `effective_at` equal to the record's own `updatedAt` stamp,
     never the wall clock.
 8.  A replay of the same delivery produces no second event.
-9.  An illegal drag returns 200 `rejected` with exactly one card comment, and the state of
-    record is unchanged.
+9.  An illegal drag returns 200 `rejected` with exactly one new rejection note bound to the
+    card (counted as `noteTargets` on the record id), and the state of record is unchanged.
 
 **How the drag legs work.** The script PATCHes the card over Twenty's core REST API (the same
 write a UI drag issues — task 7.2's hand drag is the UI-path acceptance step), reads the record's
@@ -37,7 +37,7 @@ only at the catalog's entry state (`validate_genesis` — for `enrollment`, `pen
 fresh subject's first committing drag is the one into that column. The alignment delivery declares
 exactly that, with `record.updatedAt` fixed to the projection's own `lifecycleStatusAsOf` stamp so
 its idempotency key is identical on every run: the first run commits the genesis, every later run
-replays it, and no rerun ever earns a rejection comment. The card is selected from the projection
+replays it, and no rerun ever earns a rejection note. The card is selected from the projection
 records seeded at `pending_start` so Twenty's column and the ledger's genesis state start aligned;
 after that, each run walks the non-`ended` legal cycle (`pending_start → active → on_hold →
 active → ...`), keeping card and ledger in lockstep. If someone drags the selected card by hand
@@ -49,14 +49,16 @@ shapes are pinned here, each marked inline. The view read was **verified live 20
 7.2's first contact, which falsified the original pin twice: there is no `getCoreViews` on
 `/graphql` — views are served by `getViews` on the metadata GraphQL — and the live `View` type
 exposes no `universalIdentifier`, so the board is matched by object id, type and name instead.
-The webhook listing and the comment listing on `/rest/comments` (the shape
-`pulse_ledger.twenty.client` posts) were not exercised by that contact and stay unverified.
+The webhook listing was not exercised by that contact and stays unverified. The commentary read
+counts `noteTargets` on `/rest/noteTargets` filtered by the record id — assertion 9's live run
+falsified the original `/rest/comments` pin (v2.30 has no `comment` object), and the reworked
+surface (task 6.7) is the note+noteTarget pair `pulse_ledger.twenty.client` now writes.
 
 **PHI posture.** All seeded data is synthetic, and this script still handles it as if it were
 not: the drag card is selected by index into a sorted-by-id list, never by name; workspace reads
 project each record down to Twenty's internal id plus the pseudonymous key fields, timestamps,
-and status values the assertions need, so no demographic field is ever retained; comment reads
-count matches on the card reference and drop the bodies. Everything printed is an identifier, a
+and status values the assertions need, so no demographic field is ever retained; commentary reads
+count `noteTarget` bindings matched on the record id and never fetch a note body. Everything printed is an identifier, a
 count, a state, a timestamp, or a fixed code.
 
 Configuration (never printed): `PULSE_TWENTY_<TARGET>_URL` / `PULSE_TWENTY_<TARGET>_TOKEN` for
@@ -159,10 +161,12 @@ VIEWS_QUERY = (
 #: over the metadata GraphQL, the surface task 4.1 registered through.
 WEBHOOKS_QUERY = "query Demo3Webhooks { webhooks { id targetUrl operations } }"
 
-#: Endpoint pin (unverified — 7.2's live contact did not exercise this surface): the comment
-#: listing, mirroring the shape `pulse_ledger.twenty.client` posts (`POST /rest/comments` with
-#: `cardRef`/`body`).
-COMMENTS_PLURAL = "comments"
+#: Endpoint pin (reworked after 7.2's live falsification of `/rest/comments` — v2.30 has no
+#: `comment` object): rejection commentary is a `note` bound to its record by a `noteTarget`
+#: carrying the flat relation column (`patientProgramId`, the verified relation-column
+#: convention). Counting bindings needs no note body, so the read stays PHI-clean by construction.
+NOTE_TARGETS_PLURAL = "noteTargets"
+NOTE_TARGET_RECORD_COLUMN = f"{BOARD_OBJECT}Id"
 
 
 class DemoAssertionError(AssertionError):
@@ -286,17 +290,18 @@ class TwentyReader:
         response = self._client.patch(f"/rest/{plural}/{record_id}", json=dict(payload))
         _check(response.status_code < 400, f"PATCH /rest/{plural}/{record_id} answered {response.status_code}")
 
-    def count_comments(self, card_ref: str) -> int:
-        """How many comments sit on one card. Bodies are dropped where they are read."""
+    def count_comments(self, record_id: str) -> int:
+        """How many rejection notes are bound to one record — `noteTarget` bindings matched on
+        the flat relation column. Note bodies are never fetched."""
         count = 0
         cursor: str | None = None
         while True:
             params: dict[str, Any] = {"limit": 60}
             if cursor is not None:
                 params["starting_after"] = cursor
-            body = self._get(f"/rest/{COMMENTS_PLURAL}", params=params)
-            for record in body.get("data", {}).get(COMMENTS_PLURAL, ()):
-                if record.get("cardRef") == card_ref:
+            body = self._get(f"/rest/{NOTE_TARGETS_PLURAL}", params=params)
+            for record in body.get("data", {}).get(NOTE_TARGETS_PLURAL, ()):
+                if record.get(NOTE_TARGET_RECORD_COLUMN) == record_id:
                     count += 1
             page = body.get("pageInfo") or {}
             if not page.get("hasNextPage"):
@@ -558,7 +563,7 @@ def step_legal_drag(
     illegal legs build on all three.
     """
     # Genesis alignment (see module docstring): fixed logical time -> first run commits the
-    # subject's entry state, every later run replays with no comment and no second event.
+    # subject's entry state, every later run replays with no rejection note and no second event.
     genesis_payload = _drag_payload(
         card,
         wire_state=encode_option_value("pending_start"),
@@ -637,14 +642,14 @@ def step_illegal_drag(
     card: ProjectedRecord,
     committed_state: str,
 ) -> None:
-    """9/9: an illegal drag is 200 `rejected`, posts exactly one card comment, changes nothing.
+    """9/9: an illegal drag is 200 `rejected`, binds exactly one rejection note, changes nothing.
 
     Delivered directly, never PATCHed into Twenty: the card must not actually move, so "the state
     of record unchanged" is checkable on both sides — the ledger rejected (no event id), and the
     card still sits in the legally dragged column.
     """
     card_ref = f"{BOARD_OBJECT}:{card.record_id}"
-    comments_before = twenty.count_comments(card_ref)
+    comments_before = twenty.count_comments(card.record_id)
 
     before = twenty.get_projected(
         BOARD_OBJECT_PLURAL, card.record_id, PROJECTED_FIELDS[BOARD_OBJECT_PLURAL], BOARD_OBJECT
@@ -675,10 +680,10 @@ def step_illegal_drag(
     _check(bool(body.get("reason")), "rejection receipt carried no catalog reason")
     _check("event_id" not in body, "a rejected drag carried an event id — something committed")
 
-    comments_after = twenty.count_comments(card_ref)
+    comments_after = twenty.count_comments(card.record_id)
     _check(
         comments_after == comments_before + 1,
-        f"expected exactly one new card comment, found {comments_after - comments_before}",
+        f"expected exactly one new rejection note on the card, found {comments_after - comments_before}",
     )
 
     after = twenty.get_projected(
@@ -690,7 +695,7 @@ def step_illegal_drag(
     )
     _print_receipt(
         "state_unchanged",
-        {"card_ref": card_ref, "state": committed_state, "new_comments": comments_after - comments_before},
+        {"card_ref": card_ref, "state": committed_state, "new_notes": comments_after - comments_before},
     )
 
 
@@ -752,7 +757,7 @@ def main(argv: list[str] | None = None, env: Mapping[str, str] | None = None) ->
         print("\n[8/9] a replay produces no second event")
         step_replay(ledger, drag_payload, event_id)
 
-        print("\n[9/9] an illegal drag is rejected with one comment and no state change")
+        print("\n[9/9] an illegal drag is rejected with one rejection note and no state change")
         step_illegal_drag(twenty, ledger, card, committed_state)
     except DemoAssertionError as exc:
         print(f"\nFAILED: {exc}", file=sys.stderr)

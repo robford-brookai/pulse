@@ -215,3 +215,71 @@ def test_column_parity_reads_the_matched_views_groups() -> None:
     """Assertion 3 is unchanged by the re-key: it still reads `viewGroups` off the matched view."""
     with pytest.raises(demo3.DemoAssertionError, match="column parity failed"):
         demo3.step_column_parity(_view())
+
+
+# --- The rejection-note count (task 6.7) ------------------------------------------------------------
+
+#: Synthetic record ids in Twenty's uuid shape, tied to nothing live.
+CARD_RECORD_ID = "66666666-6666-4666-8666-666666666666"
+OTHER_RECORD_ID = "77777777-7777-4777-8777-777777777777"
+
+
+class _FakeNoteTargetReader:
+    """Answers `_get` with canned `noteTargets` pages — the surface `count_comments` reads."""
+
+    def __init__(self, pages: list[dict[str, Any]]) -> None:
+        self._pages = pages
+        self.calls: list[tuple[str, dict[str, Any] | None]] = []
+
+    def _get(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        self.calls.append((path, params))
+        return self._pages[len(self.calls) - 1]
+
+
+def _note_target_page(records: list[dict[str, Any]], *, cursor: str | None = None) -> dict[str, Any]:
+    page: dict[str, Any] = {"data": {demo3.NOTE_TARGETS_PLURAL: records}}
+    if cursor is not None:
+        page["pageInfo"] = {"hasNextPage": True, "endCursor": cursor}
+    return page
+
+
+def test_the_note_target_pin_reads_the_flat_relation_column() -> None:
+    """The pin 7.2 falsified: no `comment` object — bindings carry `patientProgramId`, flat."""
+    assert demo3.NOTE_TARGETS_PLURAL == "noteTargets"
+    assert demo3.NOTE_TARGET_RECORD_COLUMN == "patientProgramId"
+
+
+def test_count_comments_counts_only_bindings_on_the_given_record() -> None:
+    reader = _FakeNoteTargetReader([
+        _note_target_page([
+            {"id": "nt-1", "noteId": "note-1", "patientProgramId": CARD_RECORD_ID},
+            {"id": "nt-2", "noteId": "note-2", "patientProgramId": OTHER_RECORD_ID},
+            {"id": "nt-3", "noteId": "note-3", "patientProgramId": CARD_RECORD_ID},
+        ])
+    ])
+
+    count = demo3.TwentyReader.count_comments(reader, CARD_RECORD_ID)
+
+    assert count == 2
+    assert reader.calls[0][0] == "/rest/noteTargets"
+
+
+def test_count_comments_walks_every_page() -> None:
+    reader = _FakeNoteTargetReader([
+        _note_target_page([{"id": "nt-1", "noteId": "note-1", "patientProgramId": CARD_RECORD_ID}], cursor="c1"),
+        _note_target_page([{"id": "nt-2", "noteId": "note-2", "patientProgramId": CARD_RECORD_ID}]),
+    ])
+
+    count = demo3.TwentyReader.count_comments(reader, CARD_RECORD_ID)
+
+    assert count == 2
+    assert len(reader.calls) == 2
+    assert reader.calls[1][1] == {"limit": 60, "starting_after": "c1"}
+
+
+def test_count_comments_is_zero_when_no_binding_matches() -> None:
+    reader = _FakeNoteTargetReader([
+        _note_target_page([{"id": "nt-1", "noteId": "note-1", "patientProgramId": OTHER_RECORD_ID}])
+    ])
+
+    assert demo3.TwentyReader.count_comments(reader, CARD_RECORD_ID) == 0
