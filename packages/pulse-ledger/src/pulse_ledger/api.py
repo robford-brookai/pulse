@@ -80,6 +80,7 @@ from pulse_ledger.twenty.mapping import (
     Drag,
     MalformedPayloadError,
     NoOp,
+    StateReader,
     Unmapped,
     interpret,
 )
@@ -460,6 +461,7 @@ def _twenty_webhook_disposition(
     mappings: Sequence[BoardMapping],
     committer: Committer,
     post_comment: CommentPoster,
+    state_reader: StateReader | None,
 ) -> dict[str, object]:
     """Interpret one verified body and act on it — the whole route past `verify`.
 
@@ -475,7 +477,7 @@ def _twenty_webhook_disposition(
         _log_disposition(DISPOSITION_MALFORMED, field_path="<body>")
         return {"disposition": DISPOSITION_MALFORMED, "field_path": "<body>"}
     try:
-        disposition = interpret(payload, mappings)
+        disposition = interpret(payload, mappings, state_of_record=state_reader)
     except MalformedPayloadError as exc:
         _log_disposition(DISPOSITION_MALFORMED, field_path=exc.field_path)
         return {"disposition": DISPOSITION_MALFORMED, "field_path": exc.field_path}
@@ -637,6 +639,7 @@ def create_app(
     environ: Mapping[str, str] | None = None,
     cursor_reader: CursorReader | None = None,
     cursor_writer: CursorWriter | None = None,
+    state_reader: StateReader | None = None,
 ) -> FastAPI:
     """Build the command API.
 
@@ -656,6 +659,13 @@ def create_app(
     design decision 6), injected the same way for the same reason: no test needs a Twenty instance
     to exercise a rejection. Left unset, a rejection still produces its receipt and logs that the
     comment could not be posted — feedback degrades, rejection correctness does not.
+
+    `state_reader` is the webhook route's echo-suppression read (twenty-projection design
+    decision 5): the mapping asks it for the subject's state of record, and a drag whose target
+    already is that state is a `noop` with reason `echo_of_record` — the loop terminator for
+    heal-back and projection writes, whose `.updated` webhooks land back here. Left unset, an
+    echo degrades to the catalog's downstream self-transition rejection (a note per heal), so the
+    running service always wires `api_server.build_state_reader`.
     """
     env = os.environ if environ is None else environ
     credentials = CredentialRegistry.from_env(env) if registry is None else registry
@@ -727,6 +737,6 @@ def create_app(
                 request.headers.get(SIGNATURE_HEADER),
                 now=datetime.now(tz=timezone.utc),
             )
-            return _twenty_webhook_disposition(body, mappings, committer, post_comment)
+            return _twenty_webhook_disposition(body, mappings, committer, post_comment, state_reader)
 
     return app

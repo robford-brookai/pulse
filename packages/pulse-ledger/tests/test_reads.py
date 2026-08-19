@@ -15,7 +15,7 @@ from typing import Any
 import psycopg
 import pytest
 from pulse_ledger.commit import Declaration, commit_declaration, commit_reversal
-from pulse_ledger.reads import NegativeLimitError, count_by_state, enumerate_state
+from pulse_ledger.reads import NegativeLimitError, count_by_state, enumerate_state, state_of_record
 from pulse_ledger.validation import IllegalTransitionError
 
 SERVICE_ROLE = "pulse_ledger_service"
@@ -167,6 +167,28 @@ def test_an_unknown_state_is_rejected_rather_than_answered_as_empty(ledger_db: p
 def test_an_unknown_subject_type_is_rejected(ledger_db: psycopg.Connection) -> None:
     with pytest.raises(IllegalTransitionError) as raised:
         enumerate_state(ledger_db, "patient", ["active"])
+
+    assert "patient" in raised.value.reason
+
+
+# --- one subject's state of record (the webhook route's echo-suppression read) ----------------
+
+
+def test_state_of_record_answers_one_subjects_current_state(ledger_db: psycopg.Connection) -> None:
+    _enrol(ledger_db, "enr-1", "pending_start", "active", "on_hold")
+    _enrol(ledger_db, "enr-2", "pending_start", "active")
+
+    assert state_of_record(ledger_db, "enrollment", "enr-1") == "on_hold"
+    assert state_of_record(ledger_db, "enrollment", "enr-2") == "active"
+
+
+def test_state_of_record_is_none_for_a_subject_the_ledger_has_never_seen(ledger_db: psycopg.Connection) -> None:
+    assert state_of_record(ledger_db, "enrollment", "enr-never-seen") is None
+
+
+def test_state_of_record_rejects_an_unknown_subject_type(ledger_db: psycopg.Connection) -> None:
+    with pytest.raises(IllegalTransitionError) as raised:
+        state_of_record(ledger_db, "patient", "enr-1")
 
     assert "patient" in raised.value.reason
 

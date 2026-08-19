@@ -363,7 +363,7 @@ class TestTheHandlerExceptionPath:
     ) -> None:
         """`DeclarationError`'s message quotes the offending value — on this route that value is payload."""
 
-        def bad_mapping(payload: object, mappings: object) -> Drag:
+        def bad_mapping(payload: object, mappings: object, **_kwargs: object) -> Drag:
             fields = dict(interpret(payload, V1_BOARD_MAPPINGS).declaration_fields)  # type: ignore[union-attr]
             fields["effective_at"] = f"Canary IllegalDrag admitted {fields['effective_at']}"
             return Drag(

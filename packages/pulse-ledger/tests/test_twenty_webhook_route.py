@@ -317,6 +317,63 @@ class TestDispositionsThatWriteNothing:
         assert committer.calls == 0
 
 
+class TestAnEchoOfTheStateOfRecordIsANoop:
+    """spec: "An echo of the state of record is a noop" — no command, no note, one countable line.
+
+    The mapping decision is `test_twenty_mapping.py`'s; what these assert is the threading — the
+    route hands its injected state reader to the mapping, the echo comes back as a 200 noop with
+    the new reason, and neither the committer nor the comment poster is touched.
+    """
+
+    @pytest.fixture
+    def posts(self) -> list[tuple[str, str, str]]:
+        return []
+
+    @pytest.fixture
+    def client(
+        self, secret: str, committer: RecordingCommitter, posts: list[tuple[str, str, str]]
+    ) -> Iterator[TestClient]:
+        app = create_app(
+            committer=committer,
+            registry=CredentialRegistry.from_env({f"{WRITER_TOKEN_PREFIX}VERDICT_RELAY": secrets.token_urlsafe(32)}),
+            twenty_webhook=TwentyWebhookConfig.from_env({
+                TWENTY_WEBHOOK_ENABLED_ENV: "true",
+                TWENTY_WEBHOOK_SECRET_ENV: secret,
+            }),
+            comment_poster=lambda card_ref, title, body: posts.append((card_ref, title, body)),
+            # `legal_drag` targets ACTIVE, so a state of record of `active` makes it an echo.
+            state_reader=lambda subject_type, subject_key: "active",
+        )
+        with TestClient(app) as test_client:
+            yield test_client
+
+    def test_an_echo_is_a_noop_with_the_echo_reason_and_commits_nothing(
+        self, client: TestClient, secret: str, committer: RecordingCommitter
+    ) -> None:
+        status, body = post_fixture(client, secret, "legal_drag")
+
+        assert status == 200
+        assert body == {"disposition": "noop", "reason": "echo_of_record"}
+        assert committer.calls == 0
+
+    def test_an_echo_posts_no_comment(self, client: TestClient, secret: str, posts: list[tuple[str, str, str]]) -> None:
+        post_fixture(client, secret, "legal_drag")
+
+        assert posts == []
+
+    def test_the_echo_log_line_carries_the_reason_and_no_payload_content(
+        self, client: TestClient, secret: str, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        with caplog.at_level(logging.INFO):
+            post_fixture(client, secret, "legal_drag")
+
+        logged = "\n".join(record.getMessage() for record in caplog.records)
+        assert "disposition=noop" in logged
+        assert "reason=echo_of_record" in logged
+        for demographic in FIXTURE_DEMOGRAPHICS:
+            assert demographic not in logged
+
+
 class TestTheStructuredDispositionLog:
     """Every disposition is one countable log line carrying identifiers and codes only."""
 
