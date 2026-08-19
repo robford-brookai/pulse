@@ -235,7 +235,11 @@ class TwentyCommentClient:
                 status_code=note_response.status_code,
                 detail="the note create answered success but carried no note id",
             )
-        self._post_with_retry(NOTE_TARGETS_PATH, {"noteId": note_id, f"{object_name}Id": record_id}, card_ref)
+        # Live v2.30 pin (2026-08-18): noteTarget's relation to a custom object is the
+        # `target`-prefixed column (`targetPatientProgramId`), not the bare `<objectName>Id`
+        # convention that stock targets (companyId, personId) follow.
+        target_column = f"target{object_name[0].upper()}{object_name[1:]}Id"
+        self._post_with_retry(NOTE_TARGETS_PATH, {"noteId": note_id, target_column: record_id}, card_ref)
 
     def _post_with_retry(self, path: str, payload: Mapping[str, object], card_ref: str) -> httpx.Response:
         """One create with the shared retry posture; returns the successful response."""
