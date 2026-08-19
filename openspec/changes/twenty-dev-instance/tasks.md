@@ -352,7 +352,7 @@ files under `openspec/specs/`.
       Verify: nine assertions green, then a hand drag producing one correctly-timed event.
       `[model: sonnet | deps: 3.1, 7.1 | lane: operational_discovery | wave: 11]`
 
-- [ ] 7.3 Close the loop in docs: `docs/runbooks/pulse-command-api-deploy.md` and
+- [x] 7.3 Close the loop in docs: `docs/runbooks/pulse-command-api-deploy.md` and
       `docs/runbooks/twenty-artifact-promotion.md`, both with `mkdocs.yml` nav entries or
       `mkdocs build -s` warns on orphans. The promotion runbook states plainly that this is dev
       only and **ADR-0004 D14 remains open** — `docs/adr/` is append-only and the roadmap still
