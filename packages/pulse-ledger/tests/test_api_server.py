@@ -145,6 +145,21 @@ class TestBuildCursorReaderWriter:
         assert calls == [(pool.sentinel_conn, "verdict-relay", {"batch": 4})]
 
 
+class TestBuildStateReader:
+    def test_reader_delegates_to_state_of_record_on_a_pooled_connection(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        pool = FakePool()
+        calls: list[tuple[object, str, str]] = []
+
+        def fake_state_of_record(conn: object, subject_type: str, subject_key: str) -> str:
+            calls.append((conn, subject_type, subject_key))
+            return "active"
+
+        monkeypatch.setattr(api_server, "state_of_record", fake_state_of_record)
+        reader = api_server.build_state_reader(pool)
+        assert reader("enrollment", SUBJECT_KEY) == "active"
+        assert calls == [(pool.sentinel_conn, "enrollment", SUBJECT_KEY)]
+
+
 class TestBuildCommentPoster:
     """Left unwired when the token is absent — rejections still receipt (module docstring)."""
 

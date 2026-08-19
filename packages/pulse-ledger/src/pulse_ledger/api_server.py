@@ -53,10 +53,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from psycopg_pool import ConnectionPool
 
-from pulse_ledger.api import CommentPoster, Committer, CursorReader, CursorWriter, create_app
+from pulse_ledger.api import CommentPoster, Committer, CursorReader, CursorWriter, StateReader, create_app
 from pulse_ledger.commit import CommitResult, Declaration, commit_declaration
 from pulse_ledger.cursor import WriterCursor, get_cursor, put_cursor
 from pulse_ledger.idempotency import commit_idempotent
+from pulse_ledger.reads import state_of_record
 from pulse_ledger.twenty.client import TWENTY_API_TOKEN_ENV, TwentyCommentClient
 
 logger = logging.getLogger(__name__)
@@ -111,6 +112,21 @@ def build_cursor_writer(pool: ConnectionPool) -> CursorWriter:
             return put_cursor(conn, writer_id, dict(cursor))
 
     return write_cursor
+
+
+def build_state_reader(pool: ConnectionPool) -> StateReader:
+    """The webhook route's state-of-record read, on a pooled connection per call.
+
+    What makes echo suppression (twenty-projection design decision 5) real in the running
+    service: without it a heal-back write's own webhook maps like a drag and the catalog posts a
+    rejection note per heal.
+    """
+
+    def read_state(subject_type: str, subject_key: str) -> str | None:
+        with pool.connection() as conn:
+            return state_of_record(conn, subject_type, subject_key)
+
+    return read_state
 
 
 def build_comment_poster(environ: Mapping[str, str]) -> CommentPoster | None:
@@ -184,6 +200,7 @@ def create_app_from_env(environ: Mapping[str, str] | None = None) -> FastAPI:
         cursor_reader=build_cursor_reader(pool),
         cursor_writer=build_cursor_writer(pool),
         comment_poster=build_comment_poster(env),
+        state_reader=build_state_reader(pool),
         environ=env,
     )
     _close_pool_on_shutdown(app, pool)

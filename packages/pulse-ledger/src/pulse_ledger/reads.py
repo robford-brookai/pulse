@@ -114,6 +114,28 @@ def enumerate_state(
     ]
 
 
+def state_of_record(conn: psycopg.Connection, subject_type: str, subject_key: str) -> str | None:
+    """One subject's current state, or `None` if the ledger has never seen the subject.
+
+    The Twenty webhook route's echo-suppression read (twenty-projection design decision 5): the
+    drag mapping compares a payload's target state against this answer to terminate the
+    heal-back/projection echo loop. The same `current_state` row every other read here trusts —
+    co-committed with the event, so this is the fold's answer, not a projection's.
+
+    `None` is an answer, not an error: a subject with no state row has no state of record, and
+    nothing can be an echo of it. An unknown subject *type* is still a rejection, as everywhere
+    else in this module.
+    """
+    validate_subject_type(subject_type)
+    cursor = conn.execute(
+        "SELECT state FROM ledger.current_state"
+        " WHERE subject_type = %(subject_type)s AND subject_key = %(subject_key)s",
+        {"subject_type": subject_type, "subject_key": subject_key},
+    )
+    row = cursor.fetchone()
+    return None if row is None else row[0]
+
+
 def count_by_state(conn: psycopg.Connection, subject_type: str) -> dict[str, int]:
     """How many subjects of this type sit in each state — the enumeration's shape, without the rows.
 

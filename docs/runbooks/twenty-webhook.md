@@ -65,7 +65,7 @@ quietly with a 200, because Twenty cannot act on an error status and retries a n
 | --- | --- | --- |
 | `committed` | A mapped, subject-resolved, legal drag was declared. Response carries the event id. | Yes — new event |
 | `replayed` | Twenty redelivered a notification already committed (D16 idempotency key from the webhook event id). Response carries the original event id. | No — returns the prior result |
-| `noop` | Verified payload that is not a mapped status-field drag: other object, create/delete, an update not touching the mapped status field. | No |
+| `noop` | Verified payload that produces no command: other object, create/delete, an update not touching the mapped status field, or a status-field update whose target already equals the state of record (`reason=echo_of_record` — the echo a heal-back or projection write fires back at this route, terminated here rather than rejected). | No |
 | `unmapped` | A mapped drag whose record lacks its canonical identifier. Logs the Twenty record id and board only. | No |
 | `rejected` | A mapped, subject-resolved drag whose target state is illegal per the catalog. Response is the rejection receipt (from-state, to-state, catalog reason, catalog version, card ref); a card comment is attempted via the outbound adapter. | No |
 | `malformed` | The body is not the shape Twenty documents (missing/unreadable JSON, an expected field absent). Not in decision 5's list — it cannot become a valid disposition regardless of auth. | No |

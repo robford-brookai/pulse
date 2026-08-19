@@ -13,12 +13,14 @@ block, or a disposition's repr.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, timezone
 
 import pytest
 from pulse_core.idempotency import derive_idempotency_key
 from pulse_ledger.twenty.mapping import (
     DRAG_COMMAND_TYPE,
+    NOOP_ECHO_OF_RECORD,
     NOOP_NOT_A_RECORD_UPDATE,
     NOOP_STATUS_FIELD_UNTOUCHED,
     NOOP_UNMAPPED_OBJECT,
@@ -160,6 +162,75 @@ class TestNonDragNotificationsAreNoOps:
 
     def test_no_mappings_at_all_makes_every_object_unmapped(self) -> None:
         assert interpret(payload("legal_drag"), ()) == NoOp(NOOP_UNMAPPED_OBJECT)
+
+
+def record_says(state: str | None) -> Callable[[str, str], str | None]:
+    """A state-of-record reader that answers `state` for every subject."""
+
+    def state_of_record(subject_type: str, subject_key: str) -> str | None:
+        return state
+
+    return state_of_record
+
+
+class TestAnEchoOfTheStateOfRecordIsANoop:
+    """Spec: "An echo of the state of record is a noop" — the projection loop's terminator.
+
+    A heal-back or projection write fires the same `.updated` webhook back at this route, and
+    `updatedBy` cannot tell those writes from a user's (Twenty collapses API-sourced writes to a
+    null `workspaceMemberId`), so state equality against the state of record is the discriminator
+    (design decision 5). `legal_drag`'s wire state is `ACTIVE`, so a reader answering `active`
+    makes it an echo and any other answer keeps it a genuine drag.
+    """
+
+    def test_a_drag_to_the_state_of_record_is_a_noop_with_the_echo_reason(self) -> None:
+        disposition = interpret(payload("legal_drag"), V1_BOARD_MAPPINGS, state_of_record=record_says("active"))
+        assert disposition == NoOp(NOOP_ECHO_OF_RECORD)
+
+    def test_the_comparison_is_encoded_not_a_raw_string_match(self) -> None:
+        # The reader answers in catalog vocabulary (`active`); the wire carries Twenty's storage
+        # encoding (`ACTIVE`). The suppression only fires if the mapping compares through
+        # `encode_option_value` — a raw equality of the two strings never would.
+        record = payload("legal_drag")["record"]
+        assert isinstance(record, dict)
+        assert record["lifecycleStatus"] == "ACTIVE"
+        disposition = interpret(payload("legal_drag"), V1_BOARD_MAPPINGS, state_of_record=record_says("active"))
+        assert disposition == NoOp(NOOP_ECHO_OF_RECORD)
+
+    def test_a_genuine_drag_to_a_different_state_still_maps_to_exactly_one_command(self) -> None:
+        # Regression pin for "A status-field update on a mapped board yields one command": echo
+        # suppression must not swallow a real move.
+        disposition = interpret(payload("legal_drag"), V1_BOARD_MAPPINGS, state_of_record=record_says("on_hold"))
+        assert isinstance(disposition, Drag)
+        assert disposition.declaration_fields["to_state"] == "active"
+
+    def test_the_reader_is_asked_for_the_mapped_subject(self) -> None:
+        asked: list[tuple[str, str]] = []
+
+        def reader(subject_type: str, subject_key: str) -> str | None:
+            asked.append((subject_type, subject_key))
+            return "active"
+
+        interpret(payload("legal_drag"), V1_BOARD_MAPPINGS, state_of_record=reader)
+        assert asked == [("enrollment", "DIM_PATIENT_CONFORMED-000101")]
+
+    def test_a_subject_the_ledger_has_never_seen_is_not_an_echo(self) -> None:
+        disposition = interpret(payload("legal_drag"), V1_BOARD_MAPPINGS, state_of_record=record_says(None))
+        assert isinstance(disposition, Drag)
+
+    def test_no_reader_at_all_leaves_the_mapping_unchanged(self) -> None:
+        # An app built without a state reader degrades to the pre-suppression behavior: the drag
+        # maps, and the catalog refuses the self-transition downstream.
+        assert isinstance(interpret(payload("legal_drag"), V1_BOARD_MAPPINGS), Drag)
+
+    def test_an_echo_needs_no_establishable_effective_time(self) -> None:
+        # The suppression sits before the timestamp refusal: a suppressed drag builds no command,
+        # so it has no time to establish — `Unmapped` here would be noise.
+        body = payload("legal_drag")
+        assert isinstance(body["record"], dict)
+        del body["record"]["updatedAt"]
+        disposition = interpret(body, V1_BOARD_MAPPINGS, state_of_record=record_says("active"))
+        assert disposition == NoOp(NOOP_ECHO_OF_RECORD)
 
 
 class TestUpdatedFieldsIsANameList:

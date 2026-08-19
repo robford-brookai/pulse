@@ -20,7 +20,10 @@ What each disposition means, and why the boundary sits where it does:
   half-attributed `Declaration` here would either duplicate that rule or defeat it.
 - **`NoOp`** — Twenty's CRUD noise: another object, a create or delete, an update that never
   touched the status field. Acknowledged as success so Twenty does not redeliver it forever, and
-  written nowhere (`event-envelope-spec.md`'s two-vocabularies rule).
+  written nowhere (`event-envelope-spec.md`'s two-vocabularies rule). The same disposition, with
+  reason `echo_of_record`, suppresses a drag whose target already *is* the state of record — the
+  echo a heal-back or projection write fires back at the route, and what terminates that loop in
+  one bounce (twenty-projection design decision 5).
 - **`Unmapped`** — a mapped drag this route refuses rather than guesses about: the record lacks
   its canonical identifier, or carries no timestamp its effective time can be established from.
   The Twenty record ID is internal and is not a subject key, and an inherited or wall-clock
@@ -51,7 +54,7 @@ never a value. Every exit from this module is an identifier or a fixed code.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -80,6 +83,13 @@ UPDATED_EVENT_SUFFIX = ".updated"
 NOOP_NOT_A_RECORD_UPDATE = "not_a_record_update"
 NOOP_UNMAPPED_OBJECT = "unmapped_object"
 NOOP_STATUS_FIELD_UNTOUCHED = "status_field_untouched"
+NOOP_ECHO_OF_RECORD = "echo_of_record"
+
+#: The state of record, on demand: (subject_type, subject_key) → the subject's current state in
+#: catalog vocabulary, or `None` if the ledger has never seen the subject. Injected like the
+#: route's `Committer` — `pulse_ledger.reads.state_of_record` over a pooled connection in the
+#: running service, a lambda in tests.
+StateReader = Callable[[str, str], str | None]
 
 
 class TwentyPayloadError(ValueError):
@@ -199,12 +209,24 @@ class Unmapped:
 Disposition = Drag | NoOp | Unmapped
 
 
-def interpret(payload: Mapping[str, object], mappings: Sequence[BoardMapping]) -> Disposition:
+def interpret(
+    payload: Mapping[str, object],
+    mappings: Sequence[BoardMapping],
+    *,
+    state_of_record: StateReader | None = None,
+) -> Disposition:
     """Interpret one verified webhook body against the configured boards.
 
     `mappings` is required rather than defaulted to `V1_BOARD_MAPPINGS`: which boards this service
     listens to is a deployment fact, and a default would let a caller commit against boards it
     never configured.
+
+    `state_of_record` is the echo-suppression read (twenty-projection design decision 5): a drag
+    whose target already is the subject's state of record is `NoOp("echo_of_record")`, never a
+    command. `None` degrades to the pre-suppression behavior — the echo maps like any drag and the
+    catalog refuses the self-transition downstream with a rejection note — which is safe for a
+    test app but reintroduces the note-per-heal loop in a running service, so the route always
+    wires one.
 
     Raises `MalformedPayloadError` for a body that is not the shape Twenty sends. Every
     well-formed body returns a disposition — including the ones that produce no command.
@@ -236,15 +258,15 @@ def interpret(payload: Mapping[str, object], mappings: Sequence[BoardMapping]) -
     if canonical_key is None:
         return Unmapped(record_ref=card_ref, board=mapping.board)
 
-    # F3: the drag's own timestamp, or a refusal. `record.updatedAt` is the only stamp a UI drag
-    # writes; a record without one has no establishable effective time, and committing with an
-    # inherited or wall-clock time would be silently wrong rather than visibly refused.
-    updated_at_raw = _text_at(record, ("updatedAt",))
-    if updated_at_raw is None:
+    # It sits before the timestamp refusal because a suppressed drag builds no command and so
+    # needs no establishable effective time.
+    if _is_echo_of_record(state_of_record, mapping, canonical_key, wire_state):
+        return NoOp(NOOP_ECHO_OF_RECORD)
+
+    effective = _effective_time(record)
+    if effective is None:
         return Unmapped(record_ref=card_ref, board=mapping.board)
-    effective_at = _parse_timestamp(updated_at_raw)
-    if effective_at is None:
-        return Unmapped(record_ref=card_ref, board=mapping.board)
+    effective_at, updated_at_raw = effective
 
     return _drag(
         record,
@@ -255,6 +277,43 @@ def interpret(payload: Mapping[str, object], mappings: Sequence[BoardMapping]) -
         effective_at=effective_at,
         logical_time=updated_at_raw,
     )
+
+
+def _is_echo_of_record(
+    state_of_record: StateReader | None,
+    mapping: BoardMapping,
+    canonical_key: str,
+    wire_state: str,
+) -> bool:
+    """Whether this drag's target already is the subject's state of record (design decision 5).
+
+    The projection loop's terminator: a heal-back or projection write fires the same `.updated`
+    webhook back at the route, and `updatedBy` cannot tell those writes from a user's (an
+    API-sourced write collapses to a null `workspaceMemberId`), so state equality is the only
+    reliable discriminator. The comparison is encoded — the reader answers in catalog vocabulary,
+    the wire carries the storage encoding, and `encode_option_value` is the proven bijection
+    between them. No reader, or a subject the ledger has never seen, is never an echo.
+    """
+    if state_of_record is None:
+        return False
+    record_state = state_of_record(mapping.subject_type, canonical_key)
+    return record_state is not None and encode_option_value(record_state) == wire_state
+
+
+def _effective_time(record: Mapping[str, object]) -> tuple[datetime, str] | None:
+    """The drag's own timestamp as (parsed, raw), or `None` for a refusal.
+
+    F3: `record.updatedAt` is the only stamp a UI drag writes; a record without one has no
+    establishable effective time, and committing with an inherited or wall-clock time would be
+    silently wrong rather than visibly refused.
+    """
+    updated_at_raw = _text_at(record, ("updatedAt",))
+    if updated_at_raw is None:
+        return None
+    effective_at = _parse_timestamp(updated_at_raw)
+    if effective_at is None:
+        return None
+    return effective_at, updated_at_raw
 
 
 def _drag(
