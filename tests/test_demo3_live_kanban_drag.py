@@ -244,17 +244,17 @@ def _note_target_page(records: list[dict[str, Any]], *, cursor: str | None = Non
 
 
 def test_the_note_target_pin_reads_the_flat_relation_column() -> None:
-    """The pin 7.2 falsified: no `comment` object — bindings carry `patientProgramId`, flat."""
+    """The pin 7.2 falsified: no `comment` object — bindings carry `targetPatientProgramId` (custom-object targets take the `target` prefix)."""
     assert demo3.NOTE_TARGETS_PLURAL == "noteTargets"
-    assert demo3.NOTE_TARGET_RECORD_COLUMN == "patientProgramId"
+    assert demo3.NOTE_TARGET_RECORD_COLUMN == "targetPatientProgramId"
 
 
 def test_count_comments_counts_only_bindings_on_the_given_record() -> None:
     reader = _FakeNoteTargetReader([
         _note_target_page([
-            {"id": "nt-1", "noteId": "note-1", "patientProgramId": CARD_RECORD_ID},
-            {"id": "nt-2", "noteId": "note-2", "patientProgramId": OTHER_RECORD_ID},
-            {"id": "nt-3", "noteId": "note-3", "patientProgramId": CARD_RECORD_ID},
+            {"id": "nt-1", "noteId": "note-1", "targetPatientProgramId": CARD_RECORD_ID},
+            {"id": "nt-2", "noteId": "note-2", "targetPatientProgramId": OTHER_RECORD_ID},
+            {"id": "nt-3", "noteId": "note-3", "targetPatientProgramId": CARD_RECORD_ID},
         ])
     ])
 
@@ -266,8 +266,8 @@ def test_count_comments_counts_only_bindings_on_the_given_record() -> None:
 
 def test_count_comments_walks_every_page() -> None:
     reader = _FakeNoteTargetReader([
-        _note_target_page([{"id": "nt-1", "noteId": "note-1", "patientProgramId": CARD_RECORD_ID}], cursor="c1"),
-        _note_target_page([{"id": "nt-2", "noteId": "note-2", "patientProgramId": CARD_RECORD_ID}]),
+        _note_target_page([{"id": "nt-1", "noteId": "note-1", "targetPatientProgramId": CARD_RECORD_ID}], cursor="c1"),
+        _note_target_page([{"id": "nt-2", "noteId": "note-2", "targetPatientProgramId": CARD_RECORD_ID}]),
     ])
 
     count = demo3.TwentyReader.count_comments(reader, CARD_RECORD_ID)
@@ -279,7 +279,7 @@ def test_count_comments_walks_every_page() -> None:
 
 def test_count_comments_is_zero_when_no_binding_matches() -> None:
     reader = _FakeNoteTargetReader([
-        _note_target_page([{"id": "nt-1", "noteId": "note-1", "patientProgramId": OTHER_RECORD_ID}])
+        _note_target_page([{"id": "nt-1", "noteId": "note-1", "targetPatientProgramId": OTHER_RECORD_ID}])
     ])
 
     assert demo3.TwentyReader.count_comments(reader, CARD_RECORD_ID) == 0

@@ -162,11 +162,12 @@ VIEWS_QUERY = (
 WEBHOOKS_QUERY = "query Demo3Webhooks { webhooks { id targetUrl operations } }"
 
 #: Endpoint pin (reworked after 7.2's live falsification of `/rest/comments` — v2.30 has no
-#: `comment` object): rejection commentary is a `note` bound to its record by a `noteTarget`
-#: carrying the flat relation column (`patientProgramId`, the verified relation-column
-#: convention). Counting bindings needs no note body, so the read stays PHI-clean by construction.
+#: `comment` object): rejection commentary is a `note` bound to its record by a `noteTarget`.
+#: Live-verified 2026-08-18: a noteTarget's relation to a *custom* object is the
+#: `target`-prefixed column (`targetPatientProgramId`), unlike stock targets (`companyId`).
+#: Counting bindings needs no note body, so the read stays PHI-clean by construction.
 NOTE_TARGETS_PLURAL = "noteTargets"
-NOTE_TARGET_RECORD_COLUMN = f"{BOARD_OBJECT}Id"
+NOTE_TARGET_RECORD_COLUMN = f"target{BOARD_OBJECT[0].upper()}{BOARD_OBJECT[1:]}Id"
 
 
 class DemoAssertionError(AssertionError):

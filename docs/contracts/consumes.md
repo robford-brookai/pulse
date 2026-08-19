@@ -82,7 +82,7 @@ API — the one outbound surface the D8 kanban route introduces (rejection-comme
 no other verb). The original `POST /rest/comments` pin was **falsified live** (7.2's assertion-9
 run, 2026-08-17): v2.30 has no `comment` object. The record-attached commentary surface is a
 `note` plus a `noteTarget` binding it to the record by the flat relation column
-(`patientProgramId`, the live-verified relation-column convention) — task 6.7. The two
+(`targetPatientProgramId` — custom-object targets take the `target` prefix, live-verified 2026-08-18) — task 6.7. The two
 create-response shapes follow the live-verified `create` + capitalized-singular convention but
 have not yet been individually exercised live; every test runs against synthetic responses at the
 HTTP boundary, `--disable-socket`. A shape drift surfaces as a typed `CommentPostError` at the

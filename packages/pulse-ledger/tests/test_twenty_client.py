@@ -9,7 +9,8 @@ error message is clean only if none of them appear.
 7.2's live run falsified the original `POST /rest/comments` pin — v2.30 has no `comment` object.
 The record-attached commentary surface is a `note` (`POST /rest/notes`) plus a `noteTarget`
 (`POST /rest/noteTargets`) binding it to the record by the flat relation column
-(`patientProgramId`), so every posting test here asserts both calls and their flat keys.
+(`targetPatientProgramId` — custom-object targets take the `target` prefix), so every
+posting test here asserts both calls and their keys.
 """
 
 from __future__ import annotations
@@ -158,7 +159,7 @@ def test_posting_creates_a_note_then_a_note_target_with_flat_keys() -> None:
     assert target_request.url.path == NOTE_TARGETS_PATH
     assert target_request.headers["Authorization"] == f"Bearer {TOKEN}"
     target_wire = json.loads(target_request.content)
-    assert target_wire == {"noteId": NOTE_ID, "patientProgramId": RECORD_ID}
+    assert target_wire == {"noteId": NOTE_ID, "targetPatientProgramId": RECORD_ID}
 
 
 def test_the_note_body_is_the_receipt_text_and_carries_no_payload_field() -> None:
@@ -179,14 +180,14 @@ def test_the_note_body_is_the_receipt_text_and_carries_no_payload_field() -> Non
 
 
 def test_the_relation_column_is_derived_from_the_card_refs_object_name() -> None:
-    """The flat relation-column convention: `<objectName>Id`, never a nested relation object."""
+    """The relation column: `target<ObjectName>Id` for custom-object targets, never nested."""
     requests: list[httpx.Request] = []
     client = _recording_client([_note_created(), _target_created()], requests)
 
     client.create_comment("otherBoard:record-0009", "some_reason", "some receipt text")
 
     target_wire = json.loads(requests[1].content)
-    assert target_wire == {"noteId": NOTE_ID, "otherBoardId": "record-0009"}
+    assert target_wire == {"noteId": NOTE_ID, "targetOtherBoardId": "record-0009"}
 
 
 def test_a_card_ref_without_an_object_and_record_id_is_refused_before_any_call() -> None:
