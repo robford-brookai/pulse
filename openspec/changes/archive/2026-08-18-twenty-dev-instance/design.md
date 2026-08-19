@@ -104,6 +104,12 @@ pod a DDL-capable credential and dissolves the split it is meant to enforce.
 `typescript@7.0.2`. Reshaping the local stand-in to mirror `ViewManifestType` first is offline and
 adds no dependency; adopting the SDK afterwards becomes a change of import path. Landing both at
 once would make a type-checking failure ambiguous between the two causes.
+*Correction (task 6.4, 2026-08-18):* "a change of import path" was falsified — the SDK's
+`twenty-sdk/define` surface diverges structurally from the reshaped stand-in (deprecated
+`defineRole`, different `RoleConfig`/`ObjectConfig` shapes, syntactic inline-default entity
+detection, hard-required `joinColumnName` on MANY_TO_ONE). The full port was its own task
+(6.4, PR #226); the sequencing rationale above still held — the failure classes stayed
+attributable.
 
 **Seed from a committed deterministic projection.**
 The synthetic-population generator emits into an untracked tree, needs a Java toolchain and a

@@ -13,14 +13,34 @@ other objects, record creation or deletion, updates not touching the status fiel
 acknowledged as a no-op: success to Twenty (so it is not redelivered), no ledger write. A mapped
 drag SHALL yield exactly one transition declaration.
 
+The payload shape a drag is recognized from SHALL be the one Twenty sends:
+
+- The event discriminator SHALL be `eventName`, an object-qualified string of the form
+  `{objectNamePlural}.{action}` such as `patientProgram.updated`, rather than a bare
+  `record.updated` event type.
+- `updatedFields` SHALL be read as a list of field **names**; the field's new value SHALL be read
+  from the corresponding key on `record`, because the payload carries no per-field before/after
+  pair.
+- `record` SHALL be treated as the flat ORM entity — Twenty's `properties.after` — so related
+  objects appear as foreign-key scalars rather than nested objects.
+
+The webhook subscription SHALL be registered narrowed to the mapped operations rather than the
+default wildcard, so that an unmapped-object no-op is a defensive path rather than the common case.
+
 #### Scenario: A status-field update on a mapped board yields one command
 
-- **GIVEN** a verified payload updating a mapped record's status field from one column to another
+- **GIVEN** a verified payload whose `eventName` is the mapped object's `.updated` event, whose
+  `updatedFields` names the mapping's status field, and whose `record` carries the new value
 - **WHEN** it is mapped
 - **THEN** exactly one transition declaration is produced, carrying the new column as the target
   state
 
 #### Scenario: A non-drag notification is acknowledged as a no-op
+
+- **GIVEN** the webhook route is enabled
+- **WHEN** a verified payload arrives for an unmapped object, a create/delete, or an update whose
+  `updatedFields` does not name the status field
+- **THEN** the response is success with a no-op disposition and nothing is written to the ledger
 
 #### Scenario: A malformed body is acknowledged, never redelivered forever
 
@@ -28,11 +48,7 @@ drag SHALL yield exactly one transition declaration.
 - **WHEN** the route processes it
 - **THEN** the response is a 200 `malformed` disposition (a non-2xx would make Twenty redeliver
   a permanently unprocessable payload indefinitely), one structured log line carries identifiers
-  and codes only, and no command is built (execution finding, task 3.1 — implemented and tested)
-
-- **WHEN** a verified payload arrives for an unmapped object, a create/delete, or an update that
-  does not touch the status field
-- **THEN** the response is success with a no-op disposition and nothing is written to the ledger
+  and codes only, and no command is built
 
 ### Requirement: Subjects resolve from canonical identifiers, never guessed
 
@@ -42,9 +58,14 @@ never a subject key). A payload whose record lacks the canonical identifier SHAL
 command or a guess: it SHALL be acknowledged with an unmapped disposition and surfaced in a log
 line naming the Twenty record ID and board only — no record fields.
 
+Because the webhook's `record` is flat, the canonical identifiers SHALL be readable as scalar
+fields on the record itself. The board's object SHALL therefore carry the canonical spine ID and
+the subject grain as denormalized fields, and resolution SHALL NOT depend on traversing a nested
+related object or on a read-back call to Twenty.
+
 #### Scenario: The canonical identifier resolves the subject
 
-- **GIVEN** a mapped drag whose record carries its canonical identifier
+- **GIVEN** a mapped drag whose flat `record` carries the canonical identifier as a scalar field
 - **WHEN** the subject is resolved
 - **THEN** the declaration's subject type and key derive from the board mapping and the canonical
   identifier, not the Twenty record ID
@@ -56,11 +77,23 @@ line naming the Twenty record ID and board only — no record fields.
 - **THEN** no command is produced, the response carries an unmapped disposition, and the log line
   names only the record ID and board
 
+#### Scenario: Resolution never calls back into Twenty
+
+- **GIVEN** a mapped drag
+- **WHEN** the subject is resolved
+- **THEN** resolution reads only the delivered payload, adding no outbound request and no second
+  credential to the request path
+
 ### Requirement: A valid drag commits on the single write path
 
 A mapped, subject-resolved drag SHALL be declared through the same commit path, catalog
 validation, and idempotent-commit semantics as every other writer — no second write path. The
 response to Twenty SHALL carry the committed event id.
+
+Twenty sends no per-delivery event identifier — `webhookId` is per-webhook, `eventDate` is
+per-batch, and the nonce is regenerated per attempt — so the drag's logical time SHALL be derived
+from `record.updatedAt`, which is stable across redeliveries of one write and distinct for a
+genuine second drag. The idempotency key SHALL be composed from that value.
 
 #### Scenario: A signed synthetic drag commits end to end
 
@@ -72,6 +105,39 @@ response to Twenty SHALL carry the committed event id.
 #### Scenario: Webhook redelivery is a replay, not a second event
 
 - **GIVEN** a drag that already committed
-- **WHEN** Twenty redelivers the same notification
+- **WHEN** Twenty redelivers the same notification, carrying a fresh nonce and delivery timestamp
+  but the same `record.updatedAt`
 - **THEN** the original commit result is returned marked as a replay and history contains exactly
   one event (D16)
+
+#### Scenario: A genuine second drag is not mistaken for a replay
+
+- **GIVEN** a subject that was dragged, committed, and then dragged again
+- **WHEN** the second notification arrives with a later `record.updatedAt`
+- **THEN** its idempotency key differs and a second event commits
+
+### Requirement: Effective time comes from the record, never the wall clock
+
+A drag's `effective_at` SHALL be derived from the dragged record's own state-change timestamp, not
+from the time the webhook was received or processed. Where the board's object does not stamp a
+dedicated as-of field on the status change, the record's own update timestamp SHALL be used.
+
+`effective_at` SHALL NOT fall back to the previous projection's timestamp. That failure is silent —
+it commits a well-formed event carrying a wrong time rather than raising — so a drag whose
+effective time cannot be established from the record SHALL be refused with an unmapped disposition
+rather than committed with a guessed time.
+
+#### Scenario: A drag commits with the record's timestamp, not the receive time
+
+- **GIVEN** a mapped drag whose record carries its state-change timestamp
+- **WHEN** the command commits
+- **THEN** the event's `effective_at` equals that timestamp, and is independent of when the
+  delivery arrived or was retried
+
+#### Scenario: A record with no establishable effective time is refused
+
+- **GIVEN** a mapped drag whose record carries neither a status as-of stamp nor an update
+  timestamp
+- **WHEN** it is processed
+- **THEN** no command is produced and the response carries an unmapped disposition, rather than an
+  event committing with an inherited or wall-clock time
