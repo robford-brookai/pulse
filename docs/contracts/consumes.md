@@ -115,6 +115,13 @@ an image built from patched source is a fork, and AGPL §13 obligations attach).
 is pinned to that version. Upstream migrations can land on app-declared objects, so a tag bump is
 a deliberate event verified against a parallel instance, not a routine upgrade.
 
+**The F1 answer (twenty-dev-instance 1.7): positive.** A `universalIdentifier` supplied on a
+Metadata API create **round-trips** — it is stored and read back unchanged, not dropped by the
+create input — observed on v2.30.0 (2026-08-16) and reconfirmed at full-artifact scale by the
+49-operation read-back below. F1 is what makes the promotion model above tenable at all:
+create-if-absent keying and cross-environment identity both rest on the artifact's
+`universalIdentifier`s surviving the create. A tag bump re-answers F1 before anything else.
+
 | Dependency | Kind | Source | Breakage risk |
 |---|---|---|---|
 | Metadata API operation set | serialized artifact, pinned in this repo (`packages/twenty-app/artifact/operations.json`, keys `artifactVersion` / `catalogVersion`) | Twenty; shape decided by D4 / DNA-908 | **live-verified against dev (v2.30.0, 2026-08-17)**: all 49 operations read back under their mapped `universalIdentifier`s, immediate re-apply all no-ops — a shape drift upstream surfaces as a failed apply, not as bad data, because validate-before-apply refuses anything the schema rejects |
