@@ -2340,6 +2340,7 @@ dependencies = [
     { name = "psycopg", extra = ["binary", "pool"] },
     { name = "pulse-core" },
     { name = "sqlalchemy" },
+    { name = "twenty-projection" },
 ]
 
 [package.optional-dependencies]
@@ -2360,6 +2361,7 @@ requires-dist = [
     { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.2" },
     { name = "pulse-core", editable = "packages/pulse-core" },
     { name = "sqlalchemy", specifier = ">=2.0" },
+    { name = "twenty-projection", editable = "packages/twenty-projection" },
     { name = "uvicorn", marker = "extra == 'serve'", specifier = ">=0.41.0" },
 ]
 provides-extras = ["serve"]

@@ -50,10 +50,13 @@ import os
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI
 from psycopg_pool import ConnectionPool
+from pulse_core.twenty_model import encode_option_value
+from twenty_projection.apply import V1_BOARD, ProjectionRestClient
 
-from pulse_ledger.api import CommentPoster, Committer, CursorReader, CursorWriter, StateReader, create_app
+from pulse_ledger.api import CommentPoster, Committer, CursorReader, CursorWriter, HealWriter, StateReader, create_app
 from pulse_ledger.commit import CommitResult, Declaration, commit_declaration
 from pulse_ledger.cursor import WriterCursor, get_cursor, put_cursor
 from pulse_ledger.idempotency import commit_idempotent
@@ -66,6 +69,14 @@ logger = logging.getLogger(__name__)
 #: webhook route's own credential (`PULSE_LEDGER_TWENTY_WEBHOOK_SECRET*`) has no URL of its own to
 #: agree with, since Twenty is the caller on that leg and the callee on this one.
 TWENTY_BASE_URL_ENV = "PULSE_LEDGER_TWENTY_BASE_URL"
+
+#: The projection identity's Twenty credential, distinct from the comment adapter's
+#: `PULSE_LEDGER_TWENTY_API_TOKEN`: a heal-back write is a projection write (twenty-projection
+#: design decision 4) and must read as one in Twenty — same identity as the consumer's applies,
+#: never the rejection-note identity. Unset means heal-back stays unwired and every rejection
+#: logs `heal_failed`; the base URL is shared with the comment adapter, since both talk to the
+#: one Twenty instance this service projects.
+PROJECTION_TWENTY_TOKEN_ENV = "PULSE_LEDGER_TWENTY_PROJECTION_TOKEN"  # noqa: S105 — a variable name, not a secret
 
 #: uvicorn defaults, overridable the same way every other piece of this wiring is: an env var, read
 #: only inside the factory.
@@ -151,6 +162,61 @@ def build_comment_poster(environ: Mapping[str, str]) -> CommentPoster | None:
     return client.create_comment
 
 
+class UnprojectedCardError(LookupError):
+    """A heal was asked for on a card whose object no projected board owns.
+
+    Carries the card ref only — two Twenty identifiers, log-safe. The route's broad catch turns
+    it into one `heal_failed` line like any other heal failure.
+    """
+
+    def __init__(self, card_ref: str) -> None:
+        self.card_ref = card_ref
+        super().__init__(f"no projected board for card {card_ref!r}")
+
+
+def build_heal_writer(
+    environ: Mapping[str, str],
+    *,
+    transport: httpx.BaseTransport | None = None,
+) -> HealWriter | None:
+    """The heal-back leg over the projection writer, or `None` if its token is unset.
+
+    One adapter around `twenty_projection.apply.ProjectionRestClient` (the merged 2.1 surface):
+    the card ref is split back into the board's object and record id, the state of record is
+    encoded with the same pinned SELECT encoding every projection write uses, and the PATCH
+    carries the status field alone — no as-of, no watermark, because a heal has no ledger
+    sequence in hand and must never move the monotonicity guard (spec: the heal "SHALL carry
+    only the state value the ledger already holds").
+
+    Absence degrades exactly as `build_comment_poster`'s does: no projection token, or a token
+    without the shared base URL, means rejections still receipt and log `heal_failed` — an
+    unwired heal channel is never a boot failure. `transport` is the test seam
+    (`httpx.MockTransport`), the same convention as the projection writer's own tests.
+    """
+    token = environ.get(PROJECTION_TWENTY_TOKEN_ENV, "").strip()
+    if not token:
+        return None
+    base_url = environ.get(TWENTY_BASE_URL_ENV)
+    if not base_url:
+        logger.warning(
+            "%s is set but %s is not; the heal-back writer cannot be built",
+            PROJECTION_TWENTY_TOKEN_ENV,
+            TWENTY_BASE_URL_ENV,
+        )
+        return None
+    client = ProjectionRestClient(base_url, token=token, transport=transport)
+    boards = {V1_BOARD.object_name: V1_BOARD}
+
+    def heal_card(card_ref: str, state_of_record: str) -> None:
+        object_name, _, record_id = card_ref.partition(":")
+        board = boards.get(object_name)
+        if board is None or not record_id:
+            raise UnprojectedCardError(card_ref)
+        client.patch_record(board.plural, record_id, {board.status_field: encode_option_value(state_of_record)})
+
+    return heal_card
+
+
 def _install_health_route(app: FastAPI) -> None:
     """Liveness only. No credential, no query — see the module docstring for why it lives here."""
 
@@ -200,6 +266,7 @@ def create_app_from_env(environ: Mapping[str, str] | None = None) -> FastAPI:
         cursor_reader=build_cursor_reader(pool),
         cursor_writer=build_cursor_writer(pool),
         comment_poster=build_comment_poster(env),
+        heal_writer=build_heal_writer(env),
         state_reader=build_state_reader(pool),
         environ=env,
     )
