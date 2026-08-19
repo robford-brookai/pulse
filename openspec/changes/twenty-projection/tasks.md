@@ -59,7 +59,7 @@ never a worktree.
       correctness story; a wrong guard silently corrupts board state and only surfaces at
       reconciliation.
 
-- [ ] 2.2 Orphan parking and payload-free failure handling around the apply core: an
+- [x] 2.2 Orphan parking and payload-free failure handling around the apply core: an
       unresolvable subject parks with a counted metric and an identifiers-only log line; a
       failed REST write retries then surfaces with no payload content in any log or metric.
       Tests: orphan parks without crashing or blocking (spec: "An orphan event parks
@@ -88,7 +88,7 @@ never a worktree.
 
 ## 3. Wave 2 — heal-back and wiring
 
-- [ ] 3.1 Heal-back on rejection: on a `rejected` disposition, the webhook route restores the
+- [x] 3.1 Heal-back on rejection: on a `rejected` disposition, the webhook route restores the
       card's status field to the state of record through the projection writer — synchronous
       best-effort, attributed to the projection identity, degrading exactly like the rejection
       note (failure logs the card ref only, receipt always returned). The echo-loop
