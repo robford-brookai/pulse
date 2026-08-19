@@ -20,7 +20,7 @@ never a worktree.
 
 ## 1. Wave 0 — model and scaffold
 
-- [ ] 1.1 Scaffold `packages/twenty-projection` as a workspace member: package layout
+- [x] 1.1 Scaffold `packages/twenty-projection` as a workspace member: package layout
       (`src/twenty_projection/`, `tests/`), pyproject wired into the uv workspace, a
       placeholder test collecting under `task check`, and Taskfile target
       `projection:consume` requiring `TARGET` (credentialed, out of `check` — the reachability
