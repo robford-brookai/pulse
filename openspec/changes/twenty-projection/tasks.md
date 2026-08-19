@@ -30,7 +30,7 @@ never a worktree.
       `[model: sonnet | deps: — | lane: repo_change | wave: 0]`
       `serial: workspace_roots` — edits `Taskfile.yml` and root workspace config.
 
-- [ ] 1.2 Watermark field in the model: add `projectionSeq` (NUMBER, nullable — null means
+- [x] 1.2 Watermark field in the model: add `projectionSeq` (NUMBER, nullable — null means
       never projected) to `patientProgram` in `pulse_core.twenty_model`, mint its UID into
       `uid-map.json`, regenerate `generated/` and the artifact. No SELECT options change; the
       encoding bijectivity gate and golden files re-render.
