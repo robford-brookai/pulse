@@ -1,5 +1,5 @@
 """twenty_projection is importable as an installed workspace member, not by path accident,
-its suite runs socket-blocked, and the consumer stub fails by name until task 2.3."""
+its suite runs socket-blocked, and the consumer entrypoint fails by name when unconfigured."""
 
 from __future__ import annotations
 
@@ -24,9 +24,16 @@ def test_sockets_are_blocked() -> None:
         socket.socket()
 
 
-def test_consumer_stub_fails_by_name(capsys: pytest.CaptureFixture[str]) -> None:
-    """`task projection:consume` must fail with a named message, never an ImportError."""
-    assert consumer.main() == 2
+def test_unconfigured_consumer_fails_by_name(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`task projection:consume` must fail with a named message, never an ImportError.
+
+    The full startup contract (every missing variable named) is pinned in test_consumer.py;
+    this keeps the entrypoint posture the stub established: exit 2, a message, no traceback.
+    """
+    for name in ("PULSE_TWENTY_DEV_URL", "PULSE_TWENTY_DEV_TOKEN", "SQS_QUEUE_URL"):
+        monkeypatch.delenv(name, raising=False)
+    assert consumer.main(["--target", "dev"]) == 2
     captured = capsys.readouterr()
-    assert "not implemented" in captured.err
-    assert "task 2.3" in captured.err
+    assert "startup failed" in captured.err
