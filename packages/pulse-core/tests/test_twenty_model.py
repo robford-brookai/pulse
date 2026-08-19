@@ -449,6 +449,22 @@ def test_the_denormalized_webhook_columns_are_declared() -> None:
         assert field.type == "TEXT"
 
 
+def test_the_projection_watermark_field_is_declared() -> None:
+    """twenty-projection 1.2: `projectionSeq` is the monotonic apply guard (design Decision 2).
+
+    NUMBER because it carries `ledger_seq`, nullable with no default because null means never
+    projected. Deliberately not a status field: no `AsOf` guard pairs with it, so it stays out
+    of the `status_fields` derivation and the staff read-only surface is unchanged.
+    """
+    patient_program = tm.TWENTY_MODEL.object("patientProgram")
+    assert patient_program is not None
+    field = patient_program.field("projectionSeq")
+    assert field is not None
+    assert field.type == "NUMBER"
+    assert field.is_nullable is True
+    assert field.default_value is None
+
+
 # --- 3. Every identifier is a well-formed, unique UUID ----------------------------------------
 
 

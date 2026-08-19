@@ -87,6 +87,7 @@
   "patientProgram.patient": "fe59dea1-6183-4b36-9b84-f73ff2ce7651",
   "patientProgram.program": "b4a58d1f-25b7-4f57-855c-75d874beafa5",
   "patientProgram.programCode": "c2597f66-f445-46e0-bf76-700f21673a2b",
+  "patientProgram.projectionSeq": "d4b30e31-db5a-455e-8839-e69531168933",
   "patientProgram.qualificationStatus": "82d94e8c-f3a3-46aa-8adf-dd2a96acde2b",
   "patientProgram.qualificationStatus.closed": "b6f1d2e3-a3b1-4fd7-b918-3f4eff940174",
   "patientProgram.qualificationStatus.not_qualified": "beab8008-5ddd-4263-b2c5-f0c8e30517d2",
