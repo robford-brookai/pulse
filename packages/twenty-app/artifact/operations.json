@@ -674,6 +674,17 @@
     },
     {
       "operation": "createField",
+      "universalIdentifier": "d4b30e31-db5a-455e-8839-e69531168933",
+      "objectNameSingular": "patientProgram",
+      "name": "projectionSeq",
+      "type": "NUMBER",
+      "label": "Projection Seq",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "Watermark: the ledger sequence of the last applied event. Null means never projected."
+    },
+    {
+      "operation": "createField",
       "universalIdentifier": "82d94e8c-f3a3-46aa-8adf-dd2a96acde2b",
       "objectNameSingular": "patientProgram",
       "name": "qualificationStatus",

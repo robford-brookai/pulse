@@ -119,6 +119,14 @@ export default defineObject({
         "Last-writer-wins guard for qualificationStatus: the `occurredAt` of the event that set it.",
     },
     {
+      universalIdentifier: uid("patientProgram.projectionSeq"),
+      name: "projectionSeq",
+      type: FieldType.NUMBER,
+      label: "Projection Seq",
+      description:
+        "Watermark: the ledger sequence of the last applied event. Null means never projected.",
+    },
+    {
       universalIdentifier: uid("patientProgram.domainEvents"),
       name: "domainEvents",
       type: FieldType.RELATION,
