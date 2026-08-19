@@ -165,7 +165,8 @@ Gate: Phase 2 exit; Twenty dev instance from `environment-matrix`.
 | Change | Delivers | Gate |
 |---|---|---|
 | `pulse-app-scaffold` | Twenty app package, objects, roles, `project-domain-event` logic function, catalog → SELECT-options codegen, artifact deploy + live dev read-back | ✅ shipped — archived `2026-08-17-pulse-app-scaffold` (DNA-918); ~~D4~~ closed 08-12: artifact split (DNA-908) |
-| `twenty-projection` | ledger-fed consumer: upserts on `(subject_id, ledger_seq)`, monotonic apply, heal-back write (closes D8 end-to-end), read-only status fields | `pulse-app-scaffold` |
+| `twenty-dev-instance` | live dev instance (v2.30.0 on EKS/DuploCloud), served command API, seed loader, real webhook wire format, twenty-sdk port + composable app package, live kanban round trip proven (nine assertions + hand drag, receipts on #223) | ✅ shipped — archived `2026-08-18-twenty-dev-instance` (DNA-1019) |
+| `twenty-projection` | ledger-fed consumer: upserts on `(subject_id, ledger_seq)`, monotonic apply, heal-back write (closes D8 end-to-end), read-only status fields | `pulse-app-scaffold` ✅ — gate open |
 | `customerio-projection` | segment/attribute sync from ledger events | Phase 2 exit |
 | `snowflake-projection` | STG_EVENTS ledger contract (flat projection proven in S1.1 task 5.1) atop the existing `OCEAN_RAW.EVENTS` landing | Phase 2 exit |
 | `survey-engine-ingress` | PX survey responses become attributed commands/facts on the ledger's single write path — actor is the survey engine's service identity, message-level provenance, same shape as `customerio-consent-ingress`; born compliant with the `producer-ingress-policy` CI gate | Phase 2 exit + PX schema validation |
@@ -313,9 +314,11 @@ sanctioned command sources live, Demo 2 receipts #144/#165/#173). Decision recor
 board-vocabulary/catalog reconciliation and patient×program grain (DNA-872), program
 entry_gate/exclusivity fills and ValueSet-binding widening (DNA-862), mandatory idempotency-key
 tightening (DNA-801), SNOWFLAKE_* deploy secrets + database pin for `task catalog:release`
-(DNA-862). **The midterm objective is met; the next rung is v3.0 — Projections**, gated on a
-Twenty dev instance (`environment-matrix`, DNA-909) — D4 closed 2026-08-12 (artifact split,
-DNA-908).
+(DNA-862). **The midterm objective is met; the next rung is v3.0 — Projections.** Its gates are down:
+the Twenty dev instance is live (DNA-909, provisioned 2026-08-16, v2.30.0), D4 closed
+2026-08-12 (artifact split, DNA-908), `pulse-app-scaffold` and `twenty-dev-instance` both
+shipped and archived with the drag-to-ledger round trip proven live 2026-08-18 (receipts on
+#223). `twenty-projection` is the next change to propose.
 
 **Longterm objective: v5.0 — Program done.** Everything after v2.0 is sequential and gated
 (Phase 3 needs Phase 2 exit + a Twenty dev instance; Phase 4 needs Phase 3 exit; genesis needs
