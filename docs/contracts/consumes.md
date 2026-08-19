@@ -146,6 +146,7 @@ than escaping); SELECT values are stored UPPER_SNAKE-encoded (`referral.received
 | Dependency | Kind | Source | Breakage risk |
 |---|---|---|---|
 | core REST record surface | REST API, live-verified against dev v2.30.0 (2026-08-17) | Twenty; bearer token per target environment | grammar and relation-column drift surfaces at the client boundary (refused values, 400s), never as silent misreads; re-verified by `task twenty:verify:live TARGET=dev` on any tag bump |
+| view read surface | metadata GraphQL `getViews` on `/metadata`, live-verified v2.30.0 (2026-08-17, `twenty-dev-instance` 6.5) — there is no `getCoreViews` on `/graphql`, and the live `View` type carries no `universalIdentifier`, so boards match on (object id, type, name) | Twenty; bearer token per target environment | a surface drift fails demo3's assertion 2 by name, never a silent mismatch; the unit suite pins the query shape offline |
 
 ### Producer-policy gate (`producer-ingress-policy`, DNA-885–DNA-888)
 
