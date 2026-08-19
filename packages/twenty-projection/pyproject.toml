@@ -3,9 +3,16 @@ name = "twenty-projection"
 version = "0.1.0"
 description = "PULSE ledger-fed Twenty board projection — committed ledger events upsert board records through the core REST surface, monotonically on (subject_id, ledger_seq)"
 requires-python = ">=3.10,<4.0"
-# No runtime dependencies yet: wave 1 (task 2.1/2.3) adds pulse-core for `pulse_core.consume`
-# and command types. The scaffold ships the layout and the credentialed entrypoint only.
-dependencies = []
+dependencies = [
+    # The apply core's REST edge — same floor pulse-core pins, so the workspace resolves one httpx.
+    "httpx>=0.28.1",
+    # `encode_option_value` (the pinned UPPER_SNAKE SELECT encoding) today; `pulse_core.consume`
+    # when the wave-1 consumer loop (task 2.3) lands.
+    "pulse-core",
+]
+
+[tool.uv.sources]
+pulse-core = { workspace = true }
 
 [dependency-groups]
 dev = [
