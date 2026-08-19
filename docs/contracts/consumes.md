@@ -75,20 +75,22 @@ services in `packages/ocean` consume AWS messaging primitives instead of a broke
 `confluent-kafka` and the Redpanda containers are removed. None of these is reached by
 `task check` — no live network in tests; the LocalStack stack exists for local simulation runs.
 
-### Twenty comment API (`twenty-kanban-webhook-ingress`, DNA-878)
+### Twenty rejection-commentary API (`twenty-kanban-webhook-ingress`, DNA-878)
 
-`pulse_ledger.twenty.client` posts a rejection comment back to the Twenty card via Twenty's REST
-API — the one outbound surface the D8 kanban route introduces (comment-create only, no other
-verb). The shape is a documented guess, not a live-verified contract: no live Twenty instance
-exists before Phase 3, so every test runs against recorded/synthetic responses at the HTTP
-boundary, `--disable-socket`. **This dependency's exact request/response shape is re-verified
-against a live Twenty instance in Phase 3, before production enablement** — a shape drift there
-changes this module's URL/body construction and its recorded fixtures, nothing else (design.md
-Open Questions).
+`pulse_ledger.twenty.client` attaches a rejection note back to the Twenty card via Twenty's REST
+API — the one outbound surface the D8 kanban route introduces (rejection-commentary creates only,
+no other verb). The original `POST /rest/comments` pin was **falsified live** (7.2's assertion-9
+run, 2026-08-17): v2.30 has no `comment` object. The record-attached commentary surface is a
+`note` plus a `noteTarget` binding it to the record by the flat relation column
+(`targetPatientProgramId` — custom-object targets take the `target` prefix, live-verified 2026-08-18) — task 6.7. The two
+create-response shapes follow the live-verified `create` + capitalized-singular convention but
+have not yet been individually exercised live; every test runs against synthetic responses at the
+HTTP boundary, `--disable-socket`. A shape drift surfaces as a typed `CommentPostError` at the
+client boundary, never as a silent misread.
 
 | Dependency | Kind | Source | Breakage risk |
 |---|---|---|---|
-| `POST /rest/comments` | REST API (pinned, not live-verified) | Twenty; bearer token via `PULSE_LEDGER_TWENTY_API_TOKEN` | comment shape drift surfaces only at the Phase 3 live re-verification; until then, fixtures are the only pinned contract, same posture as the verdict mart row above |
+| `POST /rest/notes` + `POST /rest/noteTargets` | REST API (creates live-verified 2026-08-18: `note` carries no `body` field — rich text is `bodyV2` created as `{"markdown": …}`, server-converted to blocknote; target binds via the flat `<objectName>Id` column) | Twenty; bearer token via `PULSE_LEDGER_TWENTY_API_TOKEN` | create-shape drift surfaces as `CommentPostError` on the rejection-feedback leg, which degrades feedback and never rejection correctness; re-verified by demo3's assertion 9 |
 
 ### Twenty Metadata API (`pulse-app-scaffold`, DNA-908)
 
@@ -108,21 +110,35 @@ that render. A change to either is a deliberate re-render, caught by the stalene
 
 The server-side half of the pin is the image: SPCS deploys the pinned upstream `twentycrm/twenty`
 tag, never a build from patched source (`design/platform/pulse-app-scaffold.md` §SPCS deployment —
-an image built from patched source is a fork, and AGPL §13 obligations attach). That tag is set in
-the SPCS service spec when the instance is provisioned; **no tag is pinned here yet, because no
-instance exists — DNA-909 (Twenty dev instance, manual provisioning) is the open dependency.**
-Upstream migrations can land on app-declared objects, so a tag bump is a deliberate event verified
-against a parallel instance, not a routine upgrade.
+an image built from patched source is a fork, and AGPL §13 obligations attach). The dev instance
+(DNA-909, provisioned 2026-08-16) runs upstream **v2.30.0**, and every live-verified claim below
+is pinned to that version. Upstream migrations can land on app-declared objects, so a tag bump is
+a deliberate event verified against a parallel instance, not a routine upgrade.
 
 | Dependency | Kind | Source | Breakage risk |
 |---|---|---|---|
-| Metadata API operation set | serialized artifact, pinned in this repo (`packages/twenty-app/artifact/operations.json`, keys `artifactVersion` / `catalogVersion`) | Twenty; shape decided by D4 / DNA-908 | our serialization is the only pinned contract until read-back runs — a shape drift upstream surfaces as a failed apply, not as bad data, because validate-before-apply refuses anything the schema rejects |
-| `twentycrm/twenty` image tag | pinned container image (SPCS) | upstream release, pinned in the SPCS service spec — unset until DNA-909 provisions the dev instance | an unpinned or bumped tag changes the server-side Metadata API shape under a fixed artifact; upgrades are tested against a parallel instance before promoting |
+| Metadata API operation set | serialized artifact, pinned in this repo (`packages/twenty-app/artifact/operations.json`, keys `artifactVersion` / `catalogVersion`) | Twenty; shape decided by D4 / DNA-908 | **live-verified against dev (v2.30.0, 2026-08-17)**: all 49 operations read back under their mapped `universalIdentifier`s, immediate re-apply all no-ops — a shape drift upstream surfaces as a failed apply, not as bad data, because validate-before-apply refuses anything the schema rejects |
+| `twentycrm/twenty` image tag | pinned container image (SPCS) | upstream release, pinned in the SPCS service spec — dev runs v2.30.0 (DNA-909) | an unpinned or bumped tag changes the server-side Metadata API shape under a fixed artifact; upgrades are tested against a parallel instance before promoting |
 
-Ground truth is the wave-3 read-back verification: apply the artifact to the dev instance and
-assert every operation's target present with its mapped `universalIdentifier`. It is gated on
-DNA-909 and runs before anything consumes the model, so until it passes the risk is bounded —
-nothing has applied the artifact anywhere. Same posture as the Twenty comment API entry above.
+Ground truth is the read-back verification (`pulse_core.twenty_verify`, `task twenty:verify
+TARGET=dev`): every artifact operation's target present with its mapped `universalIdentifier`,
+then an all-no-op re-apply. It passed against dev on 2026-08-17 (pulse-app-scaffold 4.1, receipt
+checksum `4a47b973…` on DNA-918) and re-runs on any tag bump before promoting.
+
+### Twenty core REST API (`pulse-app-scaffold` 4.2, live-verified v2.30.0)
+
+`packages/twenty-app/src/live/rest-core-api.ts` (the live `CoreApiClient` behind
+`project-domain-event`) and `pulse_core.twenty_seed` consume Twenty's core record surface:
+`GET/POST /rest/<plural>`, `PATCH`/`DELETE /rest/<plural>/<id>`. The pinned shape, confirmed by
+the 4.2 live run rather than assumed: relation columns write and read **flat** (`patientId`,
+never nested `{"patient": {"id": …}}` — the nested form is a 400); `filter=<field>[eq]:<value>`
+is comma-joined AND with no quoting (the client refuses values containing `,` `:` `[` `]` rather
+than escaping); SELECT values are stored UPPER_SNAKE-encoded (`referral.received` →
+`REFERRAL_RECEIVED`, see the `twenty-artifact-deploy` spec).
+
+| Dependency | Kind | Source | Breakage risk |
+|---|---|---|---|
+| core REST record surface | REST API, live-verified against dev v2.30.0 (2026-08-17) | Twenty; bearer token per target environment | grammar and relation-column drift surfaces at the client boundary (refused values, 400s), never as silent misreads; re-verified by `task twenty:verify:live TARGET=dev` on any tag bump |
 
 ### Producer-policy gate (`producer-ingress-policy`, DNA-885–DNA-888)
 

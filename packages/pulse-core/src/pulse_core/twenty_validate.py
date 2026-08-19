@@ -41,18 +41,32 @@ from pulse_core.twenty_metadata import ARTIFACT_PATH, OPTIONS_PATH, PROJECTION_L
 from pulse_core.twenty_model import (
     TWENTY_MODEL,
     ModelDefinition,
+    encode_option_value,
     is_well_formed_uuid,
     load_uid_map,
     resolve_options,
     uid_map_diff,
 )
 
+# `encode_option_value` was defined here until task 6.6 moved it down to `twenty_model` so that
+# `twenty_metadata` could emit the encoded form into `generated/options.ts` without an import
+# cycle. It is imported rather than re-defined, and stays importable from this module: every
+# caller — `twenty_deploy`, `twenty_seed`, the ledger's Twenty mapping, the demos — reads it from
+# here, where the deploy-boundary reasoning lives.
+
 #: Every surface the validator reads from the tree, in the order findings are reported.
 COMMITTED_PATHS = (OPTIONS_PATH, PROJECTION_LOOKUP_PATH, ARTIFACT_PATH)
 
 #: The checks `validate` runs. Named so a test can assert none is orphaned — a validator nobody
 #: calls gates nothing, which is the failure mode this whole module exists to prevent.
-CHECK_NAMES = ("schema", "current", "uid_map", "options_against_catalog", "options_ts_against_artifact")
+CHECK_NAMES = (
+    "schema",
+    "current",
+    "uid_map",
+    "options_against_catalog",
+    "options_ts_against_artifact",
+    "option_encoding_bijective",
+)
 
 Findings = tuple[str, ...]
 
@@ -254,12 +268,34 @@ def check_options_against_catalog(artifact: dict[str, Any], model: ModelDefiniti
     return tuple(findings)
 
 
+def check_option_encoding(artifact: dict[str, Any]) -> Findings:
+    """No two option values of one field collide once encoded for the live server.
+
+    A collision would make two catalog states indistinguishable on the target — the deploy
+    would apply, and the ledger would silently lose a distinction. Refused here, before any
+    operation is planned.
+    """
+    findings: list[str] = []
+    for key, values in sorted(_artifact_field_options(artifact).items()):
+        by_encoded: dict[str, list[str]] = {}
+        for value in values:
+            by_encoded.setdefault(encode_option_value(value), []).append(value)
+        findings.extend(
+            f"option encoding: {key} values {sorted(originals)} collide as {encoded!r} on the live server"
+            for encoded, originals in sorted(by_encoded.items())
+            if len(originals) > 1
+        )
+    return tuple(findings)
+
+
 # --- TypeScript against the artifact -----------------------------------------------------------
 
-_CONST_START = re.compile(r"^export const (?P<const>\w+): readonly GeneratedOption\[\] = \[$")
+_CONST_START = re.compile(r"^export const (?P<const>\w+): GeneratedOption\[\] = \[$")
 _OPTION_LINE = re.compile(
-    r'^\s*\{ value: "(?P<value>[^"]*)", label: "(?P<label>[^"]*)", '
-    r'position: (?P<position>\d+), universalIdentifier: "(?P<uid>[^"]*)" \},$'
+    r'^\s*\{ value: "(?P<value>[^"]*)", encodedValue: "(?P<encoded>[^"]*)", '
+    r'label: "(?P<label>[^"]*)", '
+    r'position: (?P<position>\d+), universalIdentifier: "(?P<uid>[^"]*)", '
+    r'id: "(?P<id>[^"]*)", color: "(?P<color>[^"]*)" \},$'
 )
 _INDEX_START = re.compile(r"^export const OPTIONS_BY_FIELD")
 _INDEX_LINE = re.compile(r'^\s*"(?P<key>[^"]+)": (?P<const>\w+),$')
@@ -269,6 +305,7 @@ class TsOption(_Strict):
     """One option as the generated TypeScript declares it, read as data rather than executed."""
 
     value: str
+    encodedValue: str
     label: str
     position: int
     universalIdentifier: Uid
@@ -296,6 +333,7 @@ def _parse_option_constants(text: str) -> dict[str, tuple[TsOption, ...]]:
             options.append(
                 TsOption(
                     value=option["value"],
+                    encodedValue=option["encoded"],
                     label=option["label"],
                     position=int(option["position"]),
                     universalIdentifier=option["uid"],
@@ -362,6 +400,16 @@ def check_options_ts_against_artifact(options_ts: str, artifact: dict[str, Any])
             findings.append(f"options.ts: {key} is in the generated TypeScript but not in the artifact")
         elif ts_options[key] != artifact_options[key]:
             findings.append(f"options.ts: {key} option set differs from the artifact's")
+    # `encodedValue` is what a kanban column keys on, so a wrong one is a board whose cards can
+    # never land (demo3 assertion 3). The artifact carries the catalog vocabulary, so this is
+    # checked against the encoding function rather than against the artifact.
+    findings.extend(
+        f"options.ts: {key} option {option.value!r} carries encodedValue "
+        f"{option.encodedValue!r}, not {encode_option_value(option.value)!r}"
+        for key, options in sorted(parsed.items())
+        for option in options
+        if option.encodedValue != encode_option_value(option.value)
+    )
     return tuple(findings)
 
 
@@ -396,6 +444,7 @@ def validate_verbose(model: ModelDefinition, catalog: Catalog, uid_map: dict[str
         "uid_map": check_uid_map(uid_map, model, catalog),
         "options_against_catalog": check_options_against_catalog(artifact, model, catalog),
         "options_ts_against_artifact": check_options_ts_against_artifact(committed.get(OPTIONS_PATH, ""), artifact),
+        "option_encoding_bijective": check_option_encoding(artifact),
     }
 
 

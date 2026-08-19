@@ -18,6 +18,8 @@ nav:
       - Demo 2 (partial) — s13+s14: runbooks/demo2-partial-s13-s14.md
       - Catalog-release: runbooks/catalog-release.md
       - Twenty-webhook: runbooks/twenty-webhook.md
+      - Pulse-command-api-deploy: runbooks/pulse-command-api-deploy.md
+      - Twenty-artifact-promotion: runbooks/twenty-artifact-promotion.md
 plugins:
   - search
   - mkdocstrings:

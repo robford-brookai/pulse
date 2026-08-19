@@ -17,7 +17,7 @@
  *    event type projects anything: a registry-anchor event (`referral.received`) belongs to its
  *    pair, and leaving it unbound would put it in the orphan view, falsely reporting a
  *    crosswalk gap. The relations are the only DomainEvent fields the app role may write
- *    (`src/roles/app.role.ts`) — the envelope is immutable.
+ *    (`packages/twenty-model/roles/app.role.ts`) — the envelope is immutable.
  * 4. **Lookup** the event type in `generated/projection-lookup.ts`. A miss is a logged no-op,
  *    never a crash: the lookup covers the dimensions the model projects, and the catalog holds
  *    more event types than that by design.
@@ -36,7 +36,7 @@
  */
 
 import { PROJECTION_LOOKUP } from "../../generated/projection-lookup";
-import { defineLogicFunction } from "../define";
+import { defineLogicFunction } from "twenty-sdk/define";
 import { foreignKey, type CoreApiClient, type CoreRecord } from "./core-api";
 
 /**
@@ -186,7 +186,7 @@ const resolveEntity = async (
  * (Patient, `programCode`) → the PatientProgram row, created on the first event for the pair.
  *
  * The Program itself is looked up, never created: the projection pairs identities that already
- * exist and invents neither (`src/roles/app.role.ts` grants it read-only on Patient and
+ * exist and invents neither (`packages/twenty-model/roles/app.role.ts` grants it read-only on Patient and
  * Program). An unknown program code is therefore an orphan, not a new program.
  */
 const resolvePatientProgram = async (
@@ -306,17 +306,16 @@ export const handler = async ({
 };
 
 /**
- * No `universalIdentifier`, for the reason the views carry none (`src/views/index.ts`): the UID
- * map is exactly the surface the artifact serializes, and the operation set carries objects,
- * fields, relations, and roles — there is no logic-function operation to key. One gets minted
- * the same reviewed way everything else does on the day the artifact learns to carry the
- * function (HANDOFF.md).
+ * The default export is the inline call: the CLI's manifest builder detects entities
+ * syntactically, and the const-then-default form is invisible to it.
  */
-export const PROJECT_DOMAIN_EVENT = defineLogicFunction({
+export default defineLogicFunction({
+  // Minted 2026-08-17 (task 6.4): the SDK requires an identifier on a logic function. It lives
+  // here rather than in uid-map.json because `uid_map_diff` rejects any key the Python model
+  // never asks for; moving it into the map is proposed in HANDOFF.md.
+  universalIdentifier: "767312d9-690b-4148-8269-2117ce402a54",
   name: "project-domain-event",
   timeoutSeconds: 10,
   handler,
   databaseEventTriggerSettings: { eventName: "domainEvent.created" },
 });
-
-export default PROJECT_DOMAIN_EVENT;

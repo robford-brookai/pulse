@@ -5,7 +5,6 @@ import {
   DOMAIN_EVENT_ENTITY_TYPE_OPTIONS,
 } from "../generated/options";
 import { PROJECTION_LOOKUP } from "../generated/projection-lookup";
-import { APPLICATION } from "../src/application-config";
 import {
   foreignKey,
   type CoreApiClient,
@@ -13,15 +12,29 @@ import {
   type CoreFilter,
   type CoreRecord,
 } from "../src/logic-functions/core-api";
-import { ALL_LOGIC_FUNCTIONS } from "../src/logic-functions";
-import {
+import PROJECT_DOMAIN_EVENT, {
   ENTITY_CROSSWALK,
   handler,
-  PROJECT_DOMAIN_EVENT,
   RELATION_FIELD,
   type DomainEventRecord,
 } from "../src/logic-functions/project-domain-event";
-import { ALL_OBJECTS } from "../src/objects";
+import CLINIC_OBJECT from "../../twenty-model/objects/clinic.object";
+import DOMAIN_EVENT_OBJECT from "../../twenty-model/objects/domain-event.object";
+import PATIENT_PROGRAM_OBJECT from "../../twenty-model/objects/patient-program.object";
+import PATIENT_OBJECT from "../../twenty-model/objects/patient.object";
+import PROGRAM_OBJECT from "../../twenty-model/objects/program.object";
+import PROVIDER_OBJECT from "../../twenty-model/objects/provider.object";
+
+// The `ALL_*` arrays are deleted (task 6.4: the CLI derives entities from the file tree), so
+// the structural checks below walk the define* results' `.config` directly.
+const ALL_OBJECTS = [
+  PATIENT_OBJECT,
+  PROGRAM_OBJECT,
+  PATIENT_PROGRAM_OBJECT,
+  PROVIDER_OBJECT,
+  CLINIC_OBJECT,
+  DOMAIN_EVENT_OBJECT,
+].map((result) => result.config);
 
 // Task 3.2's five spec cases, plus the two structural checks that keep the hand-written
 // crosswalk from drifting off the model and the catalog.
@@ -582,13 +595,18 @@ describe("the crosswalk and the definition against the model", () => {
     }
   });
 
-  it("registers the projection on the application, triggered by domainEvent.created", () => {
-    expect(APPLICATION.logicFunctions).toBe(ALL_LOGIC_FUNCTIONS);
-    expect(PROJECT_DOMAIN_EVENT.name).toBe("project-domain-event");
-    expect(PROJECT_DOMAIN_EVENT.databaseEventTriggerSettings).toStrictEqual({
+  it("registers the projection as an entity, triggered by domainEvent.created", () => {
+    // The application config no longer lists logic functions — the CLI derives entities from
+    // the file tree — so what this pins is the definition itself: accepted by the SDK, named,
+    // triggered by the event the projection exists for, and wired to this handler.
+    expect(PROJECT_DOMAIN_EVENT.success).toBe(true);
+    expect(PROJECT_DOMAIN_EVENT.config.name).toBe("project-domain-event");
+    expect(
+      PROJECT_DOMAIN_EVENT.config.databaseEventTriggerSettings,
+    ).toStrictEqual({
       eventName: "domainEvent.created",
     });
-    expect(PROJECT_DOMAIN_EVENT.handler).toBe(handler);
+    expect(PROJECT_DOMAIN_EVENT.config.handler).toBe(handler);
   });
 
   it("points every projection lookup row at an object and field the model defines", () => {

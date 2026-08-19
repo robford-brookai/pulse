@@ -215,6 +215,10 @@ __marimo__/
 # `npm ci` in `task twenty:test` reproduces from it.
 node_modules/
 
+# Twenty CLI build output (`twenty dev:build`, run by the manifest smoke test) — derived from
+# the app source on every build, never committed.
+.twenty/
+
 # openlore analysis artifacts
 .openlore/
 

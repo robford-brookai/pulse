@@ -14,8 +14,8 @@ secret store — never from workflow config, code, or a `.env` file committed an
 | Variable | Purpose |
 | --- | --- |
 | `PULSE_LEDGER_TWENTY_WEBHOOK_ENABLED` | Truthy value (`1`/`true`/`yes`/`on`) mounts `POST /webhooks/twenty` on the app. Unset or falsy, and the route does not exist. |
-| `PULSE_LEDGER_TWENTY_WEBHOOK_SECRET` | The HMAC secret Twenty signs deliveries with (`pulse_ledger.auth.sign`, `X-Pulse-Signature` / `X-Pulse-Timestamp`, 5-minute freshness window — S1.1 behavior, unchanged here). |
-| `PULSE_LEDGER_TWENTY_API_TOKEN` | Bearer token for the outbound comment adapter (`pulse_ledger.twenty.client`, `POST /rest/comments`). Required only if a rejection comment will ever post — enabling the webhook route without it means rejections still produce a receipt, but the comment call fails at boot resolution (`TwentyApiTokenMissingError`). |
+| `PULSE_LEDGER_TWENTY_WEBHOOK_SECRET` | The HMAC secret Twenty signs deliveries with (`pulse_ledger.auth.sign`, `X-Twenty-Webhook-Signature` / `X-Twenty-Webhook-Timestamp`, bare hex HMAC-SHA256 over `{timestamp}:{body}` with a millisecond timestamp, 5-minute freshness window — Twenty's own wire format per the task 4.2 capture). |
+| `PULSE_LEDGER_TWENTY_API_TOKEN` | Bearer token for the outbound rejection-commentary adapter (`pulse_ledger.twenty.client`, `POST /rest/notes` + `POST /rest/noteTargets` — v2.30 has no `comment` object, task 6.7). Required only if a rejection note will ever post — enabling the webhook route without it means rejections still produce a receipt, but the commentary call fails at boot resolution (`TwentyApiTokenMissingError`). |
 
 Enabling with `PULSE_LEDGER_TWENTY_WEBHOOK_ENABLED` set but neither
 `PULSE_LEDGER_TWENTY_WEBHOOK_SECRET` nor its rotation partner (below) set is a boot failure

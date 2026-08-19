@@ -39,6 +39,7 @@ from pulse_core.twenty_model import (
     ModelDefinition,
     ObjectSpec,
     OptionSpec,
+    encode_option_value,
     load_uid_map,
     require_uid,
     resolve_options,
@@ -160,6 +161,17 @@ def _const_name(obj: ObjectSpec, field: FieldSpec) -> str:
     return "_".join(parts).upper() + "_OPTIONS"
 
 
+# The SDK's `TagColor` union is wider; these ten are the stable cycle options are colored from,
+# by position. Presentation only: the artifact carries no color, and a palette edit re-colors
+# every board chip without touching an identifier.
+_OPTION_COLORS = ("green", "yellow", "orange", "red", "blue", "purple", "gray", "pink", "turquoise", "sky")
+
+
+def _option_color(position: int) -> str:
+    """The palette entry for a 1-based option position, cycling when a picklist outgrows it."""
+    return _OPTION_COLORS[(position - 1) % len(_OPTION_COLORS)]
+
+
 def render_options_ts(model: ModelDefinition, catalog: Catalog, uid_map: dict[str, str]) -> str:
     """The SELECT option arrays, one exported constant per SELECT field plus a keyed index."""
     lines = [
@@ -169,13 +181,34 @@ def render_options_ts(model: ModelDefinition, catalog: Catalog, uid_map: dict[st
         " *",
         " * Options are generated; the object files that import them are hand-written, so a field",
         " * definition stays stable and reviewable while its vocabulary follows the catalog.",
+        " *",
+        " * The shape is the SDK boundary: `twenty-sdk/define` takes SELECT options as a mutable",
+        " * `FieldMetadataComplexOption[]` — `{ id?, value, label, position, color }` — so the arrays",
+        " * are typed mutable (never mutated; the object files pass them through by reference, which",
+        " * is what `tests/model.test.ts` pins), `id` repeats the minted `universalIdentifier` so the",
+        " * server never derives an option identity, and `color` is presentation minted here from a",
+        " * fixed palette by position — the artifact deliberately does not carry it.",
+        " *",
+        " * `encodedValue` is the same option as the live server stores it: v2.30 validates SELECT",
+        " * option values as UPPER_CASE snake, so `twenty_deploy` re-encodes every value at the",
+        " * deploy boundary (`twenty_validate.encode_option_value`) and the record rows carry the",
+        " * encoded form. `value` stays the catalog vocabulary and remains the only thing to reason",
+        " * with; `encodedValue` is what any surface keyed on a stored value — a kanban column's",
+        " * `fieldValue`, a REST filter — has to use. Demo3's assertion 3 found the board keyed on",
+        " * `value`, where no card could ever land.",
         " */",
+        "",
+        "export type GeneratedOptionColor =",
+        "  | " + "\n  | ".join(f'"{color}"' for color in _OPTION_COLORS) + ";",
         "",
         "export interface GeneratedOption {",
         "  readonly value: string;",
+        "  readonly encodedValue: string;",
         "  readonly label: string;",
         "  readonly position: number;",
         "  readonly universalIdentifier: string;",
+        "  readonly id: string;",
+        "  readonly color: GeneratedOptionColor;",
         "}",
         "",
         f'export const CATALOG_VERSION = "{catalog.catalog_version}";',
@@ -189,15 +222,17 @@ def render_options_ts(model: ModelDefinition, catalog: Catalog, uid_map: dict[st
             key = f"{obj.name_singular}.{field.name}"
             constant = _const_name(obj, field)
             index.append((key, constant))
-            lines.extend(["", f"// {key}", f"export const {constant}: readonly GeneratedOption[] = ["])
+            lines.extend(["", f"// {key}", f"export const {constant}: GeneratedOption[] = ["])
             lines.extend(
-                f'  {{ value: "{option.value}", label: "{option.label}", position: {position}, '
-                f'universalIdentifier: "{_option_uid(uid_map, obj, field, option)}" }},'
+                f'  {{ value: "{option.value}", encodedValue: "{encode_option_value(option.value)}", '
+                f'label: "{option.label}", position: {position}, '
+                f'universalIdentifier: "{_option_uid(uid_map, obj, field, option)}", '
+                f'id: "{_option_uid(uid_map, obj, field, option)}", color: "{_option_color(position)}" }},'
                 for position, option in enumerate(options, start=1)
             )
             lines.append("];")
 
-    lines.extend(["", "export const OPTIONS_BY_FIELD: Readonly<Record<string, readonly GeneratedOption[]>> = {"])
+    lines.extend(["", "export const OPTIONS_BY_FIELD: Readonly<Record<string, GeneratedOption[]>> = {"])
     lines.extend(f'  "{key}": {constant},' for key, constant in index)
     lines.append("};")
     return "\n".join(lines) + "\n"

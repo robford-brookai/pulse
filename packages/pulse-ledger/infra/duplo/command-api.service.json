@@ -1,0 +1,53 @@
+{
+  "Name": "pulse-ledger-api",
+  "AgentPlatform": 7,
+  "Replicas": 1,
+  "DockerImage": "__PULSE_LEDGER_IMAGE__",
+  "OtherDockerConfig": {
+    "EnvFrom": [
+      {
+        "secretRef": {
+          "name": "pulse-ledger-api-secret"
+        }
+      }
+    ],
+    "Env": [
+      {
+        "name": "PULSE_LEDGER_TWENTY_WEBHOOK_ENABLED",
+        "value": "true"
+      }
+    ],
+    "resources": {
+      "requests": {
+        "cpu": "50m",
+        "memory": "500Mi"
+      },
+      "limits": {
+        "cpu": "500m",
+        "memory": "500Mi"
+      }
+    },
+    "readinessProbe": {
+      "periodSeconds": 3,
+      "timeoutSeconds": 3,
+      "successThreshold": 1,
+      "failureThreshold": 3,
+      "httpGet": {
+        "path": "/health",
+        "port": 8000,
+        "scheme": "HTTP"
+      }
+    },
+    "livenessProbe": {
+      "periodSeconds": 10,
+      "timeoutSeconds": 3,
+      "successThreshold": 1,
+      "failureThreshold": 3,
+      "httpGet": {
+        "path": "/health",
+        "port": 8000,
+        "scheme": "HTTP"
+      }
+    }
+  }
+}

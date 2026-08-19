@@ -235,6 +235,118 @@ tasks:
     cmds:
       - uv run python -m pulse_core.twenty_deploy --target {{.TARGET}}
 
+  twenty:verify:
+    desc: Verify the deployed Twenty artifact by read-back against TARGET (dev|staging|prod; needs that target's credential)
+    # The 4.1 verification receipt: every artifact operation present on the target under its
+    # mapped universalIdentifier, then a re-apply asserting all no-ops. Exits nonzero on any
+    # mismatch; the printed receipt (names, counts, checksum — no workspace data) is the
+    # artifact to attach. Live-only, so never reached from `check` — same posture as
+    # twenty:deploy.
+    requires:
+      vars: [TARGET]
+    cmds:
+      - uv run python -m pulse_core.twenty_verify --target {{.TARGET}}
+
+  twenty:verify:live:
+    desc: Run the five projection cases against TARGET's live server (dev|staging|prod; needs that target's credential)
+    # The 4.2 verification receipt: the same five cases the unit suite runs with a faked client,
+    # run against a live server with the real one, so a projection defect that only appears
+    # against real SELECT storage, real relation columns, or real defaults is caught. Exits
+    # nonzero on any failed assertion; the JSON the run prints (case names, outcome statuses,
+    # catalog values — no record ids, no response bodies) is the artifact to attach. Its fixtures
+    # are synthetic and namespaced per run, and the run deletes them again.
+    # Live-only, so never reached from `check` — same posture as twenty:deploy and twenty:verify.
+    # The suite lives behind its own vitest config for the same reason: `task check`'s runner
+    # includes tests/ and cannot collect it.
+    requires:
+      vars: [TARGET]
+    env:
+      PULSE_LIVE_TARGET: "{{.TARGET}}"
+    cmds:
+      - '[ -d node_modules ] || npm ci'
+      - npm run test:live --workspace=@pulse/twenty-app
+
+  twenty:seed:
+    desc: Load the committed synthetic seed projection into TARGET (dev|staging|prod; needs that target's credential)
+    # Reads the committed, checksummed projection (pulse_core/generated/twenty_seed_dev.json) and
+    # upserts it idempotently — create-if-absent and patch-if-drifted on natural keys, never
+    # delete — chunked and paced to the instance's limits. No generator toolchain: the projection
+    # is the source, so seeding reproduces from a fresh clone. Target URL and credential resolve
+    # from the environment (twenty:deploy's resolution, reused verbatim). Never reached from
+    # `check`: it needs credentials, same posture as twenty:deploy and catalog:release.
+    requires:
+      vars: [TARGET]
+    cmds:
+      - uv run python -m pulse_core.twenty_seed --target {{.TARGET}}
+
+  twenty:app:build:
+    desc: Build the Twenty app and its generated API client against TARGET (dev|staging|prod; needs that target's remote)
+    # `twenty dev:build` generates the typed API client from the active remote, so even the
+    # build half of the SDK toolchain is credentialed — hence TARGET, and hence never reached
+    # from `check` (tests/test_twenty_app_scaffold.py pins it out, same posture as
+    # twenty:deploy). The remote must exist first: run `twenty:app:publish` once, or add it by
+    # hand with the remote:add line that target runs.
+    #
+    # `node_modules/.bin/twenty` after an unconditional `npm ci`, never `npx twenty`: the npm
+    # name `twenty` is squatted (an IP-geolocation tool), and npx silently falls back to it
+    # whenever the local bin is missing — a stale node_modules that predates the twenty-sdk
+    # dependency passes the `[ -d node_modules ]` guard and still has no local bin (7.2).
+    requires:
+      vars: [TARGET]
+    cmds:
+      - npm ci
+      - node_modules/.bin/twenty --remote {{.TARGET}} dev:build packages/twenty-app
+
+  twenty:app:publish:
+    desc: Build and publish the Twenty app to TARGET's server registry (dev|staging|prod; needs that target's credential)
+    # Publishes to the server registry (--private), never npm. The remote is (re-)added
+    # non-interactively first, resolving URL and credential from the same environment surface
+    # as twenty:deploy (`PULSE_TWENTY_<TARGET>_URL` / `PULSE_TWENTY_<TARGET>_TOKEN`) — the CLI
+    # writes them into a per-user config file, which is exactly why this is a developer/CD
+    # step and never reached from `check`. The server rejects an equal or lower semver, so
+    # bump `version` in packages/twenty-app/package.json in the same change as the model edit
+    # being published — the failed publish names the version, not the cause.
+    # Same npx hazard as twenty:app:build: the local bin or nothing.
+    requires:
+      vars: [TARGET]
+    cmds:
+      - npm ci
+      - node_modules/.bin/twenty remote:add --as {{.TARGET}} --url "$PULSE_TWENTY_{{upper .TARGET}}_URL" --api-key "$PULSE_TWENTY_{{upper .TARGET}}_TOKEN"
+      - node_modules/.bin/twenty app:publish --private --remote {{.TARGET}} packages/twenty-app
+
+  ledger:image:
+    desc: Build the pulse-ledger service image (API + relay, one image) and tag it TAG (needs Docker)
+    # Build context is the repo root — pulse-core is a workspace sibling that
+    # packages/pulse-ledger/Dockerfile installs from a sibling path, not from PyPI. The image runs
+    # `python -m pulse_ledger.api_server` by default; a relay deployment overrides the command with
+    # `python -m pulse_ledger.relay_worker` (same image, task 4.5's other process).
+    # Never reached from `check`: it needs a Docker daemon and, on an arm64 dev machine, an
+    # emulated amd64 build — neither belongs on every runner (tests/test_ledger_deploy_targets.py
+    # pins this the same way tests/test_catalog_release_deploy.py pins catalog:release).
+    requires:
+      vars: [TAG]
+    cmds:
+      - docker buildx build --platform linux/amd64 -f packages/pulse-ledger/Dockerfile -t pulse-ledger:{{.TAG}} .
+
+  ledger:migrate:
+    desc: Run the ledger's Alembic migrations to head against DATABASE_URL (needs a real Postgres)
+    # The same sequence `test_migration_000*.py` exercises against a throwaway cluster; this is
+    # the deploy-time invocation against the real one. Never reached from `check`, which never
+    # touches a live database (this repo's no-live-network posture).
+    dir: packages/pulse-ledger/infra/postgres
+    cmds:
+      - uv run --project ../.. alembic upgrade head
+
+  ledger:deploy:
+    desc: Roll the pulse-ledger API/relay deployment to TAG on TARGET (needs that target's credential)
+    # Dumb by design, same posture as twenty:deploy: push the image `ledger:image` already built,
+    # then re-point TARGET's deployment at TAG. No generation logic lives here.
+    # Never reached from `check`: it needs registry and cluster credentials.
+    requires:
+      vars: [TAG, TARGET]
+    cmds:
+      - docker push pulse-ledger:{{.TAG}}
+
   # `check` is the contract between a developer's machine and CI:
   # .github/workflows/main.yml invokes exactly this target. Keep it CI-safe — openspec and
   # openlore are npm globals that runners do not install, so they belong in `verify`, not here.

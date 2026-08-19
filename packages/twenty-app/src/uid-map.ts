@@ -12,9 +12,11 @@ import uidMap from "../uid-map.json";
 export const UID_MAP: Readonly<Record<string, string>> = uidMap;
 
 /**
- * `<object>` / `<object>.<field>` / `<object>.<field>.<option>`. An option value may itself
- * contain a dot (`domainEvent.eventType.referral.received`) — keys are composed and looked up
- * whole, never split back apart.
+ * `<object>` / `<object>.<field>` / `<object>.<field>.<option>`, plus the view family:
+ * `view.<view>` and, beneath it, `.navigation`, `.field.<field>`, `.filter.<field>`,
+ * `.sort.<field>`, `.group.<state>`. An option value may itself contain a dot
+ * (`domainEvent.eventType.referral.received`) — keys are composed and looked up whole, never
+ * split back apart.
  */
 export const uid = (key: string): string => {
   const identifier = UID_MAP[key];

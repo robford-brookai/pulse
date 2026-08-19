@@ -95,16 +95,6 @@
     },
     {
       "operation": "createField",
-      "universalIdentifier": "d0a1ff05-7c2a-4552-9ae2-ed3cb149e170",
-      "objectNameSingular": "clinic",
-      "name": "name",
-      "type": "TEXT",
-      "label": "Name",
-      "isNullable": true,
-      "isUnique": false
-    },
-    {
-      "operation": "createField",
       "universalIdentifier": "bad05755-4a9a-4e6b-909e-4fc283088ce5",
       "objectNameSingular": "clinic",
       "name": "sfdcId",
@@ -602,16 +592,6 @@
     },
     {
       "operation": "createField",
-      "universalIdentifier": "ac8c8019-569c-408d-a8e0-2f8e09d4fbe0",
-      "objectNameSingular": "patient",
-      "name": "name",
-      "type": "FULL_NAME",
-      "label": "Name",
-      "isNullable": true,
-      "isUnique": false
-    },
-    {
-      "operation": "createField",
       "universalIdentifier": "5804d31d-69bc-48ea-9ed8-4b080a792ff7",
       "objectNameSingular": "patient",
       "name": "sfdcId",
@@ -620,6 +600,17 @@
       "isNullable": true,
       "isUnique": true,
       "description": "External ID, system `sfdc`."
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "1bc46690-46ca-44f9-a536-63a8f45d7163",
+      "objectNameSingular": "patientProgram",
+      "name": "canonicalPatientId",
+      "type": "TEXT",
+      "label": "Canonical Patient ID",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "Denormalized copy of `patient.canonicalPatientId`, so a webhook delivery resolves without a read-back."
     },
     {
       "operation": "createField",
@@ -669,6 +660,17 @@
       "isNullable": true,
       "isUnique": false,
       "description": "Last-writer-wins guard for lifecycleStatus: the `occurredAt` of the event that set it."
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "c2597f66-f445-46e0-bf76-700f21673a2b",
+      "objectNameSingular": "patientProgram",
+      "name": "programCode",
+      "type": "TEXT",
+      "label": "Program Code",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "Denormalized copy of `program.code`, so a webhook delivery resolves without a read-back."
     },
     {
       "operation": "createField",
@@ -738,16 +740,6 @@
     },
     {
       "operation": "createField",
-      "universalIdentifier": "5bedab16-d264-4662-a890-1d0602256b7e",
-      "objectNameSingular": "program",
-      "name": "name",
-      "type": "TEXT",
-      "label": "Name",
-      "isNullable": true,
-      "isUnique": false
-    },
-    {
-      "operation": "createField",
       "universalIdentifier": "15d5cef7-befe-400b-8720-e210cbe54d62",
       "objectNameSingular": "provider",
       "name": "lifecycleStatus",
@@ -775,16 +767,6 @@
       "isNullable": true,
       "isUnique": false,
       "description": "Last-writer-wins guard for lifecycleStatus: the `occurredAt` of the event that set it."
-    },
-    {
-      "operation": "createField",
-      "universalIdentifier": "17b94e7f-2f1d-44a3-93a1-b1e7ae56203a",
-      "objectNameSingular": "provider",
-      "name": "name",
-      "type": "FULL_NAME",
-      "label": "Name",
-      "isNullable": true,
-      "isUnique": false
     },
     {
       "operation": "createField",

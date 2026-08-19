@@ -44,6 +44,9 @@ from pulse_core.catalog_gen import Catalog, load_catalog
 FieldType = Literal["TEXT", "FULL_NAME", "NUMBER", "DATE_TIME", "RAW_JSON", "SELECT", "RELATION"]
 RelationType = Literal["MANY_TO_ONE", "ONE_TO_MANY"]
 OptionSource = Literal["literal", "catalog_subject", "event_type_registry"]
+#: Twenty's manifest-facing view types. The server also defines `*_WIDGET` variants, which it
+#: provisions itself and a manifest never declares.
+ViewType = Literal["TABLE", "LIST", "KANBAN", "CALENDAR"]
 
 PACKAGE_ROOT = Path(__file__).parent
 # Same reasoning as `catalog_gen.REPO_ROOT`: the app package is a repo-level artifact, not a
@@ -180,12 +183,91 @@ class ObjectSpec(BaseModel):
         return next((field for field in self.fields if field.name == name), None)
 
 
+class ViewSpec(BaseModel):
+    """One saved view, declared here for the identifiers it needs — not for its rendering.
+
+    Twenty's `ViewManifestType` makes a view a syncable entity, and so is every field, filter,
+    sort, and group inside it: each carries its own `universalIdentifier`. The map therefore has
+    to cover them, and `uid_map_keys` is the only statement of what the map must cover — so the
+    views are declared here even though the artifact carries no view operation yet.
+
+    What lives here is the identifier surface: which view, over which object, referencing which
+    fields. Presentation — position, icon, column width, visibility — stays in the hand-written
+    `src/views/*.view.ts` files, because none of it needs an identifier. The two sides are held
+    together by the map itself: a key the TypeScript asks for and the model does not declare fails
+    `uid()` at import, and a key the model declares and nothing mints fails `check_uid_map`.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    #: The slug that names this view in the UID map — `view.<key>`. Stable across renames of the
+    #: display name, which is why the key is not derived from `name`.
+    key: str
+    name: str
+    object: str
+    type: ViewType
+    #: Field names in column order. Filters and sorts name fields on the same object.
+    fields: tuple[str, ...] = Field(min_length=1)
+    filters: tuple[str, ...] = ()
+    sorts: tuple[str, ...] = ()
+    #: KANBAN only: the SELECT field whose options become the board's columns.
+    group_by: str | None = None
+    #: Whether a navigation menu item points at this view. A view with no menu item exists but is
+    #: unreachable from the sidebar, so this is declared rather than assumed.
+    navigation: bool = False
+
+    @model_validator(mode="after")
+    def _group_by_belongs_to_a_board(self) -> ViewSpec:
+        if (self.type == "KANBAN") != (self.group_by is not None):
+            msg = f"view {self.key!r}: `group_by` is set exactly on KANBAN views"
+            raise ValueError(msg)
+        return self
+
+    @property
+    def referenced_fields(self) -> tuple[str, ...]:
+        """Every field name this view names, deduplicated, in declaration order."""
+        names = [*self.fields, *self.filters, *self.sorts]
+        if self.group_by is not None:
+            names.append(self.group_by)
+        return tuple(dict.fromkeys(names))
+
+
 class ModelDefinition(BaseModel):
     """The whole workspace model. Its invariants hold without reading the catalog."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     objects: tuple[ObjectSpec, ...] = Field(min_length=1)
+    views: tuple[ViewSpec, ...] = ()
+
+    @model_validator(mode="after")
+    def _view_keys_are_unique(self) -> ModelDefinition:
+        keys = [view.key for view in self.views]
+        duplicates = sorted({key for key in keys if keys.count(key) > 1})
+        if duplicates:
+            msg = f"model declares duplicate view keys {duplicates}"
+            raise ValueError(msg)
+        return self
+
+    @model_validator(mode="after")
+    def _views_name_defined_fields(self) -> ModelDefinition:
+        by_name = {obj.name_singular: obj for obj in self.objects}
+        for view in self.views:
+            target = by_name.get(view.object)
+            if target is None:
+                msg = f"view {view.key!r} is over undefined object {view.object!r}"
+                raise ValueError(msg)
+            for name in view.referenced_fields:
+                if target.field(name) is None:
+                    msg = f"view {view.key!r} names {view.object}.{name}, not a field on that object"
+                    raise ValueError(msg)
+            if view.group_by is not None:
+                group_field = target.field(view.group_by)
+                assert group_field is not None  # noqa: S101 — checked in the loop above
+                if group_field.type != "SELECT":
+                    msg = f"view {view.key!r} groups by {view.object}.{view.group_by}, a {group_field.type} — a board's columns are a SELECT's options"
+                    raise ValueError(msg)
+        return self
 
     @model_validator(mode="after")
     def _object_names_are_unique(self) -> ModelDefinition:
@@ -263,6 +345,23 @@ def resolve_options(field: FieldSpec, catalog: Catalog) -> tuple[OptionSpec, ...
     return tuple(OptionSpec(value=value, label=_label(value)) for value in event_type_registry(catalog))
 
 
+def encode_option_value(value: str) -> str:
+    """A catalog option value as the live Metadata API stores it (4.1 first contact, 2026-08-16).
+
+    v2.30 validates SELECT option values as UPPER_CASE snake — the catalog's dotted lowercase
+    vocabulary (`referral.received`) is rejected as sent. The catalog stays the only vocabulary;
+    this encoding is a serialization detail of one surface, applied at the deploy plan boundary
+    and never written back into repo files. It is not inherently injective (`a.b` and `a_b`
+    collide), so `twenty_validate.check_option_encoding` proves it bijective over the actual
+    artifact and fails the validation gate if a future catalog value would collide.
+
+    It lives here rather than in `twenty_validate` because `twenty_metadata` emits the encoded
+    form into `generated/options.ts` (task 6.6) and `twenty_validate` imports `twenty_metadata` —
+    the other direction is an import cycle. `twenty_validate` re-exports it under its old name.
+    """
+    return value.upper().replace(".", "_")
+
+
 def validate_against_catalog(model: ModelDefinition, catalog: Catalog) -> None:
     """Every declared dimension names a catalog subject, and every SELECT default is an option.
 
@@ -294,6 +393,12 @@ def uid_map_keys(model: ModelDefinition, catalog: Catalog) -> tuple[str, ...]:
     Keyed `<object>` / `<object>.<field>` / `<object>.<field>.<option>` (design Decision 2). An
     event-type option value contains a dot, so `domainEvent.eventType.referral.received` has four
     segments — keys are built by composition and looked up whole, never split back apart.
+
+    Views add a second family under a `view.` prefix, one key per syncable entity in the manifest:
+    `view.<key>` and, beneath it, `.navigation`, `.field.<field>`, `.filter.<field>`,
+    `.sort.<field>`, and `.group.<state>`. Board columns are the group-by field's resolved options,
+    so a state added to the catalog becomes a column key here with no hand edit — the same
+    derivation the board's TypeScript performs against `generated/options.ts`.
     """
     keys: list[str] = []
     for obj in model.objects:
@@ -302,6 +407,20 @@ def uid_map_keys(model: ModelDefinition, catalog: Catalog) -> tuple[str, ...]:
             field_key = f"{obj.name_singular}.{field.name}"
             keys.append(field_key)
             keys.extend(f"{field_key}.{option.value}" for option in resolve_options(field, catalog))
+    for view in model.views:
+        view_key = f"view.{view.key}"
+        keys.append(view_key)
+        if view.navigation:
+            keys.append(f"{view_key}.navigation")
+        keys.extend(f"{view_key}.field.{name}" for name in view.fields)
+        keys.extend(f"{view_key}.filter.{name}" for name in view.filters)
+        keys.extend(f"{view_key}.sort.{name}" for name in view.sorts)
+        if view.group_by is not None:
+            target = model.object(view.object)
+            assert target is not None  # noqa: S101 — guaranteed by `_views_name_defined_fields`
+            group_field = target.field(view.group_by)
+            assert group_field is not None  # noqa: S101 — same
+            keys.extend(f"{view_key}.group.{option.value}" for option in resolve_options(group_field, catalog))
     return tuple(sorted(keys))
 
 
@@ -375,7 +494,6 @@ PATIENT = ObjectSpec(
             is_unique=True,
             default_value="''",
         ),
-        FieldSpec(name="name", type="FULL_NAME", label="Name"),
         FieldSpec(
             name="sfdcId", type="TEXT", label="Salesforce ID", description="External ID, system `sfdc`.", is_unique=True
         ),
@@ -405,7 +523,6 @@ PROGRAM = ObjectSpec(
             description="Stable program ID carried in the envelope `program` field.",
             is_unique=True,
         ),
-        FieldSpec(name="name", type="TEXT", label="Name"),
         FieldSpec(
             name="patientPrograms",
             type="RELATION",
@@ -436,6 +553,29 @@ PATIENT_PROGRAM = ObjectSpec(
             label="Program",
             is_nullable=False,
             relation=RelationSpec(type="MANY_TO_ONE", target_object="program", inverse_field="patientPrograms"),
+        ),
+        # The two denormalized copies below exist for the webhook path, and only for it. Twenty's
+        # webhook payload carries `properties.after`: the flat ORM entity, so a relation arrives as
+        # `patientId` / `programId` — a foreign key, not a nested `patient` or `program` object
+        # (`transform-event-to-webhook-event.ts`). A consumer that has to resolve a status change
+        # back to *which patient, which program* therefore has two choices: a REST read-back per
+        # delivery, which puts a credential and a network failure mode on the hot path, or these
+        # two columns. Both values are pseudonymous identifiers — a spine ID and a program code,
+        # never a name, a date of birth, or anything else that identifies a person.
+        #
+        # They are copies, so they are only as good as the writer that sets them; the projection
+        # owns them the same way it owns the status fields.
+        FieldSpec(
+            name="canonicalPatientId",
+            type="TEXT",
+            label="Canonical Patient ID",
+            description="Denormalized copy of `patient.canonicalPatientId`, so a webhook delivery resolves without a read-back.",
+        ),
+        FieldSpec(
+            name="programCode",
+            type="TEXT",
+            label="Program Code",
+            description="Denormalized copy of `program.code`, so a webhook delivery resolves without a read-back.",
         ),
         FieldSpec(
             name="lifecycleStatus",
@@ -474,7 +614,6 @@ PROVIDER = ObjectSpec(
     icon="IconStethoscope",
     description="Registry anchor for a clinician. Carries no catalog-backed state at v1.",
     fields=(
-        FieldSpec(name="name", type="FULL_NAME", label="Name"),
         FieldSpec(name="sfdcId", type="TEXT", label="Salesforce ID", description="External ID, system `sfdc`."),
         FieldSpec(name="npi", type="TEXT", label="NPI", description="External ID, system `npi`."),
         FieldSpec(
@@ -506,7 +645,6 @@ CLINIC = ObjectSpec(
     icon="IconBuildingHospital",
     description="Registry anchor for a referring or participating clinic. Carries no catalog-backed state at v1.",
     fields=(
-        FieldSpec(name="name", type="TEXT", label="Name"),
         FieldSpec(name="sfdcId", type="TEXT", label="Salesforce ID", description="External ID, system `sfdc`."),
         FieldSpec(
             name="lifecycleStatus",
@@ -636,7 +774,68 @@ DOMAIN_EVENT = ObjectSpec(
     ),
 )
 
-TWENTY_MODEL = ModelDefinition(objects=(PATIENT, PROGRAM, PATIENT_PROGRAM, PROVIDER, CLINIC, DOMAIN_EVENT))
+# --- Views ------------------------------------------------------------------------------------
+#
+# Declared for their identifiers (see `ViewSpec`). `key` is the slug the `src/views/*.view.ts`
+# file is named after, and the two sides are checked against each other through the map.
+
+PATIENT_PROGRAM_STATUS_BOARD_VIEW = ViewSpec(
+    key="patient-program-status-board",
+    name="Program Status Board",
+    object="patientProgram",
+    type="TABLE",
+    fields=(
+        "patient",
+        "program",
+        "lifecycleStatus",
+        "lifecycleStatusAsOf",
+        "qualificationStatus",
+        "qualificationStatusAsOf",
+    ),
+    sorts=("lifecycleStatusAsOf",),
+)
+
+PATIENT_PROGRAM_LIFECYCLE_BOARD_VIEW = ViewSpec(
+    key="patient-program-lifecycle-board",
+    name="Lifecycle Board",
+    object="patientProgram",
+    type="KANBAN",
+    # Columns are the `enrollment` subject's states, because that is what `lifecycleStatus`
+    # resolves to. A ratified state is a column on the next generation, never a hand edit.
+    group_by="lifecycleStatus",
+    fields=("patient", "program", "lifecycleStatus", "lifecycleStatusAsOf", "qualificationStatus"),
+    sorts=("lifecycleStatusAsOf",),
+    navigation=True,
+)
+
+DOMAIN_EVENT_LOG_VIEW = ViewSpec(
+    key="domain-event-log",
+    name="Event Log",
+    object="domainEvent",
+    type="TABLE",
+    fields=("occurredAt", "eventType", "entityType", "entityRefId", "programCode", "producer", "actorType"),
+    sorts=("occurredAt",),
+)
+
+DOMAIN_EVENT_ORPHANS_VIEW = ViewSpec(
+    key="domain-event-orphans",
+    name="Orphan Events",
+    object="domainEvent",
+    type="TABLE",
+    fields=("occurredAt", "eventType", "entityType", "entityRefSystem", "entityRefId", "programCode", "producer"),
+    filters=("patientProgram", "provider", "clinic"),
+    sorts=("occurredAt",),
+)
+
+TWENTY_MODEL = ModelDefinition(
+    objects=(PATIENT, PROGRAM, PATIENT_PROGRAM, PROVIDER, CLINIC, DOMAIN_EVENT),
+    views=(
+        PATIENT_PROGRAM_STATUS_BOARD_VIEW,
+        PATIENT_PROGRAM_LIFECYCLE_BOARD_VIEW,
+        DOMAIN_EVENT_LOG_VIEW,
+        DOMAIN_EVENT_ORPHANS_VIEW,
+    ),
+)
 
 
 def main() -> int:
