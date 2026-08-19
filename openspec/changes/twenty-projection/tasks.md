@@ -42,7 +42,7 @@ never a worktree.
 
 ## 2. Wave 1 — the consumer and the seam
 
-- [ ] 2.1 Projection apply core, `twenty_projection.apply` — the write path only: given a
+- [x] 2.1 Projection apply core, `twenty_projection.apply` — the write path only: given a
       committed enrollment event and a REST transport, resolve the subject to its board record
       (canonical identifiers, never guessed — the denormalized
       `canonicalPatientId`/`programCode` columns), enforce the monotonic watermark guard
@@ -78,7 +78,7 @@ never a worktree.
       projection holds no ledger credential"); a missing env var fails startup by name.
       `[model: sonnet | deps: 2.1, 2.2 | lane: repo_change | wave: 1]`
 
-- [ ] 2.4 Echo suppression in the drag mapping: `NoOp("echo_of_record")` when the payload's
+- [x] 2.4 Echo suppression in the drag mapping: `NoOp("echo_of_record")` when the payload's
       target state equals the state of record (encoded comparison), added to
       `pulse_ledger.twenty.mapping` and threaded through the route's disposition log.
       Tests: echo yields noop with the new reason and posts nothing (spec: "An echo of the
