@@ -12,6 +12,21 @@ verb, because the deploy step has no delete verb.
 
 The Twenty Metadata API this consumes is registered in `docs/contracts/consumes.md`.
 
+## Scope: dev only — ADR-0004 D14 remains open
+
+Today the only target that exists is **dev** (DNA-909, EKS on DuploCloud, upstream v2.30.0).
+Staging and prod appear in this runbook because the promotion mechanism is
+environment-agnostic by design, not because either exists.
+
+**ADR-0004 D14 remains open**: the decided deployment target for PULSE services is Snowpark
+Container Services (SPCS), subject to the timeboxed webhook-latency spike, with EKS on
+DuploCloud as the named fallback *inside* that decision
+(`docs/adr/ADR-0004-runtime-readiness-decisions.md`). The dev instance running on EKS is a
+dev-environment convenience, not the spike and not the fallback being exercised. The roadmap
+still lists the SPCS deployment unit (`pulse-spcs-deployment`). `docs/adr/` is append-only —
+abandoning SPCS as the production target requires a new ADR and a status flip on D14, never a
+quiet consequence of promotions having happened on EKS.
+
 ## Before you promote
 
 Two preconditions, both checkable offline:
