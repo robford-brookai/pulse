@@ -345,7 +345,7 @@ files under `openspec/specs/`.
       Test: the smoke test parses the script in CI without a server.
       `[model: sonnet | deps: 2.5, 5.1, 5.2, 6.2 | lane: repo_change | wave: 10]`
 
-- [ ] 7.2 Set the webhook-enabled flag, point the webhook at the cluster-internal service URL,
+- [x] 7.2 Set the webhook-enabled flag, point the webhook at the cluster-internal service URL,
       run 7.1 green, then **drag a card by hand in the UI** and confirm the same event lands. The
       script drives the REST path, which fires the same event — but the literal drag is the
       acceptance criterion, and only the hand drag proves the UI path.
