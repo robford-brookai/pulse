@@ -511,3 +511,53 @@ def test_twenty_webhook_runbook_heal_back_is_shipped_behavior() -> None:
         "twenty-webhook.md must describe the shipped heal-back behavior"
     )
     assert "echo_of_record" in runbook, "twenty-webhook.md must name the echo termination the heal loop relies on"
+
+
+#: The three verdict types `verdict_relay.config` registers (billing-state task 2.2). A registered
+#: type is a published contract on both sides — the mart must produce it, consumers see its paired
+#: transition on the bus — so both contract docs name all three or the registration is invisible.
+BILLING_STATE_VERDICT_TYPES = ("billing_eligibility", "coverage_eligibility", "benefits_verification")
+
+
+def test_publishes_md_registers_billing_state_paired_transitions() -> None:
+    """billing-state 3.3: the coverage subject and the relay's paired declare→transition are
+    published surfaces — a consumer of the `patient-state` bus now sees `coverage` subjects and
+    relay-attributed transition events it never saw before."""
+    publishes = (ROOT / "docs/contracts/publishes.md").read_text()
+    assert "billing-state" in publishes, "publishes.md must register the billing-state change"
+    assert "coverage" in publishes, "publishes.md must name the coverage subject"
+    for verdict_type in BILLING_STATE_VERDICT_TYPES:
+        assert verdict_type in publishes, f"publishes.md must name the registered verdict type {verdict_type!r}"
+    for state in ("verified_active", "verified_inactive", "qualified"):
+        assert state in publishes, f"publishes.md must name the paired target state {state!r}"
+    assert "declare_transition" in publishes, "publishes.md must name the paired command"
+    assert "patient-state" in publishes, "publishes.md must place the new events on the patient-state domain"
+    assert "runbooks/billing-state.md" in publishes, "publishes.md must link the billing-state runbook"
+
+
+def test_consumes_md_verdict_mart_row_names_the_registered_verdict_types() -> None:
+    """billing-state 3.3: the verdict-mart entry is what tells the warehouse workstream which
+    `verdict_type` values this repo will carry — an unregistered type fails row validation, so the
+    list is a hard dependency, not documentation colour."""
+    consumes = (ROOT / "docs/contracts/consumes.md").read_text()
+    for verdict_type in BILLING_STATE_VERDICT_TYPES:
+        assert verdict_type in consumes, f"consumes.md must name the registered verdict type {verdict_type!r}"
+    assert "transition_by_outcome" in consumes, "consumes.md must name the pairing configuration"
+    assert "verdict_relay/config.py" in consumes, "consumes.md must cite where the registered types live"
+
+
+def test_billing_state_runbook_exists_and_covers_operations() -> None:
+    """billing-state 3.3: the runbook exists, is navigable, and covers the five operator concerns
+    the tasks file names — pairing semantics, poll cadence, no-op runs, transition-rejected
+    triage, and rollback."""
+    path = ROOT / "docs/runbooks/billing-state.md"
+    assert path.exists(), "docs/runbooks/billing-state.md is missing"
+    runbook = path.read_text()
+    lowered = runbook.lower()
+    for topic in ("pairing", "poll", "no-op", "rollback"):
+        assert topic in lowered, f"billing-state runbook must cover {topic!r}"
+    assert "transition_rejected" in runbook, "the runbook must name the transition-rejected count"
+    assert "relay:run" in runbook, "the runbook must name the relay's task target"
+    nav = yaml.safe_load((ROOT / "mkdocs.yml").read_text())
+    nav_text = json.dumps(nav.get("nav", []))
+    assert "runbooks/billing-state.md" in nav_text, "mkdocs.yml nav must include the billing-state runbook"

@@ -3,8 +3,13 @@
 Operator actions for the two §1.5 monitors on this service
 (`design/delivery/pulse-runtime-readiness.md` §1.5): **verdict staleness > 26 h** and
 **run failure**. The relay is the batch that reads the verdict mart and declares each verdict into
-the ledger (`packages/verdict-relay`, entrypoint `verdict_relay.run.main`). Scheduling is S1.3;
-until that lands, a run is triggered by whatever wiring invokes the entrypoint.
+the ledger (`packages/verdict-relay`, entrypoint `verdict_relay.run.main`). It runs by the
+`verdict-relay-poll` schedules entry, or by hand as `task relay:run TARGET=<env>`.
+
+Since `billing-state`, a registered verdict type also pairs its outcome with a state transition,
+which adds two counts to the receipt below. The pairing's own semantics, cadence, and
+transition-rejected triage live in [`billing-state.md`](billing-state.md); this runbook stays the
+place for the two §1.5 monitors.
 
 ## Reading the receipt
 
@@ -13,17 +18,19 @@ one machine-parsable summary line of `key=value` pairs — this line is the firs
 for either alert:
 
 ```
-service=verdict-relay result=success declared=3 replayed=1 skipped_stale=1 rejected=1 failed=0
+service=verdict-relay result=success declared=3 replayed=1 skipped_stale=1 rejected=1 transitioned=2 transition_rejected=0 failed=0
 ```
 
-The five counts:
+The seven counts:
 
 | Count | Meaning |
 | --- | --- |
 | `declared` | New declarations the ledger committed. |
 | `replayed` | Idempotent replays — the ledger had already committed this declaration (D16). |
 | `skipped_stale` | Rows older than the subject's `as_of` watermark; skipped before submission. |
-| `rejected` | The ledger refused the transition. Counted and logged with the ledger's reason, **never retried**, and the run continues. |
+| `rejected` | The ledger refused the declaration. Counted and logged with the ledger's reason, **never retried**, and the run continues. |
+| `transitioned` | Paired transitions the ledger committed (`billing-state`; see [`billing-state.md`](billing-state.md)). |
+| `transition_rejected` | Paired transitions the ledger refused. Counted, logged with reason and catalog version, **never retried**; the verdict half stands. |
 | `failed` | `1` when the run did not finish (with `result=failure` and a nonzero exit); `0` otherwise. |
 
 A run that fails still emits the receipt — the counts reflect the work completed before the

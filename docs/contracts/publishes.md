@@ -110,6 +110,28 @@ record) rides the same projection writer but carries the status field alone — 
 ledger sequence in hand and never moves the `projectionSeq` watermark. Its own webhook echo
 terminates in the mapping as `noop` reason `echo_of_record`.
 
+### Coverage and billing state (`billing-state`)
+
+Verdicts stop being terminal evidence: for a registered verdict type, the relay follows its
+committed `declare_verdict` with a paired `declare_transition` on the same subject, so billing
+qualification and insurance coverage become continuously-known ledger state rather than something
+each consumer folds out of verdict history. Coverage is a new ledger-owned subject at patient ×
+payer grain. Operations (poll cadence, no-op runs, transition-rejected triage, rollback):
+[`docs/runbooks/billing-state.md`](../runbooks/billing-state.md).
+
+| Surface | Kind | Stability | Notes |
+|---|---|---|---|
+| `coverage` subject | ledger subject type | beta | ownership `ledger`, grain one subject per patient × payer, catalog release `1.1.0`; states `unverified → verified_active \| verified_inactive`, `verified_active ⇄ verified_inactive`, either verified state → `lapsed` (re-verifiable), terminal `terminated`. Benefit detail — QMB status, benefit categories, copay — lives in verdict payload and `lineage_ref`, never in the state vocabulary. Admitted by the three subject-type CHECK constraints (`events`, `current_state`, `review_queue`), so a catalog-legal coverage transition commits; enumerable by state through `pulse_ledger.reads.enumerate_state` |
+| Paired transition events on `patient-state` | EventBridge events (published) | beta | committed `coverage` and `billing_episode` events cross the `ocean` bus on the existing `patient-state` domain — no new domain, no rule change: a paired declare emits two envelopes for one subject, `event_type` `declare_verdict` then `declare_transition`, both attributed to the relay's service identity `verdict-relay` (D15). New for consumers: `subject_type` `coverage` appears on this domain, and a `declare_transition` on a billing subject may now originate from the relay rather than an operator |
+| Registered verdict → transition pairing | design contract | beta | `billing_eligibility` → `billing_episode` (`positive` → `qualified`, `negative` → `not_qualified`); `coverage_eligibility` and `benefits_verification` → `coverage` (`positive` → `verified_active`, `negative` → `verified_inactive`). `indeterminate` maps nowhere — evidence without consequence, verdict only. A verdict type with no `transition_by_outcome` entry behaves exactly as before. The pair's idempotency key derives from the verdict row (D16), so it is replay-safe as a unit; a transition the catalog refuses is counted `transition_rejected` and never retried, and the verdict half stands |
+
+The relay run receipt is the operator-visible contract for this pairing and carries seven counts
+in a pinned summary line (`declared`, `replayed`, `skipped_stale`, `rejected`, `transitioned`,
+`transition_rejected`, `failed`) — the two new counts are `transitioned` and
+`transition_rejected`. The first verdict for an unseen patient × payer key mints the coverage
+subject at its derived initial state (`unverified`) and applies the paired transition in the same
+run: no registration step, no manual minting.
+
 ### Offered to PX survey engine (discovery stage, `survey-engine-ingress` planned)
 
 PX (survey engine, owner Max Pengilly) is in discovery; pulse's planned adapter is
