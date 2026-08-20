@@ -2,7 +2,10 @@
 
 `tests/fixtures/` holds one JSON recording per work-order case: normal declare, idempotent replay,
 out-of-order stale run, illegal-transition rejection, indeterminate-with-reason, and
-indeterminate-without-reason. Each recording carries the mart rows, the pre-existing watermarks,
+indeterminate-without-reason — plus one recording per shipped verdict type (billing-state task
+2.2): `billing_eligibility`, `coverage_eligibility`, and `benefits_verification` rows whose
+shipped `transition_by_outcome` entries pair a `declare_transition` with the verdict (two API
+calls per row). Each recording carries the mart rows, the pre-existing watermarks,
 the scripted API classifications, and the expected receipt counts — so the suite here replays every
 case through the real reader → declarer → run path over the faked client.
 
@@ -24,13 +27,15 @@ from typing import cast
 import httpx
 import pytest
 from pulse_core.client import PulseCoreClient
+from verdict_relay import config
 from verdict_relay.declarer import Declarer
 from verdict_relay.mart_reader import CONTRACT_COLUMNS, FixtureRowSource, MartReader
 from verdict_relay.run import RunReceipt, run_relay
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
-#: The six work-order cases; one recording each, `<case>.json`.
+#: The six S1 work-order cases plus the three shipped-verdict-type cases (billing-state task
+#: 2.2); one recording each, `<case>.json`.
 CASES = (
     "normal_declare",
     "idempotent_replay",
@@ -38,9 +43,18 @@ CASES = (
     "illegal_transition_rejection",
     "indeterminate_with_reason",
     "indeterminate_without_reason",
+    "billing_eligibility_qualifies",
+    "coverage_eligibility_verifies",
+    "benefits_verification_verifies",
 )
 
-SUBJECT_TYPE_BY_VERDICT = {"billing_qualification": "billing_episode"}
+#: The shipped configuration plus the S1 recordings' synthetic type, which deliberately has no
+#: `transition_by_outcome` entry — those recordings double as the pin that an unconfigured type
+#: still submits exactly one command under the shipped pairing config.
+SUBJECT_TYPE_BY_VERDICT = {
+    **config.SUBJECT_TYPE_BY_VERDICT,
+    "billing_qualification": "billing_episode",
+}
 
 #: Scripted responses by the classification name a recording uses.
 RESPONSES = {
@@ -128,6 +142,7 @@ def replay_recording(recording: dict[str, object]) -> tuple[RunReceipt, Scripted
     declarer = Declarer(
         api.client(),
         subject_type_by_verdict=SUBJECT_TYPE_BY_VERDICT,
+        transition_by_outcome=config.TRANSITION_BY_OUTCOME,
         watermarks=watermarks,
         sleep=lambda _s: None,
         jitter=lambda: 0.0,
@@ -139,7 +154,7 @@ def replay_recording(recording: dict[str, object]) -> tuple[RunReceipt, Scripted
 class TestCorpusCoverage:
     """The corpus is complete, on-contract, and synthetic by construction."""
 
-    def test_the_corpus_records_exactly_the_six_work_order_cases(self) -> None:
+    def test_the_corpus_records_exactly_the_registered_cases(self) -> None:
         recorded = sorted(path.stem for path in FIXTURES_DIR.glob("*.json"))
         assert recorded == sorted(CASES)
 
