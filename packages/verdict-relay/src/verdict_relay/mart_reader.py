@@ -288,6 +288,17 @@ class MartReader:
         value = self._watermarks.get(subject_id)
         return datetime.fromisoformat(value) if value is not None else None
 
+    @property
+    def watermarks(self) -> dict[str, str]:
+        """Every subject's persisted high-water `as_of`, loaded from the durable cursor.
+
+        Production wiring (task 3.1) seeds the `Declarer`'s own watermark map from this, so both
+        halves of a resumed run start from the identical persisted state rather than the reader
+        and declarer disagreeing about what was already declared.
+        """
+        self._load_cursor()
+        return dict(self._watermarks)
+
     def record_declared(self, subject_id: str, as_of: datetime) -> None:
         """Raise the subject's watermark after a committed or replayed declaration.
 

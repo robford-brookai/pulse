@@ -10,11 +10,16 @@ dependencies = [
     # `pulse_ledger.reads.enumerate_state` — the current-state library read month-open enumerates
     # from (design decision 2). Read module only; this package owns no schema of its own.
     "pulse-ledger",
+    # `verdict_relay.run.run_relay` plus its `MartReader`/`Declarer`/production-wiring types — the
+    # poll entry (task 3.1) is a thin schedules-native wrapper over the existing relay, never a
+    # second implementation of its read-declare loop.
+    "verdict-relay",
 ]
 
 [tool.uv.sources]
 pulse-core = { workspace = true }
 pulse-ledger = { workspace = true }
+verdict-relay = { workspace = true }
 
 [dependency-groups]
 dev = [

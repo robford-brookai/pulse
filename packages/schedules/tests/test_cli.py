@@ -12,6 +12,7 @@ from __future__ import annotations
 import io
 import json
 import uuid
+from collections.abc import Mapping
 from datetime import date, datetime
 from pathlib import Path
 
@@ -243,6 +244,56 @@ class TestMainDispatch:
         assert exit_code == 0
         receipt = json.loads(capsys.readouterr().out)
         assert receipt["opt_out_corrections"] == 1
+
+    def test_verdict_relay_poll_subcommand_runs_the_job_and_returns_its_exit_code(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """`verdict-relay-poll` is fully env-driven: `main` never touches the environment itself
+        here, since the wiring seam (`_verdict_relay_dependencies_from_env`) is faked — the same
+        posture `_ledger_connection_from_env` / `_pulse_core_client_from_env` already have above."""
+        from verdict_relay.declarer import Declarer
+        from verdict_relay.mart_reader import FixtureRowSource, MartReader
+
+        api = ScriptedApi([committed("e-poll")], writer_id="verdict-relay")
+        rows = [
+            {
+                "subject_id": "episode-poll",
+                "verdict_type": "billing_qualification",
+                "outcome": "positive",
+                "reason": None,
+                "rule_version": "rules-v1",
+                "as_of": "2026-08-01T00:00:00+00:00",
+                "lineage_ref": "dbt-run-1",
+                "computed_at": "2026-08-01T02:00:00+00:00",
+            }
+        ]
+
+        class MemoryCursorStore:
+            def load(self) -> Mapping[str, object] | None:
+                return None
+
+            def save(self, cursor: Mapping[str, object]) -> None:
+                pass
+
+        reader = MartReader(FixtureRowSource(rows), MemoryCursorStore())
+        declarer = Declarer(
+            api.client(),
+            subject_type_by_verdict={"billing_qualification": "billing_episode"},
+            sleep=lambda _s: None,
+            jitter=lambda: 0.0,
+        )
+
+        def fake_dependencies() -> tuple[MartReader, Declarer]:
+            return reader, declarer
+
+        monkeypatch.setattr(cli, "_verdict_relay_dependencies_from_env", fake_dependencies)
+
+        exit_code = cli.main(["verdict-relay-poll"])
+
+        assert exit_code == 0
+        receipt = json.loads(capsys.readouterr().out)
+        assert receipt["declared"] == 1
+        assert receipt["failed"] == 0
 
     def test_unknown_subcommand_exits_nonzero_with_usage_help(self, capsys: pytest.CaptureFixture[str]) -> None:
         with pytest.raises(SystemExit) as exc_info:
