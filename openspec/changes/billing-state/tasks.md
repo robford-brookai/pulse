@@ -68,7 +68,7 @@ G_APPROVAL comment, never a worktree.
       Opus: this pairing is the mechanism of continuous billing state — a wrong mapping or a
       non-idempotent pair key writes wrong state that only surfaces at reconciliation.
 
-- [ ] 2.2 Verdict-type configuration and fixtures — sole owner of the shipped config entries
+- [x] 2.2 Verdict-type configuration and fixtures — sole owner of the shipped config entries
       and the fixture corpus: `subject_type_by_verdict` and `transition_by_outcome` entries for
       `billing_eligibility` (→ `billing_episode`), `coverage_eligibility` and
       `benefits_verification` (→ `coverage`); synthetic fixture corpus rows for all three;
@@ -93,7 +93,7 @@ G_APPROVAL comment, never a worktree.
       value").
       `[model: sonnet | deps: 1.2, 2.1, 2.2 | lane: repo_change | wave: 1]`
 
-- [ ] 2.4 Receipt extension in `verdict_relay.run`: `RunReceipt` and `summary_line()` gain the
+- [x] 2.4 Receipt extension in `verdict_relay.run`: `RunReceipt` and `summary_line()` gain the
       `transitioned` and `transition_rejected` counts wired from the declarer's counters, in
       the exact pinned seven-count form.
       Tests: a fixture mixed batch (paired declare, replay, stale row, verdict rejection,
