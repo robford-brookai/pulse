@@ -359,6 +359,27 @@ tasks:
     cmds:
       - uv run python -m twenty_projection.consumer --target {{.TARGET}}
 
+  relay:run:
+    desc: Run one verdict-relay poll against TARGET's mart and ledger (dev|staging|prod; needs that target's credentials)
+    # The operator-facing invocation of the relay's production wiring (billing-state task 3.2,
+    # spec verdict-relay-trigger). Dumb by design, same posture as twenty:deploy: no logic here,
+    # just the schedules-package poll entry task 3.1 already wired
+    # (`schedules.cli verdict-relay-poll`), so the scheduled poll and a manual run share one
+    # production path and one receipt. Safe to re-run: a cursor already at the mart's watermark
+    # is a no-op run — zero declarations, all-zero receipt, exit zero.
+    # TARGET names which environment's credentials are loaded, exactly as ledger:deploy uses it.
+    # The variable names themselves are target-agnostic on purpose (`VERDICT_RELAY_*`, pinned in
+    # verdict_relay.production, values only in the deploy environment), so the target does not
+    # enumerate them here; a missing one fails startup naming that variable, before any
+    # connection.
+    # Never reached from `check`, which stays offline and credential-free:
+    # tests/test_verdict_relay_run_target.py pins both halves, and the target is on
+    # test_twenty_app_scaffold.py's credentialed-reachability list.
+    requires:
+      vars: [TARGET]
+    cmds:
+      - uv run python -m schedules.cli verdict-relay-poll
+
   # `check` is the contract between a developer's machine and CI:
   # .github/workflows/main.yml invokes exactly this target. Keep it CI-safe — openspec and
   # openlore are npm globals that runners do not install, so they belong in `verify`, not here.

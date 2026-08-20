@@ -238,6 +238,7 @@ def test_credentialed_twenty_targets_stay_out_of_check():
         "catalog:release",
         "synthea:regen",
         "projection:consume",
+        "relay:run",
     ):
         assert target not in reached, (
             f"`task check` reaches {target}, which needs credentials or a JVM; CI has neither by default"
