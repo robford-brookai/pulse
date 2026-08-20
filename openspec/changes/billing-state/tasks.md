@@ -117,7 +117,7 @@ G_APPROVAL comment, never a worktree.
       credential value in any log.
       `[model: sonnet | deps: 2.2, 2.4 | lane: repo_change | wave: 2]`
 
-- [ ] 3.2 Credentialed task target: register `task relay:run TARGET=<env>` in the root
+- [x] 3.2 Credentialed task target: register `task relay:run TARGET=<env>` in the root
       `Taskfile.yml` (credentialed, out of `task check`, `twenty:deploy` posture) and extend
       the reachability gate.
       Tests: `task check` passes offline and credential-free while the reachability test
