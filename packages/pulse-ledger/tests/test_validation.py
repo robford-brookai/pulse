@@ -100,6 +100,7 @@ def test_entry_states_are_derived_one_per_subject_type() -> None:
         "communication_consent": frozenset({"unset"}),
         "consent": frozenset({"requested"}),
         "contract": frozenset({"draft"}),
+        "coverage": frozenset({"unverified"}),
         "device": frozenset({"ordered"}),
         "enrollment": frozenset({"pending_start"}),
         "referral": frozenset({"received"}),

@@ -104,7 +104,7 @@ a live instance — CI builds and validates the artifact with no server reachabl
 
 The artifact pins its own shape with two version keys, and nothing else stands in for them:
 `artifactVersion` (`1`) is the operation-set schema this repo serializes against, and
-`catalogVersion` (`1.0.0`) is the state-catalog release whose dimensions became SELECT options in
+`catalogVersion` (`1.1.0`) is the state-catalog release whose dimensions became SELECT options in
 that render. A change to either is a deliberate re-render, caught by the staleness check in
 `task check`, never a silent drift.
 
