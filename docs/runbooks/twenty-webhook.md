@@ -76,14 +76,26 @@ separately by the existing auth-failure handler, with no body or signature conte
 
 ## Heal-back boundary
 
-This change's scope ends at the rejection receipt plus the card comment. A rejected drag leaves
-the Twenty board showing the column the user dragged to — **the card sits in the wrong column
-until Phase 3's `twenty-projection`** closes D8 end to end by writing the card back to its true
-state. The ledger itself is never wrong: the rejected drag wrote no event, so the ledger's state
-for that subject is exactly what it was before the drag. Only the Twenty board view lags, and the
-comment is the interim signal to the user who dragged it — it names the attempted transition, the
-catalog reason, and that the state of record is unchanged. Do not treat a stuck card as a ledger
-bug; treat it as expected until the heal-back write ships.
+Shipped with `twenty-projection`: on a `rejected` disposition the route synchronously writes the
+card's status field back to the state of record — the same state the rejection receipt names as
+unchanged — through the projection writer (`api_server.build_heal_writer` over
+`twenty_projection.apply.ProjectionRestClient`), attributed to the projection identity,
+alongside the rejection note. The ledger itself was never wrong: the rejected drag wrote no
+event; the heal corrects only the board view.
+
+The heal degrades exactly as the rejection note does, and independently of it: a failed heal
+logs `heal_failed` with the card ref only, and the receipt is still returned — a broken heal
+channel degrades board convergence, never rejection correctness, because the projection's
+full-state write converges the card on the subject's next event regardless. The heal write's own
+`patientProgram.updated` webhook echo terminates at this route in one bounce as `noop` with
+reason `echo_of_record` (see the disposition table above): no command, no note, no second heal.
+
+Wiring: the heal writer builds only when `PULSE_LEDGER_TWENTY_PROJECTION_TOKEN` and
+`PULSE_LEDGER_TWENTY_BASE_URL` are both set. Absent either, the app still boots and rejections
+still produce their receipt and note — the pre-projection behavior — with `heal_failed` in the
+log. One known constraint: Twenty does not push externally-made record mutations to open browser
+sessions, so a healed card visibly snaps back only on refresh. Consumer operations are
+[`docs/runbooks/twenty-projection.md`](twenty-projection.md).
 
 ## Verifying board wiring
 

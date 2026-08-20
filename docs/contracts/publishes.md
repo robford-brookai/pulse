@@ -93,6 +93,23 @@ the transition. Runbook: [`docs/runbooks/twenty-webhook.md`](../runbooks/twenty-
 | `POST /webhooks/twenty` | REST API (webhook) | beta | env-gated (`PULSE_LEDGER_TWENTY_WEBHOOK_ENABLED`); HMAC-signed on Twenty's wire format (`X-Twenty-Webhook-Signature` / `X-Twenty-Webhook-Timestamp`, bare hex HMAC-SHA256 over `{timestamp}:{body}`, millisecond timestamp, 5-minute freshness), dual-secret during quarterly rotation (`PULSE_LEDGER_TWENTY_WEBHOOK_SECRET[_NEXT]`); 401 on auth failure, 200 with a `committed \| replayed \| noop \| unmapped \| rejected \| malformed` disposition body otherwise — no live network in tests, no live Twenty instance exists before Phase 3 |
 | Webhook attribution | design contract | stable | actor is the fixed webhook principal (`twenty-webhook`, actor_type `system`), never a payload field (D15); the dragging workspace member travels as evidence provenance only |
 
+### Twenty board projection (`twenty-projection`)
+
+The D8 return path: committed ledger events for board subjects render onto the Twenty board
+through `packages/twenty-projection`, so the board is a view of the ledger, never a parallel
+store. Operations (running the consumer, watermark semantics, orphan triage, rollback):
+[`docs/runbooks/twenty-projection.md`](../runbooks/twenty-projection.md).
+
+| Surface | Kind | Stability | Notes |
+|---|---|---|---|
+| Projection queue | EventBridge rule + SQS queue (consumed) | beta | the projection is a registered consumer of the `ocean` bus per the rule-and-queue convention above: committed `enrollment` events, consumed via `pulse_core.consume` (event-id dedupe, delete-after-success); the consumer's whole env surface is `PULSE_TWENTY_<TARGET>_URL/_TOKEN` + `SQS_QUEUE_URL` — no ledger DSN, no writer token, so it renders state and can never mint or mutate ledger events |
+| `patientProgram.lifecycleStatus` + `lifecycleStatusAsOf` + `projectionSeq` | Twenty board columns (written) | beta | the projection is the owning writer: each applied event writes the full board state (encoded status, as-of from the event's effective time, watermark) in one PATCH, monotonic per record on `projectionSeq` (the last applied ledger sequence; null = never projected); an out-of-band edit is drift that converges on the subject's next event — nothing else may write these columns |
+
+The webhook route's heal-back write (a `rejected` drag restores the card to the state of
+record) rides the same projection writer but carries the status field alone — a heal has no
+ledger sequence in hand and never moves the `projectionSeq` watermark. Its own webhook echo
+terminates in the mapping as `noop` reason `echo_of_record`.
+
 ### Offered to PX survey engine (discovery stage, `survey-engine-ingress` planned)
 
 PX (survey engine, owner Max Pengilly) is in discovery; pulse's planned adapter is

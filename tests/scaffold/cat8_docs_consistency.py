@@ -468,3 +468,46 @@ def test_workflow_does_not_recommend_install_hook() -> None:
             assert re.search(r"\b(not|never|do not)\b", line, re.I), (
                 f"WORKFLOW.md mentions --install-hook without warning against it: {line.strip()}"
             )
+
+
+def test_publishes_md_registers_twenty_projection() -> None:
+    """twenty-projection 3.3: the projection's consumed queue and written board surface are
+    named, pinned entries — the queue row so infra knows a bus consumer exists, the written
+    row so nothing else claims the projected columns.
+    """
+    publishes = (ROOT / "docs/contracts/publishes.md").read_text()
+    assert "twenty-projection" in publishes, "publishes.md must register the twenty-projection change"
+    assert "`projectionSeq`" in publishes, "publishes.md must name the watermark column"
+    assert "lifecycleStatus" in publishes, "publishes.md must name the written status column"
+    assert "SQS" in publishes, "publishes.md must record the projection's consumed queue"
+    assert "runbooks/twenty-projection.md" in publishes, "publishes.md must link the projection runbook"
+
+
+def test_twenty_projection_runbook_exists_and_covers_operations() -> None:
+    """twenty-projection 3.3: the runbook exists, is navigable, and covers the four operator
+    concerns the tasks file names — running the consumer, watermark semantics, orphan triage,
+    and rollback."""
+    path = ROOT / "docs/runbooks/twenty-projection.md"
+    assert path.exists(), "docs/runbooks/twenty-projection.md is missing"
+    runbook = path.read_text()
+    lowered = runbook.lower()
+    for topic in ("watermark", "orphan", "rollback"):
+        assert topic in lowered, f"twenty-projection runbook must cover {topic!r}"
+    assert "projection:consume" in runbook, "the runbook must name the consumer's task target"
+    nav = yaml.safe_load((ROOT / "mkdocs.yml").read_text())
+    nav_text = json.dumps(nav.get("nav", []))
+    assert "runbooks/twenty-projection.md" in nav_text, "mkdocs.yml nav must include the twenty-projection runbook"
+
+
+def test_twenty_webhook_runbook_heal_back_is_shipped_behavior() -> None:
+    """twenty-projection 3.3: the heal-back boundary section describes the shipped write, not
+    the pre-projection debt."""
+    runbook = (ROOT / "docs/runbooks/twenty-webhook.md").read_text()
+    assert "until the heal-back write ships" not in runbook, (
+        "twenty-webhook.md still describes the heal-back gap as future work"
+    )
+    lowered = runbook.lower()
+    assert "state of record" in lowered and "heal" in lowered, (
+        "twenty-webhook.md must describe the shipped heal-back behavior"
+    )
+    assert "echo_of_record" in runbook, "twenty-webhook.md must name the echo termination the heal loop relies on"
