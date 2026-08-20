@@ -1,10 +1,16 @@
-"""`schedules.cli` — one entrypoint, two subcommands (task 4.1, spec: schedule-execution).
+"""`schedules.cli` — one entrypoint, three subcommands (task 4.1, spec: schedule-execution; task
+3.1 of billing-state adds `verdict-relay-poll`).
 
-"One CLI exposes both jobs": `main` parses `argv` into `month-open` or `consent-sweep`, runs the
-named job, and returns the process exit code — the scheduler's own retry/paging contract keys off
-that status, never off log content (design decision 6: "the exit status is the contract"). An
-unknown subcommand or a missing required argument never reaches a job at all: argparse's own
-usage-and-exit(2) behavior handles both (spec: "Subcommands are invocable").
+"One CLI exposes every job": `main` parses `argv` into `month-open`, `consent-sweep`, or
+`verdict-relay-poll`, runs the named job, and returns the process exit code — the scheduler's own
+retry/paging contract keys off that status, never off log content (design decision 6: "the exit
+status is the contract"). An unknown subcommand or a missing required argument never reaches a job
+at all: argparse's own usage-and-exit(2) behavior handles both (spec: "Subcommands are invocable").
+`verdict-relay-poll` (billing-state, spec verdict-relay-trigger) is the schedules-package poll
+entry approximating "run after every mart refresh": it wraps the existing verdict-relay's own
+`run_relay` rather than reimplementing it, so a poll finding the cursor at the mart's watermark is
+already the relay's own no-op-run guarantee (D16 idempotency + the durable cursor + per-subject
+stale-skip), not a new invariant this module has to prove.
 
 Each subcommand's job logic lives in `run_month_open_job` / `run_consent_sweep_job` — plain
 functions over the same `EnrollmentSource` / `PulseCoreClient` / `Sequence[SubjectState]`
@@ -49,6 +55,10 @@ from typing import TextIO
 import psycopg
 from pulse_core.client import PulseCoreClient, ResponseClassification
 from pulse_ledger.reads import SubjectState, enumerate_state
+from verdict_relay.config import SUBJECT_TYPE_BY_VERDICT, TRANSITION_BY_OUTCOME
+from verdict_relay.declarer import Declarer
+from verdict_relay.mart_reader import MartReader
+from verdict_relay.production import build_production_dependencies, resolve_production_config
 
 from schedules.consent_sweep import (
     RECONCILIATION_WRITER_ID,
@@ -74,6 +84,7 @@ from schedules.month_open import (
     load_enrollment_fixture,
     run_month_open,
 )
+from schedules.verdict_relay_poll import run_verdict_relay_poll_job
 
 #: This job's own D15 credential name (mirrors `consent_sweep.RECONCILIATION_WRITER_ID`) — the
 #: writer identity `PulseCoreClient` authenticates as, so the ledger resolves every
@@ -230,6 +241,27 @@ def _pulse_core_client_from_env(*, writer_id: str, token_env_var: str) -> PulseC
     return PulseCoreClient(base_url, writer_id=writer_id, token=token)
 
 
+def _verdict_relay_dependencies_from_env() -> tuple[MartReader, Declarer]:
+    """The poll's production `MartReader`/`Declarer`, wired from configuration and environment.
+
+    Every environment read happens inside `resolve_production_config` (task 3.1,
+    `verdict_relay.production`): a missing variable fails startup naming it, before any Snowflake
+    or ledger connection is attempted (spec: "A missing variable fails startup by name"). The
+    `Declarer` is seeded from the reader's own persisted watermark map, not a fresh empty one, so a
+    resumed poll's stale-skip decisions agree with the cursor it just loaded.
+    """
+    config = resolve_production_config()
+    row_source, cursor_store, client = build_production_dependencies(config)
+    reader = MartReader(row_source, cursor_store)
+    declarer = Declarer(
+        client,
+        subject_type_by_verdict=SUBJECT_TYPE_BY_VERDICT,
+        transition_by_outcome=TRANSITION_BY_OUTCOME,
+        watermarks=reader.watermarks,
+    )
+    return reader, declarer
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="schedules",
@@ -287,6 +319,13 @@ def _build_parser() -> argparse.ArgumentParser:
         "{subject_key, channel, state} objects — omitted means no known prior state).",
     )
 
+    subparsers.add_parser(
+        "verdict-relay-poll",
+        help="Poll the verdict mart and declare committed verdicts (task 3.1, spec "
+        "verdict-relay-trigger). Fully env-driven — no arguments beyond the subcommand itself; a "
+        "cursor already at the mart's watermark is a no-op run.",
+    )
+
     return parser
 
 
@@ -324,6 +363,13 @@ def _dispatch_consent_sweep(args: argparse.Namespace) -> int:
     return run_consent_sweep_job(csv_text, ledger_states, client, file_id=args.file_id, export_as_of=args.export_as_of)
 
 
+def _dispatch_verdict_relay_poll() -> int:
+    """`verdict-relay-poll`'s one path: fully env-driven production wiring, no `--dry-run` (a
+    cursor already at the watermark is already a safe no-op — spec: "A no-op poll exits clean")."""
+    reader, declarer = _verdict_relay_dependencies_from_env()
+    return run_verdict_relay_poll_job(reader, declarer, stream=sys.stdout)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Parse `argv`, run the named job against production wiring, and return its exit code."""
     parser = _build_parser()
@@ -331,9 +377,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "month-open":
         return _dispatch_month_open(args, parser)
+    if args.command == "verdict-relay-poll":
+        return _dispatch_verdict_relay_poll()
 
-    # Only "month-open" and "consent-sweep" are registered subparsers, so `args.command` is one
-    # of them by the time argparse's own required-subparser validation has passed.
+    # Only "month-open", "verdict-relay-poll", and "consent-sweep" are registered subparsers, so
+    # `args.command` is one of them by the time argparse's own required-subparser validation has
+    # passed.
     return _dispatch_consent_sweep(args)
 
 

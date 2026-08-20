@@ -20,6 +20,17 @@ RUN pip install uv --quiet
 COPY packages/pulse-core /libs/pulse-core
 RUN uv pip install --system --no-cache /libs/pulse-core
 
+# twenty-projection next, before pulse-ledger asks for it by name: the heal-back leg imports its
+# REST writer (`twenty_projection.apply`), so `pulse-ledger`'s `[project.dependencies]` names it,
+# and it is a workspace sibling never published to an index — without this the build fails at
+# `No matching distribution found for twenty-projection`.
+#
+# Plain `pip` here, not `uv pip`, for the same reason the pulse-ledger install below uses it:
+# this package's `[tool.uv.sources]` points `pulse-core` at `{ workspace = true }`, which uv
+# refuses outside a real uv workspace even though pulse-core is already on the path above.
+COPY packages/twenty-projection /libs/twenty-projection
+RUN pip install --no-cache-dir /libs/twenty-projection
+
 # The [serve] extra brings uvicorn — the API process's ASGI server, not a hard dependency of the
 # library (identity/verdict-relay/schedules import pulse-ledger without it).
 #

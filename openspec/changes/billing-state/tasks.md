@@ -104,7 +104,7 @@ G_APPROVAL comment, never a worktree.
 
 ## 3. Wave 2 — trigger, wiring, docs
 
-- [ ] 3.1 Production wiring and poll entry: config-constructed Snowflake `RowSource`,
+- [x] 3.1 Production wiring and poll entry: config-constructed Snowflake `RowSource`,
       `LedgerCursorStore`, and service client (resolving the S1.3 deferral in
       `verdict_relay.run`) and a schedules-package poll entry with the no-op-run receipt
       (cursor at watermark → zero declarations, clean exit). No root `Taskfile.yml` edit —

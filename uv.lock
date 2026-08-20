@@ -2983,6 +2983,7 @@ source = { editable = "packages/schedules" }
 dependencies = [
     { name = "pulse-core" },
     { name = "pulse-ledger" },
+    { name = "verdict-relay" },
 ]
 
 [package.dev-dependencies]
@@ -2995,6 +2996,7 @@ dev = [
 requires-dist = [
     { name = "pulse-core", editable = "packages/pulse-core" },
     { name = "pulse-ledger", editable = "packages/pulse-ledger" },
+    { name = "verdict-relay", editable = "packages/verdict-relay" },
 ]
 
 [package.metadata.requires-dev]
