@@ -598,6 +598,12 @@ PATIENT_PROGRAM = ObjectSpec(
         ),
         _as_of("qualificationStatus"),
         FieldSpec(
+            name="projectionSeq",
+            type="NUMBER",
+            label="Projection Seq",
+            description="Watermark: the ledger sequence of the last applied event. Null means never projected.",
+        ),
+        FieldSpec(
             name="domainEvents",
             type="RELATION",
             label="Domain Events",

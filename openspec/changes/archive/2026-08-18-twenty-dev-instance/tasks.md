@@ -345,14 +345,14 @@ files under `openspec/specs/`.
       Test: the smoke test parses the script in CI without a server.
       `[model: sonnet | deps: 2.5, 5.1, 5.2, 6.2 | lane: repo_change | wave: 10]`
 
-- [ ] 7.2 Set the webhook-enabled flag, point the webhook at the cluster-internal service URL,
+- [x] 7.2 Set the webhook-enabled flag, point the webhook at the cluster-internal service URL,
       run 7.1 green, then **drag a card by hand in the UI** and confirm the same event lands. The
       script drives the REST path, which fires the same event — but the literal drag is the
       acceptance criterion, and only the hand drag proves the UI path.
       Verify: nine assertions green, then a hand drag producing one correctly-timed event.
       `[model: sonnet | deps: 3.1, 7.1 | lane: operational_discovery | wave: 11]`
 
-- [ ] 7.3 Close the loop in docs: `docs/runbooks/pulse-command-api-deploy.md` and
+- [x] 7.3 Close the loop in docs: `docs/runbooks/pulse-command-api-deploy.md` and
       `docs/runbooks/twenty-artifact-promotion.md`, both with `mkdocs.yml` nav entries or
       `mkdocs build -s` warns on orphans. The promotion runbook states plainly that this is dev
       only and **ADR-0004 D14 remains open** — `docs/adr/` is append-only and the roadmap still

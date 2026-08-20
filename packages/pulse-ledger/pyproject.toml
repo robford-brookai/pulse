@@ -17,6 +17,10 @@ dependencies = [
     # The outbound Twenty comment adapter (`pulse_ledger.twenty.client`, kanban-ingress design
     # decision 6). Same major pulse-core already pins, so the workspace resolves one httpx.
     "httpx>=0.28.1",
+    # The heal-back leg (twenty-projection design decision 4): the webhook route restores a
+    # rejected card through the projection writer as-is (`twenty_projection.apply`), so the heal
+    # is attributed to the projection identity rather than growing a second Twenty write surface.
+    "twenty-projection",
 ]
 
 [project.optional-dependencies]
@@ -27,6 +31,7 @@ serve = ["uvicorn>=0.41.0"]
 
 [tool.uv.sources]
 pulse-core = { workspace = true }
+twenty-projection = { workspace = true }
 
 [dependency-groups]
 dev = [

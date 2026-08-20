@@ -43,7 +43,7 @@ export interface GeneratedOption {
   readonly color: GeneratedOptionColor;
 }
 
-export const CATALOG_VERSION = "1.0.0";
+export const CATALOG_VERSION = "1.1.0";
 
 // clinic.lifecycleStatus
 export const CLINIC_LIFECYCLE_STATUS_OPTIONS: GeneratedOption[] = [
@@ -91,22 +91,27 @@ export const DOMAIN_EVENT_EVENT_TYPE_OPTIONS: GeneratedOption[] = [
   { value: "contract.draft", encodedValue: "CONTRACT_DRAFT", label: "Contract Draft", position: 15, universalIdentifier: "72f7a62b-ccb4-473e-b2f4-4ba9999feff7", id: "72f7a62b-ccb4-473e-b2f4-4ba9999feff7", color: "blue" },
   { value: "contract.superseded", encodedValue: "CONTRACT_SUPERSEDED", label: "Contract Superseded", position: 16, universalIdentifier: "6cb01296-dd87-4b02-9d3d-b7f8b296a9ec", id: "6cb01296-dd87-4b02-9d3d-b7f8b296a9ec", color: "purple" },
   { value: "contract.terminated", encodedValue: "CONTRACT_TERMINATED", label: "Contract Terminated", position: 17, universalIdentifier: "5840ca8f-574b-44a8-8fbf-3f31681fea33", id: "5840ca8f-574b-44a8-8fbf-3f31681fea33", color: "gray" },
-  { value: "device.active", encodedValue: "DEVICE_ACTIVE", label: "Device Active", position: 18, universalIdentifier: "4b890c31-7707-4f9e-a25c-8d091180e669", id: "4b890c31-7707-4f9e-a25c-8d091180e669", color: "pink" },
-  { value: "device.delivered", encodedValue: "DEVICE_DELIVERED", label: "Device Delivered", position: 19, universalIdentifier: "a460ca10-9cf0-48e5-9761-a5ba1060b9c8", id: "a460ca10-9cf0-48e5-9761-a5ba1060b9c8", color: "turquoise" },
-  { value: "device.lost", encodedValue: "DEVICE_LOST", label: "Device Lost", position: 20, universalIdentifier: "6bc2d1a0-b185-45e8-aa82-c8003fc608fc", id: "6bc2d1a0-b185-45e8-aa82-c8003fc608fc", color: "sky" },
-  { value: "device.ordered", encodedValue: "DEVICE_ORDERED", label: "Device Ordered", position: 21, universalIdentifier: "2cd26290-d4fe-4172-80f1-cb8d9aad8802", id: "2cd26290-d4fe-4172-80f1-cb8d9aad8802", color: "green" },
-  { value: "device.returned", encodedValue: "DEVICE_RETURNED", label: "Device Returned", position: 22, universalIdentifier: "6d591194-abeb-4364-ba2e-22c71bd272b3", id: "6d591194-abeb-4364-ba2e-22c71bd272b3", color: "yellow" },
-  { value: "device.shipped", encodedValue: "DEVICE_SHIPPED", label: "Device Shipped", position: 23, universalIdentifier: "8a0b0d2f-65a2-4f09-b348-09fd8b815949", id: "8a0b0d2f-65a2-4f09-b348-09fd8b815949", color: "orange" },
-  { value: "enrollment.active", encodedValue: "ENROLLMENT_ACTIVE", label: "Enrollment Active", position: 24, universalIdentifier: "a9b16e9d-da9f-4f82-a429-d64ca0cf9769", id: "a9b16e9d-da9f-4f82-a429-d64ca0cf9769", color: "red" },
-  { value: "enrollment.ended", encodedValue: "ENROLLMENT_ENDED", label: "Enrollment Ended", position: 25, universalIdentifier: "38970d36-5e0b-486e-a053-922a84b18702", id: "38970d36-5e0b-486e-a053-922a84b18702", color: "blue" },
-  { value: "enrollment.on_hold", encodedValue: "ENROLLMENT_ON_HOLD", label: "Enrollment On Hold", position: 26, universalIdentifier: "0960e25d-ef13-44b9-955e-90fd04bd3b8c", id: "0960e25d-ef13-44b9-955e-90fd04bd3b8c", color: "purple" },
-  { value: "enrollment.pending_start", encodedValue: "ENROLLMENT_PENDING_START", label: "Enrollment Pending Start", position: 27, universalIdentifier: "e583dc22-b143-4b52-bd40-b1b986e23fee", id: "e583dc22-b143-4b52-bd40-b1b986e23fee", color: "gray" },
-  { value: "referral.closed", encodedValue: "REFERRAL_CLOSED", label: "Referral Closed", position: 28, universalIdentifier: "12a5154d-9c72-49d5-80ed-bdaf3e656e29", id: "12a5154d-9c72-49d5-80ed-bdaf3e656e29", color: "pink" },
-  { value: "referral.converted", encodedValue: "REFERRAL_CONVERTED", label: "Referral Converted", position: 29, universalIdentifier: "9263ba57-a17e-4ff1-948d-fc7d7ac7952e", id: "9263ba57-a17e-4ff1-948d-fc7d7ac7952e", color: "turquoise" },
-  { value: "referral.outreach", encodedValue: "REFERRAL_OUTREACH", label: "Referral Outreach", position: 30, universalIdentifier: "5262d959-6035-4351-ab27-c52057799388", id: "5262d959-6035-4351-ab27-c52057799388", color: "sky" },
-  { value: "referral.received", encodedValue: "REFERRAL_RECEIVED", label: "Referral Received", position: 31, universalIdentifier: "19aeaeca-1971-4162-b0bf-50b8355ccd90", id: "19aeaeca-1971-4162-b0bf-50b8355ccd90", color: "green" },
-  { value: "referral.resolved", encodedValue: "REFERRAL_RESOLVED", label: "Referral Resolved", position: 32, universalIdentifier: "dbdf2a59-a281-4f4e-8442-c1e10d24bdd1", id: "dbdf2a59-a281-4f4e-8442-c1e10d24bdd1", color: "yellow" },
-  { value: "referral.screened", encodedValue: "REFERRAL_SCREENED", label: "Referral Screened", position: 33, universalIdentifier: "92320935-71b3-454b-b1c0-f59d07eac617", id: "92320935-71b3-454b-b1c0-f59d07eac617", color: "orange" },
+  { value: "coverage.lapsed", encodedValue: "COVERAGE_LAPSED", label: "Coverage Lapsed", position: 18, universalIdentifier: "1ef1f154-bffc-475d-b3e6-825ee13a2130", id: "1ef1f154-bffc-475d-b3e6-825ee13a2130", color: "pink" },
+  { value: "coverage.terminated", encodedValue: "COVERAGE_TERMINATED", label: "Coverage Terminated", position: 19, universalIdentifier: "2e2039c3-609c-4764-ae91-a7ab5befd460", id: "2e2039c3-609c-4764-ae91-a7ab5befd460", color: "turquoise" },
+  { value: "coverage.unverified", encodedValue: "COVERAGE_UNVERIFIED", label: "Coverage Unverified", position: 20, universalIdentifier: "0aea3c48-ed2e-4e8a-8f13-4f509295df2a", id: "0aea3c48-ed2e-4e8a-8f13-4f509295df2a", color: "sky" },
+  { value: "coverage.verified_active", encodedValue: "COVERAGE_VERIFIED_ACTIVE", label: "Coverage Verified Active", position: 21, universalIdentifier: "97de7887-b71e-4a75-bc81-94c4dd00529e", id: "97de7887-b71e-4a75-bc81-94c4dd00529e", color: "green" },
+  { value: "coverage.verified_inactive", encodedValue: "COVERAGE_VERIFIED_INACTIVE", label: "Coverage Verified Inactive", position: 22, universalIdentifier: "f9ec5ce3-24fb-467b-8f5c-8562926d47a3", id: "f9ec5ce3-24fb-467b-8f5c-8562926d47a3", color: "yellow" },
+  { value: "device.active", encodedValue: "DEVICE_ACTIVE", label: "Device Active", position: 23, universalIdentifier: "4b890c31-7707-4f9e-a25c-8d091180e669", id: "4b890c31-7707-4f9e-a25c-8d091180e669", color: "orange" },
+  { value: "device.delivered", encodedValue: "DEVICE_DELIVERED", label: "Device Delivered", position: 24, universalIdentifier: "a460ca10-9cf0-48e5-9761-a5ba1060b9c8", id: "a460ca10-9cf0-48e5-9761-a5ba1060b9c8", color: "red" },
+  { value: "device.lost", encodedValue: "DEVICE_LOST", label: "Device Lost", position: 25, universalIdentifier: "6bc2d1a0-b185-45e8-aa82-c8003fc608fc", id: "6bc2d1a0-b185-45e8-aa82-c8003fc608fc", color: "blue" },
+  { value: "device.ordered", encodedValue: "DEVICE_ORDERED", label: "Device Ordered", position: 26, universalIdentifier: "2cd26290-d4fe-4172-80f1-cb8d9aad8802", id: "2cd26290-d4fe-4172-80f1-cb8d9aad8802", color: "purple" },
+  { value: "device.returned", encodedValue: "DEVICE_RETURNED", label: "Device Returned", position: 27, universalIdentifier: "6d591194-abeb-4364-ba2e-22c71bd272b3", id: "6d591194-abeb-4364-ba2e-22c71bd272b3", color: "gray" },
+  { value: "device.shipped", encodedValue: "DEVICE_SHIPPED", label: "Device Shipped", position: 28, universalIdentifier: "8a0b0d2f-65a2-4f09-b348-09fd8b815949", id: "8a0b0d2f-65a2-4f09-b348-09fd8b815949", color: "pink" },
+  { value: "enrollment.active", encodedValue: "ENROLLMENT_ACTIVE", label: "Enrollment Active", position: 29, universalIdentifier: "a9b16e9d-da9f-4f82-a429-d64ca0cf9769", id: "a9b16e9d-da9f-4f82-a429-d64ca0cf9769", color: "turquoise" },
+  { value: "enrollment.ended", encodedValue: "ENROLLMENT_ENDED", label: "Enrollment Ended", position: 30, universalIdentifier: "38970d36-5e0b-486e-a053-922a84b18702", id: "38970d36-5e0b-486e-a053-922a84b18702", color: "sky" },
+  { value: "enrollment.on_hold", encodedValue: "ENROLLMENT_ON_HOLD", label: "Enrollment On Hold", position: 31, universalIdentifier: "0960e25d-ef13-44b9-955e-90fd04bd3b8c", id: "0960e25d-ef13-44b9-955e-90fd04bd3b8c", color: "green" },
+  { value: "enrollment.pending_start", encodedValue: "ENROLLMENT_PENDING_START", label: "Enrollment Pending Start", position: 32, universalIdentifier: "e583dc22-b143-4b52-bd40-b1b986e23fee", id: "e583dc22-b143-4b52-bd40-b1b986e23fee", color: "yellow" },
+  { value: "referral.closed", encodedValue: "REFERRAL_CLOSED", label: "Referral Closed", position: 33, universalIdentifier: "12a5154d-9c72-49d5-80ed-bdaf3e656e29", id: "12a5154d-9c72-49d5-80ed-bdaf3e656e29", color: "orange" },
+  { value: "referral.converted", encodedValue: "REFERRAL_CONVERTED", label: "Referral Converted", position: 34, universalIdentifier: "9263ba57-a17e-4ff1-948d-fc7d7ac7952e", id: "9263ba57-a17e-4ff1-948d-fc7d7ac7952e", color: "red" },
+  { value: "referral.outreach", encodedValue: "REFERRAL_OUTREACH", label: "Referral Outreach", position: 35, universalIdentifier: "5262d959-6035-4351-ab27-c52057799388", id: "5262d959-6035-4351-ab27-c52057799388", color: "blue" },
+  { value: "referral.received", encodedValue: "REFERRAL_RECEIVED", label: "Referral Received", position: 36, universalIdentifier: "19aeaeca-1971-4162-b0bf-50b8355ccd90", id: "19aeaeca-1971-4162-b0bf-50b8355ccd90", color: "purple" },
+  { value: "referral.resolved", encodedValue: "REFERRAL_RESOLVED", label: "Referral Resolved", position: 37, universalIdentifier: "dbdf2a59-a281-4f4e-8442-c1e10d24bdd1", id: "dbdf2a59-a281-4f4e-8442-c1e10d24bdd1", color: "gray" },
+  { value: "referral.screened", encodedValue: "REFERRAL_SCREENED", label: "Referral Screened", position: 38, universalIdentifier: "92320935-71b3-454b-b1c0-f59d07eac617", id: "92320935-71b3-454b-b1c0-f59d07eac617", color: "pink" },
 ];
 
 // patientProgram.lifecycleStatus

@@ -1,6 +1,6 @@
 {
   "artifactVersion": "1",
-  "catalogVersion": "1.0.0",
+  "catalogVersion": "1.1.0",
   "generator": "pulse_core.twenty_metadata",
   "operations": [
     {
@@ -383,100 +383,130 @@
           "position": 17
         },
         {
+          "universalIdentifier": "1ef1f154-bffc-475d-b3e6-825ee13a2130",
+          "value": "coverage.lapsed",
+          "label": "Coverage Lapsed",
+          "position": 18
+        },
+        {
+          "universalIdentifier": "2e2039c3-609c-4764-ae91-a7ab5befd460",
+          "value": "coverage.terminated",
+          "label": "Coverage Terminated",
+          "position": 19
+        },
+        {
+          "universalIdentifier": "0aea3c48-ed2e-4e8a-8f13-4f509295df2a",
+          "value": "coverage.unverified",
+          "label": "Coverage Unverified",
+          "position": 20
+        },
+        {
+          "universalIdentifier": "97de7887-b71e-4a75-bc81-94c4dd00529e",
+          "value": "coverage.verified_active",
+          "label": "Coverage Verified Active",
+          "position": 21
+        },
+        {
+          "universalIdentifier": "f9ec5ce3-24fb-467b-8f5c-8562926d47a3",
+          "value": "coverage.verified_inactive",
+          "label": "Coverage Verified Inactive",
+          "position": 22
+        },
+        {
           "universalIdentifier": "4b890c31-7707-4f9e-a25c-8d091180e669",
           "value": "device.active",
           "label": "Device Active",
-          "position": 18
+          "position": 23
         },
         {
           "universalIdentifier": "a460ca10-9cf0-48e5-9761-a5ba1060b9c8",
           "value": "device.delivered",
           "label": "Device Delivered",
-          "position": 19
+          "position": 24
         },
         {
           "universalIdentifier": "6bc2d1a0-b185-45e8-aa82-c8003fc608fc",
           "value": "device.lost",
           "label": "Device Lost",
-          "position": 20
+          "position": 25
         },
         {
           "universalIdentifier": "2cd26290-d4fe-4172-80f1-cb8d9aad8802",
           "value": "device.ordered",
           "label": "Device Ordered",
-          "position": 21
+          "position": 26
         },
         {
           "universalIdentifier": "6d591194-abeb-4364-ba2e-22c71bd272b3",
           "value": "device.returned",
           "label": "Device Returned",
-          "position": 22
+          "position": 27
         },
         {
           "universalIdentifier": "8a0b0d2f-65a2-4f09-b348-09fd8b815949",
           "value": "device.shipped",
           "label": "Device Shipped",
-          "position": 23
+          "position": 28
         },
         {
           "universalIdentifier": "a9b16e9d-da9f-4f82-a429-d64ca0cf9769",
           "value": "enrollment.active",
           "label": "Enrollment Active",
-          "position": 24
+          "position": 29
         },
         {
           "universalIdentifier": "38970d36-5e0b-486e-a053-922a84b18702",
           "value": "enrollment.ended",
           "label": "Enrollment Ended",
-          "position": 25
+          "position": 30
         },
         {
           "universalIdentifier": "0960e25d-ef13-44b9-955e-90fd04bd3b8c",
           "value": "enrollment.on_hold",
           "label": "Enrollment On Hold",
-          "position": 26
+          "position": 31
         },
         {
           "universalIdentifier": "e583dc22-b143-4b52-bd40-b1b986e23fee",
           "value": "enrollment.pending_start",
           "label": "Enrollment Pending Start",
-          "position": 27
+          "position": 32
         },
         {
           "universalIdentifier": "12a5154d-9c72-49d5-80ed-bdaf3e656e29",
           "value": "referral.closed",
           "label": "Referral Closed",
-          "position": 28
+          "position": 33
         },
         {
           "universalIdentifier": "9263ba57-a17e-4ff1-948d-fc7d7ac7952e",
           "value": "referral.converted",
           "label": "Referral Converted",
-          "position": 29
+          "position": 34
         },
         {
           "universalIdentifier": "5262d959-6035-4351-ab27-c52057799388",
           "value": "referral.outreach",
           "label": "Referral Outreach",
-          "position": 30
+          "position": 35
         },
         {
           "universalIdentifier": "19aeaeca-1971-4162-b0bf-50b8355ccd90",
           "value": "referral.received",
           "label": "Referral Received",
-          "position": 31
+          "position": 36
         },
         {
           "universalIdentifier": "dbdf2a59-a281-4f4e-8442-c1e10d24bdd1",
           "value": "referral.resolved",
           "label": "Referral Resolved",
-          "position": 32
+          "position": 37
         },
         {
           "universalIdentifier": "92320935-71b3-454b-b1c0-f59d07eac617",
           "value": "referral.screened",
           "label": "Referral Screened",
-          "position": 33
+          "position": 38
         }
       ]
     },
@@ -671,6 +701,17 @@
       "isNullable": true,
       "isUnique": false,
       "description": "Denormalized copy of `program.code`, so a webhook delivery resolves without a read-back."
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "d4b30e31-db5a-455e-8839-e69531168933",
+      "objectNameSingular": "patientProgram",
+      "name": "projectionSeq",
+      "type": "NUMBER",
+      "label": "Projection Seq",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "Watermark: the ledger sequence of the last applied event. Null means never projected."
     },
     {
       "operation": "createField",

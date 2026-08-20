@@ -80,6 +80,7 @@ from pulse_ledger.twenty.mapping import (
     Drag,
     MalformedPayloadError,
     NoOp,
+    StateReader,
     Unmapped,
     interpret,
 )
@@ -317,6 +318,14 @@ DISPOSITION_ERROR = "error"
 #: (a note plus its noteTarget binding, task 6.7) in the running service, a fake in tests.
 CommentPoster = Callable[[str, str, str], None]
 
+#: The heal-back leg (twenty-projection design decision 4): anything that restores one card's
+#: status field to the state of record — (card ref, state of record in catalog vocabulary),
+#: raising on permanent failure. `api_server.build_heal_writer`'s adapter over the projection
+#: writer (`twenty_projection.apply.ProjectionRestClient`, the projection identity's credential)
+#: in the running service, a fake in tests. The adapter owns the storage encoding, so this seam
+#: speaks the same vocabulary the receipt does.
+HealWriter = Callable[[str, str], None]
+
 
 class CommentAdapterNotConfiguredError(RuntimeError):
     """The app was built without a comment adapter and a rejection tried to use one.
@@ -332,6 +341,23 @@ class CommentAdapterNotConfiguredError(RuntimeError):
 
 def _unconfigured_comment_poster(card_ref: str, title: str, body: str) -> None:
     raise CommentAdapterNotConfiguredError()
+
+
+class HealAdapterNotConfiguredError(RuntimeError):
+    """The app was built without a heal writer and a rejection tried to heal a card.
+
+    Same posture as `CommentAdapterNotConfiguredError`: raised only if the heal path is actually
+    reached, caught by `_heal_rejected_card`, logged with the card ref, and the receipt is
+    returned regardless — an unwired heal channel degrades board convergence, never rejection
+    correctness.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("no Twenty heal writer is configured for this app")
+
+
+def _unconfigured_heal_writer(card_ref: str, state_of_record: str) -> None:
+    raise HealAdapterNotConfiguredError()
 
 
 class WebhookProcessingError(Exception):
@@ -405,8 +431,43 @@ def _post_rejection_comment(receipt: RejectionReceipt, post_comment: CommentPost
         )
 
 
-def _rejection_response(drag: Drag, exc: IllegalTransitionError, post_comment: CommentPoster) -> dict[str, object]:
-    """The catalog's refusal as feedback: a 200 receipt, a card comment, one structured log line."""
+def _heal_rejected_card(receipt: RejectionReceipt, heal_card: HealWriter) -> None:
+    """Snap the card back to the state of record; never let that leg disturb the receipt.
+
+    The heal carries the receipt's own `from_state` — the state the receipt names as unchanged —
+    so, like the comment, there is no parameter through which the webhook payload could reach it.
+    A subject's rejected *first* declaration has no state of record (`from_state` is `None`), so
+    there is nothing to restore and the leg does nothing rather than inventing a state.
+
+    The broad catch is `_post_rejection_comment`'s, for the same reason: every way the heal can
+    fail — retries spent in the writer, an unwired adapter, something unforeseen — must end as
+    one log line naming the card and the failure's type, with the receipt returned regardless
+    (spec: "A broken heal channel still rejects cleanly"). No `exc_info`: the frame it would
+    serialise holds the payload. Convergence is not lost either way — the projection's full-state
+    writes converge the card on the subject's next event (design decision 3).
+    """
+    if receipt.from_state is None:
+        return
+    try:
+        heal_card(receipt.card_ref, receipt.from_state)
+    except Exception as exc:
+        logger.warning(
+            "%s heal_failed card=%s error=%s",
+            TWENTY_WEBHOOK_PATH,
+            receipt.card_ref,
+            type(exc).__name__,
+        )
+
+
+def _rejection_response(
+    drag: Drag,
+    exc: IllegalTransitionError,
+    post_comment: CommentPoster,
+    heal_card: HealWriter,
+) -> dict[str, object]:
+    """The catalog's refusal as feedback: a 200 receipt, a card comment, a heal write back to the
+    state of record, one structured log line. The comment and the heal fail independently —
+    each is best-effort, and neither can cost the receipt."""
     receipt = _rejection_receipt(drag, exc)
     _log_disposition(
         DISPOSITION_REJECTED,
@@ -417,10 +478,16 @@ def _rejection_response(drag: Drag, exc: IllegalTransitionError, post_comment: C
         catalog_version=receipt.catalog_version,
     )
     _post_rejection_comment(receipt, post_comment)
+    _heal_rejected_card(receipt, heal_card)
     return {"disposition": DISPOSITION_REJECTED, **dataclasses.asdict(receipt)}
 
 
-def _webhook_commit_response(drag: Drag, committer: Committer, post_comment: CommentPoster) -> dict[str, object]:
+def _webhook_commit_response(
+    drag: Drag,
+    committer: Committer,
+    post_comment: CommentPoster,
+    heal_card: HealWriter,
+) -> dict[str, object]:
     """Attribute the mapped drag to the webhook principal and put it on the single write path.
 
     Two of the three ways this can end are not a commit. A catalog refusal is a receipt plus a
@@ -437,7 +504,7 @@ def _webhook_commit_response(drag: Drag, committer: Committer, post_comment: Com
         declaration = Declaration.from_mapping(WEBHOOK_WRITER.attribute(drag.declaration_fields))
         result = committer(declaration, drag.idempotency_key)
     except IllegalTransitionError as exc:
-        return _rejection_response(drag, exc, post_comment)
+        return _rejection_response(drag, exc, post_comment, heal_card)
     except Exception as exc:
         # The flagged exception exit (design Risks a): the record ref, the disposition, and the
         # failure's type name. Never the exception's message, never `exc_info` — both can carry
@@ -460,6 +527,8 @@ def _twenty_webhook_disposition(
     mappings: Sequence[BoardMapping],
     committer: Committer,
     post_comment: CommentPoster,
+    heal_card: HealWriter,
+    state_reader: StateReader | None,
 ) -> dict[str, object]:
     """Interpret one verified body and act on it — the whole route past `verify`.
 
@@ -475,7 +544,7 @@ def _twenty_webhook_disposition(
         _log_disposition(DISPOSITION_MALFORMED, field_path="<body>")
         return {"disposition": DISPOSITION_MALFORMED, "field_path": "<body>"}
     try:
-        disposition = interpret(payload, mappings)
+        disposition = interpret(payload, mappings, state_of_record=state_reader)
     except MalformedPayloadError as exc:
         _log_disposition(DISPOSITION_MALFORMED, field_path=exc.field_path)
         return {"disposition": DISPOSITION_MALFORMED, "field_path": exc.field_path}
@@ -493,7 +562,7 @@ def _twenty_webhook_disposition(
             "record_ref": str(disposition.record_ref),
             "board": disposition.board,
         }
-    return _webhook_commit_response(disposition, committer, post_comment)
+    return _webhook_commit_response(disposition, committer, post_comment, heal_card)
 
 
 def _install_error_handlers(app: FastAPI) -> None:
@@ -634,9 +703,11 @@ def create_app(
     twenty_webhook: TwentyWebhookConfig | None = None,
     board_mappings: Sequence[BoardMapping] | None = None,
     comment_poster: CommentPoster | None = None,
+    heal_writer: HealWriter | None = None,
     environ: Mapping[str, str] | None = None,
     cursor_reader: CursorReader | None = None,
     cursor_writer: CursorWriter | None = None,
+    state_reader: StateReader | None = None,
 ) -> FastAPI:
     """Build the command API.
 
@@ -656,12 +727,26 @@ def create_app(
     design decision 6), injected the same way for the same reason: no test needs a Twenty instance
     to exercise a rejection. Left unset, a rejection still produces its receipt and logs that the
     comment could not be posted — feedback degrades, rejection correctness does not.
+
+    `heal_writer` is the heal-back leg (twenty-projection design decision 4), injected for the
+    same reason with the same degrade: on a rejection the route restores the card's status field
+    to the state of record through the projection writer — `api_server.build_heal_writer` in the
+    running service. Left unset, a rejection still receipts and logs that the card could not be
+    healed; convergence falls back to the subject's next projected event.
+
+    `state_reader` is the webhook route's echo-suppression read (twenty-projection design
+    decision 5): the mapping asks it for the subject's state of record, and a drag whose target
+    already is that state is a `noop` with reason `echo_of_record` — the loop terminator for
+    heal-back and projection writes, whose `.updated` webhooks land back here. Left unset, an
+    echo degrades to the catalog's downstream self-transition rejection (a note per heal), so the
+    running service always wires `api_server.build_state_reader`.
     """
     env = os.environ if environ is None else environ
     credentials = CredentialRegistry.from_env(env) if registry is None else registry
     webhook = TwentyWebhookConfig.from_env(env) if twenty_webhook is None else twenty_webhook
     mappings = V1_BOARD_MAPPINGS if board_mappings is None else board_mappings
     post_comment = _unconfigured_comment_poster if comment_poster is None else comment_poster
+    heal_card = _unconfigured_heal_writer if heal_writer is None else heal_writer
     read_cursor = _unconfigured_cursor_reader if cursor_reader is None else cursor_reader
     write_cursor = _unconfigured_cursor_writer if cursor_writer is None else cursor_writer
 
@@ -727,6 +812,6 @@ def create_app(
                 request.headers.get(SIGNATURE_HEADER),
                 now=datetime.now(tz=timezone.utc),
             )
-            return _twenty_webhook_disposition(body, mappings, committer, post_comment)
+            return _twenty_webhook_disposition(body, mappings, committer, post_comment, heal_card, state_reader)
 
     return app

@@ -104,7 +104,7 @@ a live instance — CI builds and validates the artifact with no server reachabl
 
 The artifact pins its own shape with two version keys, and nothing else stands in for them:
 `artifactVersion` (`1`) is the operation-set schema this repo serializes against, and
-`catalogVersion` (`1.0.0`) is the state-catalog release whose dimensions became SELECT options in
+`catalogVersion` (`1.1.0`) is the state-catalog release whose dimensions became SELECT options in
 that render. A change to either is a deliberate re-render, caught by the staleness check in
 `task check`, never a silent drift.
 
@@ -114,6 +114,13 @@ an image built from patched source is a fork, and AGPL §13 obligations attach).
 (DNA-909, provisioned 2026-08-16) runs upstream **v2.30.0**, and every live-verified claim below
 is pinned to that version. Upstream migrations can land on app-declared objects, so a tag bump is
 a deliberate event verified against a parallel instance, not a routine upgrade.
+
+**The F1 answer (twenty-dev-instance 1.7): positive.** A `universalIdentifier` supplied on a
+Metadata API create **round-trips** — it is stored and read back unchanged, not dropped by the
+create input — observed on v2.30.0 (2026-08-16) and reconfirmed at full-artifact scale by the
+49-operation read-back below. F1 is what makes the promotion model above tenable at all:
+create-if-absent keying and cross-environment identity both rest on the artifact's
+`universalIdentifier`s surviving the create. A tag bump re-answers F1 before anything else.
 
 | Dependency | Kind | Source | Breakage risk |
 |---|---|---|---|
@@ -139,6 +146,7 @@ than escaping); SELECT values are stored UPPER_SNAKE-encoded (`referral.received
 | Dependency | Kind | Source | Breakage risk |
 |---|---|---|---|
 | core REST record surface | REST API, live-verified against dev v2.30.0 (2026-08-17) | Twenty; bearer token per target environment | grammar and relation-column drift surfaces at the client boundary (refused values, 400s), never as silent misreads; re-verified by `task twenty:verify:live TARGET=dev` on any tag bump |
+| view read surface | metadata GraphQL `getViews` on `/metadata`, live-verified v2.30.0 (2026-08-17, `twenty-dev-instance` 6.5) — there is no `getCoreViews` on `/graphql`, and the live `View` type carries no `universalIdentifier`, so boards match on (object id, type, name) | Twenty; bearer token per target environment | a surface drift fails demo3's assertion 2 by name, never a silent mismatch; the unit suite pins the query shape offline |
 
 ### Producer-policy gate (`producer-ingress-policy`, DNA-885–DNA-888)
 

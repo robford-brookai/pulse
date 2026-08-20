@@ -25,6 +25,7 @@
       <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: #54871a;">Pulse · system architecture</div>
       <h1 style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 46px; line-height: 1.08; letter-spacing: -0.02em; margin: 12px 0 10px; color: #305007; text-wrap: balance;">Patient unified ledger of state &amp; events</h1>
       <p style="margin: 0; font-size: 16.5px; line-height: 1.55; color: #4a5a3d; max-width: 720px; text-wrap: pretty;">One write path into an append-only Postgres ledger, one distribution bus out of it. Every box below maps to a package, service or published surface in the repo.</p>
+      <div style="margin-top: 10px; font-size: 12.5px; color: #7b8a6c;">As of 2026-08-19 · v2.0 shipped · Twenty dev instance live, drag round trip proven · v3.0 Projections in flight (<span style="font-family: ui-monospace, monospace; font-size: 11.5px;">twenty-projection</span>)</div>
     </div>
     <div style="display: flex; flex-direction: column; gap: 10px; flex-shrink: 0;">
       <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #4a5a3d;"><span style="width: 26px; height: 3px; border-radius: 2px; background: #305007; display: inline-block;"></span>Command / write path</div>
@@ -55,12 +56,11 @@
           <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px;">Backfill actor</div>
           <div style="font-size: 12.5px; color: #4a5a3d; line-height: 1.5; margin-top: 6px;">Only actor allowed <span style="font-family: ui-monospace, monospace; font-size: 11.5px;">backfill_genesis</span> and <span style="font-family: ui-monospace, monospace; font-size: 11.5px;">reconstruction_gap</span>.</div>
         </div>
-        <sc-if value="{{ showPlanned }}" hint-placeholder-val="{{ true }}">
-        <div style="background: #fff; border: 1px dashed #a9b89a; border-radius: 12px; padding: 14px 16px;">
-          <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px; color: #6b7a5c;">Twenty webhook</div>
-          <div style="font-size: 12.5px; color: #7b8a6c; line-height: 1.5; margin-top: 6px;">HMAC route exists, ships disabled until S2. PX <span style="font-family: ui-monospace, monospace; font-size: 11.5px;">survey-engine-ingress</span> is discovery-stage.</div>
+        <div style="background: #fff; border: 1px solid #d3dcca; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px;">Twenty board (drag)</div>
+          <div style="font-size: 12.5px; color: #4a5a3d; line-height: 1.5; margin-top: 6px;">HMAC-verified webhook maps a kanban drag to exactly one command; same-state echoes no-op as <span style="font-family: ui-monospace, monospace; font-size: 11.5px;">echo_of_record</span>; a rejected drag posts a card note. Live on dev.</div>
+          <sc-if value="{{ showPaths }}" hint-placeholder-val="{{ true }}"><div style="font-family: ui-monospace, monospace; font-size: 11px; color: #7b8a6c; margin-top: 8px;">pulse_ledger.twenty</div></sc-if>
         </div>
-        </sc-if>
       </div>
     </div>
 
@@ -245,6 +245,13 @@
           <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px;">sim-driver · call-simulator</div>
           <div style="font-size: 12.5px; color: #4a5a3d; line-height: 1.5; margin-top: 6px;">Synthetic traffic for local simulation and the equivalence harness</div>
         </div>
+        <sc-if value="{{ showPlanned }}" hint-placeholder-val="{{ true }}">
+        <div style="background: #fff; border: 1px dashed #9db0d0; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px; color: #2f4d8c;">twenty-projection</div>
+          <div style="font-size: 12.5px; color: #4a5a3d; line-height: 1.5; margin-top: 6px;">Ledger-fed board projection (v3.0, in flight): monotonic apply on a per-record <span style="font-family: ui-monospace, monospace; font-size: 11.5px;">projectionSeq</span> watermark, full-state writes so drift converges, heal-back on rejected drags. Apply core + echo suppression merged; consumer loop and heal-back pending.</div>
+          <sc-if value="{{ showPaths }}" hint-placeholder-val="{{ true }}"><div style="font-family: ui-monospace, monospace; font-size: 11px; color: #7b8a6c; margin-top: 8px;">packages/twenty-projection</div></sc-if>
+        </div>
+        </sc-if>
       </div>
     </div>
 

@@ -56,7 +56,7 @@ def test_gate_passes_on_the_committed_tree() -> None:
 
 def test_committed_snapshot_is_a_byte_identical_copy_of_the_head_catalog() -> None:
     head = catalog_snapshots.CATALOG_PATH.read_bytes()
-    snapshot = (catalog_snapshots.RELEASES_DIR / "v1.0.0.yaml").read_bytes()
+    snapshot = (catalog_snapshots.RELEASES_DIR / "v1.1.0.yaml").read_bytes()
     assert head == snapshot
 
 

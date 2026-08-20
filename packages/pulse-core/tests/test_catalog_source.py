@@ -34,7 +34,7 @@ def test_module_default_path_is_the_authoritative_file() -> None:
 def test_authoritative_catalog_loads_into_the_validated_model() -> None:
     catalog = catalog_gen.load_catalog()
 
-    assert catalog.catalog_version == "1.0.0"
+    assert catalog.catalog_version == "1.1.0"
     assert catalog.subjects
     assert catalog.commands
     assert catalog.valuesets

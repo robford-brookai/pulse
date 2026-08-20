@@ -14,7 +14,7 @@ export interface ProjectionTarget {
   readonly value: string;
 }
 
-export const CATALOG_VERSION = "1.0.0";
+export const CATALOG_VERSION = "1.1.0";
 
 export const PROJECTION_LOOKUP: Readonly<Record<string, ProjectionTarget>> = {
   "billing_episode.closed": { objectNameSingular: "patientProgram", statusField: "qualificationStatus", asOfField: "qualificationStatusAsOf", value: "closed" },

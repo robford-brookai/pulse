@@ -23,6 +23,7 @@ members = [
     "pulse-ledger",
     "schedules",
     "synthea-seed",
+    "twenty-projection",
     "verdict-relay",
 ]
 
@@ -2339,6 +2340,7 @@ dependencies = [
     { name = "psycopg", extra = ["binary", "pool"] },
     { name = "pulse-core" },
     { name = "sqlalchemy" },
+    { name = "twenty-projection" },
 ]
 
 [package.optional-dependencies]
@@ -2359,6 +2361,7 @@ requires-dist = [
     { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.2" },
     { name = "pulse-core", editable = "packages/pulse-core" },
     { name = "sqlalchemy", specifier = ">=2.0" },
+    { name = "twenty-projection", editable = "packages/twenty-projection" },
     { name = "uvicorn", marker = "extra == 'serve'", specifier = ">=0.41.0" },
 ]
 provides-extras = ["serve"]
@@ -3314,6 +3317,33 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/56/df/9f90a59de8c87cece6e691eee53dc1cb0a824d73aea8f380ae2f6ecb71de/tox_uv_bare-1.36.0.tar.gz", hash = "sha256:d9b0a2fd0f74fa65d9597108f8a0ef7abb08651c9196a998a6073b781b45cfd0", size = 32548, upload-time = "2026-07-21T13:09:56.435Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f7/0a/6dc462e4fb543305283a6157c80f43e3d12ca4702da6ae6521d541c6b55c/tox_uv_bare-1.36.0-py3-none-any.whl", hash = "sha256:ba397dd0396df95a75744d4e42a50ee27207c0ffcf277b62ffba9c3de455a939", size = 22489, upload-time = "2026-07-21T13:09:55.389Z" },
+]
+
+[[package]]
+name = "twenty-projection"
+version = "0.1.0"
+source = { editable = "packages/twenty-projection" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pulse-core" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pyright" },
+    { name = "pytest-socket" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "pulse-core", editable = "packages/pulse-core" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pyright", specifier = ">=1.1.390" },
+    { name = "pytest-socket", specifier = ">=0.7.0" },
 ]
 
 [[package]]
