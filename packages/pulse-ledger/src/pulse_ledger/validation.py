@@ -20,6 +20,16 @@ INITIAL_STATES: dict[str, frozenset[str]] = {
     for subject_type, adjacency in TRANSITIONS.items()
 }
 
+#: Subject types whose derived initial state is never itself declared — every other catalog
+#: subject enters the ledger through an explicit genesis event that sets its entry state
+#: (`open_billing_episode`, and the rest of this program's registration commands); `coverage` has
+#: no such command (coverage-state spec: "no separate registration step, no manual minting"). A
+#: type listed here may have its first-ever declaration land directly on any state the catalog
+#: lets its derived initial state reach — `validate_first_transition` treats the initial state as
+#: an implicit predecessor rather than requiring a writer to declare it first. Scoped narrowly:
+#: listing a type here is a deliberate exception, not a general relaxation of the genesis rule.
+IMPLICIT_MINT_SUBJECT_TYPES: frozenset[str] = frozenset({"coverage"})
+
 
 class IllegalTransitionError(Exception):
     """A declared transition the catalog does not permit; carries reason + catalog version.
@@ -156,6 +166,25 @@ def validate_genesis(subject_type: str, state: str) -> str:
             ),
         )
     return CATALOG_VERSION
+
+
+def validate_first_transition(subject_type: str, to_state: str) -> str:
+    """Validate a subject's very first state-bearing declaration.
+
+    Ordinarily this is `validate_genesis`: the first declaration must land exactly on the
+    catalog's entry state, the explicit registration event every other subject type carries. For
+    a type in `IMPLICIT_MINT_SUBJECT_TYPES`, the derived initial state is never itself declared —
+    so the first-ever transition may land on any state legally reachable from it, and the catalog
+    validates the move as if departing from that implicit predecessor (coverage-state spec:
+    "First declare mints and transitions"). No separate event is written for the implicit
+    predecessor; the single declared event is the subject's only history.
+    """
+    if subject_type in IMPLICIT_MINT_SUBJECT_TYPES:
+        entry_points = INITIAL_STATES.get(subject_type, frozenset())
+        if to_state not in entry_points:
+            (derived_initial,) = entry_points
+            return validate_transition(subject_type, derived_initial, to_state)
+    return validate_genesis(subject_type, to_state)
 
 
 def require_catalog_version(configured: str) -> None:
