@@ -43,13 +43,29 @@ A verdict for a patient × payer key with no existing coverage subject SHALL min
 its derived initial state (`unverified`) and apply the paired transition in the same run — no
 separate registration step, no manual minting.
 
+Coverage has no registration command, unlike every other catalog subject, which enters the record
+through an explicit genesis event. Its first declared transition SHALL therefore validate as
+departing from the derived initial state, and no separate event SHALL be written for that implicit
+predecessor: the single declared event is the subject's entire history. This admission SHALL be
+scoped to coverage by an explicit allowlist, never a general relaxation — a first transition to a
+state unreachable from the initial state stays illegal, and every other subject type keeps its
+explicit genesis rule.
+
 #### Scenario: First declare mints and transitions
 
 - **GIVEN** a coverage-eligibility verdict row for a patient × payer key the ledger has never
   seen
 - **WHEN** the relay declares it
-- **THEN** the coverage subject exists afterward with the transition applied, and a second
-  verdict for the same key transitions without re-minting
+- **THEN** the coverage subject exists afterward with the transition applied, exactly one event is
+  written, and a second verdict for the same key transitions without re-minting
+
+#### Scenario: The implicit-mint admission does not leak
+
+- **GIVEN** a first declared transition to a state unreachable from the derived initial state, and
+  separately a first transition for a non-coverage subject type
+- **WHEN** each is validated
+- **THEN** both are rejected — the unreachable target as an illegal transition, the other subject
+  type for missing its explicit genesis state
 
 ### Requirement: Coverage is enumerable from current state
 
