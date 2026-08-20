@@ -45,7 +45,7 @@ from pulse_core.generated import CATALOG_VERSION
 
 from pulse_ledger.fold import TO_STATE_KEY, FoldedEvent, FoldedState, fold_state, state_as_of, state_borne_by
 from pulse_ledger.validation import (
-    validate_genesis,
+    validate_first_transition,
     validate_state_membership,
     validate_subject_type,
     validate_transition,
@@ -399,7 +399,7 @@ def commit_declaration(
                 # catalog contains, or a typo lands in `current_state` stamped as catalog-conformant.
                 rule_version = validate_state_membership(declaration.subject_type, declaration.to_state)
             else:
-                rule_version = validate_genesis(declaration.subject_type, declaration.to_state)
+                rule_version = validate_first_transition(declaration.subject_type, declaration.to_state)
 
         event_id = uuid.uuid4()
         lower, upper = declaration.evidence_bounds or (None, None)
