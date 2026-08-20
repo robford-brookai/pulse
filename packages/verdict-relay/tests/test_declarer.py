@@ -30,6 +30,12 @@ from verdict_relay.declarer import (
 
 SUBJECT_TYPE_BY_VERDICT = {"billing_qualification": "billing_episode"}
 
+#: A synthetic configured verdict type (task 2.1) — the real `transition_by_outcome` entries are
+#: task 2.2's scope.
+TRANSITION_BY_OUTCOME = {
+    "billing_qualification": {"positive": "qualified", "negative": "not_qualified"},
+}
+
 
 def mart_row(**overrides: object) -> dict[str, object]:
     """One synthetic mart-contract row; keyword overrides mutate nothing shared."""
@@ -106,11 +112,13 @@ def declarer_over(
     *,
     watermarks: dict[str, str] | None = None,
     sleeps: list[float] | None = None,
+    transition_by_outcome: dict[str, dict[str, str]] | None = None,
 ) -> Declarer:
     recorded = sleeps if sleeps is not None else []
     return Declarer(
         api.client(),
         subject_type_by_verdict=SUBJECT_TYPE_BY_VERDICT,
+        transition_by_outcome=transition_by_outcome,
         watermarks=watermarks,
         sleep=recorded.append,
         jitter=lambda: 1.0,
@@ -354,3 +362,154 @@ class TestServiceClient:
                 token_env="VERDICT_RELAY_TOKEN",  # noqa: S106 — a variable name, not a secret
             )
         assert "VERDICT_RELAY_TOKEN" in str(excinfo.value)
+
+
+class TestPairedTransition:
+    """Task 2.1: a configured verdict type pairs its outcome with a `declare_transition`."""
+
+    def test_a_committed_verdict_pairs_a_committed_transition(self) -> None:
+        api = ScriptedApi([committed("e1"), committed("e2")])
+        declarer = declarer_over(api, transition_by_outcome=TRANSITION_BY_OUTCOME)
+
+        disposition = declarer.declare(mart_row(outcome="positive"))
+
+        assert disposition is RowDisposition.DECLARED
+        assert declarer.counts.declared == 1
+        assert declarer.counts.transitioned == 1
+        verdict_body, transition_body = api.bodies
+        assert verdict_body["event_type"] == "declare_verdict"
+        assert transition_body["event_type"] == "declare_transition"
+        assert transition_body["subject_type"] == "billing_episode"
+        assert transition_body["subject_key"] == "episode-0001"
+        assert transition_body["to_state"] == "qualified"
+        # Same logical time as the verdict: the pair's keys both derive from the verdict row.
+        assert transition_body["effective_at"] == verdict_body["effective_at"]
+        # The transition cites its verdict (design decision 3: reason/lineage_ref).
+        assert isinstance(transition_body["payload"], dict)
+        payload = cast("dict[str, object]", transition_body["payload"])
+        reason = payload["reason"]
+        assert isinstance(reason, str)
+        assert "dbt-run-2026-08-01T02" in reason
+        assert "billing_qualification" in reason
+        # Two distinct facts, two distinct D16 keys, both under the relay's writer id.
+        assert transition_body["idempotency_key"] != verdict_body["idempotency_key"]
+        key = transition_body["idempotency_key"]
+        assert isinstance(key, str)
+        assert key.startswith("verdict-relay:")
+        # Attribution stays server-side (D15) on both halves.
+        assert not any(field.startswith("actor") for field in transition_body)
+
+    def test_a_negative_outcome_maps_through_the_configuration(self) -> None:
+        api = ScriptedApi([committed(), committed()])
+        declarer = declarer_over(api, transition_by_outcome=TRANSITION_BY_OUTCOME)
+        declarer.declare(mart_row(outcome="negative"))
+        assert api.bodies[1]["to_state"] == "not_qualified"
+
+    def test_the_pair_is_idempotent_as_a_unit(self) -> None:
+        """Spec: The pair is idempotent as a unit — a rerun replays both halves, no new events."""
+        first_run = ScriptedApi([committed(), committed()])
+        declarer_over(first_run, transition_by_outcome=TRANSITION_BY_OUTCOME).declare(mart_row())
+
+        rerun = ScriptedApi([replayed(), replayed()])
+        declarer = declarer_over(rerun, transition_by_outcome=TRANSITION_BY_OUTCOME)
+        disposition = declarer.declare(mart_row())
+
+        assert disposition is RowDisposition.REPLAYED
+        assert declarer.counts.replayed == 1
+        assert declarer.counts.declared == 0
+        assert len(rerun.bodies) == 2  # both halves submitted, both answered replayed
+        # The rerun derives the same D16 keys, so the ledger can only answer with replays —
+        # no new event can exist.
+        assert rerun.bodies[0]["idempotency_key"] == first_run.bodies[0]["idempotency_key"]
+        assert rerun.bodies[1]["idempotency_key"] == first_run.bodies[1]["idempotency_key"]
+
+    def test_an_interrupted_pair_completes_on_resume(self) -> None:
+        """Spec: An interrupted pair completes on resume."""
+        # First run: the verdict commits, then the transition is transient until the attempt
+        # budget is spent — the run dies naming the row.
+        first_run = ScriptedApi([committed(), transient()])
+        first = declarer_over(first_run, transition_by_outcome=TRANSITION_BY_OUTCOME)
+        with pytest.raises(TransientExhaustedError):
+            first.declare(mart_row())
+        assert first.counts.declared == 1
+        assert first.counts.transitioned == 0
+
+        # The resumed run replays the verdict and commits the transition: the pair is complete.
+        resumed_run = ScriptedApi([replayed(), committed()])
+        resumed = declarer_over(resumed_run, transition_by_outcome=TRANSITION_BY_OUTCOME)
+        disposition = resumed.declare(mart_row())
+
+        assert disposition is RowDisposition.REPLAYED
+        assert resumed.counts.replayed == 1
+        assert resumed.counts.transitioned == 1
+        assert len(resumed_run.bodies) == 2
+        # The resumed transition derives the key the dead run was attempting.
+        assert resumed_run.bodies[1]["idempotency_key"] == first_run.bodies[1]["idempotency_key"]
+
+    def test_a_rejected_transition_keeps_the_verdict_and_never_retries(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Spec: A verdict against a reported episode keeps the verdict, drops the transition."""
+        api = ScriptedApi([committed(), rejected(reason="illegal transition")])
+        declarer = declarer_over(api, transition_by_outcome=TRANSITION_BY_OUTCOME)
+
+        with caplog.at_level(logging.WARNING, logger="verdict_relay.declarer"):
+            disposition = declarer.declare(mart_row())
+
+        # The verdict half stands; the run continues (no raise).
+        assert disposition is RowDisposition.DECLARED
+        assert declarer.counts.declared == 1
+        assert declarer.counts.transitioned == 0
+        assert declarer.counts.transition_rejected == 1
+        assert declarer.counts.rejected == 0  # counted distinctly from a rejected verdict
+        assert len(api.bodies) == 2  # never retried
+        transition_logs = [r for r in caplog.records if "transition" in r.getMessage()]
+        assert len(transition_logs) == 1
+        message = transition_logs[0].getMessage()
+        assert "illegal transition" in message  # the ledger's reason
+        assert "appendix-c-v0.7" in message  # and its catalog version
+        assert "episode-0001" in message
+
+    def test_an_unpaired_verdict_type_submits_no_transition(self) -> None:
+        """Spec: An unpaired verdict type submits no transition — exactly one command."""
+        api = ScriptedApi([committed()])
+        declarer = declarer_over(api, transition_by_outcome={"some_other_type": {"positive": "qualified"}})
+
+        disposition = declarer.declare(mart_row())
+
+        assert disposition is RowDisposition.DECLARED
+        assert len(api.bodies) == 1
+        assert api.bodies[0]["event_type"] == "declare_verdict"
+        assert declarer.counts.transitioned == 0
+        assert declarer.counts.transition_rejected == 0
+
+    def test_no_pairing_configuration_at_all_behaves_exactly_as_today(self) -> None:
+        api = ScriptedApi([committed()])
+        declarer = declarer_over(api)
+        assert declarer.declare(mart_row()) is RowDisposition.DECLARED
+        assert len(api.bodies) == 1
+
+    def test_an_outcome_without_a_mapping_entry_submits_no_transition(self) -> None:
+        api = ScriptedApi([committed()])
+        declarer = declarer_over(api, transition_by_outcome={"billing_qualification": {"positive": "qualified"}})
+        declarer.declare(mart_row(outcome="negative"))
+        assert len(api.bodies) == 1
+        assert declarer.counts.transitioned == 0
+
+    def test_a_rejected_verdict_submits_no_transition(self) -> None:
+        api = ScriptedApi([rejected()])
+        declarer = declarer_over(api, transition_by_outcome=TRANSITION_BY_OUTCOME)
+        disposition = declarer.declare(mart_row())
+        assert disposition is RowDisposition.REJECTED
+        assert len(api.bodies) == 1
+        assert declarer.counts.transitioned == 0
+
+    def test_a_transient_transition_retries_within_the_same_budget(self) -> None:
+        api = ScriptedApi([committed(), transient(), transient(), committed()])
+        sleeps: list[float] = []
+        declarer = declarer_over(api, transition_by_outcome=TRANSITION_BY_OUTCOME, sleeps=sleeps)
+
+        disposition = declarer.declare(mart_row())
+
+        assert disposition is RowDisposition.DECLARED
+        assert declarer.counts.transitioned == 1
+        assert len(api.bodies) == 4  # one verdict + three transition attempts
+        assert sleeps == [0.5, 1.0]  # the declarer's own backoff, not the client's
