@@ -36,7 +36,7 @@ G_APPROVAL comment, never a worktree.
       Opus: the catalog vocabulary is the one irreversible artifact — released versions land as
       immutable Snowflake rows (D18); a wrong state set survives forever.
 
-- [ ] 1.2 Alembic migration widening the three subject-type CHECK constraints
+- [x] 1.2 Alembic migration widening the three subject-type CHECK constraints
       (`ck_events_subject_type`, `ck_current_state_subject_type`,
       `ck_review_queue_subject_type`) to admit `coverage`, in
       `packages/pulse-ledger/infra/postgres/versions/`.
@@ -48,7 +48,7 @@ G_APPROVAL comment, never a worktree.
 
 ## 2. Wave 1 — the pairing, the configuration, the receipt
 
-- [ ] 2.1 Outcome→transition pairing in `verdict_relay.declarer`: per-verdict-type
+- [x] 2.1 Outcome→transition pairing in `verdict_relay.declarer`: per-verdict-type
       `transition_by_outcome` config schema; on a committed or replayed `declare_verdict`,
       submit a `declare_transition` on the same subject with a D16 key derived from the verdict
       row (replay-safe as a pair; a resumed run completes a half-finished pair); rejected
