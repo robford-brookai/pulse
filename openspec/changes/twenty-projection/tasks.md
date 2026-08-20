@@ -67,7 +67,7 @@ never a worktree.
       a synthetic record value (spec: "A failed write logs no payload").
       `[model: sonnet | deps: 2.1 | lane: repo_change | wave: 1]`
 
-- [ ] 2.3 Consumer loop, `twenty_projection.consumer` + `task projection:consume TARGET=dev`:
+- [x] 2.3 Consumer loop, `twenty_projection.consumer` + `task projection:consume TARGET=dev`:
       wire `pulse_core.consume` (event-id dedupe, delete-after-success) to the apply core,
       filter to board-relevant event subjects, resolve env
       (`PULSE_TWENTY_<TARGET>_URL/_TOKEN`, `SQS_QUEUE_URL`) with named startup errors, no
@@ -101,7 +101,7 @@ never a worktree.
       Opus: the heal write sits inside the webhook response path; a blocking or throwing heal
       breaks rejection correctness, the one property the route must never lose.
 
-- [ ] 3.2 Echo-loop termination proof: an integration test driving the full bounce — heal
+- [x] 3.2 Echo-loop termination proof: an integration test driving the full bounce — heal
       write fires the `.updated` webhook payload back through signature verification and the
       mapping — asserting the loop terminates in one bounce with no command, no note, and no
       second heal.
