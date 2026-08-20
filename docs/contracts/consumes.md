@@ -24,10 +24,23 @@ Snowpark emitter as the verdict write path — see the supersession note in
 | Dependency | Kind | Source | Breakage risk |
 |---|---|---|---|
 | Verdict mart | dbt-computed Snowflake table(s) | fixture-pinned contract: one row per `(subject_id, verdict_type, run)`, columns `subject_id, verdict_type, outcome, reason, rule_version, as_of, lineage_ref, computed_at` | a row missing a contract column or carrying an unparseable `as_of`/`computed_at` fails the run before any declaration, naming the offending row; the dbt side has no publisher contract of its own yet — this repo's fixtures are the only pinned shape |
+| Registered `verdict_type` values | fixture-pinned enumeration | `packages/verdict-relay/src/verdict_relay/config.py` (`SUBJECT_TYPE_BY_VERDICT`, `transition_by_outcome` per type) — `billing_eligibility` → `billing_episode`, `coverage_eligibility` and `benefits_verification` → `coverage` | a `verdict_type` the mart produces that is **not** registered here fails row validation before any API call (`RowValidationError` naming the row), so a new mart verdict type is a deliberate reviewed edit to that module, never a silent carry; conversely a registered type's `outcome` vocabulary is load-bearing — `positive`/`negative` drive the paired `declare_transition`, `indeterminate` declares the verdict with no transition |
 
 The relay pages on `computed_at` and persists its cursor through the ledger's writer-state
 facility (`pulse_core.cursor`), scoped to its own writer id — so schema drift on the mart is caught
 at read time, never silently skipped by resuming past a bad page.
+
+Since `billing-state`, a registered verdict type carries a `transition_by_outcome` entry and the
+declaration is a pair: the verdict, then a `declare_transition` moving the same subject to the
+mapped state. That raises the stakes on two mart columns the relay already read. `outcome` now
+decides state, not just evidence, so a mart that mislabels an outcome writes wrong billing or
+coverage state; and `subject_id` for the two coverage verdict types is the patient × payer subject
+key, the only identifying field a coverage row has — the mart contract carries no payer or
+member-id column, and none may be added, because that key convention is what keeps payer
+identifiers out of relay logs. Coverage-detail values (QMB status, benefit categories, copay)
+belong in the verdict payload and `lineage_ref`, never in a new column and never in the state
+vocabulary. Rows whose verdict types the mart does not yet produce simply never arrive; the relay
+declares what it reads.
 
 ### Customer.io consent export (`customerio-consent-ingress`, DNA-891)
 
