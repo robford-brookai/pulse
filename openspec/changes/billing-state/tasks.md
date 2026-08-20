@@ -22,7 +22,7 @@ G_APPROVAL comment, never a worktree.
 
 ## 1. Wave 0 — catalog and schema
 
-- [ ] 1.1 Coverage subject in the catalog: add `coverage` (ownership: ledger, transitions per
+- [x] 1.1 Coverage subject in the catalog: add `coverage` (ownership: ledger, transitions per
       design.md §2) to `catalog/state_catalog.yaml`, MINOR bump `catalog_version` to 1.1.0,
       regenerate `pulse_core.generated` via `catalog_gen`, freeze the byte-identical release
       copy `catalog/releases/v1.1.0.yaml` and append its sha256 to `MANIFEST.sha256`
