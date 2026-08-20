@@ -112,7 +112,7 @@ never a worktree.
       Opus: the heal/echo interaction is a feedback loop through a live webhook; getting the
       termination guarantee wrong spams every rejected card with notes forever.
 
-- [ ] 3.3 Contracts and docs: `docs/contracts/publishes.md` gains the projection's consumed
+- [x] 3.3 Contracts and docs: `docs/contracts/publishes.md` gains the projection's consumed
       queue + written surface row; `docs/runbooks/twenty-webhook.md` §Heal-back boundary
       rewritten from "expected until the heal-back write ships" to the shipped behavior;
       `docs/runbooks/twenty-projection.md` (new) covers running the consumer, the watermark

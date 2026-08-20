@@ -3,14 +3,15 @@
 `run_relay` drives one relay run: it pages the mart through `MartReader`, hands each validated row
 to the `Declarer`, records committed/replayed declarations back into the reader's watermark map,
 and commits the durable cursor once per page. The run finishes by emitting a `RunReceipt` with the
-five counts — declared, replayed, skipped-stale, rejected, failed.
+seven counts — declared, replayed, skipped-stale, rejected, transitioned, transition-rejected,
+failed.
 
 The receipt is structured logs, no new sink (design decision 6): stdlib logging with a JSON
 formatter, every record tagged `service:verdict-relay`, and one machine-parsable (Datadog-parsable)
-`key=value` summary line carrying the five counts. Log content is subject keys, verdict types, and
+`key=value` summary line carrying the seven counts. Log content is subject keys, verdict types, and
 timestamps only — never demographics, never outcome values (no-PHI posture).
 
-Failure semantics (spec: "A run emits a receipt with five counts"): a row that exhausts the
+Failure semantics (spec: "A run emits a receipt with seven counts"): a row that exhausts the
 transient budget, fails validation, or violates the mart contract fails the run — `main` exits
 nonzero — with the receipt reflecting the work completed before the failure. The failed page is
 *not* committed, so the resumed run re-reads it from the persisted cursor; rows declared before the
@@ -71,12 +72,15 @@ def configure_logging(stream: TextIO | None = None) -> logging.Handler:
 
 @dataclass(frozen=True)
 class RunReceipt:
-    """What one run did: the five counts, plus the failure detail when the run did not finish."""
+    """What one run did: the seven counts, plus the failure detail when the run did not finish."""
 
     declared: int
     replayed: int
     skipped_stale: int
     rejected: int
+    #: Committed paired transitions; a rejected pairing counts under `transition_rejected` instead.
+    transitioned: int
+    transition_rejected: int
     failed: int
     #: The failing row named by its keys (subject key, verdict type, timestamps) — never content.
     failure: str | None = None
@@ -90,7 +94,9 @@ class RunReceipt:
         result = "success" if self.succeeded else "failure"
         return (
             f"service={SERVICE} result={result} declared={self.declared} replayed={self.replayed} "
-            f"skipped_stale={self.skipped_stale} rejected={self.rejected} failed={self.failed}"
+            f"skipped_stale={self.skipped_stale} rejected={self.rejected} "
+            f"transitioned={self.transitioned} transition_rejected={self.transition_rejected} "
+            f"failed={self.failed}"
         )
 
 
@@ -133,6 +139,8 @@ def run_relay(reader: MartReader, declarer: Declarer) -> RunReceipt:
         replayed=counts.replayed,
         skipped_stale=counts.skipped_stale,
         rejected=counts.rejected,
+        transitioned=counts.transitioned,
+        transition_rejected=counts.transition_rejected,
         failed=0 if failure is None else 1,
         failure=failure,
     )

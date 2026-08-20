@@ -1,9 +1,10 @@
-"""`verdict_relay.run` — batch entrypoint: read → declare → receipt (task 3.1).
+"""`verdict_relay.run` — batch entrypoint: read → declare → receipt (task 3.1; seven counts, billing-state 2.4).
 
-Covers the verdict-relay-run scenario "A mixed batch produces a complete receipt": five counts as
+Covers the verdict-relay-run scenario "A mixed batch produces a complete receipt": seven counts —
+declared, replayed, skipped-stale, rejected, transitioned, transition-rejected, failed — as
 structured JSON logs tagged `service:verdict-relay` with one Datadog-parsable `key=value` summary
-line, the no-PHI log lint (records carry subject keys only, design decision 6), and nonzero exit
-on run failure with the receipt reflecting completed work.
+line in the pinned form, the no-PHI log lint (records carry subject keys only, design decision 6),
+and nonzero exit on run failure with the receipt reflecting completed work.
 
 The command API is faked at the client boundary (`httpx.MockTransport`) and mart rows come from
 `FixtureRowSource`; `conftest.py` blocks sockets for every run.
@@ -25,6 +26,9 @@ from verdict_relay.mart_reader import FixtureRowSource, MartReader
 from verdict_relay.run import SERVICE, RunReceipt, configure_logging, main, run_relay
 
 SUBJECT_TYPE_BY_VERDICT = {"billing_qualification": "billing_episode"}
+
+#: Only `positive` pairs a transition, so a replayed `negative` verdict submits the verdict alone.
+TRANSITION_BY_OUTCOME = {"billing_qualification": {"positive": "qualified"}}
 
 
 def mart_row(subject_id: str, *, as_of: str, computed_at: str, **overrides: object) -> dict[str, object]:
@@ -104,10 +108,16 @@ class MemoryCursorStore:
         self.saved.append(dict(cursor))
 
 
-def declarer_over(api: ScriptedApi, *, watermarks: dict[str, str] | None = None) -> Declarer:
+def declarer_over(
+    api: ScriptedApi,
+    *,
+    watermarks: dict[str, str] | None = None,
+    transition_by_outcome: dict[str, dict[str, str]] | None = None,
+) -> Declarer:
     return Declarer(
         api.client(),
         subject_type_by_verdict=SUBJECT_TYPE_BY_VERDICT,
+        transition_by_outcome=transition_by_outcome,
         watermarks=watermarks,
         sleep=lambda _s: None,
         jitter=lambda: 0.0,
@@ -115,17 +125,25 @@ def declarer_over(api: ScriptedApi, *, watermarks: dict[str, str] | None = None)
 
 
 def mixed_batch() -> list[dict[str, object]]:
-    """A normal declare, an idempotent replay, a stale row, and an illegal-transition rejection."""
+    """A paired declare, a replay, a stale row, a verdict rejection, and a transition rejection."""
     return [
         mart_row("episode-A", as_of="2026-08-01T00:00:00+00:00", computed_at="2026-08-01T02:00:00+00:00"),
-        mart_row("episode-B", as_of="2026-08-01T00:00:00+00:00", computed_at="2026-08-01T02:01:00+00:00"),
+        mart_row(
+            "episode-B",
+            as_of="2026-08-01T00:00:00+00:00",
+            computed_at="2026-08-01T02:01:00+00:00",
+            outcome="negative",
+        ),
         mart_row("episode-C", as_of="2026-07-01T00:00:00+00:00", computed_at="2026-08-01T02:02:00+00:00"),
         mart_row("episode-D", as_of="2026-08-01T00:00:00+00:00", computed_at="2026-08-01T02:03:00+00:00"),
+        mart_row("episode-E", as_of="2026-08-01T00:00:00+00:00", computed_at="2026-08-01T02:04:00+00:00"),
     ]
 
 
-#: Reader order is (subject, as_of): A declares, B replays, C is stale (no API call), D rejects.
-MIXED_RESPONSES = [committed(), replayed(), rejected()]
+#: Reader order is (subject, as_of): A declares and its paired transition commits, B replays
+#: (outcome unmapped, no transition), C is stale (no API call), D's verdict rejects, E declares
+#: and its paired transition is refused at a lifecycle boundary.
+MIXED_RESPONSES = [committed(), committed("t1"), replayed(), rejected(), committed("e2"), rejected()]
 
 #: episode-C's persisted watermark is ahead of its row's as_of, making that row stale.
 MIXED_WATERMARKS = {"episode-C": "2026-08-02T00:00:00+00:00"}
@@ -160,31 +178,34 @@ class TestMixedBatchScenario:
     def run_mixed_batch(self) -> RunReceipt:
         api = ScriptedApi(MIXED_RESPONSES)
         reader = MartReader(FixtureRowSource(mixed_batch()), MemoryCursorStore())
-        return run_relay(reader, declarer_over(api, watermarks=dict(MIXED_WATERMARKS)))
+        declarer = declarer_over(
+            api,
+            watermarks=dict(MIXED_WATERMARKS),
+            transition_by_outcome=TRANSITION_BY_OUTCOME,
+        )
+        return run_relay(reader, declarer)
 
-    def test_the_receipt_reports_all_five_counts(self, log_stream: io.StringIO) -> None:
+    def test_the_receipt_reports_all_seven_counts(self, log_stream: io.StringIO) -> None:
         receipt = self.run_mixed_batch()
 
-        assert receipt.declared == 1
+        assert receipt.declared == 2
         assert receipt.replayed == 1
         assert receipt.skipped_stale == 1
         assert receipt.rejected == 1
+        assert receipt.transitioned == 1
+        assert receipt.transition_rejected == 1
         assert receipt.failed == 0
         assert receipt.succeeded
 
-    def test_exactly_one_machine_parsable_summary_line(self, log_stream: io.StringIO) -> None:
+    def test_exactly_one_summary_line_in_the_pinned_form(self, log_stream: io.StringIO) -> None:
         self.run_mixed_batch()
 
         (line,) = summary_lines(log_records(log_stream))
-        assert parse_summary(line) == {
-            "service": SERVICE,
-            "result": "success",
-            "declared": "1",
-            "replayed": "1",
-            "skipped_stale": "1",
-            "rejected": "1",
-            "failed": "0",
-        }
+        # The spec pins the exact form, key order included — assert the whole line, not a parse.
+        assert line == (
+            f"service={SERVICE} result=success declared=2 replayed=1 skipped_stale=1 "
+            "rejected=1 transitioned=1 transition_rejected=1 failed=0"
+        )
 
     def test_every_record_is_structured_json_tagged_with_the_service(self, log_stream: io.StringIO) -> None:
         self.run_mixed_batch()
@@ -199,15 +220,22 @@ class TestMixedBatchScenario:
         api = ScriptedApi(MIXED_RESPONSES)
         store = MemoryCursorStore()
         reader = MartReader(FixtureRowSource(mixed_batch()), store)
+        declarer = declarer_over(
+            api,
+            watermarks=dict(MIXED_WATERMARKS),
+            transition_by_outcome=TRANSITION_BY_OUTCOME,
+        )
 
-        run_relay(reader, declarer_over(api, watermarks=dict(MIXED_WATERMARKS)))
+        run_relay(reader, declarer)
 
         (cursor,) = store.saved
-        assert cursor["computed_at"] == "2026-08-01T02:03:00+00:00"
-        # Declared and replayed rows advance the persisted watermark; stale and rejected do not.
+        assert cursor["computed_at"] == "2026-08-01T02:04:00+00:00"
+        # Declared and replayed rows advance the persisted watermark; stale and rejected do not,
+        # and a refused paired transition leaves its verdict's watermark advance standing.
         assert cursor["watermarks"] == {
             "episode-A": "2026-08-01T00:00:00+00:00",
             "episode-B": "2026-08-01T00:00:00+00:00",
+            "episode-E": "2026-08-01T00:00:00+00:00",
         }
 
 
@@ -232,8 +260,13 @@ class TestNoPhiLogLint:
     def test_log_records_carry_subject_keys_only(self, log_stream: io.StringIO) -> None:
         api = ScriptedApi(MIXED_RESPONSES)
         reader = MartReader(FixtureRowSource(mixed_batch()), MemoryCursorStore())
+        declarer = declarer_over(
+            api,
+            watermarks=dict(MIXED_WATERMARKS),
+            transition_by_outcome=TRANSITION_BY_OUTCOME,
+        )
 
-        run_relay(reader, declarer_over(api, watermarks=dict(MIXED_WATERMARKS)))
+        run_relay(reader, declarer)
 
         output = log_stream.getvalue().lower()
         assert "episode-" in output  # rows are named by subject key
@@ -274,6 +307,8 @@ class TestFailedRun:
         parsed = parse_summary(line)
         assert parsed["result"] == "failure"
         assert parsed["declared"] == "1"
+        assert parsed["transitioned"] == "0"
+        assert parsed["transition_rejected"] == "0"
         assert parsed["failed"] == "1"
 
     def test_a_contract_violation_fails_the_run_naming_the_row(self, log_stream: io.StringIO) -> None:
@@ -293,7 +328,11 @@ class TestExitCode:
     def test_a_successful_run_exits_zero(self) -> None:
         api = ScriptedApi(MIXED_RESPONSES)
         reader = MartReader(FixtureRowSource(mixed_batch()), MemoryCursorStore())
-        declarer = declarer_over(api, watermarks=dict(MIXED_WATERMARKS))
+        declarer = declarer_over(
+            api,
+            watermarks=dict(MIXED_WATERMARKS),
+            transition_by_outcome=TRANSITION_BY_OUTCOME,
+        )
 
         assert main(reader, declarer, stream=io.StringIO()) == 0
 
@@ -306,7 +345,11 @@ class TestExitCode:
     def test_main_detaches_its_handler_after_the_run(self) -> None:
         api = ScriptedApi(MIXED_RESPONSES)
         reader = MartReader(FixtureRowSource(mixed_batch()), MemoryCursorStore())
-        declarer = declarer_over(api, watermarks=dict(MIXED_WATERMARKS))
+        declarer = declarer_over(
+            api,
+            watermarks=dict(MIXED_WATERMARKS),
+            transition_by_outcome=TRANSITION_BY_OUTCOME,
+        )
         before = list(logging.getLogger("verdict_relay").handlers)
 
         main(reader, declarer, stream=io.StringIO())
