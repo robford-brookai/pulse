@@ -31,6 +31,18 @@ against the catalog — so the declarer takes an explicit `subject_type_by_verdi
 `verdict_type` and `lineage_ref` travel in the command's `lineage`, so distinct verdict types on
 one subject stay distinct facts under D16.
 
+**Outcome→transition pairing** (design decision 3, billing-state): a verdict type carrying a
+`transition_by_outcome` entry (`verdict_type → {outcome → to_state}`) follows a committed or
+replayed verdict with a `declare_transition` on the same subject. The transition's D16 key derives
+from the verdict row — same `effective_at`, a reason citing the verdict's `verdict_type`,
+`rule_version`, and `lineage_ref` — so the pair is replay-safe as a unit: a rerun replays both
+halves, and a run that died between the two completes the pair on resume (the verdict replays, the
+transition commits). A committed or replayed transition counts as `transitioned`; one the ledger
+rejects counts as `transition_rejected` — distinctly from a rejected verdict — and is never
+retried: past a lifecycle boundary, rejection is the correct answer, and the verdict half stands.
+A verdict type without an entry, or an outcome its entry does not map, submits the verdict only —
+exactly as before.
+
 Errors and logs carry subject keys, verdict types, and timestamps only — never outcome values or
 anything beyond the row's keys (no-PHI posture).
 """
@@ -49,7 +61,7 @@ from os import environ
 import httpx
 import pydantic
 from pulse_core.client import CommandResponse, PulseCoreClient, ResponseClassification
-from pulse_core.generated import DeclareVerdictCommand
+from pulse_core.generated import DeclareTransitionCommand, DeclareVerdictCommand
 
 logger = logging.getLogger("verdict_relay.declarer")
 
@@ -84,6 +96,8 @@ class DeclarerCounts:
     replayed: int = 0
     skipped_stale: int = 0
     rejected: int = 0
+    transitioned: int = 0
+    transition_rejected: int = 0
 
 
 class DeclarerError(RuntimeError):
@@ -171,6 +185,7 @@ class Declarer:
         client: PulseCoreClient,
         *,
         subject_type_by_verdict: Mapping[str, str],
+        transition_by_outcome: Mapping[str, Mapping[str, str]] | None = None,
         watermarks: Mapping[str, str] | None = None,
         max_attempts: int = DECLARE_MAX_ATTEMPTS,
         base_delay_seconds: float = DEFAULT_BASE_DELAY_SECONDS,
@@ -183,6 +198,9 @@ class Declarer:
             raise ValueError(msg)
         self._client = client
         self._subject_type_by_verdict = dict(subject_type_by_verdict)
+        self._transition_by_outcome = {
+            verdict_type: dict(by_outcome) for verdict_type, by_outcome in (transition_by_outcome or {}).items()
+        }
         self._watermarks = dict(watermarks or {})
         self._max_attempts = max_attempts
         self._base_delay = base_delay_seconds
@@ -217,7 +235,10 @@ class Declarer:
             return RowDisposition.SKIPPED_STALE
 
         response = self._submit_with_retry(command, as_of, row_ref)
-        return self._settle(command, response, as_of, row_ref)
+        disposition = self._settle(command, response, as_of, row_ref)
+        if disposition in (RowDisposition.DECLARED, RowDisposition.REPLAYED):
+            self._pair_transition(command, as_of, row_ref)
+        return disposition
 
     def _command_for(self, row: Mapping[str, object], row_ref: str) -> DeclareVerdictCommand:
         verdict_type = row.get("verdict_type")
@@ -246,7 +267,12 @@ class Declarer:
             )
             raise RowValidationError(row_ref, fields) from exc
 
-    def _submit_with_retry(self, command: DeclareVerdictCommand, as_of: datetime, row_ref: str) -> CommandResponse:
+    def _submit_with_retry(
+        self,
+        command: DeclareVerdictCommand | DeclareTransitionCommand,
+        as_of: datetime,
+        row_ref: str,
+    ) -> CommandResponse:
         # A pydantic KeyError above guarantees rule_version/as_of exist; `effective_at=as_of`
         # doubles as the D16 logical time, so the same row always derives the same key.
         response: CommandResponse | None = None
@@ -291,6 +317,51 @@ class Declarer:
         self._counts = replace(self._counts, declared=self._counts.declared + 1)
         logger.info("row %s declared (event_id=%s)", row_ref, response.event_id)
         return RowDisposition.DECLARED
+
+    def _pair_transition(self, command: DeclareVerdictCommand, as_of: datetime, row_ref: str) -> None:
+        """Follow a committed or replayed verdict with its configured `declare_transition`.
+
+        The transition's D16 key derives from the verdict row: same subject, same `effective_at`,
+        and a reason built only from the row's own fields — so the same row always derives the
+        same pair of keys, and the pair replays as a unit. Runs after the verdict half settled,
+        so a transient-exhausted transition fails the run with the verdict already committed; the
+        resumed run replays the verdict (the watermark only skips strictly-older rows) and
+        completes the pair.
+        """
+        lineage = command.lineage or {}
+        verdict_type = str(lineage.get("verdict_type"))
+        to_state = self._transition_by_outcome.get(verdict_type, {}).get(command.outcome.value)
+        if to_state is None:
+            return
+        transition = DeclareTransitionCommand(
+            subject_type=command.subject_type,
+            subject_key=command.subject_key,
+            to_state=to_state,
+            reason=(
+                f"paired declare_verdict verdict_type={verdict_type} "
+                f"rule_version={command.rule_version} lineage_ref={lineage.get('lineage_ref')}"
+            ),
+        )
+        response = self._submit_with_retry(transition, as_of, row_ref)
+        if response.classification is ResponseClassification.REJECTED:
+            rejection = response.rejection
+            logger.warning(
+                "row %s paired transition rejected by the ledger: %s (reason=%s catalog_version=%s); "
+                "not retried, the verdict stands",
+                row_ref,
+                rejection.message if rejection else "no detail",
+                rejection.reason if rejection else None,
+                rejection.catalog_version if rejection else None,
+            )
+            self._counts = replace(self._counts, transition_rejected=self._counts.transition_rejected + 1)
+            return
+        self._counts = replace(self._counts, transitioned=self._counts.transitioned + 1)
+        logger.info(
+            "row %s paired transition %s (event_id=%s)",
+            row_ref,
+            response.classification.value,
+            response.event_id,
+        )
 
     def _advance_watermark(self, subject_key: str, as_of: datetime) -> None:
         existing = self._watermarks.get(subject_key)
