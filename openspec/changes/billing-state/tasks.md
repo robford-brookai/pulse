@@ -79,7 +79,7 @@ G_APPROVAL comment, never a worktree.
       identifiers only; unmapped-type pin green.
       `[model: sonnet | deps: 2.1 | lane: repo_change | wave: 1]`
 
-- [ ] 2.3 Coverage first-declare and enumeration, consuming (never editing) 2.2's config
+- [x] 2.3 Coverage first-declare and enumeration, consuming (never editing) 2.2's config
       entries and fixture corpus: the subject-key convention for patient × payer, the minting
       rule (first verdict for an unseen key transitions from derived initial `unverified`), and
       an `enumerate_state` read proving coverage subjects enumerate from `current_state`.
