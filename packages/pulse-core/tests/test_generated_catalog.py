@@ -60,6 +60,28 @@ class TestAdjacencyRoundTripsCatalog:
         assert TRANSITIONS["referral"]["converted"] == frozenset()
 
 
+class TestCoverageSubject:
+    """billing-state coverage-state: coverage as a ledger-owned subject (design §2, option A)."""
+
+    def test_coverage_is_a_generated_subject_type(self) -> None:
+        assert "coverage" in generated.SUBJECT_TYPES
+        assert "coverage" not in generated.RECORDED_SUBJECT_TYPES
+
+    def test_coverage_adjacency_is_the_design_s2_machine(self) -> None:
+        assert TRANSITIONS["coverage"] == {
+            "unverified": frozenset({"verified_active", "verified_inactive"}),
+            "verified_active": frozenset({"verified_inactive", "lapsed", "terminated"}),
+            "verified_inactive": frozenset({"verified_active", "lapsed", "terminated"}),
+            "lapsed": frozenset({"verified_active", "verified_inactive", "terminated"}),
+            "terminated": frozenset(),
+        }
+
+    def test_unverified_is_the_only_state_with_no_incoming_edge(self) -> None:
+        adjacency = TRANSITIONS["coverage"]
+        entry = {state for state in adjacency if not any(state in targets for targets in adjacency.values())}
+        assert entry == {"unverified"}
+
+
 class TestCommandVocabulary:
     SPEC_NAMED_COMMANDS: ClassVar[frozenset[str]] = frozenset({
         "declare_verdict",

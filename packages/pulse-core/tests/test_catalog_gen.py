@@ -31,7 +31,7 @@ def test_generated_module_is_pinned_to_the_catalog_version() -> None:
     catalog = catalog_gen.load_catalog()
     rendered = catalog_gen.render_module(catalog)
 
-    assert catalog.catalog_version == "1.0.0"
+    assert catalog.catalog_version == "1.1.0"
     assert f'CATALOG_VERSION = "{catalog.catalog_version}"' in rendered
 
 
