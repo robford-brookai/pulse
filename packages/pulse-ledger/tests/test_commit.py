@@ -308,17 +308,50 @@ def test_arbitrary_genesis_still_refuses_a_state_the_catalog_does_not_contain(
 def test_communication_consent_validates_but_cannot_yet_be_committed(ledger_db: psycopg.Connection) -> None:
     """A live mismatch between three artifacts, pinned here so it is visible rather than latent.
 
-    The catalog seed carries seven subject types (`communication_consent` is `ownership: recorded`);
-    migration 0001's `ck_events_subject_type` accepts the six ledger-owned grains the specs
-    enumerate. So legality validation passes and the insert is refused by the store. Task 3.2 does
-    not need this subject type; whichever task first records communication consent needs either a
-    schema revision or a spec correction, and this test turns red when that lands. See HANDOFF.md.
+    The catalog seed carries `communication_consent` (`ownership: recorded`); the subject-type
+    checks (0001, widened to admit `coverage` by 0004) do not. So legality validation passes and
+    the insert is refused by the store. Whichever task first records communication consent needs
+    either a schema revision or a spec correction, and this test turns red when that lands. See
+    HANDOFF.md.
     """
     with pytest.raises(psycopg.errors.CheckViolation):
         commit_declaration(
             ledger_db,
             _declare(subject_type="communication_consent", subject_key="cc-1", to_state="unset"),
         )
+
+
+def test_a_catalog_legal_coverage_transition_commits(ledger_db: psycopg.Connection) -> None:
+    """The gap the test above pins, closed for `coverage` by migration 0004: catalog 1.1.0 added
+    the subject and the same change widens the store, so validation and commit agree — event,
+    `current_state` fold, and outbox row land in one transaction.
+    """
+    minted = commit_declaration(
+        ledger_db, _declare(subject_type="coverage", subject_key="cov-1", to_state="unverified")
+    )
+    verified = commit_declaration(
+        ledger_db,
+        _declare(
+            subject_type="coverage",
+            subject_key="cov-1",
+            to_state="verified_active",
+            effective_at=T0 + timedelta(days=1),
+        ),
+    )
+
+    assert minted.rule_version == CATALOG_VERSION
+    assert verified.state is not None
+    assert verified.state.state == "verified_active"
+    state = ledger_db.execute(
+        "SELECT state, last_event_id FROM ledger.current_state"
+        " WHERE subject_type = 'coverage' AND subject_key = 'cov-1'"
+    ).fetchone()
+    assert state == ("verified_active", verified.event_id)
+    outbox = ledger_db.execute(
+        "SELECT subject_type, subject_key, seq FROM ledger.outbox WHERE event_id = %s",
+        (verified.event_id,),
+    ).fetchone()
+    assert outbox == ("coverage", "cov-1", 2)
 
 
 # --- bitemporality: backdating and fold order -------------------------------------------------
