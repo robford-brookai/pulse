@@ -127,7 +127,7 @@ G_APPROVAL comment, never a worktree.
       narrow so unserialized wiring work (3.1) does not wait on the lane. Sequenced behind
       twenty-projection per Entry conditions.
 
-- [ ] 3.3 Contracts and docs: `docs/contracts/publishes.md` gains the new event types on the
+- [x] 3.3 Contracts and docs: `docs/contracts/publishes.md` gains the new event types on the
       `patient-state` row (or a coverage/billing sub-row per its conventions);
       `docs/contracts/consumes.md` updates the verdict-mart row for the new verdict types;
       `docs/runbooks/billing-state.md` (new) covers the pairing semantics, poll cadence, no-op
