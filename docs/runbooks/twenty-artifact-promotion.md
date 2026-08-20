@@ -12,6 +12,20 @@ verb, because the deploy step has no delete verb.
 
 The Twenty Metadata API this consumes is registered in `docs/contracts/consumes.md`.
 
+## Reinstall the app after every artifact apply
+
+Applying the metadata artifact to a target whose app is already installed **drops the
+app-owned views' kanban groups** — the board renders with no columns until the app is
+reinstalled. Observed on dev 2026-08-20: adding one field to `patientProgram`
+(`projectionSeq`, twenty-projection 1.2) left both app boards with empty `viewGroups` while
+the stock Twenty boards kept theirs; republishing and reinstalling the app at a bumped version
+restored them.
+
+So the promotion order is: apply the artifact, then bump `packages/twenty-app/package.json`'s
+version and run `task twenty:app:publish TARGET=<t>` plus `twenty app:install --remote <t>`.
+Verify with a `getViews` read on `/metadata` — every KANBAN view the app defines must carry its
+`viewGroups`, and demo3's assertion 3 (column parity) is the automated form of that check.
+
 ## Scope: dev only — ADR-0004 D14 remains open
 
 Today the only target that exists is **dev** (DNA-909, EKS on DuploCloud, upstream v2.30.0).
