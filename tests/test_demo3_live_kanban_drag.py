@@ -283,3 +283,141 @@ def test_count_comments_is_zero_when_no_binding_matches() -> None:
     ])
 
     assert demo3.TwentyReader.count_comments(reader, CARD_RECORD_ID) == 0
+
+
+# --- The replay probe (task 4.3) ------------------------------------------------------------------
+#
+# 4.1 found steps 7/8 systemically broken in the live-webhook world: Twenty's own webhook now
+# commits a legal drag before this script's self-delivery arrives, so echo suppression (task 2.4)
+# answers the self-delivery `noop reason=echo_of_record` — a genuine duplicate of the committed
+# target state can never reach D16's idempotency layer, because the echo check runs first and
+# unconditionally (`pulse_ledger.twenty.mapping.interpret`). The probe below dodges that by naming
+# the state the card was dragged *from* — never equal to the committed target — so only D16's
+# key match can answer it, and a replay is the only pass.
+
+PROGRAM_CODE = "PGM-1"
+CANONICAL_PATIENT_ID = "patient-88888888-8888-4888-8888-888888888888"
+RECORD_UPDATED_AT = "2026-08-19T12:00:00.000Z"
+
+
+def _card(**overrides: Any) -> Any:
+    fields = {
+        "canonicalPatientId": CANONICAL_PATIENT_ID,
+        "programCode": PROGRAM_CODE,
+        demo3.STATUS_FIELD: demo3.encode_option_value("active"),
+        "updatedAt": RECORD_UPDATED_AT,
+    }
+    fields.update(overrides)
+    return demo3.ProjectedRecord(record_id=CARD_RECORD_ID, fields=fields)
+
+
+class _FakeLedgerDeliverer:
+    """Answers `deliver` with one canned (status, body) pair, recording the payload it received."""
+
+    def __init__(self, status: int, body: dict[str, Any]) -> None:
+        self._status = status
+        self._body = body
+        self.delivered: list[dict[str, Any]] = []
+
+    def deliver(self, payload: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+        self.delivered.append(payload)
+        return self._status, self._body
+
+
+def _replayed_body(*, effective_at: str = RECORD_UPDATED_AT, event_id: str = "event-1") -> dict[str, Any]:
+    return {
+        "disposition": "replayed",
+        "event_id": event_id,
+        "replayed": True,
+        "state": {"state": "active", "effective_at": effective_at, "recorded_at": effective_at, "event_id": event_id},
+    }
+
+
+def test_replay_probe_payload_names_the_state_dragged_from_not_the_committed_target() -> None:
+    payload = demo3._replay_probe_payload(_card(), "pending_start", RECORD_UPDATED_AT)
+    assert payload["record"][demo3.STATUS_FIELD] == demo3.encode_option_value("pending_start")
+    assert payload["record"][demo3.STATUS_FIELD] != demo3.encode_option_value("active")
+    assert payload["record"]["updatedAt"] == RECORD_UPDATED_AT
+    assert payload["record"]["canonicalPatientId"] == CANONICAL_PATIENT_ID
+    assert payload["record"]["programCode"] == PROGRAM_CODE
+    assert payload["updatedFields"] == [demo3.STATUS_FIELD]
+
+
+def test_step_replay_passes_on_a_matching_replayed_probe() -> None:
+    ledger = _FakeLedgerDeliverer(200, _replayed_body())
+    demo3.step_replay(ledger, _card(), "pending_start", RECORD_UPDATED_AT)
+    assert len(ledger.delivered) == 1
+
+
+def test_step_replay_rejects_a_committed_disposition() -> None:
+    """A probe that commits is not a replay — it means the key did not already exist."""
+    ledger = _FakeLedgerDeliverer(200, {"disposition": "committed", "event_id": "event-2", "state": {}})
+    with pytest.raises(demo3.DemoAssertionError, match="expected disposition 'replayed'"):
+        demo3.step_replay(ledger, _card(), "pending_start", RECORD_UPDATED_AT)
+
+
+def test_step_replay_rejects_an_echo_noop() -> None:
+    """The one outcome the work order names explicitly: accepting this would assert nothing."""
+    ledger = _FakeLedgerDeliverer(200, {"disposition": "noop", "reason": "echo_of_record"})
+    with pytest.raises(demo3.DemoAssertionError, match="expected disposition 'replayed'"):
+        demo3.step_replay(ledger, _card(), "pending_start", RECORD_UPDATED_AT)
+
+
+def test_step_replay_rejects_a_missing_event_id() -> None:
+    body = _replayed_body()
+    del body["event_id"]
+    ledger = _FakeLedgerDeliverer(200, body)
+    with pytest.raises(demo3.DemoAssertionError, match="carried no event id"):
+        demo3.step_replay(ledger, _card(), "pending_start", RECORD_UPDATED_AT)
+
+
+def test_step_replay_rejects_a_missing_effective_at() -> None:
+    body = _replayed_body()
+    body["state"] = {}
+    ledger = _FakeLedgerDeliverer(200, body)
+    with pytest.raises(demo3.DemoAssertionError, match="carried no effective_at"):
+        demo3.step_replay(ledger, _card(), "pending_start", RECORD_UPDATED_AT)
+
+
+def test_step_replay_rejects_a_wall_clock_effective_at() -> None:
+    """A wall-clock time leaking in is exactly what this probe exists to catch."""
+    body = _replayed_body(effective_at="2026-08-19T12:05:00.000Z")
+    ledger = _FakeLedgerDeliverer(200, body)
+    with pytest.raises(demo3.DemoAssertionError, match="not the record stamp"):
+        demo3.step_replay(ledger, _card(), "pending_start", RECORD_UPDATED_AT)
+
+
+def test_step_replay_rejects_a_non_200_status() -> None:
+    ledger = _FakeLedgerDeliverer(500, {})
+    with pytest.raises(demo3.DemoAssertionError, match="expected 200"):
+        demo3.step_replay(ledger, _card(), "pending_start", RECORD_UPDATED_AT)
+
+
+# --- Causation acceptance for step 7's own delivery (task 4.3) -------------------------------------
+
+
+def test_causation_accepts_committed() -> None:
+    assert demo3._drag_delivery_confirms_causation({"disposition": "committed"}) is True
+
+
+def test_causation_accepts_replayed() -> None:
+    assert demo3._drag_delivery_confirms_causation({"disposition": "replayed"}) is True
+
+
+def test_causation_accepts_echo_of_record_noop() -> None:
+    """The live-webhook finding: Twenty's own delivery usually wins the race, so this script's
+    own delivery of the same drag now normally answers echo — that proves the event already
+    exists rather than disproving causation."""
+    assert demo3._drag_delivery_confirms_causation({"disposition": "noop", "reason": "echo_of_record"}) is True
+
+
+def test_causation_rejects_other_noop_reasons() -> None:
+    assert demo3._drag_delivery_confirms_causation({"disposition": "noop", "reason": "status_field_untouched"}) is False
+
+
+def test_causation_rejects_rejected() -> None:
+    assert demo3._drag_delivery_confirms_causation({"disposition": "rejected"}) is False
+
+
+def test_causation_rejects_unmapped() -> None:
+    assert demo3._drag_delivery_confirms_causation({"disposition": "unmapped"}) is False

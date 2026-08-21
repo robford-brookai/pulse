@@ -18,19 +18,46 @@ Nine assertions, in order:
 4.  Seed counts — every record in the committed projection is present in the workspace.
 5.  As-of stamps — every seeded board record carries non-null status as-of stamps.
 6.  Exactly one webhook is registered, scoped to the one mapped operation.
-7.  A legal drag commits with `effective_at` equal to the record's own `updatedAt` stamp,
-    never the wall clock.
-8.  A replay of the same delivery produces no second event.
+7.  A legal drag commits, driven through Twenty's REST API — the same write a UI drag issues.
+8.  A replay probe proves, against the real committed event, that `effective_at` is the
+    record's own `updatedAt` stamp (never the wall clock) and that a redelivery of the drag's
+    idempotency key produces no second event.
 9.  An illegal drag returns 200 `rejected` with exactly one new rejection note bound to the
     card (counted as `noteTargets` on the record id), and the state of record is unchanged.
 
-**How the drag legs work.** The script PATCHes the card over Twenty's core REST API (the same
-write a UI drag issues — task 7.2's hand drag is the UI-path acceptance step), reads the record's
-own `updatedAt` back, then delivers the webhook body itself, signed with the configured secret
-(`pulse_ledger.auth.sign`, Twenty's wire format). Delivering the body directly is what makes the
-replay and illegal legs possible on demand — Twenty offers no redeliver-now button — and it is
-idempotent with Twenty's own delivery when 7.2 points the real webhook here: both carry the same
-`record.updatedAt`, so whichever arrives second replays (D16).
+**How the drag legs work (reworked, task 4.3).** The script PATCHes the card over Twenty's core
+REST API (the same write a UI drag issues — task 7.2's hand drag is the UI-path acceptance step),
+reads the record's own `updatedAt` back, then delivers the webhook body itself, signed with the
+configured secret (`pulse_ledger.auth.sign`, Twenty's wire format) — this guarantees an event
+exists for the drag without waiting on Twenty's own asynchronous webhook to land.
+
+**Why steps 7 and 8 no longer read the commit's properties off that self-delivery.** With
+Twenty's own webhook live (7.2), Twenty's delivery for this same PATCH now reliably commits
+before the script's self-delivery arrives (task 4.1's live finding), so echo suppression (task
+2.4) answers the self-delivery `noop reason=echo_of_record` — correctly, since the drag is
+already committed, but the response the script can see no longer carries `effective_at` or
+`event_id`. Worse, a genuine redelivery of that same committed target state is now *always*
+`echo_of_record` too: `pulse_ledger.twenty.mapping.interpret` checks wire-state-equals-state-of-
+record before it ever builds a command, so the D16 idempotency layer is unreachable for a
+byte-identical repeat. Accepting `echo_of_record` as either step's pass would assert nothing —
+it cannot distinguish "the ledger correctly deduplicated" from "this delivery never got far
+enough to try."
+
+`step_replay`'s probe (`_replay_probe_payload`) sidesteps this by naming the state the card was
+dragged *from* as its target — never equal to the state it was dragged to, so it cannot be an
+echo — while keeping the same subject, program, and `updated_at` as the committing drag, so it
+carries the identical D16 idempotency key. The only way to answer that probe is a replay of the
+original commit, whoever made it: Twenty's own webhook, or the script's own delivery in
+`step_legal_drag` if it happened to win the race. That single probe response proves both
+properties at once — its `state.effective_at` is the record's own stamp, and getting the
+*original* `event_id` back rather than a new one is the no-second-event guarantee.
+
+**Option considered and rejected: a new read-back endpoint.** Reading the committed event back
+through a dedicated query surface (rather than the mapping's own idempotency behavior) was the
+other option this task weighed. Rejected: it is new production surface with its own auth and
+spec, for a property the ledger already proves through the wire protocol the demo already
+speaks — the probe above needs no new endpoint, no new credential, and stays entirely within
+`repo_change`'s offline-testable lane.
 
 **Why there is a genesis-alignment delivery before the legal drag.** The ledger admits a subject
 only at the catalog's entry state (`validate_genesis` — for `enrollment`, `pending_start`), so a
@@ -552,16 +579,32 @@ def _select_card(
     return card, matched
 
 
+def _drag_delivery_confirms_causation(body: Mapping[str, Any]) -> bool:
+    """Whether `step_legal_drag`'s own delivery is an acceptable outcome for causing the drag.
+
+    Any of three outcomes passes: this delivery committed it, this delivery replayed an earlier
+    attempt of its own, or Twenty's real webhook already committed it and this delivery is exactly
+    what echo suppression (task 2.4) is built to answer with — `noop reason=echo_of_record`. This
+    call never reads the commit's own properties (`step_replay`'s probe does that instead); it only
+    has to be satisfied that an event now exists for the drag before the probe reads it back.
+    """
+    disposition = body.get("disposition")
+    if disposition in ("committed", "replayed"):
+        return True
+    return disposition == "noop" and body.get("reason") == "echo_of_record"
+
+
 def step_legal_drag(
     twenty: TwentyReader,
     ledger: LedgerDeliverer,
     card: ProjectedRecord,
     seeded_fields: Mapping[str, Any],
-) -> tuple[dict[str, Any], str, str]:
-    """7/9: a legal drag commits with `effective_at` equal to the record stamp, not the wall clock.
+) -> tuple[ProjectedRecord, str, str, str]:
+    """7/9: a legal drag commits, driven through Twenty's REST API.
 
-    Returns the delivered body, the committed event id, and the state dragged to — the replay and
-    illegal legs build on all three.
+    Returns the moved record, its own `updatedAt` stamp, the state dragged *from*, and the state
+    dragged *to* — everything `step_replay`'s probe needs to prove `effective_at` and
+    no-second-event against the real committed event (module docstring: why steps 7/8 changed).
     """
     # Genesis alignment (see module docstring): fixed logical time -> first run commits the
     # subject's entry state, every later run replays with no rejection note and no second event.
@@ -599,42 +642,60 @@ def step_legal_drag(
 
     drag_payload = _drag_payload(moved, wire_state=encode_option_value(target_state), updated_at=updated_at)
     status, body = ledger.deliver(drag_payload)
-    _print_receipt("legal_drag", {k: body.get(k) for k in ("disposition", "event_id", "replayed")} | {"status": status})
+    _print_receipt("legal_drag", {k: body.get(k) for k in ("disposition", "reason", "event_id")} | {"status": status})
     _check(status == 200, f"legal drag expected 200, got {status}")
-    # `replayed` is also a pass: once 7.2 points Twenty's own webhook at this ledger, the real
-    # delivery races this one, and whichever lands second replays — exactly the D16 contract.
     _check(
-        body.get("disposition") in ("committed", "replayed"),
-        f"legal drag expected committed or replayed, got {body.get('disposition')!r}",
+        _drag_delivery_confirms_causation(body),
+        f"legal drag expected committed, replayed, or an echo_of_record noop, "
+        f"got {body.get('disposition')!r}/{body.get('reason')!r}",
+    )
+    return moved, updated_at, current, target_state
+
+
+def _replay_probe_payload(card: ProjectedRecord, previous_state: str, updated_at: str) -> dict[str, Any]:
+    """The follow-up delivery `step_replay` uses to prove D16 without echo suppression eating it.
+
+    Naming `previous_state` — the state the card was dragged *from*, never equal to the state it
+    was dragged to — as this delivery's target cannot be an echo (module docstring: why steps 7/8
+    changed), so the only thing left to answer it is a replay of the drag's own idempotency key:
+    the same subject, program, and `updated_at` the committing drag carried.
+    """
+    return _drag_payload(card, wire_state=encode_option_value(previous_state), updated_at=updated_at)
+
+
+def step_replay(
+    ledger: LedgerDeliverer,
+    card: ProjectedRecord,
+    previous_state: str,
+    updated_at: str,
+) -> None:
+    """8/9: a replay probe proves `effective_at` is the record's own stamp and that a redelivery
+    of the drag's idempotency key produces no second event — both against the real committed
+    event, whoever committed it (module docstring: why steps 7/8 changed).
+    """
+    probe = _replay_probe_payload(card, previous_state, updated_at)
+    status, body = ledger.deliver(probe)
+    _print_receipt("replay_probe", {k: body.get(k) for k in ("disposition", "event_id")} | {"status": status})
+    _check(status == 200, f"replay probe expected 200, got {status}")
+    # `echo_of_record` is not an acceptable answer here even though it is a `noop`: the probe is
+    # built so it cannot be an echo of the state of record (it names the *previous* state), so
+    # anything other than `replayed` means the idempotency key this probe carries was never
+    # claimed — the drag never committed, or committed under a different key than expected.
+    _check(
+        body.get("disposition") == "replayed",
+        f"replay probe expected disposition 'replayed', got {body.get('disposition')!r} — "
+        "no committed event was found for this drag's idempotency key",
     )
     event_id = body.get("event_id")
-    _check(event_id is not None, "the committed drag carried no event id")
-
+    _check(event_id is not None, "the replay probe carried no event id")
     state = body.get("state") or {}
     effective_at = state.get("effective_at")
-    _check(effective_at is not None, "the committed drag carried no effective_at")
+    _check(effective_at is not None, "the replay probe carried no effective_at")
     _check(
         _canonical_timestamp(str(effective_at)) == _canonical_timestamp(updated_at),
         f"effective_at {effective_at!r} is not the record stamp {updated_at!r} — a wall-clock time leaked in",
     )
     _print_receipt("effective_at", {"effective_at": str(effective_at), "record_updated_at": updated_at})
-    return drag_payload, str(event_id), target_state
-
-
-def step_replay(ledger: LedgerDeliverer, drag_payload: Mapping[str, Any], event_id: str) -> None:
-    """8/9: redelivering the same notification replays the original commit — no second event."""
-    status, body = ledger.deliver(drag_payload)
-    _print_receipt("replay", {k: body.get(k) for k in ("disposition", "event_id", "replayed")} | {"status": status})
-    _check(status == 200, f"replay expected 200, got {status}")
-    _check(
-        body.get("disposition") == "replayed",
-        f"replay expected disposition 'replayed', got {body.get('disposition')!r}",
-    )
-    _check(body.get("replayed") is True, "replay response did not carry replayed=true")
-    _check(
-        str(body.get("event_id")) == event_id,
-        "replay returned a different event id — a second event was committed",
-    )
 
 
 def step_illegal_drag(
@@ -752,11 +813,11 @@ def main(argv: list[str] | None = None, env: Mapping[str, str] | None = None) ->
             seed["projection"].records[BOARD_OBJECT_PLURAL],
             args.card_index,
         )
-        print(f"\n[7/9] a legal drag commits with the record's own stamp (card {card.record_id})")
-        drag_payload, event_id, committed_state = step_legal_drag(twenty, ledger, card, seeded["fields"])
+        print(f"\n[7/9] a legal drag commits, driven through Twenty (card {card.record_id})")
+        moved, updated_at, previous_state, committed_state = step_legal_drag(twenty, ledger, card, seeded["fields"])
 
-        print("\n[8/9] a replay produces no second event")
-        step_replay(ledger, drag_payload, event_id)
+        print("\n[8/9] a replay probe proves the record's own stamp and no second event")
+        step_replay(ledger, moved, previous_state, updated_at)
 
         print("\n[9/9] an illegal drag is rejected with one rejection note and no state change")
         step_illegal_drag(twenty, ledger, card, committed_state)
