@@ -31,6 +31,14 @@ RUN uv pip install --system --no-cache /libs/pulse-core
 COPY packages/twenty-projection /libs/twenty-projection
 RUN pip install --no-cache-dir /libs/twenty-projection
 
+# ocean-broker the same way: the relay process's EventBridge publisher, imported lazily inside
+# `pulse_ledger.relay.default_publisher()`. A lazy import is still a runtime dependency — without
+# this the relay container starts and then dies on `ModuleNotFoundError: No module named
+# 'ocean_broker'` the first time it publishes, which is how it failed on dev 2026-08-21. It lives
+# under packages/ocean/libs/, not packages/, so the path differs from its siblings above.
+COPY packages/ocean/libs/ocean-broker /libs/ocean-broker
+RUN pip install --no-cache-dir /libs/ocean-broker
+
 # The [serve] extra brings uvicorn — the API process's ASGI server, not a hard dependency of the
 # library (identity/verdict-relay/schedules import pulse-ledger without it).
 #
@@ -40,6 +48,6 @@ RUN pip install --no-cache-dir /libs/twenty-projection
 # `pulse-core` dependency in `[project.dependencies]` by name. Stock pip has no opinion on
 # `tool.uv.sources` and installs against what is already on the system path.
 COPY packages/pulse-ledger /app/pulse-ledger
-RUN pip install --no-cache-dir "/app/pulse-ledger[serve]"
+RUN pip install --no-cache-dir "/app/pulse-ledger[serve,relay]"
 
 CMD ["python", "-m", "pulse_ledger.api_server"]

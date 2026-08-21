@@ -28,10 +28,18 @@ dependencies = [
 # schedules import pulse-ledger for its client/commit code and pull no ASGI server for it.
 # `packages/pulse-ledger/Dockerfile` is the one place this extra is installed.
 serve = ["uvicorn>=0.41.0"]
+# ocean-broker is the relay process's publisher, imported lazily inside
+# `pulse_ledger.relay.default_publisher()` so the API process never pays for it. It is a real
+# runtime dependency of `python -m pulse_ledger.relay_worker` all the same: without it the relay
+# starts, connects, and dies on `ModuleNotFoundError: No module named 'ocean_broker'` the moment
+# it tries to publish (observed on dev 2026-08-21). Declared here so the image installs it and
+# `tests/test_ledger_deploy_targets.py` can hold the Dockerfile to it.
+relay = ["ocean-broker"]
 
 [tool.uv.sources]
 pulse-core = { workspace = true }
 twenty-projection = { workspace = true }
+ocean-broker = { workspace = true }
 
 [dependency-groups]
 dev = [

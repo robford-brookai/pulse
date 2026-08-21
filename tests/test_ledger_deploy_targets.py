@@ -8,6 +8,7 @@ of them may be reachable from `check` through Taskfile `task:` refs.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import yaml
@@ -85,34 +86,79 @@ class TestImageInstallsEveryWorkspaceSibling:
     `No matching distribution found for twenty-projection`.
     """
 
-    def _sibling_names(self) -> set[str]:
-        """Workspace packages `pulse-ledger` declares as dependencies, by distribution name."""
+    def _workspace_dists(self) -> dict[str, Path]:
+        """Every uv workspace member's distribution name mapped to its directory.
+
+        Members live at two depths (`packages/x` and `packages/ocean/libs/x`), so this reads the
+        workspace member list rather than globbing one level down.
+        """
         import tomllib
 
-        ledger = tomllib.loads((_REPO_ROOT / "packages" / "pulse-ledger" / "pyproject.toml").read_text())
-        declared = {
-            dep.split("[")[0].split(">")[0].split("=")[0].split("<")[0].strip()
-            for dep in ledger["project"]["dependencies"]
-        }
-        members = {path.name for path in (_REPO_ROOT / "packages").iterdir() if (path / "pyproject.toml").is_file()}
-        sibling_dists = set()
-        for member in sorted(members):
-            meta = tomllib.loads((_REPO_ROOT / "packages" / member / "pyproject.toml").read_text())
-            name = meta["project"]["name"]
-            if name in declared:
-                sibling_dists.add(name)
-        return sibling_dists
+        root = tomllib.loads((_REPO_ROOT / "pyproject.toml").read_text())
+        dists: dict[str, Path] = {}
+        for member in root["tool"]["uv"]["workspace"]["members"]:
+            manifest = _REPO_ROOT / member / "pyproject.toml"
+            if manifest.is_file():
+                dists[tomllib.loads(manifest.read_text())["project"]["name"]] = _REPO_ROOT / member
+        return dists
 
-    def test_every_declared_sibling_is_installed_in_the_image(self) -> None:
-        dockerfile = (_REPO_ROOT / "packages" / "pulse-ledger" / "Dockerfile").read_text()
+    def _sibling_names(self) -> set[str]:
+        """Workspace siblings `pulse-ledger` needs at runtime, by distribution name.
+
+        Two sources, because the manifest alone is not enough. `[project.dependencies]` plus every
+        `[project.optional-dependencies]` extra cover what the manifest admits to. But the failure
+        that motivated widening this test was a **lazy import**: `pulse_ledger.relay` imports
+        `ocean_broker` inside `default_publisher()`, nothing in the manifest mentioned it, the
+        image never installed it, and the relay container died on `ModuleNotFoundError: No module
+        named 'ocean_broker'` the first time it tried to publish on dev (2026-08-21). So the source
+        tree is scanned too: any `import x` naming a workspace member counts, declared or not.
+        """
+        import tomllib
+
+        workspace = self._workspace_dists()
+        ledger = tomllib.loads((_REPO_ROOT / "packages" / "pulse-ledger" / "pyproject.toml").read_text())
+
+        requirements = list(ledger["project"]["dependencies"])
+        for extra in (ledger["project"].get("optional-dependencies") or {}).values():
+            requirements.extend(extra)
+        declared = {req.split("[")[0].split(">")[0].split("=")[0].split("<")[0].strip() for req in requirements}
+        needed = {name for name in workspace if name in declared}
+
+        # Module name to distribution name: the workspace uses the underscore/hyphen convention
+        # throughout (ocean_broker -> ocean-broker, pulse_core -> pulse-core).
+        by_module = {name.replace("-", "_"): name for name in workspace}
+        import_pattern = re.compile(r"^\s*(?:from|import)\s+([a-zA-Z_][a-zA-Z0-9_]*)", re.MULTILINE)
+        for module_file in (_REPO_ROOT / "packages" / "pulse-ledger" / "src").rglob("*.py"):
+            for module in import_pattern.findall(module_file.read_text()):
+                if module in by_module:
+                    needed.add(by_module[module])
+
+        needed.discard(ledger["project"]["name"])
+        return needed
+
+    def test_every_runtime_sibling_is_installed_in_the_image(self) -> None:
+        # Non-comment lines only, and an actual install instruction — not any occurrence of the
+        # path. A substring check over the whole file passes on a *comment* mentioning the path,
+        # which is how the first version of this test falsely passed while the install was gone.
+        lines = [
+            line.strip()
+            for line in (_REPO_ROOT / "packages" / "pulse-ledger" / "Dockerfile").read_text().splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        ]
+        installs = [line for line in lines if "install" in line]
+        copies = [line for line in lines if line.upper().startswith("COPY")]
         missing = sorted(
             name
             for name in self._sibling_names()
-            if f"packages/{name}" not in dockerfile or f"/libs/{name}" not in dockerfile
+            if not (
+                any(f"/libs/{name}" in line for line in installs)
+                and any(line.rstrip().endswith(f"/libs/{name}") for line in copies)
+            )
         )
         assert not missing, (
-            f"pulse-ledger declares workspace sibling(s) {missing} that its Dockerfile never "
-            "installs — the image build will fail at 'No matching distribution found'. Add a "
-            "COPY packages/<name> /libs/<name> plus an install step before the pulse-ledger "
-            "install."
+            f"pulse-ledger needs workspace sibling(s) {missing} at runtime that its Dockerfile "
+            "never installs. A declared one fails the image build at 'No matching distribution "
+            "found'; a lazily-imported one builds fine and then dies on ModuleNotFoundError in "
+            "the running container. Add a COPY <member-path> /libs/<name> plus an install step "
+            "before the pulse-ledger install."
         )
