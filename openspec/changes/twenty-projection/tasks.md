@@ -161,7 +161,7 @@ never a worktree.
       `[model: sonnet | deps: 4.1 | lane: destructive_ops | wave: 4]`
       Gate: G_APPROVAL — provisions tenant infrastructure; operator queue, never a worktree.
 
-- [ ] 4.3 Rework demo3's steps 7–8 for the live-webhook world. 4.1 found the demo systemically
+- [x] 4.3 Rework demo3's steps 7–8 for the live-webhook world. 4.1 found the demo systemically
       broken rather than card-diverged (reproduced on a fresh `--card-index`): the script
       PATCHes the card and then delivers the webhook body itself, but with Twenty's real
       webhook live **Twenty's delivery commits first**, and echo suppression (task 2.4) answers
