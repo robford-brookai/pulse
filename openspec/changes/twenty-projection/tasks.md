@@ -126,15 +126,56 @@ never a worktree.
 
 ## 4. Wave 3 — live verification (operator lane)
 
-- [ ] 4.1 Live round trip on dev: re-apply the artifact (watermark field lands, idempotent
-      read-back), run the consumer against the dev queue, then (a) drive a committed event and
-      watch the card's status, as-of, and watermark converge; (b) drag a card illegally by
-      hand and watch it snap back within the D17 budget with exactly one rejection note and a
-      terminated echo; (c) confirm drift injected out of band converges on the subject's next
-      event. Receipt (identifiers, states, sequences, wall-clock timings — no payload values)
-      to this change's Linear parent and the tracking issue.
-      Verify: a repo-committed verification script exits nonzero on any failed check; its
-      output is the receipt.
+- [x] 4.1 Live heal-back verification on dev (**narrowed** — see 4.2/4.3 for what moved out):
+      re-apply the artifact (watermark field lands, idempotent read-back), then drag a card
+      illegally and watch it snap back within the D17 budget with a rejection note and a
+      terminated echo. Receipt (identifiers, states, timings — no payload values) on the
+      tracking issue.
+      **Done 2026-08-20, receipts on issue #252**: artifact read-back `ok: true` / 0 missing /
+      re-apply all no-ops; card `392dae45` rejected `pending_start -> on_hold` at
+      `catalog_version 1.1.0`, healed back in **0.37 s**, and the heal write's own webhook
+      returned from the live Twenty server as `disposition=noop reason=echo_of_record` — the
+      loop-termination guarantee (2.4/3.2) holding against real software.
+      Legs (a) convergence and (c) drift moved to **4.2**: dev has no `ocean` bus, no
+      projection queue, and no outbox relay deployment, so the consumer has nothing to consume.
+      The automated receipt moved to **4.3**: demo3's steps 7–8 are obsolete now that Twenty's
+      real webhook commits first and echo suppression answers the demo's own delivery `noop`.
       `[model: sonnet | deps: 1.1, 3.2, 3.3 | lane: operational_discovery | wave: 3]`
-      Gate: G_APPROVAL comment from Rob on the tracking issue; operator queue, never a
+      Gate: G_APPROVAL comment from Rob on the tracking issue (given); operator queue, never a
       worktree.
+
+- [ ] 4.2 Provision the ledger's distribution path on dev, then finish 4.1's deferred legs.
+      Discovered by 4.1: `pulse-ledger-api` is the tenant's only pulse workload — there is no
+      outbox relay deployment, no `ocean` EventBridge bus (only `default`), and no projection
+      SQS queue, so no committed event ever reaches a consumer. Provision, in this order: the
+      relay as a second deployment off the same image (`python -m pulse_ledger.relay_worker`,
+      the Dockerfile's documented second command) with `DATABASE_URL` and
+      `OCEAN_EVENT_BUS_NAME`; the `ocean` bus; a rule matching `source = "ocean"` targeting a
+      new projection queue; and the queue's access policy. Then run
+      `task projection:consume TARGET=dev` and close 4.1's remaining legs: (a) drive a
+      committed event and watch status, as-of, and watermark converge, and (c) inject
+      out-of-band drift and watch it converge on the subject's next event, both inside the
+      ADR-0004 D17 budget.
+      Verify: relay lag gauge visible; a committed event observed converging end to end; the
+      receipt (ids, states, sequences, timings) on the tracking issue.
+      `[model: sonnet | deps: 4.1 | lane: destructive_ops | wave: 4]`
+      Gate: G_APPROVAL — provisions tenant infrastructure; operator queue, never a worktree.
+
+- [ ] 4.3 Rework demo3's steps 7–8 for the live-webhook world. 4.1 found the demo systemically
+      broken rather than card-diverged (reproduced on a fresh `--card-index`): the script
+      PATCHes the card and then delivers the webhook body itself, but with Twenty's real
+      webhook live **Twenty's delivery commits first**, and echo suppression (task 2.4) answers
+      the script's own delivery `noop reason=echo_of_record` where it used to answer `replayed`.
+      Step 8 compounds it — the replay proof needs an `event_id` only the committing delivery
+      returns, and that delivery is now Twenty's, whose response the demo never sees.
+      Rework so the demo asserts the same two properties against the real path: the drag's
+      `effective_at` equals the record's own stamp (not the wall clock), and a redelivery
+      produces no second event. Options the task should weigh and record: read the committed
+      event id back from a disposition receipt rather than the delivery response; or drive the
+      drag through Twenty only and assert via a follow-up delivery that must answer `replayed`.
+      Accepting `echo_of_record` as a pass is NOT acceptable — it would assert nothing.
+      Tests: the smoke-parse contract still holds; new unit coverage for whichever discovery
+      path is chosen, offline against fixture transports.
+      `[model: opus | deps: — | lane: repo_change | wave: 4]`
+      Opus: the demo is the change's own acceptance instrument — an assertion that passes
+      without proving the property is worse than a failing one.
