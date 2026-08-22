@@ -20,6 +20,15 @@ UPPER_SNAKE-encoded SELECT values). It SHALL hold no ledger database credential.
 - **THEN** the Twenty record's status, as-of stamp, and watermark are written through the REST
   surface, and the message is deleted only after the write succeeds
 
+#### Scenario: An EventBridge-wrapped delivery applies the same as a bare envelope
+
+- **GIVEN** a queue message whose body is the EventBridge delivery shape — the committed
+  envelope riding whole inside a `detail` key — rather than the bare envelope
+- **WHEN** the consumer processes it
+- **THEN** the envelope is unwrapped from `detail` and applies exactly as a bare-body message
+  does (the real relay → bus → rule → queue path wraps every delivery this way; verified live
+  2026-08-21, receipt on issue #252)
+
 #### Scenario: A redelivered message applies nothing twice
 
 - **GIVEN** the same queue message delivered twice
