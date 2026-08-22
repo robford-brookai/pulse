@@ -32,9 +32,15 @@ async def run_forever(database_url: str) -> None:
         while True:
             result = await relay_once(conn, publisher)
             if result.published or result.dead_lettered:
+                # max_lag_seconds is the ADR-0004 D17 gauge (p99 outbox-to-backbone < 30 s);
+                # the deployment's log stream is the only place an operator can read it.
                 log.info(
                     "relay_pass",
-                    extra={"published": result.published, "dead_lettered": result.dead_lettered},
+                    extra={
+                        "published": result.published,
+                        "dead_lettered": result.dead_lettered,
+                        "max_lag_seconds": result.max_lag_seconds,
+                    },
                 )
             await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
