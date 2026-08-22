@@ -144,7 +144,14 @@ never a worktree.
       Gate: G_APPROVAL comment from Rob on the tracking issue (given); operator queue, never a
       worktree.
 
-- [ ] 4.2 Provision the ledger's distribution path on dev, then finish 4.1's deferred legs.
+- [x] 4.2 Provision the ledger's distribution path on dev, then finish 4.1's deferred legs.
+      **Done 2026-08-21, receipt on issue #252**: bus + rule + queue policy provisioned
+      (`duplo-jit aws -admin` — no admin grant needed, closing DNA-1192's blocker); relay
+      deployed as Duplo service `pulse-ledger-relay` at image `7f63ae91` (PRs #265 dependency
+      fix, #266 service manifest + lag-gauge logging); 22 real events drained, fresh commit
+      converged end to end in ~1–2 s, and the chain **settled** (two rounds stable, queue
+      depth 0). Findings flagged: projection write amplification (DNA-1138), lag gauge was
+      computed but never logged (fixed, #266).
       Discovered by 4.1: `pulse-ledger-api` is the tenant's only pulse workload — there is no
       outbox relay deployment, no `ocean` EventBridge bus (only `default`), and no projection
       SQS queue, so no committed event ever reaches a consumer. Provision, in this order: the
