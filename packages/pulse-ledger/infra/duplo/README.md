@@ -1,4 +1,4 @@
-# Duplo service definitions — pulse-ledger command API
+# Duplo service definitions — pulse-ledger command API and outbox relay
 
 Shapes verified against the live tenant `dev01-brook` (AWS `173008660334`, `us-east-1`, EKS
 cluster `duploinfra-nonprod`, namespace `duploservices-dev01-brook`) while authoring this change.
@@ -30,6 +30,27 @@ its own artifact).
   referenced by name only through `EnvFrom`.
 - `readinessProbe`/`livenessProbe` and `resources` are the exact nested shapes observed on
   `identity`, copied verbatim rather than re-derived.
+
+## `relay.service.json`
+
+The outbox relay (`python -m pulse_ledger.relay_worker`, the Dockerfile's documented second
+command) as a second Duplo service off the same `pulse-ledger` image. Deployed to `dev01-brook`
+2026-08-21 as `pulse-ledger-relay`; the twenty-projection 4.2 receipt on GitHub issue #252 records
+the live proof.
+
+- Same `__PULSE_LEDGER_IMAGE__` placeholder and `AgentPlatform: 7` as the command API — render
+  with `jq --arg image ... '.DockerImage = $image'` before applying.
+- Reuses `pulse-ledger-api-secret` via `EnvFrom` for `DATABASE_URL` — the relay reads the same
+  outbox table the API writes, so a shared credential is the correct blast radius here, not a
+  shortcut.
+- `OCEAN_EVENT_BUS_NAME` is a non-secret switch in plain `Env`, same rule as the command API's
+  webhook flag.
+- No LB config: the relay serves nothing — it polls the outbox and publishes to EventBridge.
+- **Create-time quirk**: `duploctl service apply` on a service that does not exist yet returns a
+  `NullReferenceException` when `OtherDockerConfig` is a JSON object — render it stringified
+  (`jq '.OtherDockerConfig |= tojson'`) for the create. Updates accept the object form, which is
+  why `deploy.sh` needs no such step for the long-lived command API. First recorded on the
+  DNA-909 handoff.
 
 ## `command-api.lb.json`
 
