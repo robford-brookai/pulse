@@ -85,7 +85,10 @@ for the two scenarios billing-state already covers.
       `reported`, `rule_version`, `producer-registry.md`, and `qualification`; contains no
       occurrence of a dollar-amount literal (regex `\$[0-9]`) — the boundary page itself
       carries no rates; `mkdocs.yml` nav references both new contracts pages.
-      `[model: sonnet | deps: 1.1 | lane: repo_change | wave: 1]`
+      `[model: opus | deps: 1.1 | lane: repo_change | wave: 1]`
+      Opus: the page is the contract integrators read, and its verifier is string presence —
+      prose that passes the greps while misstating the boundary is the failure the tier
+      upgrade buys down (rubric: verifier strength, not task prestige).
 
 ## 2. Wave 1 — the amount-free tripwires
 
