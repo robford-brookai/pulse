@@ -1,5 +1,15 @@
 # Connector template — Tier 3 gap analysis (PARTIAL — run halted)
 
+> **SUPERSEDED 2026-08-23** by
+> `.planning/reports/2026-08-21-connector-template-tier-3-gap-analysis.md`, which completed the
+> run and re-verified every load-bearing claim below. **One material correction:** this file
+> frames `mongodb-connector` as the migration candidate because it emits to the `patient-state`
+> domain. That reasoning is wrong — the producer-policy classifier never reads the bus domain, and
+> `patient.feature.changed` names no catalog state. The connector actually carrying a
+> catalog-subject assertion is `impilo-connector`, which emits `"enrollment_status": "enrolled"`
+> at `packages/ocean/services/impilo-connector/src/normalizer.py:241` against the `enrollment`
+> subject. Kept as the record of the halted run; read the full report instead.
+
 **Status**: INCOMPLETE. The tier 3 run was stopped by the operator part-way through. This file
 preserves the one piece of reconnaissance that completed, so a future session does not repeat it.
 It is NOT the tier 3 report; the work order at
