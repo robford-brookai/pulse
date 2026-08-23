@@ -37,7 +37,7 @@ for the two scenarios billing-state already covers.
 
 ## 1. Wave 1 — the registry and the stated boundary
 
-- [ ] 1.1 Author `docs/contracts/producer-registry.md` and its shape test. One markdown table,
+- [x] 1.1 Author `docs/contracts/producer-registry.md` and its shape test. One markdown table,
       columns exactly `System | Direction | Seam | Credential / actor | Grain | Status |
       Notes`; `Direction` one of `declares in | consumes out | both`; `Status` one of
       `shipped | spec-only | planned | blocked | excluded-by-design`. Rows, at minimum:
@@ -92,7 +92,7 @@ for the two scenarios billing-state already covers.
 
 ## 2. Wave 1 — the amount-free tripwires
 
-- [ ] 2.1 Catalog monetary deny-list test, new
+- [x] 2.1 Catalog monetary deny-list test, new
       `packages/pulse-core/tests/test_catalog_amount_free.py`: load
       `catalog/state_catalog.yaml`; for every subject, collect every field name, state name,
       and transition-reason key the catalog defines; assert none contains, case-insensitive,
@@ -104,7 +104,7 @@ for the two scenarios billing-state already covers.
       real catalog passes.
       `[model: sonnet | deps: — | lane: repo_change | wave: 1]`
 
-- [ ] 2.2 Command-envelope refusal and evidence-pass test, new
+- [x] 2.2 Command-envelope refusal and evidence-pass test, new
       `packages/pulse-ledger/tests/test_billing_boundary.py`, offline against the real
       coercion path in `pulse_ledger.api`: (a) a `declare_transition`-shaped body for subject
       `billing_episode` carrying top-level `allowed_amount: 123.45` raises
