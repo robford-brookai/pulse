@@ -1,19 +1,28 @@
-"""The producer-registry shape test (producer-registry spec, billing-source-boundary 1.1).
+"""The producer-registry shape test (producer-registry spec, billing-source-boundary 1.1),
+extended with the registry enforcement test (billing-source-boundary 3.1).
 
 Parses `docs/contracts/producer-registry.md`'s table and pins its shape: the exact column set,
 the fixed `Direction`/`Status` vocabularies, at least one `excluded-by-design` row with a reason,
 and the cpt-om row stating both directions and the amount-free citation — the same
 parse-and-assert pattern as `tests/test_producer_ingress_policy.py`.
 
-Offline, no network, no credentials — reads only the committed doc.
+3.1 adds the enforcement half: a module-level mapping from each repo-resident ingress surface to
+its required registry row, asserting both that the surface exists in the tree and that its row
+exists in the table — so adding an ingress package without a registry row fails CI by name — plus
+the `AGENTS.md` line requiring a change that introduces a new writer credential or ingress
+package to add or update that row in the same change.
+
+Offline, no network, no credentials — reads only the committed docs.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+from typing import NamedTuple
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOC_PATH = REPO_ROOT / "docs" / "contracts" / "producer-registry.md"
+AGENTS_PATH = REPO_ROOT / "AGENTS.md"
 
 #: The task's pinned column set, in order.
 EXPECTED_COLUMNS = (
@@ -137,3 +146,65 @@ def test_the_cpt_om_row_states_both_directions_and_the_amount_free_citation() ->
     assert row["Direction"] == "both"
     assert "command api" in row["Seam"].lower()
     assert "billing-computation-boundary" in row["Notes"]
+
+
+# --- Registry enforcement: repo-resident ingress surfaces (billing-source-boundary 3.1) -----
+
+
+class IngressSurface(NamedTuple):
+    """One repo-resident ingress surface: where it lives, and which registry row covers it."""
+
+    path: Path
+    system: str  # required substring (case-insensitive) of the registry row's `System` cell
+
+
+#: Every repo-resident ingress surface, mapped to the filesystem path proving it exists in the
+#: tree and the `System` substring its required registry row must contain. Adding an ingress
+#: package without adding both sides of this mapping is the defect this test exists to catch —
+#: the mapping is spelled out here, not derived, so a reviewer can see exactly what is covered.
+REPO_INGRESS_SURFACES: dict[str, IngressSurface] = {
+    "packages/consent-ingress": IngressSurface(
+        path=REPO_ROOT / "packages" / "consent-ingress",
+        system="customer.io consent ingress",
+    ),
+    "packages/verdict-relay": IngressSurface(
+        path=REPO_ROOT / "packages" / "verdict-relay",
+        system="warehouse verdict relay",
+    ),
+    "pulse_ledger.twenty (webhook)": IngressSurface(
+        path=REPO_ROOT / "packages" / "pulse-ledger" / "src" / "pulse_ledger" / "twenty",
+        system="twenty kanban webhook",
+    ),
+    "packages/identity": IngressSurface(
+        path=REPO_ROOT / "packages" / "identity",
+        system="identity-resolution",
+    ),
+}
+
+
+def test_every_mapped_repo_resident_ingress_surface_exists_in_the_tree() -> None:
+    for surface, entry in REPO_INGRESS_SURFACES.items():
+        assert entry.path.is_dir(), (
+            f"{surface!r} is mapped to a producer-registry row but {entry.path} does not exist "
+            "in the tree — update the mapping if the surface moved or was removed"
+        )
+
+
+def test_every_mapped_repo_resident_ingress_surface_has_a_registry_row() -> None:
+    rows = _load_rows()
+    systems = [row["System"].lower() for row in rows]
+
+    for surface, entry in REPO_INGRESS_SURFACES.items():
+        assert any(entry.system in system for system in systems), (
+            f"{surface!r} has no matching row in the producer registry "
+            f"(expected a System containing {entry.system!r}) — a repo-resident ingress surface "
+            "without a registry row is a defect, not a variant"
+        )
+
+
+# --- Scenario: the review-conventions line names the registry doc by name -------------------
+
+
+def test_agents_md_requires_a_registry_row_for_a_new_writer_credential_or_ingress_package() -> None:
+    text = AGENTS_PATH.read_text(encoding="utf-8")
+    assert "producer-registry.md" in text

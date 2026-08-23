@@ -53,6 +53,13 @@ Do NOT include:
 - Style or formatting decisions
 - Non-plan-changing refactors
 
+### Review conventions
+
+- A change introducing a new writer credential or ingress package must add or update the
+  matching row in `docs/contracts/producer-registry.md` in the same change. An unregistered
+  producer is a defect, not a variant — its absence is a finding to resolve before the change
+  lands, never a gap to grandfather in.
+
 ### Quality
 
 - Run `task check` before committing — lint, typecheck, tests, the Twenty app suite, docs build.
