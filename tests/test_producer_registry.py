@@ -1,5 +1,6 @@
 """The producer-registry shape test (producer-registry spec, billing-source-boundary 1.1),
-extended with the registry enforcement test (billing-source-boundary 3.1).
+extended with the registry enforcement test (billing-source-boundary 3.1) and the legacy
+inventory supersession test (billing-source-boundary 1.2).
 
 Parses `docs/contracts/producer-registry.md`'s table and pins its shape: the exact column set,
 the fixed `Direction`/`Status` vocabularies, at least one `excluded-by-design` row with a reason,
@@ -12,6 +13,10 @@ exists in the table — so adding an ingress package without a registry row fail
 the `AGENTS.md` line requiring a change that introduces a new writer credential or ingress
 package to add or update that row in the same change.
 
+1.2 adds the legacy-inventory-points-forward scenario: the pre-connector-architecture surface
+inventory names the registry as authoritative within its opening lines, so a reader who starts
+there is redirected rather than misled.
+
 Offline, no network, no credentials — reads only the committed docs.
 """
 
@@ -23,6 +28,8 @@ from typing import NamedTuple
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOC_PATH = REPO_ROOT / "docs" / "contracts" / "producer-registry.md"
 AGENTS_PATH = REPO_ROOT / "AGENTS.md"
+LEGACY_INVENTORY_PATH = REPO_ROOT / "packages" / "ocean" / "docs" / "pt-data-infra-acq-status.md"
+LEGACY_INVENTORY_HEADER_LINES = 30
 
 #: The task's pinned column set, in order.
 EXPECTED_COLUMNS = (
@@ -208,3 +215,18 @@ def test_every_mapped_repo_resident_ingress_surface_has_a_registry_row() -> None
 def test_agents_md_requires_a_registry_row_for_a_new_writer_credential_or_ingress_package() -> None:
     text = AGENTS_PATH.read_text(encoding="utf-8")
     assert "producer-registry.md" in text
+
+
+# --- Scenario: The legacy list points forward (billing-source-boundary 1.2) -----------------
+
+
+def test_the_legacy_inventory_points_forward_to_the_registry() -> None:
+    header = "\n".join(LEGACY_INVENTORY_PATH.read_text(encoding="utf-8").splitlines()[:LEGACY_INVENTORY_HEADER_LINES])
+
+    assert "producer-registry.md" in header, (
+        "the legacy inventory's first "
+        f"{LEGACY_INVENTORY_HEADER_LINES} lines don't name the registry as the authoritative source"
+    )
+    assert "superseded" in header.lower(), (
+        f"the legacy inventory's first {LEGACY_INVENTORY_HEADER_LINES} lines don't say it's superseded"
+    )
