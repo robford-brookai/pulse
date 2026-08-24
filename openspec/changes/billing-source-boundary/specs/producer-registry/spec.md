@@ -15,7 +15,10 @@ delivered export landed in the warehouse, bus subscription, or library entrypoin
 **credential and actor id** as the ledger will see it (D15 — attribution is authentication, so
 the actor is derived from the credential and never read from a body); the **grain** it declares
 or reads; and **status** from a fixed vocabulary: `shipped`, `spec-only`, `planned`, `blocked`,
-or `excluded-by-design`.
+or `excluded-by-design`. An `excluded-by-design` entry states the direction the system
+*would* have if integrated — the hypothetical crossing — with the Notes cell carrying why it
+never does; the fixed Direction vocabulary has no "n/a" value by design, so an absence of
+direction can never be read as an answer.
 
 #### Scenario: A registry entry names its seam and its actor
 
