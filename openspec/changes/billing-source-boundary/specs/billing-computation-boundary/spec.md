@@ -18,9 +18,10 @@ qualification outcome that model declares.
 
 - **GIVEN** the committed state catalog and the ledger schema
 - **WHEN** every subject's field set is inspected
-- **THEN** no field is a currency, rate, amount, or code-valued billing field — the billing
-  episode's own fields are counters (`accrued_minutes`, `reading_days`), states, stamps, and a
-  `rule_version` string
+- **THEN** no name the catalog defines — subject, state, command, command field, valueset, or
+  transition-reason code — is a currency, rate, amount, or code-valued billing field; the
+  episode's counters (`accrued_minutes`, `reading_days`) are object-model facts, deliberately
+  outside the catalog's vocabulary
 
 #### Scenario: A command asserting an amount is refused
 
@@ -33,7 +34,8 @@ qualification outcome that model declares.
 
 PULSE SHALL record billing qualification as the catalog's trinary outcome
 (`qualified` / `not_qualified`, with `indeterminate` moving no state) paired with the
-`rule_version` that produced it and a `lineage_ref` to the evidence held by the deciding system.
+`rule_version` that produced it and a `lineage_ref` — carried inside the event's `lineage`
+payload — to the evidence held by the deciding system.
 PULSE SHALL NOT re-derive, second-guess, or recompute a declared verdict.
 
 #### Scenario: A verdict moves state and records its provenance
@@ -41,8 +43,8 @@ PULSE SHALL NOT re-derive, second-guess, or recompute a declared verdict.
 - **GIVEN** a `billing_eligibility` verdict declared by the registered revenue model
 - **WHEN** it commits
 - **THEN** the episode's state moves per the catalog's adjacency and the event carries
-  `rule_version` and `lineage_ref`, so the decision is attributable to a version of a rule set
-  PULSE does not hold
+  `rule_version` and, inside its `lineage` payload, `lineage_ref`, so the decision is
+  attributable to a version of a rule set PULSE does not hold
 
 #### Scenario: Nothing downstream recomputes the verdict
 
