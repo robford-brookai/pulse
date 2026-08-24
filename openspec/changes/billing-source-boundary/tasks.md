@@ -118,7 +118,7 @@ for the two scenarios billing-state already covers.
 
 ## 3. Wave 2 — the convention that keeps it true
 
-- [ ] 3.1 Registry enforcement: the repo-resident-producer check and the `AGENTS.md` line.
+- [x] 3.1 Registry enforcement: the repo-resident-producer check and the `AGENTS.md` line.
       (a) Extend `tests/test_producer_registry.py`: a module-level mapping, spelled out in the
       test, from each repo-resident ingress surface to its required registry row —
       `packages/consent-ingress` → Customer.io consent ingress row,
