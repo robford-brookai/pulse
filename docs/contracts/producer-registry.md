@@ -36,5 +36,6 @@ spec-only | planned | blocked | excluded-by-design`.
   outbound seam.
 - [`consumes.md`](consumes.md) — the source-side detail for an ingress package's inbound read
   (mart contracts, export schemas).
-- `docs/contracts/billing-boundary.md` — the amount-free contract the cpt-om row's Notes cite
-  (added by `billing-source-boundary` task 1.3).
+- [`billing-boundary.md`](billing-boundary.md) — the amount-free contract the cpt-om row's Notes
+  cite: PULSE records qualification, computes no monetary value, and the episode ends at
+  `reported`.

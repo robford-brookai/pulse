@@ -26,6 +26,7 @@ nav:
       - Consumes: contracts/consumes.md
       - Publishes: contracts/publishes.md
       - Producer-registry: contracts/producer-registry.md
+      - Billing-boundary: contracts/billing-boundary.md
 plugins:
   - search
   - mkdocstrings:
