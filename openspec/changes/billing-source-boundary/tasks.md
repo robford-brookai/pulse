@@ -60,7 +60,7 @@ for the two scenarios billing-state already covers.
       `billing-computation-boundary`.
       `[model: sonnet | deps: — | lane: repo_change | wave: 1]`
 
-- [ ] 1.2 Mark the legacy inventory superseded. Add a note at the top of
+- [x] 1.2 Mark the legacy inventory superseded. Add a note at the top of
       `packages/ocean/docs/pt-data-infra-acq-status.md`: superseded as a governance surface by
       `docs/contracts/producer-registry.md`, retained as historical context on where patient
       facts lived pre-connector-architecture. Do not delete or rewrite the inventory itself.
@@ -71,7 +71,7 @@ for the two scenarios billing-state already covers.
       Dep is the shared test module: 1.1 creates `tests/test_producer_registry.py`, this task
       appends to it — sequenced so two same-wave workers never collide on the file.
 
-- [ ] 1.3 State the billing computation boundary where an integrator will look: new
+- [x] 1.3 State the billing computation boundary where an integrator will look: new
       `docs/contracts/billing-boundary.md` (added to `mkdocs.yml` nav). Contents: PULSE
       records billing *qualification* (trinary verdict + `rule_version` + `lineage_ref`) and
       computes no monetary value — no rate, amount, CPT/HCPCS code as state, fee schedule, or
