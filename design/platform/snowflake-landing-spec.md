@@ -11,6 +11,16 @@ Snowflake is the analytical and verification layer: complete event history, inde
 
 ## Pipeline
 
+> **Superseded (events leg only, 2026-08-25):** the events leg described below —
+> Twenty-Postgres CDC → `RAW_TWENTY.DOMAIN_EVENT` → `STG_EVENTS` — is superseded. This doc
+> predates the ledger and treats Twenty Postgres as the event store; today the ledger is the
+> record and Twenty is a projection surface (`twenty-projection`). Event envelopes land via
+> `warehouse-event-sync` directly in `STREAMLINE.OCEAN_RAW.EVENTS`, and `STG_EVENTS` is now
+> defined by the `snowflake-stg-events` capability (`snowflake-projection` design.md decision
+> 1) as a view over that landing, not over a CDC mirror of Twenty's event table. The
+> entity-CDC dimension views and the `MART_STATE` section below are unaffected and remain
+> as-is.
+
 Twenty Postgres (workspace schema: `domainEvent`, `patient`, `patientProgram`, `provider`, `clinic` tables) → CDC → Snowflake.
 
 - **Tool**: an SPCS-hosted CDC service following the `streamline` pattern (the proven mdba → Snowflake pipeline), adapted from MongoDB Atlas change streams to Postgres logical replication, with a read-only replication user (per data-model access table). Third-party managed connectors (Fivetran, Airbyte) are excluded: this leg carries PHI once gate C1 clears, and a SaaS connector routes it through vendor infrastructure. Data stays on AWS and Snowflake.
