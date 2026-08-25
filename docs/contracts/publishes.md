@@ -25,7 +25,20 @@ by attaching an EventBridge rule and its own SQS queue — never by subscribing 
 |---|---|---|---|
 | `ocean` event bus | EventBridge bus | stable | events address as `source = "ocean"`, `detail-type = "<domain>"`; the envelope crosses whole in `detail`, unmodified — `event_type` stays an envelope field, never promoted to `detail-type` |
 | Domain catalog | generated mapping | stable | eleven live domains: `signals`, `alerts`, `tasks`, `interactions`, `outcomes`, `patient-state`, `tickets`, `ai-ops`, `audit`, `ops`, `logistics`; source table is `packages/ocean/libs/ocean-broker/src/ocean_broker/catalog.py`, from which publisher addressing and Terraform rule patterns both generate |
-| `STREAMLINE.OCEAN_RAW.EVENTS` | Snowflake table | stable | grain: one row per envelope `event_id`; `data` is the envelope as VARIANT, `_topic` records the originating domain; append-only — redelivery never updates or duplicates a row |
+| `STREAMLINE.OCEAN_RAW.EVENTS` | Snowflake table | stable | grain: one row per envelope `event_id`; `data` is the envelope as VARIANT, `_topic` records the originating domain; append-only — redelivery never updates or duplicates a row; fed continuously by the provisioned warehouse-sync consumer |
+
+### STG_EVENTS ledger contract (`snowflake-stg-events`)
+
+The typed, deduplicated view of the ledger's event envelopes: downstream warehouse consumers
+read `STG_EVENTS.EVENTS` instead of the raw landing. Committed SQL, not dbt — the view IS this
+contract row, so it versions with this repo: `packages/ocean/infra/snowflake/stg_events_events.sql`.
+History before `min_complete_from` is incomplete until
+`projection-rebuild-drill` closes the pre-revival gap — absence of pre-revival rows reads as
+documented, not as data loss.
+
+| Surface | Kind | Stability | Notes |
+|---|---|---|---|
+| `STREAMLINE.STG_EVENTS.EVENTS` | Snowflake view | beta | grain: one row per envelope `event_id`, earliest arrival wins (`QUALIFY ROW_NUMBER() OVER (PARTITION BY data:event_id ORDER BY _loaded_at ASC) = 1`); no `_topic` filter — consumers filter on `_topic` themselves; columns: `event_id`, `event_type`, `subject_type`, `subject_key`, `seq`, `effective_at`, `occurred_at`, `recorded_at`, `producer`, `schema_version`, `rule_version`, `correlation_id`, `causation_id`, `reverses_event_id`, `actor`, `evidence`, `evidence_class`, `epoch`, `payload`, `key`, `_topic`, `_loaded_at`; freshness query: `SELECT TIMESTAMPDIFF('minute', MAX(_loaded_at), CURRENT_TIMESTAMP()) FROM STREAMLINE.OCEAN_RAW.EVENTS`; `min_complete_from`: `stamped-at-revival` — rows before this date are absent by design, not by loss; `projection-rebuild-drill` is the change that backfills history and closes the pre-revival gap |
 
 ### Ledger command and read surfaces (`pulse-ledger-core`, DNA-784)
 
