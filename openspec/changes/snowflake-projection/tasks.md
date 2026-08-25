@@ -31,7 +31,7 @@ No serial lanes are touched.
 
 ## 1. Wave 1 — the committed shapes
 
-- [ ] 1.1 STG_EVENTS view as committed SQL, plus its offline tests. New
+- [x] 1.1 STG_EVENTS view as committed SQL, plus its offline tests. New
       `packages/ocean/infra/snowflake/stg_events_events.sql` (create the directory): a single
       `CREATE OR REPLACE VIEW STREAMLINE.STG_EVENTS.EVENTS AS ...` over
       `STREAMLINE.OCEAN_RAW.EVENTS`, deduping with
