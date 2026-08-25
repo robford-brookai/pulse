@@ -28,7 +28,11 @@ vars:
   # top-level `src` package and imports itself as `from src.X`, and one interpreter cannot hold
   # sixteen different `src` packages in sys.modules. graph-projection moved from this list into
   # the loop with the rest. tests/test_taskfile_test_coverage.py pins this arrangement.
-  TESTED_PATHS: tests packages/archaeology/tests packages/pulse-ledger/tests packages/pulse-core/tests packages/verdict-relay/tests packages/schedules/tests packages/identity/tests packages/consent-ingress/tests packages/synthea-seed/tests packages/twenty-projection/tests packages/ocean/libs
+  # The one explicit file at the end is `packages/ocean/tests/unit`'s only entry: ADR-0002 keeps
+  # that cross-service tree out of CI (~60 pre-existing failures), but this single test
+  # (snowflake-projection task 1.1) is a self-contained SQL/emitter-comparison check with none
+  # of that tree's fixtures, so it is named directly rather than pulling the whole directory in.
+  TESTED_PATHS: tests packages/archaeology/tests packages/pulse-ledger/tests packages/pulse-core/tests packages/verdict-relay/tests packages/schedules/tests packages/identity/tests packages/consent-ingress/tests packages/synthea-seed/tests packages/twenty-projection/tests packages/ocean/libs packages/ocean/tests/unit/test_stg_events_sql.py
   # Coverage covers ocean-events because it is the envelope every consumer depends on, and it is
   # at 100%. ocean-broker joins it at task 2.2: the reason it was excluded — that 2.2 would throw
   # its tests away — expired when 2.2 landed EventBridgePublisher and the event catalog, which are
@@ -211,6 +215,17 @@ tasks:
     # (tests/test_catalog_release_deploy.py pins both).
     cmds:
       - uv run python -m pulse_core.catalog_release_cli {{if .APPLY}}--apply{{end}}
+
+  snowflake:stg-events:
+    desc: Apply the STG_EVENTS.EVENTS view DDL to Snowflake (idempotent CREATE OR REPLACE; needs Snowflake credentials)
+    # snowflake-projection task 1.1: the committed shape is the reviewable artifact
+    # (packages/ocean/infra/snowflake/stg_events_events.sql); this target just replays it.
+    # CREATE OR REPLACE VIEW makes a re-run a no-op, so there is no plan/apply split like
+    # catalog:release's. Never reached from `check` — CI has no Snowflake credentials
+    # (docs/contracts/consumes.md posture); same guard as catalog:release above.
+    dir: packages/ocean
+    cmds:
+      - uv run python scripts/apply_snowflake_view.py infra/snowflake/stg_events_events.sql
 
   synthea:regen:
     desc: Regenerate the PROFILE synthetic population from the pinned JAR and verify its manifest (Java required; REPIN=1 re-pins)
