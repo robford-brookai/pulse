@@ -147,7 +147,8 @@ deployment-specific additions.
 6. Capture the standard (non-SRV) connection string listing replica set hosts
    explicitly. SRV resolution works through the EAI wildcard, but explicit hosts
    make the network rule auditable:
-   `mongodb://rw_cdc:<pw>@shard-00-00.xxxxx.mongodb.net:27017,shard-00-01...`
+   `mongodb://shard-00-00.xxxxx.mongodb.net:27017,shard-00-01...` — supply the
+   `rw_cdc` user and its password separately, never inline in the URI.
 
 ### 4.2 Phase B — Snowflake objects
 
@@ -182,10 +183,11 @@ create external access integration atlas_eai
   allowed_network_rules = (atlas_egress) enabled = true;
 grant usage on integration atlas_eai to role rw_admin;
 
--- secret: connection URI (never in specs or model SQL)
+-- secret: connection URI (never in specs or model SQL; user and password
+-- supplied out of band, not inline in the connection string)
 create secret rw_platform.core.atlas_cdc_uri
   type = generic_string
-  secret_string = 'mongodb://rw_cdc:<pw>@shard-00-00...';
+  secret_string = 'mongodb://shard-00-00.../?authSource=admin';
 ```
 
 Note `auto_suspend_secs = 0` and its cost consequence: a streaming service is a
