@@ -1,0 +1,48 @@
+{
+  "Name": "pulse-warehouse-sync",
+  "AgentPlatform": 7,
+  "Replicas": 1,
+  "DockerImage": "__WAREHOUSE_SYNC_IMAGE__",
+  "OtherDockerConfig": {
+    "command": [
+      "sh",
+      "-c",
+      "umask 077 && printf '%s' \"$SNOWFLAKE_PRIVATE_KEY_PEM\" > /tmp/sf.pem && unset SNOWFLAKE_PRIVATE_KEY_PEM && exec python -m uvicorn src.main:app --host 0.0.0.0 --port 8008"
+    ],
+    "EnvFrom": [
+      {
+        "secretRef": {
+          "name": "pulse-warehouse-sync-secret"
+        }
+      }
+    ],
+    "Env": [
+      {
+        "name": "SQS_QUEUE_URL",
+        "value": "https://sqs.us-east-1.amazonaws.com/173008660334/duploservices-dev01-brook-pulse-warehouse-sync"
+      },
+      {
+        "name": "SNOWFLAKE_PRIVATE_KEY_PATH",
+        "value": "/tmp/sf.pem"
+      },
+      {
+        "name": "AWS_REGION",
+        "value": "us-east-1"
+      },
+      {
+        "name": "AWS_DEFAULT_REGION",
+        "value": "us-east-1"
+      }
+    ],
+    "resources": {
+      "requests": {
+        "cpu": "50m",
+        "memory": "500Mi"
+      },
+      "limits": {
+        "cpu": "500m",
+        "memory": "500Mi"
+      }
+    }
+  }
+}
