@@ -75,11 +75,16 @@ def test_stg_events_row_carries_the_pinned_facts() -> None:
         assert needle in block, f"STG_EVENTS.EVENTS row (or its adjacent prose) is missing {needle!r}"
 
 
-def test_min_complete_from_uses_the_stamped_at_revival_placeholder() -> None:
+def test_min_complete_from_carries_a_placeholder_or_a_stamped_date() -> None:
+    # Before the feed revival (task 2.1) the cell carries the literal inline-code placeholder;
+    # the revival stamps it with the date completeness begins. Either is legal — a bare word or
+    # a link is not. Inline code, never a link: mkdocs build -s treats a broken link as an error.
     block = _stg_events_row_block(_publishes_text())
-    assert "`stamped-at-revival`" in block, (
-        "min_complete_from must carry the literal inline-code placeholder `stamped-at-revival`, "
-        "never a link (mkdocs build -s treats a broken link as an error)"
+    match = re.search(r"min_complete_from`?:?\s*`([^`]+)`", block)
+    assert match, "min_complete_from must carry an inline-code value (placeholder or stamped date)"
+    value = match.group(1)
+    assert value == "stamped-at-revival" or re.fullmatch(r"\d{4}-\d{2}-\d{2}", value), (
+        f"min_complete_from value {value!r} is neither the `stamped-at-revival` placeholder nor an ISO date"
     )
 
 
