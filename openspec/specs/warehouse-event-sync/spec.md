@@ -4,9 +4,7 @@
 
 Defines how events continue to reach Snowflake once the Redpanda Connect sink is removed, and what
 happens to an event the warehouse cannot accept.
-
 ## Requirements
-
 ### Requirement: Events reach the warehouse without Redpanda Connect
 
 Events SHALL continue to land in the Snowflake raw events table after the Redpanda Connect sink is
@@ -58,3 +56,37 @@ delivery order, and a redelivered event SHALL NOT produce a duplicate row.
 - **GIVEN** an event already written
 - **WHEN** the same event is redelivered
 - **THEN** no additional row is created
+
+### Requirement: The warehouse consumer is a provisioned workload
+
+The warehouse path SHALL exist as standing infrastructure: an EventBridge rule on the `ocean`
+bus matching the ledger's published events, a dedicated SQS queue with a dead-letter queue,
+the queue access policy admitting the rule, and the `warehouse-sync` consumer running as a
+deployed service. The definitions SHALL be committed files applied by script, in the same
+reviewable-shape posture as the relay's service definition.
+
+#### Scenario: A committed ledger event lands as a warehouse row
+
+- **GIVEN** the provisioned rule, queue, and running consumer
+- **WHEN** a command commits and the relay publishes its envelope on the `ocean` bus
+- **THEN** a row for that `event_id` appears in the raw events table, with `_topic` carrying
+  the originating domain
+
+#### Scenario: Redelivery still produces no second row
+
+- **GIVEN** a row already landed for an `event_id`
+- **WHEN** the same envelope is redelivered through the queue
+- **THEN** the table gains no additional row for that `event_id`
+
+### Requirement: Warehouse freshness is observable as one pinned query
+
+The capability SHALL define a single freshness query — the age of the newest `_loaded_at` in
+the raw events table — and the published contract SHALL carry it verbatim, so any consumer or
+gate (including `survey-engine-ingress`'s entry metric) measures freshness the same way.
+
+#### Scenario: The freshness figure is queryable after revival
+
+- **GIVEN** the provisioned feed has processed at least one event
+- **WHEN** the pinned freshness query runs
+- **THEN** it returns the age in minutes of the newest landed row, and that age reflects the
+  most recent committed ledger event rather than the pre-revival gap
