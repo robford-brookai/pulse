@@ -48,7 +48,8 @@ if [[ "$VERIFY_ONLY" -eq 0 ]]; then
   REDRIVE=$(printf '{"deadLetterTargetArn":"%s","maxReceiveCount":"%s"}' "$DLQ_ARN" "$MAX_RECEIVE")
   aws sqs create-queue --queue-name "$QUEUE" --query QueueUrl --output text >/dev/null \
     || fail "could not create or confirm the queue" "sqs:CreateQueue on the tenant role"
-  aws sqs set-queue-attributes --queue-url "$QUEUE_URL" --attributes "RedrivePolicy=${REDRIVE}" \
+  ATTRS=$(python3 -c 'import json,sys; print(json.dumps({"RedrivePolicy": sys.argv[1]}))' "$REDRIVE")
+  aws sqs set-queue-attributes --queue-url "$QUEUE_URL" --attributes "$ATTRS" \
     || fail "could not set the redrive policy" "the RedrivePolicy JSON, or sqs:SetQueueAttributes"
 
   step "event bus ${BUS} (must already exist — created by twenty-projection 4.2)"
@@ -67,7 +68,8 @@ if [[ "$VERIFY_ONLY" -eq 0 ]]; then
 {"Version":"2012-10-17","Statement":[{"Sid":"AllowEventBridgeRuleToSendMessage","Effect":"Allow","Principal":{"Service":"events.amazonaws.com"},"Action":"sqs:SendMessage","Resource":"${QUEUE_ARN}","Condition":{"ArnEquals":{"aws:SourceArn":"${RULE_ARN}"}}}]}
 JSON
 )
-  aws sqs set-queue-attributes --queue-url "$QUEUE_URL" --attributes "Policy=${POLICY}" \
+  PATTRS=$(python3 -c 'import json,sys; print(json.dumps({"Policy": sys.argv[1]}))' "$POLICY")
+  aws sqs set-queue-attributes --queue-url "$QUEUE_URL" --attributes "$PATTRS" \
     || fail "could not set the queue policy" "the Policy JSON, or sqs:SetQueueAttributes"
 
   step "rule target"
