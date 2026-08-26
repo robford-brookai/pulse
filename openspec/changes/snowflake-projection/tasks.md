@@ -83,7 +83,7 @@ No serial lanes are touched.
 
 ## 2. Wave 2 — revival and live proof (operator)
 
-- [ ] 2.1 Provision the warehouse feed on dev and prove it end to end. From the operator
+- [x] 2.1 Provision the warehouse feed on dev and prove it end to end. From the operator
       queue under G_APPROVAL, per the 4.2 playbook and
       `scripts/pulse-ledger/provision_projection_feed.sh` precedent: (a) EventBridge rule on
       bus `duploservices-dev01-brook-ocean` matching `source = "ocean"`, targeting (b) a new
