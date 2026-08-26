@@ -22,6 +22,7 @@ nav:
       - Twenty-artifact-promotion: runbooks/twenty-artifact-promotion.md
       - Twenty-projection: runbooks/twenty-projection.md
       - Billing-state: runbooks/billing-state.md
+      - Warehouse-sync-revival: runbooks/warehouse-sync-revival.md
   - Contracts:
       - Consumes: contracts/consumes.md
       - Publishes: contracts/publishes.md
