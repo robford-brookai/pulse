@@ -4,11 +4,11 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends g++ && rm -rf /var/lib/apt/lists/*
 
-RUN pip install uv --quiet
-
 # Copy pyproject.toml and install deps
 COPY services/warehouse-sync/pyproject.toml .
-RUN uv pip install --system --no-cache \
+# pip, not uv: uv segfaults (SIGSEGV, exit 139) under qemu amd64 emulation on the
+# arm64 dev machines this image is built from; versions are fully pinned so pip is equivalent.
+RUN pip install --no-cache-dir \
     fastapi==0.135.1 \
     uvicorn==0.41.0 \
     "aioboto3>=13.0.0" \
