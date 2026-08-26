@@ -53,7 +53,7 @@ No serial lanes are touched.
       matching column in the SQL (failure message names the missing field).
       `[model: sonnet | deps: — | lane: repo_change | wave: 1]`
 
-- [ ] 1.2 Supersession note on the stale design leg. In
+- [x] 1.2 Supersession note on the stale design leg. In
       `design/platform/snowflake-landing-spec.md`, directly under the `## Pipeline` heading:
       a note that the events leg (Twenty-Postgres CDC → `RAW_TWENTY.DOMAIN_EVENT` →
       STG_EVENTS) is superseded — the ledger is the record, envelopes land via
@@ -65,7 +65,7 @@ No serial lanes are touched.
       `snowflake-stg-events` (case-insensitive for `superseded`).
       `[model: sonnet | deps: — | lane: repo_change | wave: 1]`
 
-- [ ] 1.3 Publish the contract rows. In `docs/contracts/publishes.md`: (a) a new
+- [x] 1.3 Publish the contract rows. In `docs/contracts/publishes.md`: (a) a new
       `STREAMLINE.STG_EVENTS.EVENTS` row — pinned column list (copied from 1.1's SQL), grain
       (one row per envelope `event_id`, earliest arrival wins), the verbatim freshness query
       `SELECT TIMESTAMPDIFF('minute', MAX(_loaded_at), CURRENT_TIMESTAMP()) FROM
