@@ -37,7 +37,9 @@ decides state, not just evidence, so a mart that mislabels an outcome writes wro
 coverage state; and `subject_id` for the two coverage verdict types is the patient × payer subject
 key, the only identifying field a coverage row has — the mart contract carries no payer or
 member-id column, and none may be added, because that key convention is what keeps payer
-identifiers out of relay logs. Coverage-detail values (QMB status, benefit categories, copay)
+identifiers out of relay logs. The key format is pinned (coverage-state delta, billing-state):
+`{patient_subject_key}:{first 16 hex of sha256(payer identifier, lowercased, UTF-8)}`, derived by
+the mart-row producer — the raw payer identifier never leaves the adjudicating system. Coverage-detail values (QMB status, benefit categories, copay)
 belong in the verdict payload and `lineage_ref`, never in a new column and never in the state
 vocabulary. Rows whose verdict types the mart does not yet produce simply never arrive; the relay
 declares what it reads.

@@ -87,7 +87,10 @@ this change touching those lanes are sequenced behind it (or behind explicit lan
    both. Decide at proposal review.
 2. **dbt mart seam ownership** — who adds the `billing_eligibility` / `coverage_eligibility` /
    `benefits_verification` rows to the mart, and does the dbt repo adopt a `publishes.md` pin?
-   Blocks wave 3 only.
+   Blocks wave 3 only. **Decided 2026-08-26 (DNA-1252):** the streamline dbt project owns the
+   mart (`STREAMLINE.OCEAN_MARTS.OCEAN_VERDICTS`, `Brookai/streamline#20`) with a `publishes.md`
+   pin in that repo; v1 rows come from a manually adjudicated seed (the question-4 "Billy manual
+   runner" posture, `rule_version manual-*-v1`), rules-engine SQL later behind the same contract.
 3. **pricing-engine's seam** — the Brook `pricing-engine` app connects to pulse via a connector.
    Does it feed the Snowflake mart (verdict-relay declares on its behalf), or declare directly
    through the command API under its own credential (`customerio-consent-ingress` precedent)?
@@ -99,6 +102,9 @@ this change touching those lanes are sequenced behind it (or behind explicit lan
    the state vocabulary (recommended). Needs billing-team confirmation.
 6. **subject_id addressing** — confirmation that the mart can address `billing_episode`
    subject ids via `warehouse-event-sync`, and the coverage first-declare rule.
+   **Decided 2026-08-26:** confirmed — the mart joins `billing_eligibility` rows to
+   `STG_EVENTS.EVENTS` subjects; the coverage subject-key convention is now pinned in the
+   coverage-state delta (`{patient_subject_key}:{sha256(payer)[:16]}`).
 7. **Cadence SLO** — poll interval; whether the 26 h verdict-staleness monitor tightens for
    billing verdict types.
 8. **Exclusivity interaction** — whether `qualified → not_qualified` mid-month re-opens the

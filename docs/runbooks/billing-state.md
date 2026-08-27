@@ -61,7 +61,11 @@ which is `uv run python -m schedules.cli verdict-relay-poll`. Credentialed, so i
 from `task check`, which stays offline and credential-free.
 
 Configuration is env-var names only (`VERDICT_RELAY_*`, pinned in `verdict_relay.production`);
-values live in the deploy environment. A missing variable fails startup naming exactly that
+values live in the deploy environment. **The dev mart address is decided** (DNA-1252, mart PR
+`Brookai/streamline#20`): `VERDICT_RELAY_SNOWFLAKE_DATABASE=STREAMLINE`,
+`VERDICT_RELAY_SNOWFLAKE_SCHEMA=OCEAN_MARTS`, `VERDICT_RELAY_SNOWFLAKE_TABLE=OCEAN_VERDICTS` —
+the dbt-materialized verdict mart in the streamline project, publisher-pinned in that repo's
+`docs/contracts/publishes.md`. Account/user/password/warehouse remain per-target credentials. A missing variable fails startup naming exactly that
 variable, before any Snowflake or ledger connection is attempted — so a misconfigured deploy tells
 you which variable, not "connection refused". No credential value reaches a log, a receipt, or an
 error message.

@@ -165,7 +165,22 @@ class SnowflakeRowSource:
                     "WHERE computed_at > %s ORDER BY computed_at ASC LIMIT %s",
                     (after, limit),
                 )
-            return [dict(zip(CONTRACT_COLUMNS, row, strict=True)) for row in cursor.fetchall()]
+            rows = [dict(zip(CONTRACT_COLUMNS, row, strict=True)) for row in cursor.fetchall()]
+            if len(rows) < limit:
+                return rows
+            # A full page may cut mid-tie, and the reader advances its cursor with a strict
+            # `computed_at > boundary` — any tied row beyond the cut would be skipped forever.
+            # The RowSource protocol therefore requires the tie never split: re-fetch every row
+            # sharing the boundary `computed_at` and splice them in (`FixtureRowSource` over-fills
+            # the same way).
+            boundary = rows[-1]["computed_at"]
+            head = [row for row in rows if row["computed_at"] != boundary]
+            cursor.execute(
+                f"SELECT {columns} FROM {table} WHERE computed_at = %s",  # noqa: S608
+                (boundary,),
+            )
+            ties = [dict(zip(CONTRACT_COLUMNS, row, strict=True)) for row in cursor.fetchall()]
+            return [*head, *ties]
         finally:
             cursor.close()
 
