@@ -112,7 +112,7 @@ Two rules ride along:
 
 ## 4. Dispatch mechanics: waves, serial lanes, escalation
 
-**Waves.** Dispatch releases only tasks whose `depends_on` are merged. Orca will happily parallelize a dependency chain if allowed — the wave gate is what stops it. Within a wave, everything `parallel: yes` may run concurrently in separate worktrees. "Merged" is read off `tasks.md`: a checked box is a merged task, so checking one off is the act that opens the next wave.
+**Waves.** Dispatch releases only tasks whose `depends_on` are merged. Orca will happily parallelize a dependency chain if allowed — the wave gate is what stops it. Within a wave, everything `parallel: yes` may run concurrently in separate worktrees. "Merged" is read off `tasks.md`: a checked box is a merged task, so checking one off is the act that opens the next wave — and `task checkoff CHANGE=<id>` is the normal actor for that flip, deriving it from merge subjects' `(X.Y[, TEAM-n])` tag rather than a hand-typed commit. The subject tag is therefore normative: dispatch writes the task id into the work-order title, the PR title inherits it, and checkoff reads it back. Hand-flipping stays legal under `main_access`; it is just the slow way.
 
 A dependency on an out-of-lane task holds its dependent exactly like any other, and dispatch names the lane when it reports the block. That work is real; it simply happens on another queue.
 

@@ -28,7 +28,7 @@ its own justification. Default model is `sonnet`, stated explicitly per
       merged, commit message lists source SHAs/PRs. Tests first: subject-parsing table test,
       unknown-id refusal, idempotent rerun, checkbox-only diff assertion.
       `[model: sonnet | deps: 1.1 | lane: repo_change | wave: 1]`
-- [ ] 2.2 Wire checkoff into the docs: dispatch-template §4 gains the automated path ("checking
+- [x] 2.2 Wire checkoff into the docs: dispatch-template §4 gains the automated path ("checking
       one off is the act that opens the next wave" now names `task checkoff` as the normal actor),
       WORKFLOW.md merge step behavior mentions it, `task -l` grouping ordered per convention.
       `[model: sonnet | deps: 2.1 | lane: repo_change | wave: 1]`
