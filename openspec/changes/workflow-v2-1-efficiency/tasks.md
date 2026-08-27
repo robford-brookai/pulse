@@ -63,7 +63,8 @@ its own justification. Default model is `sonnet`, stated explicitly per
       exercise of the new edges — `task checkoff` against this change's own merged PRs, a
       dry-run `linear:sync` showing a planned write-back, `workflow:lint` green.
       `[model: sonnet | deps: 2.2, 3.1, 4.2 | lane: repo_change | wave: 3]`
-- [ ] 5.2 Record the template-bound pieces (checkoff target, write-back, gitignore narrowing,
+- [x] 5.2 Record the template-bound pieces (checkoff target, write-back, gitignore narrowing,
       lint extension) as a repo-ade issue per the fix-upstream rule — filed, not implemented
       here.
       `[model: sonnet | deps: 5.1 | lane: repo_change | wave: 3]`
+      Filed: robford-brookai/repo-ade#6
