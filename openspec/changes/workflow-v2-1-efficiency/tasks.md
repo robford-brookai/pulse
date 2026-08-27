@@ -15,7 +15,7 @@ its own justification. Default model is `sonnet`, stated explicitly per
       Done when `task workflow:lint` passes and every new status/step string resolves.
       `[model: fable | deps: — | lane: repo_change | wave: 0]`
       `serial: openspec_main_specs` — the workflow document governs every other agent's behavior.
-- [ ] 1.2 `scripts/workflow.py`: extend the lint so the new step, edges, and resolution rules are
+- [x] 1.2 `scripts/workflow.py`: extend the lint so the new step, edges, and resolution rules are
       schema-valid, and add a regression test that the v2.1.0 block parses and cross-references
       cleanly. Tests first.
       `[model: sonnet | deps: 1.1 | lane: repo_change | wave: 0]`

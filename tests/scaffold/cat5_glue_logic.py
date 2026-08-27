@@ -438,6 +438,33 @@ def test_gate_reference_must_exist(tmp_path: Path) -> None:
     assert any("G_MISSING" in e for e in workflow.check_structure(block))
 
 
+def test_v2_1_replan_is_wired() -> None:
+    """v2.1.0 regression: replan exists, execute reaches it, and it flows back through sync."""
+    block, _ = workflow.load(ROOT / "WORKFLOW.md")
+    steps = {s["id"]: s for s in block["steps"]}
+    assert "replan" in steps, "the replan step is gone"
+    assert steps["execute"]["next"].get("plan_amendment") == "replan"
+    assert steps["replan"]["next"].get("pass") == "sync_linear"
+    assert "G_MECE" in str(steps["replan"].get("gate", ""))
+
+
+def test_state_resolution_reads_no_machine_local_state() -> None:
+    """v2.1.0 regression: every resolution rule must be computable on a fresh clone.
+
+    v2.0.3 keyed three rules on gitignored paths (work_orders/ staleness, an untracked
+    SUMMARY.md, local worktree existence), so two machines could resolve the same change to
+    different steps. Comments in the block may still discuss those paths; the rules may not.
+    """
+    block, _ = workflow.load(ROOT / "WORKFLOW.md")
+    rules = [
+        condition for entry in block["state_resolution"]["order"] if isinstance(entry, dict) for condition in entry
+    ]
+    offenders = [r for r in rules if "work_orders/" in r or "worktree" in r.lower()]
+    assert offenders == [], f"resolution rules read machine-local state: {offenders}"
+    summary_rules = [r for r in rules if "SUMMARY.md absent" in r]
+    assert all("tracked" in r for r in summary_rules), "the collect rule must read the tracked tree"
+
+
 def test_gate_blocks_must_reference_a_real_step(tmp_path: Path) -> None:
     block, _ = workflow.load(_workflow_md(tmp_path, MINIMAL.replace("blocks: [execute]", "blocks: [nope]")))
     assert any("nope" in e for e in workflow.check_structure(block))
