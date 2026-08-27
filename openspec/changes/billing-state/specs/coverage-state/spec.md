@@ -23,6 +23,25 @@ in the state vocabulary.
 - **THEN** the subject's state is a coarse vocabulary value and the QMB detail is reachable
   only through the verdict's payload and lineage
 
+### Requirement: The coverage subject key is the patient × payer digest convention
+
+The `coverage` subject key SHALL be
+`{patient_subject_key}:{first 16 hex characters of sha256(payer identifier, lowercased, UTF-8)}`
+— the patient's existing ledger subject key, a `:` separator (the `billing_episode`
+`{enrollment_key}:{month}` precedent), and a truncated digest of the payer identifier as carried
+by the adjudicating system. The producer of a coverage verdict row SHALL derive this key itself;
+the raw payer identifier SHALL NOT appear in the mart, the relay, the ledger, or any log — the
+digest convention is what keeps payer identifiers out of every downstream surface
+(identifier-registry sha256 posture).
+
+#### Scenario: Two verdicts for the same patient and payer address one subject
+
+- **GIVEN** a coverage-eligibility verdict and a later benefits-verification verdict, each
+  independently deriving the key from the same patient subject key and payer identifier
+- **WHEN** both are declared
+- **THEN** they address the same coverage subject, and no surface anywhere carries the payer
+  identifier itself
+
 ### Requirement: The record admits the coverage subject
 
 The ledger schema SHALL accept `coverage` in `events`, `current_state`, and `review_queue` —

@@ -206,6 +206,89 @@ class TestSnowflakeRowSourceNeverImportsTheDriverUntilConnecting:
         source.close()
 
 
+class TestSnowflakeRowSourceNeverSplitsAComputedAtTie:
+    """The RowSource protocol (mart_reader.py): a page never splits a `computed_at` tie — rows
+    sharing the last included `computed_at` are all included, so paging on a strict `>` boundary
+    can never skip a tied row. `FixtureRowSource` over-fills the same way; the production source
+    must too, or a tie wider than the page size is silently dropped."""
+
+    @staticmethod
+    def _row(subject_id: str, computed_at: str) -> dict[str, object]:
+        return {
+            "subject_id": subject_id,
+            "verdict_type": "billing_eligibility",
+            "outcome": "positive",
+            "reason": None,
+            "rule_version": "rules-v1",
+            "as_of": "2026-08-01T00:00:00+00:00",
+            "lineage_ref": "dbt-run-1",
+            "computed_at": computed_at,
+        }
+
+    class _ScriptedCursor:
+        """Serves one pre-scripted result set per `execute`, recording every query."""
+
+        def __init__(self, result_sets: list[list[dict[str, object]]]) -> None:
+            self._result_sets = result_sets
+            self.queries: list[tuple[str, tuple[object, ...]]] = []
+
+        def execute(self, statement: str, params: tuple[object, ...]) -> None:
+            self.queries.append((statement, params))
+
+        def fetchall(self) -> list[tuple[object, ...]]:
+            from verdict_relay.mart_reader import CONTRACT_COLUMNS
+
+            rows = self._result_sets[len(self.queries) - 1]
+            return [tuple(row[column] for column in CONTRACT_COLUMNS) for row in rows]
+
+        def close(self) -> None:
+            pass
+
+    class _ScriptedConnection:
+        def __init__(self, cursor: TestSnowflakeRowSourceNeverSplitsAComputedAtTie._ScriptedCursor) -> None:
+            self.cursor_obj = cursor
+
+        def cursor(self) -> TestSnowflakeRowSourceNeverSplitsAComputedAtTie._ScriptedCursor:
+            return self.cursor_obj
+
+        def close(self) -> None:
+            pass
+
+    def test_a_full_page_is_extended_with_every_row_tying_the_boundary_computed_at(self) -> None:
+        tied = "2026-08-01T02:00:00+00:00"
+        earlier = self._row("episode-A", "2026-08-01T01:00:00+00:00")
+        tie_rows = [self._row(f"episode-{name}", tied) for name in ("B", "C", "D")]
+        # The page query (LIMIT 3) cuts mid-tie: episode-D is beyond the limit.
+        cursor = self._ScriptedCursor([
+            [earlier, tie_rows[0], tie_rows[1]],
+            tie_rows,  # the boundary re-fetch returns the full tie
+        ])
+        connection = self._ScriptedConnection(cursor)
+        config = resolve_production_config(COMPLETE_ENV)
+        source = SnowflakeRowSource(config, connect=lambda _config: connection)
+
+        page = source.fetch(after=None, limit=3)
+
+        assert list(page) == [earlier, *tie_rows]
+        (tie_statement, tie_params) = cursor.queries[1]
+        assert "WHERE computed_at = %s" in tie_statement
+        assert tie_params == (tied,)
+        source.close()
+
+    def test_a_page_below_the_limit_issues_no_second_query(self) -> None:
+        rows = [self._row("episode-A", "2026-08-01T01:00:00+00:00")]
+        cursor = self._ScriptedCursor([rows])
+        connection = self._ScriptedConnection(cursor)
+        config = resolve_production_config(COMPLETE_ENV)
+        source = SnowflakeRowSource(config, connect=lambda _config: connection)
+
+        page = source.fetch(after=None, limit=3)
+
+        assert list(page) == rows
+        assert len(cursor.queries) == 1
+        source.close()
+
+
 def test_production_config_is_a_dataclass_of_only_configured_values() -> None:
     config = ProductionConfig(
         pulse_core_base_url="https://ledger.test",
