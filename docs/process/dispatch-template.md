@@ -156,7 +156,7 @@ halted at this point per WORKFLOW.md decision table.>
 not guessed.>
 ```
 
-The Receipt block is the router's attribution surface — same doctrine as the ledger's actor field. Phase 5 `task collect` aggregates receipts into SUMMARY.md so the change's tier economics are readable in one place.
+The Receipt block is the router's attribution surface — same doctrine as the ledger's actor field. Phase 5 `task collect` aggregates receipts into SUMMARY.md so the change's tier economics are readable in one place — and `handoffs/<change>/SUMMARY.md` is **tracked** (WORKFLOW v2.1.0): a receipt record that lives only on one workstation is not a record, and whether the escalation ladder pays is unanswerable without it. The tracked summary inherits the HANDOFF content rule with teeth: receipts and spec deltas only, no operational detail, no PHI — a violation is a review-reject, and `task collect` refuses outright when the summary path is gitignored.
 
 ## 6. Quality gate before dispatch (per work order)
 

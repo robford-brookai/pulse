@@ -52,7 +52,7 @@ its own justification. Default model is `sonnet`, stated explicitly per
       accepts a scratch path, and extend the cat9 golden workflow to commit the summary.
       `[model: sonnet | deps: 1.1 | lane: repo_change | wave: 1]`
       `serial: workspace_roots` — edits the root ignore file and scaffold gates.
-- [ ] 4.2 `scripts/collect_handoffs.py`: assert the summary it writes lands on a tracked path,
+- [x] 4.2 `scripts/collect_handoffs.py`: assert the summary it writes lands on a tracked path,
       and document the receipts-and-spec-deltas-only content rule (PHI review-reject) in the
       template HANDOFF and dispatch-template §5. Tests first.
       `[model: sonnet | deps: 4.1 | lane: repo_change | wave: 2]`

@@ -325,6 +325,34 @@ def test_summarize_handoffs_documents_the_empty_case() -> None:
     assert collect.summarize_handoffs([], "add-auth") == ("No HANDOFF.md files found for change 'add-auth'.")
 
 
+def _git_repo_with_ignore(tmp_path: Path, pattern: str) -> Path:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)  # noqa: S603, S607
+    (tmp_path / ".gitignore").write_text(pattern + "\n")
+    summary = tmp_path / "handoffs" / "c" / "SUMMARY.md"
+    summary.parent.mkdir(parents=True)
+    summary.write_text("# SUMMARY\n")
+    return summary
+
+
+def test_collect_detects_an_ignored_summary(tmp_path: Path) -> None:
+    """The regression this guards: a directory-level `handoffs/` ignore silently loses the
+    receipt record — the escalation ladder's own evidence never enters the repo."""
+    assert collect.summary_is_ignored(_git_repo_with_ignore(tmp_path, "handoffs/"))
+
+
+def test_collect_accepts_a_trackable_summary(tmp_path: Path) -> None:
+    assert not collect.summary_is_ignored(
+        _git_repo_with_ignore(tmp_path, "handoffs/**\n!handoffs/*/\n!handoffs/*/SUMMARY.md")
+    )
+
+
+def test_summary_check_outside_a_repo_is_not_an_error(tmp_path: Path) -> None:
+    """cat9 collects into plain temp dirs; no repo means nothing can be ignored."""
+    summary = tmp_path / "handoffs" / "c" / "SUMMARY.md"
+    summary.parent.mkdir(parents=True)
+    assert not collect.summary_is_ignored(summary)
+
+
 # --- workflow.py: WORKFLOW.md's block is the source of truth, so something must read it --------
 #
 # The block sat in WORKFLOW.md for two revisions declaring itself "parsed by thin glue" while
