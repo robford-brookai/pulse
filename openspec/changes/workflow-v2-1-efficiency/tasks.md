@@ -59,7 +59,7 @@ its own justification. Default model is `sonnet`, stated explicitly per
 
 ## 5. Verification and upstreaming
 
-- [ ] 5.1 Full pass: `task check`, `task verify CHANGE=workflow-v2-1-efficiency`, and a dry-run
+- [x] 5.1 Full pass: `task check`, `task verify CHANGE=workflow-v2-1-efficiency`, and a dry-run
       exercise of the new edges — `task checkoff` against this change's own merged PRs, a
       dry-run `linear:sync` showing a planned write-back, `workflow:lint` green.
       `[model: sonnet | deps: 2.2, 3.1, 4.2 | lane: repo_change | wave: 3]`
