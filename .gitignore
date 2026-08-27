@@ -214,9 +214,13 @@ __marimo__/
 # openlore analysis artifacts
 .openlore/
 
-# Thin-glue working state
+# Thin-glue working state. handoffs/<change>/SUMMARY.md is the tracked receipt record
+# (WORKFLOW v2.1.0) — ignore the directory's CONTENTS, never the directory: a directory-level
+# `handoffs/` pattern would block the SUMMARY.md negation beneath it.
 work_orders/
-handoffs/
+handoffs/**
+!handoffs/*/
+!handoffs/*/SUMMARY.md
 
 # HANDOFF.md (per-worktree, not committed; templates/HANDOFF.md stays tracked)
 /HANDOFF.md

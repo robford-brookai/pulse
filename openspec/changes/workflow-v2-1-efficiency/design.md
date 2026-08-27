@@ -79,9 +79,10 @@ and a §5 note (SUMMARY.md is tracked); both are doc edits riding this change.
   `(X.Y` / `(X.Y,` convention at end-of-subject and checkoff refuses ids not present in tasks.md;
   a false positive still only flips a box whose PR reviewer will see the flip in the checkoff
   commit message listing its source SHAs.
-- [Gitignore negation silently fails and SUMMARY.md stays untracked] → cat-series scaffold gate
-  asserts `git check-ignore handoffs/x/SUMMARY.md` fails and `handoffs/x/scratch.md` passes;
-  golden workflow test extends to commit the summary.
+- [Gitignore negation silently fails and SUMMARY.md stays untracked] → cat1 gates assert
+  `git check-ignore handoffs/x/SUMMARY.md` fails and scratch paths (shallow and nested) pass;
+  cat9's fresh-clone smoke runs those same gates in a clone, so the class is covered without a
+  separate golden extension.
 - [Write-back races a hand edit to tasks.md] → sync already treats the file as canonical input;
   the write-back happens on the operator's working copy in the same session, and an id token
   collision (line already has one) is a no-op by rule.

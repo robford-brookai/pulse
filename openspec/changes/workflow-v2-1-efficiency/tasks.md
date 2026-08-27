@@ -46,7 +46,7 @@ its own justification. Default model is `sonnet`, stated explicitly per
 
 ## 4. Tracked state
 
-- [ ] 4.1 `.gitignore`: narrow `handoffs/` so `handoffs/*/SUMMARY.md` tracks while per-task
+- [x] 4.1 `.gitignore`: narrow `handoffs/` so `handoffs/*/SUMMARY.md` tracks while per-task
       scratch stays ignored — mind directory-level negation semantics (ignore contents, not the
       directory). Add a scaffold gate asserting `git check-ignore` rejects the summary path and
       accepts a scratch path, and extend the cat9 golden workflow to commit the summary.
