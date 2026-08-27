@@ -8,7 +8,10 @@ Usage:
 
 Direction of truth is one-way. `tasks.md` and the work-order files are canonical; Linear is where
 humans watch, comment and approve. A sub-issue edited by hand is drift and gets overwritten on the
-next sync. Nothing is ever read back out of Linear into the repo.
+next sync. ONE reverse edge is sanctioned, because the issue id is the one fact Linear mints:
+after a create succeeds on an --apply run, the `[TEAM-n]` token is inserted into that task's line
+in tasks.md. Id tokens only — never rewritten once present, never any other content, and a dry
+run prints the pending write-back without touching the file. Everything else stays one-way.
 
 Dry run is the default because this writes to a shared system. `--apply` is the only way to mutate,
 and the plan it prints first is the same plan it executes.
@@ -103,6 +106,35 @@ class LinearClient:
 
 def parent_title(change: str) -> str:
     return f"[CHANGE] {change}"
+
+
+# `- [ ] 1.1 ` optionally followed by an existing `[DNA-nnn]` token. The write-back keys on the
+# task number and refuses to touch a line that already carries any id.
+TASK_LINE_RE = re.compile(r"^(?P<head>-\s+\[[ xX]\]\s+(?P<key>\d+\.\d+)\s+)(?P<rest>.*)$")
+ID_TOKEN_RE = re.compile(r"^\[[A-Z][A-Z0-9]*-\d+\]")
+
+
+def write_back_ids(content: str, ids_by_key: dict[str, str]) -> tuple[str, list[str]]:
+    """Insert `[TEAM-n]` tokens for newly created sub-issues. The one sanctioned reverse edge.
+
+    Returns (new content, keys written). A line already carrying an id token is never rewritten —
+    the token is minted once, and healing a "wrong" id by sync would make Linear a writer of
+    record. Nothing but the token is ever inserted.
+    """
+    written: list[str] = []
+    lines = content.splitlines(keepends=True)
+    for i, line in enumerate(lines):
+        match = TASK_LINE_RE.match(line)
+        if not match:
+            continue
+        key = match.group("key")
+        identifier = ids_by_key.get(key)
+        if not identifier or ID_TOKEN_RE.match(match.group("rest")):
+            continue
+        tail = "\n" if line.endswith("\n") else ""
+        lines[i] = f"{match.group('head')}[{identifier}] {match.group('rest')}{tail}"
+        written.append(key)
+    return "".join(lines), written
 
 
 def task_key_of(title: str) -> str | None:
@@ -261,6 +293,18 @@ def fetch_existing(client: LinearClient, team: str, change: str) -> tuple[bool, 
     return True, existing
 
 
+def _render_op(op: dict) -> str:
+    if op["kind"] == "create_parent":
+        return f"  create parent   {op['title']}"
+    if op["kind"] == "create_sub":
+        return f"  create sub      {op['key']:<6} {op['title'][:80]}"
+    if op["kind"] == "update_sub":
+        return f"  update sub      {op['key']:<6} {op['id']} (description drifted from the work order)"
+    if op["kind"] == "heal_status":
+        return f"  heal status     {op['key']:<6} {op['id']} Triage -> {UNSTARTED}"
+    return f"  ORPHAN          {op['key']:<6} {op['id']} — no longer in tasks.md, left alone"
+
+
 def render_plan(operations: list[dict], out_of_lane: list[dict]) -> str:
     lines = []
     if not operations:
@@ -271,17 +315,11 @@ def render_plan(operations: list[dict], out_of_lane: list[dict]) -> str:
             counts[op["kind"]] = counts.get(op["kind"], 0) + 1
         lines.append("Plan: " + ", ".join(f"{v} {k}" for k, v in sorted(counts.items())))
         lines.append("")
-        for op in operations:
-            if op["kind"] == "create_parent":
-                lines.append(f"  create parent   {op['title']}")
-            elif op["kind"] == "create_sub":
-                lines.append(f"  create sub      {op['key']:<6} {op['title'][:80]}")
-            elif op["kind"] == "update_sub":
-                lines.append(f"  update sub      {op['key']:<6} {op['id']} (description drifted from the work order)")
-            elif op["kind"] == "heal_status":
-                lines.append(f"  heal status     {op['key']:<6} {op['id']} Triage -> {UNSTARTED}")
-            elif op["kind"] == "orphan":
-                lines.append(f"  ORPHAN          {op['key']:<6} {op['id']} — no longer in tasks.md, left alone")
+        lines += [_render_op(op) for op in operations]
+
+    creates = sum(1 for op in operations if op["kind"] == "create_sub")
+    if creates:
+        lines += ["", f"On apply, {creates} new issue id(s) will be written back into tasks.md (id tokens only)."]
 
     if out_of_lane:
         lines += ["", f"Not synced — Open Engine queue, team CCC ({len(out_of_lane)}):"]
@@ -290,7 +328,20 @@ def render_plan(operations: list[dict], out_of_lane: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def apply_plan(client: LinearClient, operations: list[dict], desired: list[dict], ctx: dict, change: str) -> int:
+def apply_plan(
+    client: LinearClient,
+    operations: list[dict],
+    desired: list[dict],
+    ctx: dict,
+    change: str,
+    created: dict[str, str],
+) -> int:
+    """Execute the plan. `created` accumulates task key -> minted identifier for the write-back.
+
+    It is an out-parameter deliberately: a mid-run failure raises, and identifiers minted before
+    the failure must survive for the caller's finally-block write-back — otherwise the rerun sees
+    the sub-issue as existing and the id is never recorded anywhere.
+    """
     by_key = {d["key"]: d for d in desired}
     parent_id = None
     applied = 0
@@ -317,7 +368,7 @@ def apply_plan(client: LinearClient, operations: list[dict], desired: list[dict]
             applied += 1
         elif op["kind"] == "create_sub":
             item = by_key[op["key"]]
-            client.query(
+            data = client.query(
                 CREATE_MUTATION,
                 {
                     "input": {
@@ -329,6 +380,9 @@ def apply_plan(client: LinearClient, operations: list[dict], desired: list[dict]
                     }
                 },
             )
+            identifier = ((data.get("issueCreate") or {}).get("issue") or {}).get("identifier")
+            if identifier:
+                created[op["key"]] = str(identifier)
             applied += 1
         elif op["kind"] == "update_sub":
             item = by_key[op["key"]]
@@ -372,9 +426,10 @@ def main() -> int:
     parser.add_argument("--work-orders", type=Path, default=Path("work_orders"))
     args = parser.parse_args()
 
+    tasks_md = Path("openspec/changes") / args.change / "tasks.md"
     try:
         team, project = _target(workflow_mod.load()[0])
-        tasks = dispatch_tasks.parse_tasks(Path("openspec/changes") / args.change / "tasks.md")
+        tasks = dispatch_tasks.parse_tasks(tasks_md)
         dispatch_tasks.validate(tasks)
         desired = desired_subissues(args.change, tasks, args.work_orders)
         out_of_lane = [t for t in tasks if not t["dispatchable"]]
@@ -396,7 +451,18 @@ def main() -> int:
         if not args.apply:
             print("\nDry run. Re-run with APPLY=1 to write these to Linear.")
             return 0
-        applied = apply_plan(client, operations, desired, ctx, args.change)
+        created: dict[str, str] = {}
+        try:
+            applied = apply_plan(client, operations, desired, ctx, args.change, created)
+        finally:
+            # The one sanctioned reverse edge — and in a finally so a mid-run failure never
+            # orphans an already-minted id: the rerun would see the sub-issue as existing and
+            # the token would end up hand-copied, which is the drift this exists to end.
+            if created:
+                new_content, written = write_back_ids(tasks_md.read_text(), created)
+                if written:
+                    tasks_md.write_text(new_content)
+                    print(f"Wrote issue ids back into {tasks_md}: {', '.join(written)}")
         print(f"\nApplied {applied} operation(s) to team {team}.")
     except (SyncError, dispatch_tasks.DispatchError, workflow_mod.WorkflowError) as exc:
         print(f"Error: {exc}", file=sys.stderr)

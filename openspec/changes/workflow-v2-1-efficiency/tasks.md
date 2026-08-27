@@ -35,7 +35,7 @@ its own justification. Default model is `sonnet`, stated explicitly per
 
 ## 3. Linear id write-back
 
-- [ ] 3.1 `scripts/linear_sync.py`: on APPLY create success, insert the `[<TEAM>-<n>]` token into
+- [x] 3.1 `scripts/linear_sync.py`: on APPLY create success, insert the `[<TEAM>-<n>]` token into
       the task's line when absent — never rewrite an existing token, never touch any other
       content, dry run prints the pending write-back. Tests first: insertion, existing-token
       no-op, dry-run purity, failed-create writes nothing (mock the client — no live network in

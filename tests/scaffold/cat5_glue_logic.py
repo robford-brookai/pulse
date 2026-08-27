@@ -709,6 +709,89 @@ def test_status_guard_rejects_a_write_outside_the_unstarted_band() -> None:
         linear_sync.assert_status_writes_are_legal([{"kind": "create_sub", "state": "In Progress"}], statuses)
 
 
+# --- linear_sync id write-back: the ONE sanctioned reverse edge ---------------------------------
+#
+# The id is the one fact Linear mints. The first real change spent whole commits hand-copying
+# `[DNA-nnn]` tokens into tasks.md; the write-back inserts them on create, and nothing else ever
+# flows Linear -> repo.
+
+WRITEBACK_MD = """\
+# Tasks
+
+- [ ] 1.1 New task  `[lane: repo_change]`
+- [x] 1.2 [DNA-734] Old task with an id  `[lane: repo_change]`
+- [ ] 2.1 Untouched sibling  `[lane: repo_change]`
+"""
+
+
+def test_write_back_inserts_the_id_after_the_task_key() -> None:
+    new, written = linear_sync.write_back_ids(WRITEBACK_MD, {"1.1": "DNA-812"})
+    assert written == ["1.1"]
+    assert "- [ ] 1.1 [DNA-812] New task" in new
+
+
+def test_write_back_never_rewrites_an_existing_token() -> None:
+    new, written = linear_sync.write_back_ids(WRITEBACK_MD, {"1.2": "DNA-999"})
+    assert written == []
+    assert "[DNA-734]" in new
+    assert "DNA-999" not in new
+
+
+def test_write_back_touches_only_the_written_line() -> None:
+    new, _ = linear_sync.write_back_ids(WRITEBACK_MD, {"1.1": "DNA-812"})
+    old_lines, new_lines = WRITEBACK_MD.splitlines(), new.splitlines()
+    changed = [(a, b) for a, b in zip(old_lines, new_lines, strict=True) if a != b]
+    assert len(changed) == 1
+    assert changed[0][1] == changed[0][0].replace("1.1 ", "1.1 [DNA-812] ", 1)
+
+
+class _FakeClient:
+    """Answers create mutations with minted identifiers; fails on demand."""
+
+    def __init__(self, fail_on_key: str | None = None) -> None:
+        self.minted = 0
+        self._fail_on_key = fail_on_key
+
+    def query(self, document: str, variables: dict) -> dict:
+        title = variables.get("input", {}).get("title", "")
+        if self._fail_on_key and title.startswith(self._fail_on_key):
+            raise linear_sync.SyncError("boom")
+        self.minted += 1
+        return {
+            "issueCreate": {"success": True, "issue": {"id": f"uuid-{self.minted}", "identifier": f"DNA-{self.minted}"}}
+        }
+
+
+def _apply_ctx() -> dict:
+    return {"team_id": "t", "todo_state_id": "s", "project_id": None, "states": {}}
+
+
+def test_apply_reports_created_identifiers_for_the_write_back(tmp_path: Path) -> None:
+    _, desired = _synced(tmp_path)
+    ops = linear_sync.plan(desired, {}, parent_exists=False, change="c")
+    created: dict[str, str] = {}
+    linear_sync.apply_plan(_FakeClient(), ops, desired, _apply_ctx(), "c", created)
+    assert set(created) == {"1.2", "1.3"}, "every created sub-issue must surface its identifier"
+
+
+def test_a_failed_create_writes_no_phantom_id(tmp_path: Path) -> None:
+    """Partial apply: identifiers minted before the failure survive; the failed one never appears."""
+    _, desired = _synced(tmp_path)
+    ops = linear_sync.plan(desired, {}, parent_exists=False, change="c")
+    created: dict[str, str] = {}
+    with pytest.raises(linear_sync.SyncError):
+        linear_sync.apply_plan(_FakeClient(fail_on_key="1.3"), ops, desired, _apply_ctx(), "c", created)
+    assert "1.3" not in created
+    assert "1.2" in created, "an id minted before the failure must not be lost"
+
+
+def test_dry_run_plan_names_the_pending_write_back(tmp_path: Path) -> None:
+    _, desired = _synced(tmp_path)
+    ops = linear_sync.plan(desired, {}, parent_exists=False, change="c")
+    rendered = linear_sync.render_plan(ops, [])
+    assert "written back" in rendered.lower(), "the dry run must say ids will be written back on apply"
+
+
 def test_target_comes_from_workflow_md_not_the_api_key(tmp_path: Path) -> None:
     block, _ = workflow.load(_workflow_md(tmp_path, MINIMAL))
     assert linear_sync._target(block) == ("DNA", "P")
