@@ -438,6 +438,69 @@ def test_gate_reference_must_exist(tmp_path: Path) -> None:
     assert any("G_MISSING" in e for e in workflow.check_structure(block))
 
 
+# --- checkoff_tasks.py: merged PRs flip their own boxes, nobody hand-types the commit -----------
+#
+# The first real change put 25 hand-typed `chore: check off` commits on main. Each was
+# load-bearing (dispatch reads checked boxes to release waves), none was reviewable content.
+# checkoff derives the flips from main's own history instead.
+
+checkoff = load_script("checkoff_tasks.py")
+
+CHECKOFF_MD = """\
+# Tasks
+
+## 1. Wave 0
+
+- [ ] 1.1 First task
+      `[model: sonnet | deps: — | lane: repo_change | wave: 0]`
+- [x] 1.2 Already recorded
+- [ ] 2.3 Later task
+"""
+
+
+def test_subject_ids_follow_the_convention() -> None:
+    """The `(X.Y[, TEAM-n])` convention, as observed on the ocean run's actual merge subjects."""
+    cases = {
+        "fix(ocean): set AWS_DEFAULT_REGION (6.7) (#65)": {"6.7"},
+        "test(ocean): record equivalence — EQUIVALENT (8.2, DNA-774) (#63)": {"8.2"},
+        "feat(catalog): subscribe event-store (5.8, DNA-783) (#54)": {"5.8"},
+        "chore: check off 6.7 and 10.1": set(),  # checkoff's own commits never re-match
+        "feat(zcc-connector): publish through EventBridge, not Redpanda (#31)": set(),
+        "3.1 [DNA-738] graph-projection: sequence guard (#33)": set(),  # bare prefix, no parens
+    }
+    for subject, expected in cases.items():
+        assert checkoff.subject_task_ids(subject) == expected, subject
+
+
+def test_flip_checks_exactly_the_merged_boxes() -> None:
+    new, flipped, unknown = checkoff.flip(CHECKOFF_MD, {"1.1"})
+    assert flipped == ["1.1"]
+    assert unknown == []
+    assert "- [x] 1.1 First task" in new
+    assert "- [ ] 2.3 Later task" in new, "an unmerged task must stay unchecked"
+
+
+def test_flip_touches_only_checkbox_state() -> None:
+    new, _, _ = checkoff.flip(CHECKOFF_MD, {"1.1"})
+    diff = [(a, b) for a, b in zip(CHECKOFF_MD.splitlines(), new.splitlines(), strict=True) if a != b]
+    assert all(a.replace("[ ]", "[x]", 1) == b for a, b in diff), "flip changed more than a checkbox"
+    assert len(CHECKOFF_MD.splitlines()) == len(new.splitlines())
+
+
+def test_flip_is_idempotent() -> None:
+    """An already-checked task is a no-op, so rerunning after new merges is always safe."""
+    new, flipped, _ = checkoff.flip(CHECKOFF_MD, {"1.2"})
+    assert flipped == []
+    assert new == CHECKOFF_MD
+
+
+def test_flip_refuses_unknown_ids() -> None:
+    """A subject referencing a task this change does not have is a defect, not a silent skip."""
+    _, flipped, unknown = checkoff.flip(CHECKOFF_MD, {"9.9"})
+    assert unknown == ["9.9"]
+    assert flipped == []
+
+
 def test_v2_1_replan_is_wired() -> None:
     """v2.1.0 regression: replan exists, execute reaches it, and it flows back through sync."""
     block, _ = workflow.load(ROOT / "WORKFLOW.md")

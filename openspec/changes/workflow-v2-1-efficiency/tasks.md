@@ -22,7 +22,7 @@ its own justification. Default model is `sonnet`, stated explicitly per
 
 ## 2. Checkoff automation
 
-- [ ] 2.1 `scripts/checkoff_tasks.py` + `task checkoff CHANGE=<id>`: parse
+- [x] 2.1 `scripts/checkoff_tasks.py` + `task checkoff CHANGE=<id>`: parse
       `git log <last-checkoff>..main` subjects for the `(X.Y[, DNA-nnn])` convention, flip
       matching unchecked boxes only, refuse unknown ids nonzero, no-op cleanly when nothing
       merged, commit message lists source SHAs/PRs. Tests first: subject-parsing table test,
