@@ -187,6 +187,33 @@ class TestReRunReplays:
         ]
 
 
+class TestMidMonthInvocationDerivesFirstOfMonthKeys:
+    """DNA-1260: the subject key, the command's `month`, and `effective_at` must all derive from
+    the SAME first-of-month date. Before the fix, a mid-month `--month` leaked its literal day
+    into the subject key (observed on dev: `{enrollment}:2026-08-27`), so two runs invoked on
+    different days of one month derived different keys — a second open episode per enrollment,
+    breaking the one-per-month grain and the replay contract."""
+
+    def test_a_mid_month_date_derives_the_same_keys_as_the_first(self) -> None:
+        _, enrollments = load_enrollments("normal_month")
+        source = FixtureEnrollmentSource(rows=enrollments)
+        api = ScriptedApi([committed(), committed()])
+
+        declarations = declare_month_open(source, api.client(), month=date(2026, 8, 27))
+
+        for declaration in declarations:
+            assert declaration.command.month == date(2026, 8, 1)
+            assert declaration.command.subject_key == f"{declaration.enrollment.subject_key}:2026-08-01"
+
+    def test_dry_run_normalizes_identically(self) -> None:
+        _, enrollments = load_enrollments("normal_month")
+        source = FixtureEnrollmentSource(rows=enrollments)
+
+        commands = dry_run_month_open(source, month=date(2026, 8, 27))
+
+        assert all(command.subject_key.endswith(":2026-08-01") for command in commands)
+
+
 class TestMidMonthInvocation:
     def test_replays_existing_episodes_and_opens_only_the_newly_activated_enrollment(self) -> None:
         month, enrollments = load_enrollments("mid_month")

@@ -190,6 +190,12 @@ def declare_month_open(
     enumerated is a hard failure") — checked here, after enumeration and before the loop below
     builds a single command, so a broken read path never declares a partial run.
     """
+    # Normalize once: the CLI accepts any date within the billing month, and every derived value —
+    # subject_key, the command's `month` payload, `effective_at` — must come from the same
+    # first-of-month date, or two runs invoked on different days would derive different subject
+    # keys for the same enrollment x month (a second open episode, breaking the one-per-month
+    # grain and the replay contract).
+    month = month.replace(day=1)
     enrollments = source.eligible(states)
     if not enrollments:
         raise ZeroEnrollmentError(states)
@@ -219,6 +225,9 @@ def dry_run_month_open(
     `ZeroEnrollmentError` on empty enumeration, the same invariant `declare_month_open` enforces,
     so a dry run cannot mask a would-be invariant breach behind an empty would-declare set.
     """
+    # Same first-of-month normalization as `declare_month_open`, for the same reason: the dry
+    # run's whole point is exercising the real subject-key derivation.
+    month = month.replace(day=1)
     enrollments = source.eligible(states)
     if not enrollments:
         raise ZeroEnrollmentError(states)
