@@ -382,7 +382,7 @@ ade_workflow:
     order:
       - "any sub-issue status in [Todo, In Progress]": step=execute
   gates:
-    G_ONE:
+    demo_gate:
       blocks: [execute]
   live_execution:
     tracking: github_issue
@@ -393,7 +393,7 @@ ade_workflow:
   steps:
     - id: execute
       actor: agent(sonnet)
-      gate: G_ONE
+      gate: demo_gate
       linear_status: In Progress -> Done
       next: done
     - id: done
@@ -402,7 +402,7 @@ ade_workflow:
 
 ```mermaid
 flowchart TB
-  E[execute<br/>gate: G_ONE] --> D[done]
+  E[execute<br/>gate: demo_gate] --> D[done]
 ```
 """
 
@@ -463,8 +463,8 @@ def test_lane_excluded_steps_must_reference_a_real_step(tmp_path: Path) -> None:
 
 
 def test_gate_reference_must_exist(tmp_path: Path) -> None:
-    block, _ = workflow.load(_workflow_md(tmp_path, MINIMAL.replace("gate: G_ONE", "gate: G_MISSING")))
-    assert any("G_MISSING" in e for e in workflow.check_structure(block))
+    block, _ = workflow.load(_workflow_md(tmp_path, MINIMAL.replace("gate: demo_gate", "gate: missing_gate")))
+    assert any("missing_gate" in e for e in workflow.check_structure(block))
 
 
 # --- checkoff_tasks.py: merged PRs flip their own boxes, nobody hand-types the commit -----------
@@ -580,7 +580,7 @@ def test_v2_1_replan_is_wired() -> None:
     # dispatch, not sync_linear: v2.0.5 ordered dispatch first (the sub-issue description IS
     # the work-order body), and the replan tail follows the same order.
     assert steps["replan"]["next"].get("pass") == "dispatch"
-    assert "G_MECE" in str(steps["replan"].get("gate", ""))
+    assert "plan_validation" in str(steps["replan"].get("gate", ""))
 
 
 def test_state_resolution_reads_no_machine_local_state() -> None:
@@ -632,9 +632,9 @@ def test_diagram_may_not_omit_a_step(tmp_path: Path) -> None:
 
 def test_diagram_may_not_invent_a_gate(tmp_path: Path) -> None:
     block, text = workflow.load(
-        _workflow_md(tmp_path, MINIMAL.replace("E[execute<br/>gate: G_ONE]", "E[execute<br/>gate: G_GHOST]"))
+        _workflow_md(tmp_path, MINIMAL.replace("E[execute<br/>gate: demo_gate]", "E[execute<br/>gate: ghost_gate]"))
     )
-    assert any("G_GHOST" in e for e in workflow.check_projections(block, text))
+    assert any("ghost_gate" in e for e in workflow.check_projections(block, text))
 
 
 def test_header_version_must_match_the_yaml(tmp_path: Path) -> None:
@@ -1000,9 +1000,9 @@ def test_commits_ahead_survives_an_unresolvable_base_ref(tmp_path: Path) -> None
     assert collect.delinquent_worktrees([wt], "origin/nonexistent", repo) == []
 
 
-# --- dispatch: G_HARDENING is enforced, not just declared --------------------------------------
+# --- dispatch: the hardening gate is enforced, not just declared --------------------------------------
 #
-# WORKFLOW.md said `G_HARDENING blocks: [execute]` and nothing checked it. Two worktrees launched
+# WORKFLOW.md said the hardening gate blocks execute and nothing checked it. Two worktrees launched
 # straight through, and the audit that followed (DNA-777) found Orca spawning every agent with
 # --dangerously-skip-permissions.
 
@@ -1033,7 +1033,7 @@ def test_a_clean_receipt_permits_dispatch(tmp_path: Path, monkeypatch: pytest.Mo
 def test_a_missing_receipt_blocks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(dispatch, "ORCA_PROFILE", _profile(tmp_path, {}))
     problems = dispatch.hardening_problems("claude", date(2026, 8, 2), tmp_path / "absent.json")
-    assert any("no G_HARDENING receipt" in p for p in problems)
+    assert any("no hardening receipt" in p for p in problems)
 
 
 def test_a_failing_adoption_check_blocks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1094,7 +1094,7 @@ def test_a_corrupt_receipt_blocks_rather_than_passing(tmp_path: Path, monkeypatc
     assert any("unreadable" in p for p in problems)
 
 
-# --- G_HARDENING exceptions --------------------------------------------------------------------
+# --- hardening-gate exceptions --------------------------------------------------------------------
 #
 # Some checks cannot pass without giving up a feature that is genuinely wanted: H2 asks for a
 # localhost-only daemon and the phone client needs it reachable. Without a first-class exception

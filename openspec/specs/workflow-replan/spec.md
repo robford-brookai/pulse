@@ -7,23 +7,23 @@ pushes that carry scope decisions.
 ## Requirements
 ### Requirement: The step graph defines replan
 The WORKFLOW.md YAML block SHALL define a `replan` step reachable from `execute`, whose behavior
-is: amend tasks.md via a pull request, re-check G_MECE over the amended and newly added tasks
+is: amend tasks.md via a pull request, re-check plan validation over the amended and newly added tasks
 only, then proceed to `sync_linear` and `dispatch`. The prose and diagram projections SHALL name
 the step, and `task workflow:lint` SHALL pass.
 
 #### Scenario: New tasks discovered mid-execute
 - **GIVEN** a change is at execute and implementation reveals two missing tasks
-- **WHEN** the tasks are added to tasks.md through a replan PR and G_MECE holds on the delta
+- **WHEN** the tasks are added to tasks.md through a replan PR and plan validation holds on the delta
 - **THEN** the change proceeds through sync_linear and dispatch, and existing in-flight tasks are
   unaffected
 
-#### Scenario: Amendment failing G_MECE does not dispatch
+#### Scenario: Amendment failing plan validation does not dispatch
 - **GIVEN** a replan PR adds a task with a dependency on a task id that does not exist
-- **WHEN** G_MECE is checked on the delta
+- **WHEN** plan validation is checked on the delta
 - **THEN** the amendment is rejected back to replan and no work order is emitted for it
 
-### Requirement: The delta G_MECE check is tool-run
-The system SHALL provide `task replan CHANGE=<id>` running the mechanical G_MECE assertions over
+### Requirement: The delta plan-validation check is tool-run
+The system SHALL provide `task replan CHANGE=<id>` running the mechanical plan-validation assertions over
 tasks.md (lane tokens known, deps resolve, serial flags justified, waves monotonic, spec
 validation) and printing the pre-filled follow-up commands on pass. No gate in the replan path
 SHALL require a human comment — no comment-gated check exists anywhere in the workflow

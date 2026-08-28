@@ -42,7 +42,7 @@ def stage_change(workdir: Path) -> None:
 
 def run_dispatch(workdir: Path) -> list[Path]:
     stage_change(workdir)
-    # --skip-hardening: these tests exercise work-order emission, not release. G_HARDENING gates
+    # --skip-hardening: these tests exercise work-order emission, not release. the hardening gate gates
     # releasing worktrees onto a workstation, which a fixture in a temp directory never does.
     r = subprocess.run(  # noqa: S603
         [sys.executable, str(DISPATCH_CLI), "--change", CHANGE, "--skip-hardening"],
