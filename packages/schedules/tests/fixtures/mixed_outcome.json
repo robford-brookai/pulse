@@ -1,0 +1,28 @@
+{
+  "case": "mixed_outcome",
+  "description": "A three-enrollment enumeration for the 'Receipt reflects the run' scenario: one declaration commits, one replays, and one is rejected by the catalog at the command boundary \u2014 the receipt's opened/replayed/failed counts must match this mix exactly, and the run's exit status is nonzero because of the one failure.",
+  "month": "2026-08-01",
+  "enrollments": [
+    {
+      "subject_key": "enr-opens-1",
+      "state": "active",
+      "effective_at": "2026-07-01T00:00:00+00:00",
+      "last_event_id": "55555555-5555-5555-5555-555555555555",
+      "updated_at": "2026-07-01T00:00:00+00:00"
+    },
+    {
+      "subject_key": "enr-replays-1",
+      "state": "on_hold",
+      "effective_at": "2026-07-05T00:00:00+00:00",
+      "last_event_id": "66666666-6666-6666-6666-666666666666",
+      "updated_at": "2026-07-05T00:00:00+00:00"
+    },
+    {
+      "subject_key": "enr-fails-1",
+      "state": "active",
+      "effective_at": "2026-07-10T00:00:00+00:00",
+      "last_event_id": "77777777-7777-7777-7777-777777777777",
+      "updated_at": "2026-07-10T00:00:00+00:00"
+    }
+  ]
+}

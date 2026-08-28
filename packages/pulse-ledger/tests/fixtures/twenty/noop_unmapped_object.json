@@ -1,0 +1,38 @@
+{
+  "targetUrl": "https://pulse.example/webhooks/twenty",
+  "eventName": "provider.updated",
+  "objectMetadata": {
+    "id": "objmeta-provider-0000-0000-0001",
+    "nameSingular": "provider"
+  },
+  "workspaceId": "workspace-pulse-dev-0000-0001",
+  "webhookId": "webhook-pulse-dev-0000-0001",
+  "eventDate": "2026-08-06T15:20:00.041Z",
+  "record": {
+    "name": "Canary NoopUnmapped",
+    "id": "twenty-record-provider-0001",
+    "createdAt": "2026-08-01T09:30:00.000Z",
+    "createdBy": {
+      "source": "API",
+      "workspaceMemberId": null,
+      "name": "pulse-dev",
+      "context": {}
+    },
+    "deletedAt": null,
+    "position": -1,
+    "updatedAt": "2026-08-06T15:20:00.036Z",
+    "updatedBy": {
+      "source": "MANUAL",
+      "workspaceMemberId": "wsm-0001-canary-nurse",
+      "name": "Canary CareCoordinator",
+      "context": {}
+    },
+    "searchVector": "",
+    "npi": "1999999999",
+    "lifecycleStatus": "CREDENTIALED",
+    "lifecycleStatusAsOf": "2026-08-03T09:00:00.000Z"
+  },
+  "updatedFields": [
+    "lifecycleStatus"
+  ]
+}

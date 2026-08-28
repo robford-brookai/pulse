@@ -1,0 +1,44 @@
+[project]
+name = "consent-ingress"
+version = "0.1.0"
+description = "PULSE Customer.io consent ingress — D9's forward path, declaring the delivered streamline.cio_raw/cio_prod landing as record_communication_consent commands"
+requires-python = ">=3.10,<4.0"
+dependencies = [
+    # The cursor store's HTTP edge (row_source.LedgerCursorStore) — same floor pulse-core pins,
+    # so the workspace resolves one httpx (mart_reader's precedent).
+    "httpx>=0.28.1",
+    # Command submission + classification, D16 idempotency, generated command types, and the
+    # cursor_path / validate_cursor writer-state contract — the only other dependency this
+    # package takes. No dependency on pulse-ledger or schedules: the {subject_key}:{channel}
+    # grain composition is duplicated from consent-reconciliation's sweep, not imported (design
+    # decision 3).
+    "pulse-core",
+]
+
+[tool.uv.sources]
+pulse-core = { workspace = true }
+
+[dependency-groups]
+dev = [
+    # Enforces the no-live-network posture (spec: "Every Snowflake read is fixture-faked in
+    # tests"). tests/conftest.py blocks sockets for every run that collects this package, flag
+    # or no flag — same pattern as verdict-relay and schedules.
+    "pytest-socket>=0.7.0",
+    # This package typechecks under pyright (see [tool.pyright] below); `task typecheck`
+    # runs it alongside the workspace mypy pass.
+    "pyright>=1.1.390",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/consent_ingress"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.pyright]
+include = ["src", "tests"]
+typeCheckingMode = "strict"

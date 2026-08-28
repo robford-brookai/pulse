@@ -1,0 +1,28 @@
+{
+  "case": "indeterminate_with_reason",
+  "description": "An indeterminate outcome carrying a non-empty reason: valid under the trinary contract, declares normally, and the committed command carries the reason.",
+  "watermarks": {},
+  "responses": [
+    "committed"
+  ],
+  "rows": [
+    {
+      "subject_id": "episode-1005",
+      "verdict_type": "billing_qualification",
+      "outcome": "indeterminate",
+      "reason": "insufficient device days in the qualifying window",
+      "rule_version": "rules-v3",
+      "as_of": "2026-08-01T00:00:00+00:00",
+      "lineage_ref": "dbt-run-2026-08-01T02",
+      "computed_at": "2026-08-01T02:04:00+00:00"
+    }
+  ],
+  "expected": {
+    "declared": 1,
+    "replayed": 0,
+    "skipped_stale": 0,
+    "rejected": 0,
+    "failed": 0,
+    "api_calls": 1
+  }
+}

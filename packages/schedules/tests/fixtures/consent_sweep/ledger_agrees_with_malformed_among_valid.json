@@ -1,0 +1,12 @@
+[
+  {
+    "subject_key": "SUBJ-020",
+    "channel": "sms",
+    "state": "opted_out"
+  },
+  {
+    "subject_key": "SUBJ-022",
+    "channel": "sms",
+    "state": "opted_in"
+  }
+]

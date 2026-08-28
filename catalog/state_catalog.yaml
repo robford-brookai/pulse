@@ -1,0 +1,190 @@
+# PULSE authoritative state catalog.
+#
+# The single source of truth for the state surface: subjects and their transition adjacency, the
+# command vocabulary, the reason ValueSets, and program configuration. Every generated surface
+# derives from this file (object model §7); released versions land as immutable rows in the
+# Snowflake `catalog` schema (D18 / ADR-0004). Edits happen here, in git, through the PR flow —
+# never by hand in Snowflake.
+#
+# Loaded and validated by `pulse_core.catalog_gen.load_catalog`. Validation rejects unknown keys,
+# transitions targeting undeclared states, commands pinning undeclared subjects or binding
+# undeclared ValueSets, and a non-semver `catalog_version`.
+#
+# catalog_version is semver, MAJOR incrementing exactly on breaking releases — a release that
+# removes a state, narrows a ValueSet, or changes a transition's legality in either direction
+# (pulse-runtime-readiness §4.3). v1.0.0 carries the Appendix C seed's subjects and commands over
+# unchanged; the generator's input path moves to this file in task 2.1.
+#
+# subjects: state-bearing PULSE subjects (adjacency as drawn in the object model §5.2).
+# `ownership: recorded` marks state the ledger records but does not adjudicate
+# (CommunicationConsent, D9).
+# registry_subjects: registry anchors a command can be pinned to that carry no state machine.
+# commands: the command vocabulary. `subject_type` pins the command to one subject where the
+# grain determines it; `backfill_only` restricts the type to the backfill actor. Field types:
+# str | optional_str | datetime | date | verdict_outcome | json. A `verdict_outcome` field
+# generates the trinary enum plus the mandatory-reason-on-indeterminate validator.
+# valuesets: reason code sets. `codes` maps code to display.
+# programs: program configuration (I6 — programs are configuration, not schema).
+
+catalog_version: 1.1.0
+
+subjects:
+  referral:
+    ownership: ledger
+    # `closed` is reachable from every non-terminal state, not just `outreach`: §5.3's
+    # deceased-closure (and duplicate/clinic_terminated reasons) can end a referral at any
+    # stage. Ratified 2026-08-03 (doc_update, pulse-ledger-core).
+    transitions:
+      received: [resolved, closed]
+      resolved: [screened, closed]
+      screened: [outreach, closed]
+      outreach: [converted, closed]
+      converted: []
+      closed: []
+  consent:
+    ownership: ledger
+    transitions:
+      requested: [granted]
+      granted: [revoked, superseded, expired]
+      revoked: []
+      superseded: []
+      expired: []
+  communication_consent:
+    ownership: recorded
+    transitions:
+      # unset → opted_out: a patient whose first recorded interaction is STOP must be a legal
+      # recorded transition — the ledger records suppression, never blocks it (D9).
+      # Ratified 2026-08-03 (doc_update, pulse-ledger-core).
+      unset: [opted_in, opted_out]
+      opted_in: [opted_out]
+      opted_out: [opted_in]
+  enrollment:
+    ownership: ledger
+    transitions:
+      pending_start: [active, ended]
+      active: [on_hold, ended]
+      on_hold: [active, ended]
+      ended: []
+  billing_episode:
+    ownership: ledger
+    transitions:
+      open: [qualified, not_qualified]
+      qualified: [not_qualified, reported]
+      not_qualified: [qualified, reported]
+      reported: [closed]
+      closed: []
+  device:
+    ownership: ledger
+    transitions:
+      ordered: [shipped]
+      shipped: [delivered]
+      delivered: [active]
+      active: [returned, lost]
+      returned: []
+      lost: []
+  contract:
+    ownership: ledger
+    transitions:
+      draft: [active]
+      active: [superseded, terminated]
+      superseded: []
+      terminated: []
+  coverage:
+    # Patient × payer grain, states coarse by design (billing-state design §2, option A): QMB
+    # status, benefit categories, and copay detail live in verdict payload and `lineage_ref`,
+    # never in this vocabulary. `lapsed` is re-verifiable; `terminated` is terminal.
+    ownership: ledger
+    transitions:
+      unverified: [verified_active, verified_inactive]
+      verified_active: [verified_inactive, lapsed, terminated]
+      verified_inactive: [verified_active, lapsed, terminated]
+      lapsed: [verified_active, verified_inactive, terminated]
+      terminated: []
+
+registry_subjects: [person]
+
+commands:
+  declare_transition:
+    fields:
+      to_state: str
+      reason: optional_str
+  declare_verdict:
+    fields:
+      outcome: verdict_outcome
+      reason: optional_str
+      rule_version: str
+      as_of: datetime
+      lineage: json
+  open_billing_episode:
+    subject_type: billing_episode
+    fields:
+      month: date
+  record_communication_consent:
+    subject_type: communication_consent
+    fields:
+      channel: str
+      to_state: str
+      method: optional_str
+      evidence_ref: optional_str
+  resolve_referral:
+    subject_type: referral
+    fields:
+      person_key: str
+      evidence_ref: optional_str
+  mint_person:
+    subject_type: person
+    fields:
+      evidence_ref: optional_str
+  attach_identifier:
+    subject_type: person
+    fields:
+      system: str
+      value: str
+  merge_person:
+    subject_type: person
+    fields:
+      survivor_key: str
+      duplicate_key: str
+      evidence_ref: optional_str
+  backfill_genesis:
+    backfill_only: true
+    fields:
+      state: str
+      as_of: datetime
+  reconstruction_gap:
+    backfill_only: true
+    fields:
+      evidence_summary: json
+
+valuesets:
+  # Referral closure reasons, ratified 2026-08-03 with the every-state-to-`closed` adjacency
+  # (object model §5.3). No command binds this set at v1.0.0 — `declare_transition` is generic
+  # across subjects, so the binding this set needs is per-transition, not per-command. See
+  # HANDOFF.md.
+  referral_closure_reason:
+    description: Reasons a referral closes before conversion.
+    codes:
+      deceased: Patient is deceased.
+      duplicate: Referral duplicates an existing referral for the same person.
+      clinic_terminated: The referring clinic's contract terminated.
+
+programs:
+  # Program set per D11 (resolved 2026-07-31): PCM, CCM, RPM, APCM. `entry_gate` is the gate
+  # `pending_start -> active` must clear (§5.2) — recorded for CCM, RPM, and APCM only.
+  # `exclusivity_group` is the CMS group the command API enforces against concurrent enrollments
+  # (I6); the object model records CCM and PCM as same-group (§5.2 mid-month-switch case) and
+  # leaves RPM and APCM unassigned. Both gaps need a billing-team confirmation, not a guess —
+  # see HANDOFF.md.
+  pcm:
+    display_name: Principal Care Management
+    exclusivity_group: care_management
+  ccm:
+    display_name: Chronic Care Management
+    entry_gate: initiating_visit
+    exclusivity_group: care_management
+  rpm:
+    display_name: Remote Patient Monitoring
+    entry_gate: device_activation
+  apcm:
+    display_name: Advanced Primary Care Management
+    entry_gate: attribution_confirmation

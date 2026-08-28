@@ -1,0 +1,15 @@
+# orca-idle-stop.service — oneshot invoked by orca-idle-stop.timer.
+
+[Unit]
+Description=Stop the Orca host after sustained inactivity
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/idle-stop.sh
+
+# Tune without editing the script:
+#   systemctl edit orca-idle-stop.service
+# then set, for example, Environment=IDLE_MINUTES=240
+Environment=IDLE_MINUTES=120
+Environment=CHECK_MINUTES=10
+Environment=ORCA_PORT=7331

@@ -1,0 +1,80 @@
+# orca-serve.service — keep the Orca runtime up across reboots.
+#
+# Install:
+#   cp orca-serve.service /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now orca-serve
+#
+# Read the pairing code:
+#   journalctl -u orca-serve -n 50 --no-pager
+#
+# The advertised pairing address is the loopback port your Mac forwards to over
+# SSM. It must match localPortNumber in tunnel.sh, or the client dials a port
+# nothing is listening on.
+#
+# `orca serve` has no bind-address option — `orca serve --help` lists only --port
+# and --pairing-address, and --pairing-address changes the address advertised to
+# the client, not the socket. The runtime therefore binds 0.0.0.0, and the
+# ExecStartPost rules below are what actually confine it to loopback.
+#
+# This matters because the port is an agent control channel: anything that can
+# reach it drives worktrees on a host inside a healthcare tenant. The design's
+# "no inbound exposure" (see the DEV01-BROOK spec §1.4) rests on the host having
+# no public IP, which leaves the whole VPC — 11 SSM-managed instances — able to
+# dial it, plus any local container over docker0.
+#
+# Loopback stays open because AWS-StartPortForwardingSession has ssm-agent
+# connect to localhost:PORT on this host, so the tunnel is unaffected. Confirm
+# with `iptables -S INPUT` after start; H2 of the Appendix A hardening checklist
+# is what this satisfies.
+
+[Unit]
+Description=Orca headless runtime
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu
+
+Environment=ORCA_PORT=7331
+Environment=ORCA_PROJECT_ROOT=/home/ubuntu/workspace
+
+# systemd's default PATH omits ~/.local/bin, where claude, task, and uv live.
+# Agents launched through a login shell pick them up from the profile anyway,
+# which hides the gap; anything the runtime spawns directly gets a bare execve
+# against this PATH and dies with ENOENT. That is what `spawn gh ENOENT` and
+# `spawn codex ENOENT` in the journal were. Keep user bin ahead of the system
+# dirs so a user-installed newer tool wins over a stale packaged one.
+Environment=PATH=/home/ubuntu/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin
+
+ExecStartPre=/bin/mkdir -p /home/ubuntu/workspace
+ExecStart=/usr/bin/orca-ide serve \
+  --port ${ORCA_PORT} \
+  --project-root ${ORCA_PROJECT_ROOT} \
+  --pairing-address ws://127.0.0.1:${ORCA_PORT} \
+  --json
+
+# Confine the listener to loopback. `+` runs these as root despite User=ubuntu.
+# Check-then-insert keeps them idempotent under Restart=always, which would
+# otherwise stack a duplicate pair on every restart. The ACCEPT is inserted at
+# position 1 so it precedes the DROP regardless of what else occupies the chain.
+ExecStartPost=+/bin/sh -c 'iptables -C INPUT -i lo -p tcp --dport ${ORCA_PORT} -j ACCEPT 2>/dev/null || iptables -I INPUT 1 -i lo -p tcp --dport ${ORCA_PORT} -j ACCEPT'
+ExecStartPost=+/bin/sh -c 'iptables -C INPUT -p tcp --dport ${ORCA_PORT} -j DROP 2>/dev/null || iptables -A INPUT -p tcp --dport ${ORCA_PORT} -j DROP'
+
+# No matching ExecStopPost: the rules are deliberately left in place when the
+# unit stops. A stopped runtime has nothing listening, so the residue is inert,
+# and leaving it means a manual `orca serve` run never lands unprotected.
+
+Restart=always
+RestartSec=5
+
+# Agent work is long-running. Do not let systemd reap it under memory pressure
+# before the OOM killer has a say.
+OOMPolicy=continue
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -9,7 +9,25 @@ copyright: Maintained by <a href="https://robford-brookai.com">robford-brookai</
 
 nav:
   - Home: index.md
+  - Architecture: architecture.html
   - Modules: modules.md
+  - Runbooks:
+      - Month-open: runbooks/month-open.md
+      - Consent-sweep: runbooks/consent-sweep.md
+      - Identity-quarantine: runbooks/identity-quarantine.md
+      - Demo 2 (partial) — s13+s14: runbooks/demo2-partial-s13-s14.md
+      - Catalog-release: runbooks/catalog-release.md
+      - Twenty-webhook: runbooks/twenty-webhook.md
+      - Pulse-command-api-deploy: runbooks/pulse-command-api-deploy.md
+      - Twenty-artifact-promotion: runbooks/twenty-artifact-promotion.md
+      - Twenty-projection: runbooks/twenty-projection.md
+      - Billing-state: runbooks/billing-state.md
+      - Warehouse-sync-revival: runbooks/warehouse-sync-revival.md
+  - Contracts:
+      - Consumes: contracts/consumes.md
+      - Publishes: contracts/publishes.md
+      - Producer-registry: contracts/producer-registry.md
+      - Billing-boundary: contracts/billing-boundary.md
 plugins:
   - search
   - mkdocstrings:

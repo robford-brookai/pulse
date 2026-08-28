@@ -11,8 +11,14 @@ repos:
       - id: pretty-format-json
         exclude: ^.devcontainer/devcontainer.json
         args: [--autofix, --no-sort-keys]
+      # Captured webhook bodies are byte-exact evidence: their committed HMAC signatures cover
+      # exactly these bytes, so a trailing newline or a reserialization silently invalidates
+      # every signature check against them. Both hooks rewrite file content, so both must skip
+      # them. They are stored as `.raw` (never `.json`) for the same reason.
       - id: end-of-file-fixer
+        exclude: ^packages/pulse-ledger/tests/fixtures/twenty/captured/.*\.raw$
       - id: trailing-whitespace
+        exclude: ^packages/pulse-ledger/tests/fixtures/twenty/captured/.*\.raw$
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: "v0.15.7"

@@ -1,0 +1,42 @@
+[project]
+name = "identity"
+version = "0.1.0"
+description = "PULSE TIDE matcher v1 — deterministic identity resolution for the received -> resolved Referral transition"
+requires-python = ">=3.10,<4.0"
+dependencies = [
+    # Command submission + classification, D16 idempotency, generated command types — the
+    # resolver's write boundary (design decision 1).
+    "pulse-core",
+    # `pulse_ledger.identity.lookup_identifier` / `find_candidates`, `pulse_ledger.review.quarantine_subject`
+    # — the live candidate-lookup adapter and quarantine effect (design decisions 4, 6).
+    "pulse-ledger",
+]
+
+[tool.uv.sources]
+pulse-core = { workspace = true }
+pulse-ledger = { workspace = true }
+
+[dependency-groups]
+dev = [
+    # Enforces the no-live-network posture (design — Auth per D15). tests/conftest.py blocks
+    # sockets for every run that collects this package, flag or no flag — same pattern as
+    # verdict-relay and schedules.
+    "pytest-socket>=0.7.0",
+    # This package typechecks under pyright (see [tool.pyright] below); `task typecheck`
+    # runs it alongside the workspace mypy pass.
+    "pyright>=1.1.390",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/identity"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.pyright]
+include = ["src", "tests"]
+typeCheckingMode = "strict"

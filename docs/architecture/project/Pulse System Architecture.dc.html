@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/brook-ai-design-system-b2b-marketing-e884144f-7e37-4fd5-be88-79aad08b6dba/colors_and_type.css">
+<link rel="stylesheet" href="_ds/brook-ai-design-system-b2b-marketing-e884144f-7e37-4fd5-be88-79aad08b6dba/fonts/fonts.css">
+<script src="_ds/brook-ai-design-system-b2b-marketing-e884144f-7e37-4fd5-be88-79aad08b6dba/_ds_bundle.js"></script>
+<style>
+  body { margin: 0; background: #ffffff; }
+  a { color: #4873c2; text-decoration: none; }
+  a:hover { color: #305007; }
+</style>
+</helmet>
+
+<div style="width: 1600px; margin: 0 auto; padding: 56px 56px 72px; background: #ffffff; font-family: 'Red Hat Text', system-ui, sans-serif; color: #1d280b; box-sizing: border-box;">
+
+  <div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 48px; padding-bottom: 28px; border-bottom: 1px solid #d3dcca;">
+    <div style="max-width: 780px;">
+      <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: #54871a;">Pulse · system architecture</div>
+      <h1 style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 46px; line-height: 1.08; letter-spacing: -0.02em; margin: 12px 0 10px; color: #305007; text-wrap: balance;">Patient unified ledger of state &amp; events</h1>
+      <p style="margin: 0; font-size: 16.5px; line-height: 1.55; color: #4a5a3d; max-width: 720px; text-wrap: pretty;">One write path into an append-only Postgres ledger, one distribution bus out of it. Every box below maps to a package, service or published surface in the repo.</p>
+      <div style="margin-top: 10px; font-size: 12.5px; color: #7b8a6c;">As of 2026-08-19 · v2.0 shipped · Twenty dev instance live, drag round trip proven · v3.0 Projections in flight (<span style="font-family: ui-monospace, monospace; font-size: 11.5px;">twenty-projection</span>)</div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 10px; flex-shrink: 0;">
+      <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #4a5a3d;"><span style="width: 26px; height: 3px; border-radius: 2px; background: #305007; display: inline-block;"></span>Command / write path</div>
+      <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #4a5a3d;"><span style="width: 26px; height: 3px; border-radius: 2px; background: #4873c2; display: inline-block;"></span>Event distribution</div>
+      <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #4a5a3d;"><span style="width: 26px; height: 3px; border-radius: 2px; background: #b6710e; display: inline-block;"></span>Read / analytics</div>
+      <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #4a5a3d;"><span style="width: 26px; height: 0; border-top: 3px dashed #8a9a7a; display: inline-block;"></span>Planned / not yet wired</div>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 156px 1fr; gap: 0 28px; margin-top: 36px;">
+
+    <div style="padding-top: 26px;">
+      <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px; color: #305007;">Producers</div>
+      <div style="font-size: 12.5px; color: #7b8a6c; margin-top: 4px; line-height: 1.45;">Declare facts</div>
+    </div>
+    <div style="background: #f1f5ed; border-radius: 20px; padding: 24px 26px;">
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;">
+        <div style="background: #fff; border: 1px solid #d3dcca; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px;">Source connectors</div>
+          <div style="font-size: 12.5px; color: #4a5a3d; line-height: 1.5; margin-top: 6px;">Connects Hubspot · Impilo · MongoDB · RDS · Zoom · Linear · Github</div>
+          <sc-if value="{{ showPaths }}" hint-placeholder-val="{{ true }}"><div style="font-family: ui-monospace, monospace; font-size: 11px; color: #7b8a6c; margin-top: 8px;">packages/ocean/services/*-connector</div></sc-if>
+        </div>
+        <div style="background: #fff; border: 1px solid #d3dcca; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px;">Signal adapter</div>
+          <div style="font-size: 12.5px; color: #4a5a3d; line-height: 1.5; margin-top: 6px;">Taps ExDash, PAP, Billy, POCAR and translates side effects into declared events with source evidence.</div>
+        </div>
+        <div style="background: #fff; border: 1px solid #d3dcca; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px;">Backfill actor</div>
+          <div style="font-size: 12.5px; color: #4a5a3d; line-height: 1.5; margin-top: 6px;">Only actor allowed <span style="font-family: ui-monospace, monospace; font-size: 11.5px;">backfill_genesis</span> and <span style="font-family: ui-monospace, monospace; font-size: 11.5px;">reconstruction_gap</span>.</div>
+        </div>
+        <div style="background: #fff; border: 1px solid #d3dcca; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px;">Twenty board (drag)</div>
+          <div style="font-size: 12.5px; color: #4a5a3d; line-height: 1.5; margin-top: 6px;">HMAC-verified webhook maps a kanban drag to exactly one command; same-state echoes no-op as <span style="font-family: ui-monospace, monospace; font-size: 11.5px;">echo_of_record</span>; a rejected drag posts a card note. Live on dev.</div>
+          <sc-if value="{{ showPaths }}" hint-placeholder-val="{{ true }}"><div style="font-family: ui-monospace, monospace; font-size: 11px; color: #7b8a6c; margin-top: 8px;">pulse_ledger.twenty</div></sc-if>
+        </div>
+      </div>
+    </div>
+
+    <div></div>
+    <div style="display: flex; align-items: center; gap: 14px; padding: 14px 0 14px 26px;">
+      <span style="width: 3px; height: 34px; background: #305007; border-radius: 2px; display: inline-block;"></span>
+      <span style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 13px; color: #305007;">every writer speaks the command API — no "just insert a row" escape hatch (ADR-0003)</span>
+    </div>
+
+    <div style="padding-top: 26px;">
+      <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px; color: #305007;">Write path</div>
+      <div style="font-size: 12.5px; color: #7b8a6c; margin-top: 4px; line-height: 1.45;">One SDK, one API</div>
+    </div>
+    <div style="background: #f1f5ed; border-radius: 20px; padding: 24px 26px;">
+      <div style="display: grid; grid-template-columns: 320px 1fr; gap: 20px; align-items: stretch;">
+        <div style="background: #fff; border: 1px solid #d3dcca; border-radius: 12px; padding: 18px 20px;">
+          <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 17px; color: #305007;">pulse_core</div>
+          <div style="font-size: 12.5px; color: #54871a; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; margin-top: 2px;">Client SDK</div>
+          <div style="display: flex; flex-direction: column; gap: 7px; margin-top: 12px; font-size: 13px; color: #4a5a3d; line-height: 1.45;">
+            <div><strong style="font-weight: 600;">submit_command</strong> — classifies committed · replayed · rejected · transient; retries transient only</div>
+            <div><strong style="font-weight: 600;">idempotency</strong> — D16 key derivation</div>
+            <div><strong style="font-weight: 600;">cursor</strong> — durable writer cursors</div>
+            <div><strong style="font-weight: 600;">generated</strong> — Pydantic command types from the catalog seed</div>
+          </div>
+          <sc-if value="{{ showPaths }}" hint-placeholder-val="{{ true }}"><div style="font-family: ui-monospace, monospace; font-size: 11px; color: #7b8a6c; margin-top: 12px;">packages/pulse-core</div></sc-if>
+        </div>
+        <div style="background: #305007; border-radius: 12px; padding: 18px 20px; color: #f1f5ed;">
+          <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 20px;">
+            <div>
+              <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 17px; color: #ffffff;">pulse_ledger — command API</div>
+              <div style="font-size: 12.5px; color: #c5db9e; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; margin-top: 2px;">The single writer</div>
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end;">
+              <span style="border: 1px solid rgba(241,245,237,0.35); border-radius: 999px; padding: 4px 12px; font-family: ui-monospace, monospace; font-size: 11.5px;">POST /commands</span>
+              <span style="border: 1px solid rgba(241,245,237,0.35); border-radius: 999px; padding: 4px 12px; font-family: ui-monospace, monospace; font-size: 11.5px;">POST /commands:batch</span>
+              <span style="border: 1px solid rgba(241,245,237,0.35); border-radius: 999px; padding: 4px 12px; font-family: ui-monospace, monospace; font-size: 11.5px;">PUT/GET /writers/{id}/cursor</span>
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px;">
+            <div style="background: rgba(241,245,237,0.10); border-radius: 8px; padding: 12px 14px;">
+              <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 14px; color: #ffffff;">auth</div>
+              <div style="font-size: 12.5px; color: #c5db9e; line-height: 1.45; margin-top: 4px;">D15 — bearer credential resolves to writer_id = actor; body actor fields rejected</div>
+            </div>
+            <div style="background: rgba(241,245,237,0.10); border-radius: 8px; padding: 12px 14px;">
+              <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 14px; color: #ffffff;">validation</div>
+              <div style="font-size: 12.5px; color: #c5db9e; line-height: 1.45; margin-top: 4px;">Write-time legality against generated adjacency for the six v0.7 subject types; reason + catalog_version on reject</div>
+            </div>
+            <div style="background: rgba(241,245,237,0.10); border-radius: 8px; padding: 12px 14px;">
+              <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 14px; color: #ffffff;">idempotency</div>
+              <div style="font-size: 12.5px; color: #c5db9e; line-height: 1.45; margin-top: 4px;">D16 key unique for the ledger's lifetime; a replay returns the original event id</div>
+            </div>
+            <div style="background: rgba(241,245,237,0.10); border-radius: 8px; padding: 12px 14px;">
+              <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 14px; color: #ffffff;">commit + fold</div>
+              <div style="font-size: 12.5px; color: #c5db9e; line-height: 1.45; margin-top: 4px;">Event, current_state and outbox row in one transaction</div>
+            </div>
+            <div style="background: rgba(241,245,237,0.10); border-radius: 8px; padding: 12px 14px;">
+              <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 14px; color: #ffffff;">reads · identity · review</div>
+              <div style="font-size: 12.5px; color: #c5db9e; line-height: 1.45; margin-top: 4px;">In-process library reads; no HTTP read routes in S1.1</div>
+            </div>
+            <div style="background: rgba(241,245,237,0.10); border-radius: 8px; padding: 12px 14px;">
+              <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 14px; color: #ffffff;">relay + relay_worker</div>
+              <div style="font-size: 12.5px; color: #c5db9e; line-height: 1.45; margin-top: 4px;">Drains the outbox to the bus — 5 attempts, then DLQ</div>
+            </div>
+          </div>
+          <sc-if value="{{ showPaths }}" hint-placeholder-val="{{ true }}"><div style="font-family: ui-monospace, monospace; font-size: 11px; color: #a8bd85; margin-top: 14px;">packages/pulse-ledger/src/pulse_ledger</div></sc-if>
+        </div>
+      </div>
+    </div>
+
+    <div></div>
+    <div style="display: flex; align-items: center; gap: 14px; padding: 14px 0 14px 26px;">
+      <span style="width: 3px; height: 34px; background: #305007; border-radius: 2px; display: inline-block;"></span>
+      <span style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 13px; color: #305007;">append-only — UPDATE and DELETE are REVOKEd on <span style="font-family: ui-monospace, monospace;">events</span>; correction is a reversal event</span>
+    </div>
+
+    <div style="padding-top: 26px;">
+      <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px; color: #305007;">The record</div>
+      <div style="font-size: 12.5px; color: #7b8a6c; margin-top: 4px; line-height: 1.45;">Postgres schema <span style="font-family: ui-monospace, monospace;">ledger</span></div>
+    </div>
+    <div style="background: #f1f5ed; border-radius: 20px; padding: 24px 26px;">
+      <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px;">
+        <div style="background: #fff; border: 1px solid #d3dcca; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-family: ui-monospace, monospace; font-size: 13.5px; font-weight: 700; color: #305007;">events</div>
+          <div style="font-size: 12.5px; color: #4a5a3d; line-height: 1.5; margin-top: 6px;">Bitemporal: effective_at + server-set recorded_at, evidence_class E0–E4, epoch, reverses_event_id</div>
+        </div>
+        <div style="background: #fff; border: 1px solid #d3dcca; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-family: ui-monospace, monospace; font-size: 13.5px; font-weight: 700; color: #305007;">current_state</div>
+          <div style="font-size: 12.5px; color: #4a5a3d; line-height: 1.5; margin-top: 6px;">Folded in the same transaction; clock-driven jobs enumerate from here, never from a projection</div>
+        </div>
+        <div style="background: #fff; border: 1px solid #d3dcca; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-family: ui-monospace, monospace; font-size: 13.5px; font-weight: 700; color: #305007;">outbox</div>
+          <div style="font-size: 12.5px; color: #4a5a3d; line-height: 1.5; margin-top: 6px;">Transactional, per-subject sequence (D17), relayed to EventBridge</div>
+        </div>
+        <div style="background: #fff; border: 1px solid #d3dcca; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-family: ui-monospace, monospace; font-size: 13.5px; font-weight: 700; color: #305007;">external_identifiers<br>person_match_keys</div>
+          <div style="font-size: 12.5px; color: #4a5a3d; line-height: 1.5; margin-top: 6px;">Registry, not events. (system, value) unique; sha256 digests only — PHI kept out by check constraint</div>
+        </div>
+        <div style="background: #fff; border: 1px solid #d3dcca; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-family: ui-monospace, monospace; font-size: 13.5px; font-weight: 700; color: #305007;">review_queue</div>
+          <div style="font-size: 12.5px; color: #4a5a3d; line-height: 1.5; margin-top: 6px;">Ambiguous identity quarantines to a human; resolved via <span style="font-family: ui-monospace, monospace;">merge_person</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div></div>
+    <div style="display: flex; align-items: center; gap: 14px; padding: 14px 0 14px 26px;">
+      <span style="width: 3px; height: 34px; background: #4873c2; border-radius: 2px; display: inline-block;"></span>
+      <span style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 13px; color: #2f4d8c;">outbox relay → shared EventBridgePublisher (all 13 publish sites), Postgres <span style="font-family: ui-monospace, monospace;">failed_webhooks</span> as publish fallback</span>
+    </div>
+
+    <div style="padding-top: 26px;">
+      <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px; color: #2f4d8c;">Distribution</div>
+      <div style="font-size: 12.5px; color: #7b8a6c; margin-top: 4px; line-height: 1.45;">EventBridge, not Kafka (ADR-0002)</div>
+    </div>
+    <div style="background: #eef2f9; border-radius: 20px; padding: 24px 26px;">
+      <div style="background: #1c2846; border-radius: 12px; padding: 18px 22px; color: #e6ecf7;">
+        <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 24px; flex-wrap: wrap;">
+          <div>
+            <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 17px; color: #ffffff;">EventBridge bus <span style="font-family: ui-monospace, monospace; font-size: 15px;">ocean</span></div>
+            <div style="font-size: 12.5px; color: #a8bde4; margin-top: 3px;">source = "ocean" · detail-type = "&lt;domain&gt;" · the envelope crosses whole in <span style="font-family: ui-monospace, monospace;">detail</span>, unmodified</div>
+          </div>
+          <div style="font-size: 12.5px; color: #a8bde4;">One rule + one SQS queue + DLQ per consumer · standard queues don't preserve order, so order-dependent consumers carry a sequence guard</div>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px;">
+          <span style="background: rgba(230,236,247,0.12); border-radius: 999px; padding: 5px 14px; font-family: ui-monospace, monospace; font-size: 12px;">signals</span>
+          <span style="background: rgba(230,236,247,0.12); border-radius: 999px; padding: 5px 14px; font-family: ui-monospace, monospace; font-size: 12px;">alerts</span>
+          <span style="background: rgba(230,236,247,0.12); border-radius: 999px; padding: 5px 14px; font-family: ui-monospace, monospace; font-size: 12px;">tasks</span>
+          <span style="background: rgba(230,236,247,0.12); border-radius: 999px; padding: 5px 14px; font-family: ui-monospace, monospace; font-size: 12px;">interactions</span>
+          <span style="background: rgba(230,236,247,0.12); border-radius: 999px; padding: 5px 14px; font-family: ui-monospace, monospace; font-size: 12px;">outcomes</span>
+          <span style="background: rgba(230,236,247,0.12); border-radius: 999px; padding: 5px 14px; font-family: ui-monospace, monospace; font-size: 12px;">patient-state</span>
+          <span style="background: rgba(230,236,247,0.12); border-radius: 999px; padding: 5px 14px; font-family: ui-monospace, monospace; font-size: 12px;">tickets</span>
+          <span style="background: rgba(230,236,247,0.12); border-radius: 999px; padding: 5px 14px; font-family: ui-monospace, monospace; font-size: 12px;">ai-ops</span>
+          <span style="background: rgba(230,236,247,0.12); border-radius: 999px; padding: 5px 14px; font-family: ui-monospace, monospace; font-size: 12px;">audit</span>
+          <span style="background: rgba(230,236,247,0.12); border-radius: 999px; padding: 5px 14px; font-family: ui-monospace, monospace; font-size: 12px;">ops</span>
+          <span style="background: rgba(230,236,247,0.12); border-radius: 999px; padding: 5px 14px; font-family: ui-monospace, monospace; font-size: 12px;">logistics</span>
+          <span style="border: 1px solid rgba(230,236,247,0.3); border-radius: 999px; padding: 5px 14px; font-size: 12px; color: #a8bde4;">catalog generates addressing + Terraform rule patterns</span>
+        </div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 18px;">
+        <div style="background: #fff; border: 1px solid #ccd6e8; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px;">ocean-broker</div>
+          <div style="font-size: 12.5px; color: #4a5a3d; line-height: 1.5; margin-top: 6px;">Shared <span style="font-family: ui-monospace, monospace;">EventBridgePublisher</span> + the generated domain catalog every publisher addresses from</div>
+        </div>
+        <div style="background: #fff; border: 1px solid #ccd6e8; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px;">ocean-events</div>
+          <div style="font-size: 12.5px; color: #4a5a3d; line-height: 1.5; margin-top: 6px;">Envelope types shared by producers and consumers</div>
+        </div>
+        <div style="background: #fff; border: 1px solid #ccd6e8; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px;">LocalStack</div>
+          <div style="font-size: 12.5px; color: #4a5a3d; line-height: 1.5; margin-top: 6px;">Local bus, rules, queues and DLQs</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding-top: 26px;">
+      <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px; color: #2f4d8c;">Consumers</div>
+      <div style="font-size: 12.5px; color: #7b8a6c; margin-top: 4px; line-height: 1.45;">Rule + queue, one each</div>
+    </div>
+    <div style="background: #eef2f9; border-radius: 20px; padding: 24px 26px; margin-top: 18px;">
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;">
+        <div style="background: #fff; border: 1px solid #ccd6e8; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px;">warehouse-sync</div>
+          <div style="font-size: 12.5px; color: #4a5a3d; line-height: 1.5; margin-top: 6px;">Ordinary rule-and-queue consumer writing <span style="font-family: ui-monospace, monospace;">STREAMLINE.OCEAN_RAW.EVENTS</span></div>
+        </div>
+        <div style="background: #fff; border: 1px solid #ccd6e8; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px;">graph-projection</div>
+          <div style="font-size: 12.5px; color: #4a5a3d; line-height: 1.5; margin-top: 6px;">Operational data graph over the event stream</div>
+        </div>
+        <div style="background: #fff; border: 1px solid #ccd6e8; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px;">control-plane</div>
+          <div style="font-size: 12.5px; color: #4a5a3d; line-height: 1.5; margin-top: 6px;">Operational control surface — routing, escalation, ordering verdicts</div>
+        </div>
+        <div style="background: #fff; border: 1px solid #ccd6e8; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px;">agent-worker</div>
+          <div style="font-size: 12.5px; color: #4a5a3d; line-height: 1.5; margin-top: 6px;">AI-assisted operations; <span style="font-family: ui-monospace, monospace;">ocean-connector-mcp</span> exposes tools</div>
+        </div>
+        <div style="background: #fff; border: 1px solid #ccd6e8; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px;">slack-bot · stacte-bridge</div>
+          <div style="font-size: 12.5px; color: #4a5a3d; line-height: 1.5; margin-top: 6px;">Human-facing notification and bridge surfaces</div>
+        </div>
+        <div style="background: #fff; border: 1px solid #ccd6e8; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px;">sim-driver · call-simulator</div>
+          <div style="font-size: 12.5px; color: #4a5a3d; line-height: 1.5; margin-top: 6px;">Synthetic traffic for local simulation and the equivalence harness</div>
+        </div>
+        <sc-if value="{{ showPlanned }}" hint-placeholder-val="{{ true }}">
+        <div style="background: #fff; border: 1px dashed #9db0d0; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px; color: #2f4d8c;">twenty-projection</div>
+          <div style="font-size: 12.5px; color: #4a5a3d; line-height: 1.5; margin-top: 6px;">Ledger-fed board projection (v3.0, in flight): monotonic apply on a per-record <span style="font-family: ui-monospace, monospace; font-size: 11.5px;">projectionSeq</span> watermark, full-state writes so drift converges, heal-back on rejected drags. Apply core + echo suppression merged; consumer loop and heal-back pending.</div>
+          <sc-if value="{{ showPaths }}" hint-placeholder-val="{{ true }}"><div style="font-family: ui-monospace, monospace; font-size: 11px; color: #7b8a6c; margin-top: 8px;">packages/twenty-projection</div></sc-if>
+        </div>
+        </sc-if>
+      </div>
+    </div>
+
+    <div style="padding-top: 26px;">
+      <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px; color: #b6710e;">Read &amp; return</div>
+      <div style="font-size: 12.5px; color: #7b8a6c; margin-top: 4px; line-height: 1.45;">Services that read, then declare back</div>
+    </div>
+    <div style="background: #faf6ef; border-radius: 20px; padding: 24px 26px; margin-top: 18px;">
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;">
+        <div style="background: #fff; border: 1px solid #e6dcc9; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px;">Snowflake</div>
+          <div style="font-size: 12.5px; color: #4a5a3d; line-height: 1.5; margin-top: 6px;">Verification and analytics layer, fed by the outbox relay. Append-only <span style="font-family: ui-monospace, monospace;">OCEAN_RAW.EVENTS</span>; dbt computes the verdict mart.</div>
+        </div>
+        <div style="background: #fff; border: 1px solid #e6dcc9; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px;">verdict-relay</div>
+          <div style="font-size: 12.5px; color: #4a5a3d; line-height: 1.5; margin-top: 6px;">Pages the mart on <span style="font-family: ui-monospace, monospace;">computed_at</span>, declares each row as <span style="font-family: ui-monospace, monospace;">declare_verdict</span>. Cursor persisted through <span style="font-family: ui-monospace, monospace;">pulse_core.cursor</span>.</div>
+          <sc-if value="{{ showPaths }}" hint-placeholder-val="{{ true }}"><div style="font-family: ui-monospace, monospace; font-size: 11px; color: #7b8a6c; margin-top: 8px;">mart_reader · declarer · run</div></sc-if>
+        </div>
+        <div style="background: #fff; border: 1px solid #e6dcc9; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px;">schedules</div>
+          <div style="font-size: 12.5px; color: #4a5a3d; line-height: 1.5; margin-top: 6px;">Clock-driven jobs — <span style="font-family: ui-monospace, monospace;">month_open</span>, <span style="font-family: ui-monospace, monospace;">consent_sweep</span> — enumerate from <span style="font-family: ui-monospace, monospace;">current_state</span> and declare back.</div>
+        </div>
+        <div style="background: #fff; border: 1px solid #e6dcc9; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px;">identity</div>
+          <div style="font-size: 12.5px; color: #4a5a3d; line-height: 1.5; margin-top: 6px;">Deterministic matcher — pure function, no I/O. <span style="font-family: ui-monospace, monospace;">Match · Mint · Ambiguous</span>; ambiguity always quarantines to a human.</div>
+          <sc-if value="{{ showPaths }}" hint-placeholder-val="{{ true }}"><div style="font-family: ui-monospace, monospace; font-size: 11px; color: #7b8a6c; margin-top: 8px;">matcher · lookup · normalize · resolver · service</div></sc-if>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 14px; margin-top: 18px;">
+        <span style="width: 3px; height: 32px; background: #b6710e; border-radius: 2px; display: inline-block;"></span>
+        <span style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 13px; color: #8a560a;">all three return through the same command API — there is no second write path</span>
+      </div>
+    </div>
+
+  </div>
+
+  <sc-if value="{{ showRetired }}" hint-placeholder-val="{{ true }}">
+  <div style="margin-top: 40px; padding-top: 24px; border-top: 1px solid #d3dcca; display: grid; grid-template-columns: 156px 1fr; gap: 28px;">
+    <div style="font-family: 'Red Hat Display', system-ui, sans-serif; font-weight: 600; font-size: 15px; color: #7b8a6c;">Retired</div>
+    <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+      <span style="border: 1px dashed #b9c4ac; border-radius: 999px; padding: 6px 14px; font-size: 12.5px; color: #7b8a6c; text-decoration: line-through;">Kafka / MSK Serverless</span>
+      <span style="border: 1px dashed #b9c4ac; border-radius: 999px; padding: 6px 14px; font-size: 12.5px; color: #7b8a6c; text-decoration: line-through;">Redpanda (local)</span>
+      <span style="border: 1px dashed #b9c4ac; border-radius: 999px; padding: 6px 14px; font-size: 12.5px; color: #7b8a6c; text-decoration: line-through;">ocean.&lt;domain&gt; topics</span>
+      <span style="border: 1px dashed #b9c4ac; border-radius: 999px; padding: 6px 14px; font-size: 12.5px; color: #7b8a6c; text-decoration: line-through;">ocean.warehouse-dlq</span>
+      <span style="border: 1px dashed #b9c4ac; border-radius: 999px; padding: 6px 14px; font-size: 12.5px; color: #7b8a6c; text-decoration: line-through;">Redpanda Connect warehouse sink</span>
+      <span style="border: 1px dashed #b9c4ac; border-radius: 999px; padding: 6px 14px; font-size: 12.5px; color: #7b8a6c; text-decoration: line-through;">clinic-rules-engine Snowpark emitter</span>
+      <span style="font-size: 12.5px; color: #7b8a6c;">Equivalence harness recorded EQUIVALENT before teardown — no transport rollback, only forward recovery via archive replay.</span>
+    </div>
+  </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1600},&quot;showPaths&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Detail&quot;},&quot;showPlanned&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Detail&quot;},&quot;showRetired&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Detail&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      showPaths: this.props.showPaths ?? true,
+      showPlanned: this.props.showPlanned ?? true,
+      showRetired: this.props.showRetired ?? true,
+    };
+  }
+}
+</script>
+</body>
+</html>

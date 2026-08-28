@@ -22,9 +22,12 @@ Three rules from WORKFLOW.md's `sync_linear` step, all of which are easy to get 
   block — never inferred from whatever workspace the API key happens to belong to.
 * **stateId is resolved once per run and passed explicitly on create**, so a team's triage intake
   cannot swallow a new sub-issue before anyone sees it.
-* **Sync owns the unstarted band only.** It sets Todo on create and heals Triage -> Todo on
-  update. It never writes In Progress, Blocked, In Review, Done or Canceled: those belong to
-  agents, Orca, and humans at merge, per `linear.status_ownership`.
+* **Sync owns the unstarted band, plus one narrow terminal write.** It sets Todo on create and
+  heals Triage -> Todo on update. It also moves an already-existing sub-issue straight to Done
+  when its task is checked off in tasks.md — sync is the trigger for that transition, immediate
+  with the checkoff rather than deferred to merge/archive. It never writes In Progress, Blocked,
+  In Review or Canceled, and it never touches the *parent* issue's status: that stays humans'
+  at merge/archive, per `linear.status_ownership`.
 
 Out-of-lane tasks (`destructive_ops`, `operational_discovery`) are **not** synced. They run on the
 Open Engine queue in team CCC under its own receipt-token protocol with its own status vocabulary,
@@ -69,13 +72,37 @@ workflow_mod = _sibling("workflow.py")
 
 API_URL = "https://api.linear.app/graphql"
 UNSTARTED = "Todo"
+DONE = "Done"
 TRIAGE = "Triage"
-# Sync may write these and nothing else. Everything from In Progress onward is owned elsewhere.
-SYNC_WRITABLE = frozenset({UNSTARTED})
+# Sync may write these and nothing else. In Progress, Blocked, In Review, Canceled are owned
+# elsewhere; Done is writable only via complete_sub, on an already-existing sub-issue whose
+# task is checked off — never on the parent issue.
+SYNC_WRITABLE = frozenset({UNSTARTED, DONE})
 
 
 class SyncError(Exception):
     """The sync cannot proceed."""
+
+
+def resolve_tasks_md(change: str) -> Path:
+    """Find a change's tasks.md whether it's active or already archived.
+
+    `openspec archive` moves tasks.md to `openspec/changes/archive/<date>-<change>/`, but the
+    Linear-side identity of the change (parent issue title, `[CHANGE] <change>`) never changes —
+    so callers must keep passing the plain change name, never the archive path, or sync creates
+    a duplicate parent instead of finding the existing one.
+    """
+    active = Path("openspec/changes") / change / "tasks.md"
+    if active.exists():
+        return active
+    matches = sorted(Path("openspec/changes/archive").glob(f"*-{change}/tasks.md"))
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        msg = f"multiple archived tasks.md match `{change}`: {[str(m) for m in matches]}"
+        raise SyncError(msg)
+    msg = f"no tasks.md found for `{change}` (checked {active} and openspec/changes/archive/*-{change}/)"
+    raise SyncError(msg)
 
 
 class LinearClient:
@@ -95,6 +122,13 @@ class LinearClient:
         try:
             with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310
                 body = json.loads(response.read())
+        except urllib.error.HTTPError as exc:
+            try:
+                detail = exc.read().decode(errors="replace")
+            finally:
+                exc.close()
+            msg = f"Linear request failed: {exc}\n{detail}"
+            raise SyncError(msg) from exc
         except (urllib.error.URLError, TimeoutError) as exc:
             msg = f"Linear request failed: {exc}"
             raise SyncError(msg) from exc
@@ -179,6 +213,7 @@ def desired_subissues(change: str, tasks: list[dict], work_orders: Path) -> list
             "key": task["key"],
             "title": issue_title(task),
             "description": work_order_body(change, task, work_orders),
+            "done": task["done"],
         }
         for task in tasks
         if task["dispatchable"]
@@ -202,9 +237,25 @@ def plan(desired: list[dict], existing: dict, parent_exists: bool, change: str) 
             continue
         if found.get("description") != item["description"] or found.get("title") != item["title"]:
             operations.append({"kind": "update_sub", "key": item["key"], "id": found["identifier"]})
-        # Sync owns the unstarted band only: heal the triage edge, touch nothing else.
+        # Sync owns the unstarted band: heal the triage edge, touch nothing else in that band.
         if found.get("status") == TRIAGE:
-            operations.append({"kind": "heal_status", "key": item["key"], "id": found["identifier"]})
+            operations.append({
+                "kind": "heal_status",
+                "key": item["key"],
+                "id": found["identifier"],
+                "state": UNSTARTED,
+            })
+        # The one terminal write sync owns: checkoff completes an existing sub-issue immediately,
+        # rather than waiting on merge/archive. Skipped once already Done or Canceled, so re-runs
+        # are a no-op.
+        if item["done"] and found.get("status") not in {DONE, "Canceled"}:
+            operations.append({
+                "kind": "complete_sub",
+                "key": item["key"],
+                "id": found["identifier"],
+                "from_status": found.get("status"),
+                "state": DONE,
+            })
 
     orphans = sorted(set(existing) - {d["key"] for d in desired})
     operations += [{"kind": "orphan", "key": k, "id": existing[k]["identifier"]} for k in orphans]
@@ -214,8 +265,10 @@ def plan(desired: list[dict], existing: dict, parent_exists: bool, change: str) 
 def assert_status_writes_are_legal(operations: list[dict], statuses: list[str]) -> None:
     """Belt and braces on the one rule whose violation is invisible until it has already happened.
 
-    Writing `In Progress` from a sync would silently steal a status band from the agents that own
-    it, and the damage looks like an agent misbehaving rather than a tool overreaching.
+    Writing `In Progress`, `Blocked`, `In Review` or `Canceled` from a sync would silently steal a
+    status band from the agents, Orca, or humans that own it, and the damage looks like an agent
+    misbehaving rather than a tool overreaching. `Done` is legal only via `complete_sub`, which
+    `plan()` only ever produces for an already-existing sub-issue whose task is checked off.
     """
     illegal = [
         op for op in operations if op.get("state") and op["state"] not in SYNC_WRITABLE and op["state"] in statuses
@@ -235,7 +288,7 @@ query($team:String!,$q:String!){
 """
 
 STATES_QUERY = """
-query($team:String!){ team(key:$team){ id states{ nodes{ id name } } projects{ nodes{ id name } } } }
+query($team:String!){ team(id:$team){ id states{ nodes{ id name } } projects{ nodes{ id name } } } }
 """
 
 CREATE_MUTATION = """
@@ -259,6 +312,9 @@ def fetch_context(client: LinearClient, team: str, project: str) -> dict:
     if UNSTARTED not in states:
         msg = f"team {team} has no {UNSTARTED!r} status; sync cannot place new issues in the unstarted band"
         raise SyncError(msg)
+    if DONE not in states:
+        msg = f"team {team} has no {DONE!r} status; sync cannot complete checked-off sub-issues"
+        raise SyncError(msg)
 
     projects = {n["name"]: n["id"] for n in team_node["projects"]["nodes"]}
     if project and project not in projects:
@@ -268,6 +324,7 @@ def fetch_context(client: LinearClient, team: str, project: str) -> dict:
     return {
         "team_id": team_node["id"],
         "todo_state_id": states[UNSTARTED],
+        "done_state_id": states[DONE],
         "project_id": projects.get(project) if project else None,
         "states": states,
     }
@@ -393,6 +450,9 @@ def apply_plan(
             applied += 1
         elif op["kind"] == "heal_status":
             client.query(UPDATE_MUTATION, {"id": op["id"], "input": {"stateId": ctx["todo_state_id"]}})
+            applied += 1
+        elif op["kind"] == "complete_sub":
+            client.query(UPDATE_MUTATION, {"id": op["id"], "input": {"stateId": ctx["done_state_id"]}})
             applied += 1
     return applied
 

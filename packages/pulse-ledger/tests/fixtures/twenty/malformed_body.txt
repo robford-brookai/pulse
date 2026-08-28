@@ -1,0 +1,11 @@
+{
+  "targetUrl": "https://pulse.example/webhooks/twenty",
+  "eventName": "patientProgram.updated",
+  "objectMetadata": {
+    "id": "objmeta-patientprogram-0000-0000-0001",
+    "nameSingular": "patientProgram"
+  },
+  "record": {
+    "name": "Canary MalformedBody",
+    "id": "twenty-record-patientprogram-0007",
+    "lifecycleStatus": "ACTI

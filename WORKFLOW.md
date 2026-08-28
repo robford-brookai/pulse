@@ -26,7 +26,7 @@ One OpenSpec change = one Linear parent issue = one directory of dispatched work
 
 | Grain | Linear | Repo | Orca | Git |
 |---|---|---|---|---|
-| Program | Team **DNA** / project **PULSE / Declared-State Funnel** | — | — | — |
+| Program | Team **DNA** / project **Pulse 1.0** | — | — | — |
 | Change | Parent issue (DNA) | `openspec/changes/<id>/` + `work_orders/<id>/` | — | Feature branches per task, merged per wave |
 | Task | **Sub-issue of the parent** (DNA) | `work_orders/<id>/<task>.md` | One worktree | One commit |
 | Attempt | Sub-issue comment (receipt) | HANDOFF.md Receipt block | Fresh worktree per escalation | — |
@@ -61,7 +61,10 @@ ade_workflow:
     status_ownership:                      # one writer per band
       unstarted: sync                      # Todo (and healing Triage -> Todo)
       started: agents_and_orca             # In Progress, Blocked, In Review
-      terminal: human_via_merge_archive    # Done, Canceled
+      terminal: human_via_merge_archive_plus_sync_on_checkoff
+                                            # parent issue Done/Canceled: human, at merge/archive.
+                                            # sub-issue Done: sync, immediately on tasks.md checkoff
+                                            # -- the one terminal write sync owns; never the parent's
 
   state_resolution:                        # how an agent determines "where are we"
     # Every rule below reads tracked repo state or shared state (Linear, the git
@@ -110,7 +113,13 @@ ade_workflow:
       blocks: [archive]
     G_APPROVAL:
       applies_to: tasks_tagged_destructive_or_prod_touching
-      requires: human_comment_on_linear_subissue
+      requires: human_approved_pr        # the PR carrying the task's runbook, scripts, or
+                                         # committed artifacts, approved or merged by a human.
+                                         # The review IS the approval receipt. v2.0.7 replaced
+                                         # the Linear-comment ceremony: comment approvals had
+                                         # no acknowledgment and no validation, so they could
+                                         # land on the wrong issue (or the right one) and
+                                         # silently change nothing — four were lost this way.
       blocks: [execute]
 
   lanes:
@@ -152,11 +161,39 @@ ade_workflow:
         adding a task, widening scope, or changing a dependency is a decision and goes
         through replan as a PR
       - one focused commit, and the message says why it bypassed review
+      - a commit that checks off a task also runs
+        `task linear:sync CHANGE=<id> --apply` as part of the same mechanical
+        action — the checkoff and the Linear write travel together, not as
+        two separately-reviewed events; this is what makes sub-issue Done
+        immediate rather than whenever someone next happens to run sync
     rationale: >
       A checkbox flip after every one of ~45 tasks is not reviewable content, and
       routing it through a PR trains people to merge their own PRs unread, which is
       worse than the bypass. The conditions keep it from widening: the moment a push
-      carries a decision, it is a PR again.
+      carries a decision, it is a PR again. The checkoff bypass now carries one side
+      effect on a shared system — a Linear sub-issue write, not the purely local
+      change this exemption originally assumed — but that write is --apply-gated,
+      idempotent (a no-op once already Done), and trivially correctable by hand if
+      wrong, so the exemption still holds, on a documented basis rather than an
+      implicit one.
+
+  decision_protocol:                       # where a decision must land to count as made
+    rule: >
+      A decision reached outside the artifacts — in a chat, a report, a review
+      thread — is not a decision until it is recorded where the tasks that inherit
+      it read it. Recording it is a change or a PR, never only a message.
+    homes:
+      - "architecture and technology commitments -> docs/adr/ (one decision per
+         ADR, alternatives with the reason each was not chosen)"
+      - "sequencing and entry gates -> design/delivery/pulse-program-roadmap.md"
+      - "conventions binding every agent -> AGENTS.md"
+      - "decisions scoped to one change -> that change's design.md"
+    record_carries: [answer, date_decided, what_it_gates]
+    rationale: >
+      A decision that exists only where it was made is the same hazard as an
+      unmade one: the tasks that inherit it cannot see it, so each one either
+      re-decides or guesses. The record carries what it gates so a task can tell
+      whether the decision anticipated its situation, not only what was chosen.
 
   steps:
     - id: propose
@@ -169,11 +206,25 @@ ade_workflow:
       actor: human + agent(fable, review-assist)
       run: openspec validate <id>
       gate: G_MECE
-      next: {pass: sync_linear, fail: propose}   # revise docs, re-validate
+      next: {pass: dispatch, fail: propose}   # revise docs, re-validate
+
+    # dispatch precedes sync_linear: the sub-issue description IS the work-order
+    # body, so the files must exist before Linear can be written. linear_sync.py
+    # enforces this — it hard-errors when work_orders/<id>/ is absent. Ordered the
+    # other way until v2.0.5, which made sync_linear unrunnable at its declared
+    # position; state_resolution had the right order the whole time.
+    - id: dispatch
+      actor: tool + router
+      run: task dispatch CHANGE=<id>
+      behavior: emit work_orders/<id>/<task>.md per dispatch-template v1;
+                release only wave-eligible tasks (deps merged);
+                serial-lane tasks release alone
+      next: sync_linear
 
     - id: sync_linear
       actor: tool
       run: task linear:sync CHANGE=<id>
+      requires: work_orders/<id>/ emitted by dispatch
       behavior: create parent issue if absent (team and project per linear block,
                 passed explicitly on every mutation — never inferred from API-key
                 context); create/update one sub-issue per task, description =
@@ -206,7 +257,11 @@ ade_workflow:
         orca worktree create <task>          # or claim sub-issue via Orca Linear panel
         agent reads AGENTS.md, calls orient(), reads spec_refs,
         tests first, implements, task lint && task test,
-        writes HANDOFF.md (Receipt + Spec deltas), one commit, push
+        writes HANDOFF.md (Receipt + Spec deltas), one commit, push,
+        gh pr create --base main (ready for review — never --draft),
+        gh pr checks --watch until green; red CI is the agent's to fix, not the
+        reviewer's to discover. Ship without being asked: a finished task that
+        stops at a local commit is an unfinished task
       linear_status: In Progress -> In Review
       next: {verification_pass: collect,      # collect runs once the whole wave is done
              verification_fail: escalate,
@@ -308,7 +363,7 @@ A change begins at **propose**: OpenSpec scaffolds the change folder, Fable-tier
 
 **Sync-linear** projects the plan into Linear: one parent issue for the change and one sub-issue per task, all in the DNA team under the PULSE / Declared-State Funnel project, with team and project passed explicitly on every mutation. Sub-issue descriptions are the work-order bodies. Status writes follow the one-writer-per-band rule: sync resolves DNA's Todo state ID once per run and passes it on every create so triage intake can never intercept a new sub-issue, heals only the Triage→Todo edge on updates, and never touches anything from In Progress onward — that band belongs to agents and Orca, and the terminal band belongs to humans at merge and archive. The repo is the record and the sync is one-directional — Linear is where humans watch, comment, and approve, not where specs live. One reverse edge is sanctioned, because the id is the one fact Linear mints: after a create succeeds on an apply run, sync writes the `[DNA-nnn]` token back into that task's line in tasks.md — id tokens only, never rewritten once present, never any other content. The first real change spent whole commits hand-copying those ids, and hand-copying is how they drift. **Dispatch** then emits the work-order files per the dispatch template, releasing tasks in waves as dependencies merge, with serial-lane tasks (generated surfaces, workspace roots) running alone.
 
-**Execute** is one agent per task per worktree, claimed through Orca's Linear panel or the CLI, gated on hardening (and on an approval comment for anything tagged destructive or prod-touching — those actually leave this lane entirely, per the lanes block). The agent orients, writes tests first, implements, verifies, writes a HANDOFF with its receipt, and commits once. Verification failure feeds **escalate**: two attempts per tier, fresh worktree per rung, and failure at the ceiling returns the task to validate as a spec defect rather than a bigger-model problem. Design drift halts the worktree and flags for human review. A sub-issue dragged to Blocked parks the change at execute — state resolution reads Blocked as "wave not done," the unblock path is a human comment plus a drag back to In Progress, and escalation never fires on status, only on verification failure.
+**Execute** is one agent per task per worktree, claimed through Orca's Linear panel or the CLI, gated on hardening (and, for anything tagged destructive or prod-touching, on a human-approved PR carrying the task's runbook or artifacts — those tasks actually leave this lane entirely, per the lanes block). The agent orients, writes tests first, implements, verifies, writes a HANDOFF with its receipt, and commits once — then ships that commit without being asked: push, open a PR against main **ready for review, never a draft**, and watch `gh pr checks` to green. Red CI belongs to the agent that made it red, not to the reviewer who finds it. A draft PR is the same failure in a quieter form: it withholds finished work from the review step that is supposed to consume it, and reads as "still working" when nobody is. The task is done when the diff is on a green, reviewable PR — a finished task parked at a local commit is an unfinished task. Verification failure feeds **escalate**: two attempts per tier, fresh worktree per rung, and failure at the ceiling returns the task to validate as a spec defect rather than a bigger-model problem. Design drift halts the worktree and flags for human review. A sub-issue dragged to Blocked parks the change at execute — state resolution reads Blocked as "wave not done," the unblock path is a human comment plus a drag back to In Progress, and escalation never fires on status, only on verification failure.
 
 Mid-change discovery — a missing task, a task that needs widening, a dependency edge that proved wrong — takes the **replan** edge. The amendment is a decision, so it is a PR against `tasks.md`, checked by G_MECE over the delta only (revalidating a fifty-task file to add two tasks is exactly the friction that used to push amendments straight to main), then flows through sync-linear and dispatch while in-flight tasks continue undisturbed. The first real change hit this at least eight times with no legal edge for it; now it has one, and `main_access` is correspondingly narrower — checkbox state and issue-id tokens are the only tasks.md content that may reach main without review.
 
@@ -320,15 +375,17 @@ State resolution now reads tracked or shared state only — tasks.md, the tracke
 
 Two narrow things may reach main without a PR, per `main_access`: mechanical state updates that carry no reviewable decision — checking off a completed task, Orca or worktree configuration — and repairing a red main, where waiting on review costs every worktree more than the review would catch. The conditions are what keep that from widening: `task check` green first, nothing under `specs/`, `src/` or `design/`, one focused commit, and a message that says why it skipped review. A checkbox flip after each of ~45 tasks is not reviewable content, and routing it through a PR mostly teaches people to merge their own PRs unread. The moment a push carries a decision, it is a PR again.
 
+Decisions themselves have a landing rule, per `decision_protocol`: a decision reached outside the artifacts — in a chat, a report, a review thread — is not a decision until it is recorded where the tasks that inherit it read it, and recording it is a change or a PR, never only a message. Architecture and technology commitments go to `docs/adr/`, sequencing and entry gates to the program roadmap, conventions binding every agent to `AGENTS.md`, and change-scoped decisions to that change's `design.md`. The record carries the answer, the date, and what it gates — a decision that exists only where it was made is the same hazard as an unmade one, because the tasks that inherit it cannot see it.
+
 ## 4. Diagram (projection of §2)
 
 ```mermaid
 flowchart TB
   P[propose<br/>fable] --> V{validate<br/>G_MECE}
   V -- fail --> P
-  V -- pass --> SL[sync_linear<br/>team DNA · parent + sub-issues<br/>status writes: unstarted band only]
-  SL --> D[dispatch<br/>router · waves · serial lane]
-  D --> E[execute<br/>1 task = 1 worktree = 1 commit<br/>gate: G_HARDENING<br/>Blocked parks here]
+  V -- pass --> D[dispatch<br/>router · waves · serial lane<br/>emits work_orders/]
+  D --> SL[sync_linear<br/>team DNA · parent + sub-issues<br/>description = work-order body<br/>status writes: unstarted band only]
+  SL --> E[execute<br/>1 task = 1 worktree = 1 commit<br/>push + ready PR + green CI<br/>gate: G_HARDENING<br/>Blocked parks here]
   E -- verification fail --> ESC{escalate<br/>fresh worktree,<br/>next tier}
   ESC -- tier available --> E
   ESC -- at max_tier --> V

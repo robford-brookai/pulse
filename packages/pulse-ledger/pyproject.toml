@@ -1,0 +1,71 @@
+[project]
+name = "pulse-ledger"
+version = "0.1.0"
+description = "PULSE ledger service — command API, ledger schema, outbox relay"
+requires-python = ">=3.10,<4.0"
+dependencies = [
+    "alembic>=1.13",
+    # The command API's HTTP edge (design decision 2). Same major the ocean services already run,
+    # so one FastAPI is resolved for the workspace rather than two.
+    "fastapi>=0.135.1",
+    "sqlalchemy>=2.0",
+    # [pool] brings psycopg_pool: the command API server (api_server.py) hands each request its
+    # own connection rather than serialising on one shared connection behind commit_declaration's
+    # per-subject advisory lock.
+    "psycopg[binary,pool]>=3.2",
+    "pulse-core",
+    # The outbound Twenty comment adapter (`pulse_ledger.twenty.client`, kanban-ingress design
+    # decision 6). Same major pulse-core already pins, so the workspace resolves one httpx.
+    "httpx>=0.28.1",
+    # The heal-back leg (twenty-projection design decision 4): the webhook route restores a
+    # rejected card through the projection writer as-is (`twenty_projection.apply`), so the heal
+    # is attributed to the projection identity rather than growing a second Twenty write surface.
+    "twenty-projection",
+]
+
+[project.optional-dependencies]
+# uvicorn is the command API server's process, not the library: identity, verdict-relay, and
+# schedules import pulse-ledger for its client/commit code and pull no ASGI server for it.
+# `packages/pulse-ledger/Dockerfile` is the one place this extra is installed.
+serve = ["uvicorn>=0.41.0"]
+# ocean-broker is the relay process's publisher, imported lazily inside
+# `pulse_ledger.relay.default_publisher()` so the API process never pays for it. It is a real
+# runtime dependency of `python -m pulse_ledger.relay_worker` all the same: without it the relay
+# starts, connects, and dies on `ModuleNotFoundError: No module named 'ocean_broker'` the moment
+# it tries to publish (observed on dev 2026-08-21). Declared here so the image installs it and
+# `tests/test_ledger_deploy_targets.py` can hold the Dockerfile to it.
+relay = ["ocean-broker"]
+
+[tool.uv.sources]
+pulse-core = { workspace = true }
+twenty-projection = { workspace = true }
+ocean-broker = { workspace = true }
+
+[dependency-groups]
+dev = [
+    # Enforces the no-live-network posture for the Twenty adapter tests, which block sockets
+    # per-module rather than trusting the `--disable-socket` flag — same plugin verdict-relay,
+    # schedules, and identity already use.
+    "pytest-socket>=0.7.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pulse_ledger"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Mirrors the root pyproject.toml exclusion: pytest picks this file as its rootdir config when
+# invoked directly on this subpackage (e.g. `uv run pytest packages/pulse-ledger`), so without this
+# the root's `-m "not slow and not integration"` addopts never applies and
+# tests/integration/test_localstack_relay.py tries to reach Docker.
+markers = [
+    "integration: needs Docker, excluded from the default run",
+]
+# --allow-unix-socket: harmless under `--disable-socket` (AF_UNIX can't reach the network) and
+# required for it — FastAPI's TestClient runs its anyio portal via a unix-socketpair self-pipe,
+# which a global `--disable-socket` blocks along with real network calls.
+addopts = '-m "not integration" --allow-unix-socket'

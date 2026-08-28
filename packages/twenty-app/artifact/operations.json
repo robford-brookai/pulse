@@ -1,0 +1,1190 @@
+{
+  "artifactVersion": "1",
+  "catalogVersion": "1.1.0",
+  "generator": "pulse_core.twenty_metadata",
+  "operations": [
+    {
+      "operation": "createObject",
+      "universalIdentifier": "d8ebaf86-4146-4170-b674-a6c3041a2f71",
+      "nameSingular": "clinic",
+      "namePlural": "clinics",
+      "labelSingular": "Clinic",
+      "labelPlural": "Clinics",
+      "icon": "IconBuildingHospital",
+      "description": "Registry anchor for a referring or participating clinic. Carries no catalog-backed state at v1."
+    },
+    {
+      "operation": "createObject",
+      "universalIdentifier": "c643ddea-c53f-4d7b-aac4-a8ae02f69e2d",
+      "nameSingular": "domainEvent",
+      "namePlural": "domainEvents",
+      "labelSingular": "Domain Event",
+      "labelPlural": "Domain Events",
+      "icon": "IconHistory",
+      "description": "The append-only event log. Never updated, never deleted (immutability policy)."
+    },
+    {
+      "operation": "createObject",
+      "universalIdentifier": "9b711c53-7cc7-4f24-9792-58dedf403313",
+      "nameSingular": "patient",
+      "namePlural": "patients",
+      "labelSingular": "Patient",
+      "labelPlural": "Patients",
+      "icon": "IconUser",
+      "description": "Identity and crosswalk only \u2014 patient state lives on PatientProgram (grain decision 2026-07-28)."
+    },
+    {
+      "operation": "createObject",
+      "universalIdentifier": "fea7e97c-8d50-47a6-a54b-86c3583ce6e5",
+      "nameSingular": "patientProgram",
+      "namePlural": "patientPrograms",
+      "labelSingular": "Patient Program",
+      "labelPlural": "Patient Programs",
+      "icon": "IconUserHeart",
+      "description": "One row per patient x program \u2014 the patient-state grain. A projection target only (D2)."
+    },
+    {
+      "operation": "createObject",
+      "universalIdentifier": "79b33a07-a408-4392-b4ac-bac15da7d785",
+      "nameSingular": "program",
+      "namePlural": "programs",
+      "labelSingular": "Program",
+      "labelPlural": "Programs",
+      "icon": "IconClipboardList",
+      "description": "A care program. Programs are configuration, not schema (I6)."
+    },
+    {
+      "operation": "createObject",
+      "universalIdentifier": "4f6f8a69-fe39-4e3c-89fb-3e117892e83f",
+      "nameSingular": "provider",
+      "namePlural": "providers",
+      "labelSingular": "Provider",
+      "labelPlural": "Providers",
+      "icon": "IconStethoscope",
+      "description": "Registry anchor for a clinician. Carries no catalog-backed state at v1."
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "1808f713-0823-45eb-b4f3-9836b9cbbf2d",
+      "objectNameSingular": "clinic",
+      "name": "lifecycleStatus",
+      "type": "SELECT",
+      "label": "Lifecycle Status",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "v1 literal vocabulary; extend with the catalog when it carries a clinic dimension.",
+      "options": [
+        {
+          "universalIdentifier": "cc0881a1-6c06-452a-92f7-766a01ced30b",
+          "value": "onboarded",
+          "label": "Onboarded",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "b37d7b21-5560-47fb-aa03-836592f7fa65",
+      "objectNameSingular": "clinic",
+      "name": "lifecycleStatusAsOf",
+      "type": "DATE_TIME",
+      "label": "Lifecyclestatus As Of",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "Last-writer-wins guard for lifecycleStatus: the `occurredAt` of the event that set it."
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "bad05755-4a9a-4e6b-909e-4fc283088ce5",
+      "objectNameSingular": "clinic",
+      "name": "sfdcId",
+      "type": "TEXT",
+      "label": "Salesforce ID",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "External ID, system `sfdc`."
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "5882bbb7-4d9a-41ad-bc44-b0a6fd8da953",
+      "objectNameSingular": "domainEvent",
+      "name": "actorId",
+      "type": "TEXT",
+      "label": "Actor ID",
+      "isNullable": true,
+      "isUnique": false
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "9504da64-d3c0-490d-b313-6b7537d721ff",
+      "objectNameSingular": "domainEvent",
+      "name": "actorType",
+      "type": "SELECT",
+      "label": "Actor Type",
+      "isNullable": true,
+      "isUnique": false,
+      "options": [
+        {
+          "universalIdentifier": "06e789a1-bb2b-4b0a-9880-782a54b3e45d",
+          "value": "human",
+          "label": "Human",
+          "position": 1
+        },
+        {
+          "universalIdentifier": "ce4aa281-c3f6-4662-a73b-c830546abd5a",
+          "value": "agent",
+          "label": "Agent",
+          "position": 2
+        },
+        {
+          "universalIdentifier": "8fbcbe14-9af6-4f45-8ebe-5bd231546df8",
+          "value": "system",
+          "label": "System",
+          "position": 3
+        }
+      ]
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "076307d3-b7bc-404b-afd6-1d2f2274638f",
+      "objectNameSingular": "domainEvent",
+      "name": "authority",
+      "type": "TEXT",
+      "label": "Authority",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "Approving human, where one is required."
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "37efe837-c059-4bf6-b8f7-b960fccb1515",
+      "objectNameSingular": "domainEvent",
+      "name": "causationId",
+      "type": "TEXT",
+      "label": "Causation ID",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "The causing event or command."
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "7b5b885a-63ca-4730-bceb-a4bc27f5b5b0",
+      "objectNameSingular": "domainEvent",
+      "name": "correlationId",
+      "type": "TEXT",
+      "label": "Correlation ID",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "Journey ID across systems."
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "156a38cf-13d5-4370-8a70-faf1e35dcac8",
+      "objectNameSingular": "domainEvent",
+      "name": "entityRefId",
+      "type": "TEXT",
+      "label": "Entity Ref ID",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "ID within `entityRefSystem`."
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "cab45080-7c7a-4461-9eec-69771fdac3be",
+      "objectNameSingular": "domainEvent",
+      "name": "entityRefSystem",
+      "type": "SELECT",
+      "label": "Entity Ref System",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "The identifier system `entityRefId` is expressed in.",
+      "options": [
+        {
+          "universalIdentifier": "41d134d9-de2e-492b-aeca-0806cb1e67a3",
+          "value": "brook",
+          "label": "Brook",
+          "position": 1
+        },
+        {
+          "universalIdentifier": "f6b2abda-bf60-42f1-9712-4aad69ea150e",
+          "value": "sfdc",
+          "label": "Sfdc",
+          "position": 2
+        },
+        {
+          "universalIdentifier": "9649c28e-43b3-49a7-a332-16220f0de426",
+          "value": "mrn",
+          "label": "Mrn",
+          "position": 3
+        },
+        {
+          "universalIdentifier": "8e62514d-0a64-4366-b013-0039ade3d1ff",
+          "value": "app",
+          "label": "App",
+          "position": 4
+        }
+      ]
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "7e32dbe0-cf2f-449f-9681-8c29b17c371c",
+      "objectNameSingular": "domainEvent",
+      "name": "entityType",
+      "type": "SELECT",
+      "label": "Entity Type",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "Must agree with the noun in `eventType`.",
+      "options": [
+        {
+          "universalIdentifier": "2b6503e1-ef3c-4084-bc0a-aaae2fca91e8",
+          "value": "patient",
+          "label": "Patient",
+          "position": 1
+        },
+        {
+          "universalIdentifier": "04fd4793-6a9f-4958-af35-100cfad2a5dc",
+          "value": "provider",
+          "label": "Provider",
+          "position": 2
+        },
+        {
+          "universalIdentifier": "f20141bc-d767-497f-88ab-f2319be8e3dc",
+          "value": "clinic",
+          "label": "Clinic",
+          "position": 3
+        }
+      ]
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "0f439d2a-dcb9-4271-ad5d-e81edf9284a7",
+      "objectNameSingular": "domainEvent",
+      "name": "eventId",
+      "type": "TEXT",
+      "label": "Event ID",
+      "isNullable": false,
+      "isUnique": true,
+      "description": "Producer idempotency key. Unique by convention; deduped in Snowflake.",
+      "defaultValue": "''"
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "1d072a3e-6813-4884-a5ce-e77c58626879",
+      "objectNameSingular": "domainEvent",
+      "name": "eventType",
+      "type": "SELECT",
+      "label": "Event Type",
+      "isNullable": false,
+      "isUnique": false,
+      "description": "Catalog-derived `<subject>.<state>` registry. Adding a type is a catalog PR.",
+      "defaultValue": "'referral.received'",
+      "options": [
+        {
+          "universalIdentifier": "095dc9f1-d4b6-4caa-bffd-5e12a2279477",
+          "value": "billing_episode.closed",
+          "label": "Billing Episode Closed",
+          "position": 1
+        },
+        {
+          "universalIdentifier": "abdeda23-b758-457f-9178-e1e10057e738",
+          "value": "billing_episode.not_qualified",
+          "label": "Billing Episode Not Qualified",
+          "position": 2
+        },
+        {
+          "universalIdentifier": "39624945-fbfb-4ddf-beb7-422875b9ba48",
+          "value": "billing_episode.open",
+          "label": "Billing Episode Open",
+          "position": 3
+        },
+        {
+          "universalIdentifier": "df5b56cd-18b0-4873-8d64-ce1a7f957019",
+          "value": "billing_episode.qualified",
+          "label": "Billing Episode Qualified",
+          "position": 4
+        },
+        {
+          "universalIdentifier": "892292d1-5f14-4cd1-9043-38375bc81020",
+          "value": "billing_episode.reported",
+          "label": "Billing Episode Reported",
+          "position": 5
+        },
+        {
+          "universalIdentifier": "23054975-4b99-4069-a875-dddd4f149b94",
+          "value": "communication_consent.opted_in",
+          "label": "Communication Consent Opted In",
+          "position": 6
+        },
+        {
+          "universalIdentifier": "b76fc7e3-c28c-4e59-bb1b-0367a35a71c6",
+          "value": "communication_consent.opted_out",
+          "label": "Communication Consent Opted Out",
+          "position": 7
+        },
+        {
+          "universalIdentifier": "725d4400-6ee2-4268-a449-d65dcd00222f",
+          "value": "communication_consent.unset",
+          "label": "Communication Consent Unset",
+          "position": 8
+        },
+        {
+          "universalIdentifier": "2765a8e4-01da-426d-b6e1-c404afd2fbca",
+          "value": "consent.expired",
+          "label": "Consent Expired",
+          "position": 9
+        },
+        {
+          "universalIdentifier": "f566be45-8160-4e45-8973-561b3ccf5c4f",
+          "value": "consent.granted",
+          "label": "Consent Granted",
+          "position": 10
+        },
+        {
+          "universalIdentifier": "98381dc9-d8e1-4518-9ad7-2cebbfc49e9b",
+          "value": "consent.requested",
+          "label": "Consent Requested",
+          "position": 11
+        },
+        {
+          "universalIdentifier": "4089eb89-8896-4902-bd81-92de6890c807",
+          "value": "consent.revoked",
+          "label": "Consent Revoked",
+          "position": 12
+        },
+        {
+          "universalIdentifier": "e3aa79fe-4147-47b5-8990-1718279b88e8",
+          "value": "consent.superseded",
+          "label": "Consent Superseded",
+          "position": 13
+        },
+        {
+          "universalIdentifier": "0a8f469a-c703-402d-ba45-5af1829f5e7d",
+          "value": "contract.active",
+          "label": "Contract Active",
+          "position": 14
+        },
+        {
+          "universalIdentifier": "72f7a62b-ccb4-473e-b2f4-4ba9999feff7",
+          "value": "contract.draft",
+          "label": "Contract Draft",
+          "position": 15
+        },
+        {
+          "universalIdentifier": "6cb01296-dd87-4b02-9d3d-b7f8b296a9ec",
+          "value": "contract.superseded",
+          "label": "Contract Superseded",
+          "position": 16
+        },
+        {
+          "universalIdentifier": "5840ca8f-574b-44a8-8fbf-3f31681fea33",
+          "value": "contract.terminated",
+          "label": "Contract Terminated",
+          "position": 17
+        },
+        {
+          "universalIdentifier": "1ef1f154-bffc-475d-b3e6-825ee13a2130",
+          "value": "coverage.lapsed",
+          "label": "Coverage Lapsed",
+          "position": 18
+        },
+        {
+          "universalIdentifier": "2e2039c3-609c-4764-ae91-a7ab5befd460",
+          "value": "coverage.terminated",
+          "label": "Coverage Terminated",
+          "position": 19
+        },
+        {
+          "universalIdentifier": "0aea3c48-ed2e-4e8a-8f13-4f509295df2a",
+          "value": "coverage.unverified",
+          "label": "Coverage Unverified",
+          "position": 20
+        },
+        {
+          "universalIdentifier": "97de7887-b71e-4a75-bc81-94c4dd00529e",
+          "value": "coverage.verified_active",
+          "label": "Coverage Verified Active",
+          "position": 21
+        },
+        {
+          "universalIdentifier": "f9ec5ce3-24fb-467b-8f5c-8562926d47a3",
+          "value": "coverage.verified_inactive",
+          "label": "Coverage Verified Inactive",
+          "position": 22
+        },
+        {
+          "universalIdentifier": "4b890c31-7707-4f9e-a25c-8d091180e669",
+          "value": "device.active",
+          "label": "Device Active",
+          "position": 23
+        },
+        {
+          "universalIdentifier": "a460ca10-9cf0-48e5-9761-a5ba1060b9c8",
+          "value": "device.delivered",
+          "label": "Device Delivered",
+          "position": 24
+        },
+        {
+          "universalIdentifier": "6bc2d1a0-b185-45e8-aa82-c8003fc608fc",
+          "value": "device.lost",
+          "label": "Device Lost",
+          "position": 25
+        },
+        {
+          "universalIdentifier": "2cd26290-d4fe-4172-80f1-cb8d9aad8802",
+          "value": "device.ordered",
+          "label": "Device Ordered",
+          "position": 26
+        },
+        {
+          "universalIdentifier": "6d591194-abeb-4364-ba2e-22c71bd272b3",
+          "value": "device.returned",
+          "label": "Device Returned",
+          "position": 27
+        },
+        {
+          "universalIdentifier": "8a0b0d2f-65a2-4f09-b348-09fd8b815949",
+          "value": "device.shipped",
+          "label": "Device Shipped",
+          "position": 28
+        },
+        {
+          "universalIdentifier": "a9b16e9d-da9f-4f82-a429-d64ca0cf9769",
+          "value": "enrollment.active",
+          "label": "Enrollment Active",
+          "position": 29
+        },
+        {
+          "universalIdentifier": "38970d36-5e0b-486e-a053-922a84b18702",
+          "value": "enrollment.ended",
+          "label": "Enrollment Ended",
+          "position": 30
+        },
+        {
+          "universalIdentifier": "0960e25d-ef13-44b9-955e-90fd04bd3b8c",
+          "value": "enrollment.on_hold",
+          "label": "Enrollment On Hold",
+          "position": 31
+        },
+        {
+          "universalIdentifier": "e583dc22-b143-4b52-bd40-b1b986e23fee",
+          "value": "enrollment.pending_start",
+          "label": "Enrollment Pending Start",
+          "position": 32
+        },
+        {
+          "universalIdentifier": "12a5154d-9c72-49d5-80ed-bdaf3e656e29",
+          "value": "referral.closed",
+          "label": "Referral Closed",
+          "position": 33
+        },
+        {
+          "universalIdentifier": "9263ba57-a17e-4ff1-948d-fc7d7ac7952e",
+          "value": "referral.converted",
+          "label": "Referral Converted",
+          "position": 34
+        },
+        {
+          "universalIdentifier": "5262d959-6035-4351-ab27-c52057799388",
+          "value": "referral.outreach",
+          "label": "Referral Outreach",
+          "position": 35
+        },
+        {
+          "universalIdentifier": "19aeaeca-1971-4162-b0bf-50b8355ccd90",
+          "value": "referral.received",
+          "label": "Referral Received",
+          "position": 36
+        },
+        {
+          "universalIdentifier": "dbdf2a59-a281-4f4e-8442-c1e10d24bdd1",
+          "value": "referral.resolved",
+          "label": "Referral Resolved",
+          "position": 37
+        },
+        {
+          "universalIdentifier": "92320935-71b3-454b-b1c0-f59d07eac617",
+          "value": "referral.screened",
+          "label": "Referral Screened",
+          "position": 38
+        }
+      ]
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "2d7553e7-06c6-4394-895b-f9ad4f400962",
+      "objectNameSingular": "domainEvent",
+      "name": "evidence",
+      "type": "RAW_JSON",
+      "label": "Evidence",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "Source references; mandatory when `actorType` is `system`."
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "ec0209a8-3ceb-4938-bbc2-ebc79cd982e1",
+      "objectNameSingular": "domainEvent",
+      "name": "occurredAt",
+      "type": "DATE_TIME",
+      "label": "Occurred At",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "Business time, set by the producer."
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "55988477-5fb2-4454-966d-bc1b63ba1c71",
+      "objectNameSingular": "domainEvent",
+      "name": "payload",
+      "type": "RAW_JSON",
+      "label": "Payload",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "Unvalidated at MVP."
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "4199f77c-5344-416d-9cb0-3c3209dc5d39",
+      "objectNameSingular": "domainEvent",
+      "name": "producer",
+      "type": "TEXT",
+      "label": "Producer",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "Set by the write path from key identity, never producer-supplied."
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "6a9aa840-220f-47a5-8729-ebf6294d4a52",
+      "objectNameSingular": "domainEvent",
+      "name": "programCode",
+      "type": "TEXT",
+      "label": "Program Code",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "Envelope `program`; required for patient events."
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "b799e952-e887-47e6-8864-f96aad185669",
+      "objectNameSingular": "domainEvent",
+      "name": "ruleVersion",
+      "type": "TEXT",
+      "label": "Rule Version",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "The `catalog_version` in force when the event was written."
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "ee57f572-d195-4382-b207-870d73b568d8",
+      "objectNameSingular": "domainEvent",
+      "name": "schemaVersion",
+      "type": "NUMBER",
+      "label": "Schema Version",
+      "isNullable": true,
+      "isUnique": false
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "85a3cccf-a7a5-4108-b1cb-9aa7f2ee9dac",
+      "objectNameSingular": "patient",
+      "name": "appUserId",
+      "type": "TEXT",
+      "label": "App User ID",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "External ID, system `app`."
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "4740d7e8-90c7-47bb-90e9-5381e8886a71",
+      "objectNameSingular": "patient",
+      "name": "canonicalPatientId",
+      "type": "TEXT",
+      "label": "Canonical Patient ID",
+      "isNullable": false,
+      "isUnique": true,
+      "description": "DIM_PATIENT_CONFORMED spine ID \u2014 the canonical identity (`entity_ref` system `brook`).",
+      "defaultValue": "''"
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "7dbbb8be-c01e-4497-b47a-741ddf31430b",
+      "objectNameSingular": "patient",
+      "name": "mrn",
+      "type": "TEXT",
+      "label": "MRN",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "External ID, system `mrn`."
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "5804d31d-69bc-48ea-9ed8-4b080a792ff7",
+      "objectNameSingular": "patient",
+      "name": "sfdcId",
+      "type": "TEXT",
+      "label": "Salesforce ID",
+      "isNullable": true,
+      "isUnique": true,
+      "description": "External ID, system `sfdc`."
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "1bc46690-46ca-44f9-a536-63a8f45d7163",
+      "objectNameSingular": "patientProgram",
+      "name": "canonicalPatientId",
+      "type": "TEXT",
+      "label": "Canonical Patient ID",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "Denormalized copy of `patient.canonicalPatientId`, so a webhook delivery resolves without a read-back."
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "26c65f17-a751-44d1-9209-8c2492f40696",
+      "objectNameSingular": "patientProgram",
+      "name": "lifecycleStatus",
+      "type": "SELECT",
+      "label": "Lifecycle Status",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "Enrollment state at the patient x program grain. Options from the `enrollment` catalog subject.",
+      "defaultValue": "'pending_start'",
+      "options": [
+        {
+          "universalIdentifier": "a2fcf5df-765b-4fbb-8302-93dbab43f5ec",
+          "value": "active",
+          "label": "Active",
+          "position": 1
+        },
+        {
+          "universalIdentifier": "2b5acb51-f874-46af-a94c-1eacd8a49a23",
+          "value": "ended",
+          "label": "Ended",
+          "position": 2
+        },
+        {
+          "universalIdentifier": "2567317a-6298-4104-9e37-47b3f0956561",
+          "value": "on_hold",
+          "label": "On Hold",
+          "position": 3
+        },
+        {
+          "universalIdentifier": "6cd2154d-b7c0-42f2-b4b6-ce88341c5c41",
+          "value": "pending_start",
+          "label": "Pending Start",
+          "position": 4
+        }
+      ]
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "882d27bc-3d6c-41aa-810c-bcf91bbeb5c5",
+      "objectNameSingular": "patientProgram",
+      "name": "lifecycleStatusAsOf",
+      "type": "DATE_TIME",
+      "label": "Lifecyclestatus As Of",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "Last-writer-wins guard for lifecycleStatus: the `occurredAt` of the event that set it."
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "c2597f66-f445-46e0-bf76-700f21673a2b",
+      "objectNameSingular": "patientProgram",
+      "name": "programCode",
+      "type": "TEXT",
+      "label": "Program Code",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "Denormalized copy of `program.code`, so a webhook delivery resolves without a read-back."
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "d4b30e31-db5a-455e-8839-e69531168933",
+      "objectNameSingular": "patientProgram",
+      "name": "projectionSeq",
+      "type": "NUMBER",
+      "label": "Projection Seq",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "Watermark: the ledger sequence of the last applied event. Null means never projected."
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "82d94e8c-f3a3-46aa-8adf-dd2a96acde2b",
+      "objectNameSingular": "patientProgram",
+      "name": "qualificationStatus",
+      "type": "SELECT",
+      "label": "Qualification Status",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "Billing qualification. Options from the `billing_episode` catalog subject; set only by clinic-rules-engine events.",
+      "defaultValue": "'open'",
+      "options": [
+        {
+          "universalIdentifier": "b6f1d2e3-a3b1-4fd7-b918-3f4eff940174",
+          "value": "closed",
+          "label": "Closed",
+          "position": 1
+        },
+        {
+          "universalIdentifier": "beab8008-5ddd-4263-b2c5-f0c8e30517d2",
+          "value": "not_qualified",
+          "label": "Not Qualified",
+          "position": 2
+        },
+        {
+          "universalIdentifier": "1cc0977c-30c7-4fdc-bede-b21256cc5611",
+          "value": "open",
+          "label": "Open",
+          "position": 3
+        },
+        {
+          "universalIdentifier": "72937290-c141-470e-8c08-5c64c93ab5ac",
+          "value": "qualified",
+          "label": "Qualified",
+          "position": 4
+        },
+        {
+          "universalIdentifier": "3d1301f4-e8d8-438b-bef7-0c642c447268",
+          "value": "reported",
+          "label": "Reported",
+          "position": 5
+        }
+      ]
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "62aef2b4-c79a-44a6-b579-0188a3d36eb5",
+      "objectNameSingular": "patientProgram",
+      "name": "qualificationStatusAsOf",
+      "type": "DATE_TIME",
+      "label": "Qualificationstatus As Of",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "Last-writer-wins guard for qualificationStatus: the `occurredAt` of the event that set it."
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "e6303099-89b2-4487-8a4f-fc3326afbfea",
+      "objectNameSingular": "program",
+      "name": "code",
+      "type": "TEXT",
+      "label": "Code",
+      "isNullable": true,
+      "isUnique": true,
+      "description": "Stable program ID carried in the envelope `program` field."
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "15d5cef7-befe-400b-8720-e210cbe54d62",
+      "objectNameSingular": "provider",
+      "name": "lifecycleStatus",
+      "type": "SELECT",
+      "label": "Lifecycle Status",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "v1 literal vocabulary; extend with the catalog when it carries a provider dimension.",
+      "options": [
+        {
+          "universalIdentifier": "4ae15917-410c-4be0-8c31-aa22b1963487",
+          "value": "credentialed",
+          "label": "Credentialed",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "6d518f15-b3f3-4524-a1e2-92c20701f976",
+      "objectNameSingular": "provider",
+      "name": "lifecycleStatusAsOf",
+      "type": "DATE_TIME",
+      "label": "Lifecyclestatus As Of",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "Last-writer-wins guard for lifecycleStatus: the `occurredAt` of the event that set it."
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "ccabc848-d149-4aca-828e-d1449b3b9f9e",
+      "objectNameSingular": "provider",
+      "name": "npi",
+      "type": "TEXT",
+      "label": "NPI",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "External ID, system `npi`."
+    },
+    {
+      "operation": "createField",
+      "universalIdentifier": "cac15ab1-6d37-42c6-9cbe-7ce242e5d14b",
+      "objectNameSingular": "provider",
+      "name": "sfdcId",
+      "type": "TEXT",
+      "label": "Salesforce ID",
+      "isNullable": true,
+      "isUnique": false,
+      "description": "External ID, system `sfdc`."
+    },
+    {
+      "operation": "createRelation",
+      "type": "MANY_TO_ONE",
+      "from": {
+        "universalIdentifier": "f2598b9e-2c2f-4ee4-80d7-1a9c97e1dbf3",
+        "objectNameSingular": "domainEvent",
+        "fieldName": "clinic",
+        "label": "Clinic",
+        "isNullable": true
+      },
+      "to": {
+        "universalIdentifier": "4347df9f-663f-44e7-a8cc-020122c2f314",
+        "objectNameSingular": "clinic",
+        "fieldName": "domainEvents",
+        "label": "Domain Events"
+      }
+    },
+    {
+      "operation": "createRelation",
+      "type": "MANY_TO_ONE",
+      "from": {
+        "universalIdentifier": "821b64ad-edba-41fe-93bf-b85eaf096f2d",
+        "objectNameSingular": "domainEvent",
+        "fieldName": "patientProgram",
+        "label": "Patient Program",
+        "isNullable": true
+      },
+      "to": {
+        "universalIdentifier": "85df7dbe-0ebb-4a1e-ad2c-04a62e28ee1a",
+        "objectNameSingular": "patientProgram",
+        "fieldName": "domainEvents",
+        "label": "Domain Events"
+      }
+    },
+    {
+      "operation": "createRelation",
+      "type": "MANY_TO_ONE",
+      "from": {
+        "universalIdentifier": "ea0ee25f-8f58-4107-b575-5c10fd5b8135",
+        "objectNameSingular": "domainEvent",
+        "fieldName": "provider",
+        "label": "Provider",
+        "isNullable": true
+      },
+      "to": {
+        "universalIdentifier": "b356902a-bbf4-4460-8fb5-4d1026af549e",
+        "objectNameSingular": "provider",
+        "fieldName": "domainEvents",
+        "label": "Domain Events"
+      }
+    },
+    {
+      "operation": "createRelation",
+      "type": "MANY_TO_ONE",
+      "from": {
+        "universalIdentifier": "fe59dea1-6183-4b36-9b84-f73ff2ce7651",
+        "objectNameSingular": "patientProgram",
+        "fieldName": "patient",
+        "label": "Patient",
+        "isNullable": false
+      },
+      "to": {
+        "universalIdentifier": "3f04b21c-432a-4296-b28b-aec64a6f4d4a",
+        "objectNameSingular": "patient",
+        "fieldName": "patientPrograms",
+        "label": "Patient Programs"
+      }
+    },
+    {
+      "operation": "createRelation",
+      "type": "MANY_TO_ONE",
+      "from": {
+        "universalIdentifier": "b4a58d1f-25b7-4f57-855c-75d874beafa5",
+        "objectNameSingular": "patientProgram",
+        "fieldName": "program",
+        "label": "Program",
+        "isNullable": false
+      },
+      "to": {
+        "universalIdentifier": "441a8e7a-37e8-4f3d-9097-4f6b0a932967",
+        "objectNameSingular": "program",
+        "fieldName": "patientPrograms",
+        "label": "Patient Programs"
+      }
+    },
+    {
+      "operation": "createRole",
+      "name": "producer",
+      "label": "Event Producer",
+      "description": "The single MCP write path. Creates DomainEvent rows and nothing else.",
+      "objectPermissions": [
+        {
+          "objectNameSingular": "domainEvent",
+          "canRead": false,
+          "canCreate": true,
+          "canUpdate": false,
+          "canDelete": false
+        }
+      ],
+      "fieldPermissions": []
+    },
+    {
+      "operation": "createRole",
+      "name": "staff",
+      "label": "Ops and Clinical Staff",
+      "description": "Reads and edits entity records; status fields and the event log are read-only.",
+      "objectPermissions": [
+        {
+          "objectNameSingular": "clinic",
+          "canRead": true,
+          "canCreate": true,
+          "canUpdate": true,
+          "canDelete": false
+        },
+        {
+          "objectNameSingular": "patient",
+          "canRead": true,
+          "canCreate": true,
+          "canUpdate": true,
+          "canDelete": false
+        },
+        {
+          "objectNameSingular": "patientProgram",
+          "canRead": true,
+          "canCreate": true,
+          "canUpdate": true,
+          "canDelete": false
+        },
+        {
+          "objectNameSingular": "program",
+          "canRead": true,
+          "canCreate": true,
+          "canUpdate": true,
+          "canDelete": false
+        },
+        {
+          "objectNameSingular": "provider",
+          "canRead": true,
+          "canCreate": true,
+          "canUpdate": true,
+          "canDelete": false
+        },
+        {
+          "objectNameSingular": "domainEvent",
+          "canRead": true,
+          "canCreate": false,
+          "canUpdate": false,
+          "canDelete": false
+        }
+      ],
+      "fieldPermissions": [
+        {
+          "objectNameSingular": "clinic",
+          "fieldName": "lifecycleStatus",
+          "canRead": true,
+          "canUpdate": false
+        },
+        {
+          "objectNameSingular": "clinic",
+          "fieldName": "lifecycleStatusAsOf",
+          "canRead": true,
+          "canUpdate": false
+        },
+        {
+          "objectNameSingular": "patientProgram",
+          "fieldName": "lifecycleStatus",
+          "canRead": true,
+          "canUpdate": false
+        },
+        {
+          "objectNameSingular": "patientProgram",
+          "fieldName": "lifecycleStatusAsOf",
+          "canRead": true,
+          "canUpdate": false
+        },
+        {
+          "objectNameSingular": "patientProgram",
+          "fieldName": "qualificationStatus",
+          "canRead": true,
+          "canUpdate": false
+        },
+        {
+          "objectNameSingular": "patientProgram",
+          "fieldName": "qualificationStatusAsOf",
+          "canRead": true,
+          "canUpdate": false
+        },
+        {
+          "objectNameSingular": "provider",
+          "fieldName": "lifecycleStatus",
+          "canRead": true,
+          "canUpdate": false
+        },
+        {
+          "objectNameSingular": "provider",
+          "fieldName": "lifecycleStatusAsOf",
+          "canRead": true,
+          "canUpdate": false
+        }
+      ]
+    },
+    {
+      "operation": "createRole",
+      "name": "app",
+      "label": "Projection App",
+      "description": "The projection runtime: resolves entities, applies status per the lookup, binds relations.",
+      "objectPermissions": [
+        {
+          "objectNameSingular": "clinic",
+          "canRead": true,
+          "canCreate": true,
+          "canUpdate": true,
+          "canDelete": false
+        },
+        {
+          "objectNameSingular": "domainEvent",
+          "canRead": true,
+          "canCreate": true,
+          "canUpdate": true,
+          "canDelete": false
+        },
+        {
+          "objectNameSingular": "patient",
+          "canRead": true,
+          "canCreate": false,
+          "canUpdate": false,
+          "canDelete": false
+        },
+        {
+          "objectNameSingular": "patientProgram",
+          "canRead": true,
+          "canCreate": true,
+          "canUpdate": true,
+          "canDelete": false
+        },
+        {
+          "objectNameSingular": "program",
+          "canRead": true,
+          "canCreate": false,
+          "canUpdate": false,
+          "canDelete": false
+        },
+        {
+          "objectNameSingular": "provider",
+          "canRead": true,
+          "canCreate": true,
+          "canUpdate": true,
+          "canDelete": false
+        }
+      ],
+      "fieldPermissions": [
+        {
+          "objectNameSingular": "domainEvent",
+          "fieldName": "actorId",
+          "canRead": true,
+          "canUpdate": false
+        },
+        {
+          "objectNameSingular": "domainEvent",
+          "fieldName": "actorType",
+          "canRead": true,
+          "canUpdate": false
+        },
+        {
+          "objectNameSingular": "domainEvent",
+          "fieldName": "authority",
+          "canRead": true,
+          "canUpdate": false
+        },
+        {
+          "objectNameSingular": "domainEvent",
+          "fieldName": "causationId",
+          "canRead": true,
+          "canUpdate": false
+        },
+        {
+          "objectNameSingular": "domainEvent",
+          "fieldName": "correlationId",
+          "canRead": true,
+          "canUpdate": false
+        },
+        {
+          "objectNameSingular": "domainEvent",
+          "fieldName": "entityRefId",
+          "canRead": true,
+          "canUpdate": false
+        },
+        {
+          "objectNameSingular": "domainEvent",
+          "fieldName": "entityRefSystem",
+          "canRead": true,
+          "canUpdate": false
+        },
+        {
+          "objectNameSingular": "domainEvent",
+          "fieldName": "entityType",
+          "canRead": true,
+          "canUpdate": false
+        },
+        {
+          "objectNameSingular": "domainEvent",
+          "fieldName": "eventId",
+          "canRead": true,
+          "canUpdate": false
+        },
+        {
+          "objectNameSingular": "domainEvent",
+          "fieldName": "eventType",
+          "canRead": true,
+          "canUpdate": false
+        },
+        {
+          "objectNameSingular": "domainEvent",
+          "fieldName": "evidence",
+          "canRead": true,
+          "canUpdate": false
+        },
+        {
+          "objectNameSingular": "domainEvent",
+          "fieldName": "occurredAt",
+          "canRead": true,
+          "canUpdate": false
+        },
+        {
+          "objectNameSingular": "domainEvent",
+          "fieldName": "payload",
+          "canRead": true,
+          "canUpdate": false
+        },
+        {
+          "objectNameSingular": "domainEvent",
+          "fieldName": "producer",
+          "canRead": true,
+          "canUpdate": false
+        },
+        {
+          "objectNameSingular": "domainEvent",
+          "fieldName": "programCode",
+          "canRead": true,
+          "canUpdate": false
+        },
+        {
+          "objectNameSingular": "domainEvent",
+          "fieldName": "ruleVersion",
+          "canRead": true,
+          "canUpdate": false
+        },
+        {
+          "objectNameSingular": "domainEvent",
+          "fieldName": "schemaVersion",
+          "canRead": true,
+          "canUpdate": false
+        }
+      ]
+    }
+  ]
+}

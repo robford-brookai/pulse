@@ -1,0 +1,40 @@
+[project]
+name = "twenty-projection"
+version = "0.1.0"
+description = "PULSE ledger-fed Twenty board projection — committed ledger events upsert board records through the core REST surface, monotonically on (subject_id, ledger_seq)"
+requires-python = ">=3.10,<4.0"
+dependencies = [
+    # The apply core's REST edge — same floor pulse-core pins, so the workspace resolves one httpx.
+    "httpx>=0.28.1",
+    # `encode_option_value` (the pinned UPPER_SNAKE SELECT encoding) today; `pulse_core.consume`
+    # when the wave-1 consumer loop (task 2.3) lands.
+    "pulse-core",
+]
+
+[tool.uv.sources]
+pulse-core = { workspace = true }
+
+[dependency-groups]
+dev = [
+    # Enforces the no-live-network posture (spec: every consumer/writer test runs against
+    # fixture transports). tests/conftest.py blocks sockets for every run that collects this
+    # package, flag or no flag — same pattern as verdict-relay, schedules, and consent-ingress.
+    "pytest-socket>=0.7.0",
+    # This package typechecks under pyright (see [tool.pyright] below); `task typecheck`
+    # runs it alongside the workspace mypy pass.
+    "pyright>=1.1.390",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/twenty_projection"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.pyright]
+include = ["src", "tests"]
+typeCheckingMode = "strict"

@@ -1,5 +1,10 @@
 # Patient Data Infrastructure — Acquisition Status Tracking (Spec)
 
+> **Superseded:** As a governance surface, this document is superseded by
+> `docs/contracts/producer-registry.md`, which is the authoritative list of what crosses PULSE's
+> boundary. Retained here as historical context on where patient facts lived pre-connector-
+> architecture. Do not use this inventory to determine how to integrate — read the registry.
+
 > **Author:** Rob Ford · **Date:** 2026-07-26 · **Status:** Draft for review
 > **Companions:** `DNA-SPEC-COHORT-FUNNEL-REQS.md` (funnel PRD) · `DNA-SPEC-DECLARED-STATE-PRM.md` (pattern companion)
 >

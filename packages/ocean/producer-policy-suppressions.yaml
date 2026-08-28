@@ -1,0 +1,14 @@
+# Producer-policy suppressions (§4.4, producer-ingress-policy).
+#
+# Adjudicated name-collision false positives only — never exemptions for a genuinely
+# state-asserting producer, which converts to an ingress adapter with no grandfathering. Each
+# entry names the finding it suppresses and carries a mandatory justification; an entry with no
+# justification, or one matching no current finding, fails the gate.
+#
+# - file: <path to the producer source, relative to packages/ocean>
+#   element: <the finding's qualified element name>
+#   subject: <the catalog subject the finding names>
+#   justification: <why this is a false positive, not a state-asserting emit>
+#
+# See packages/ocean/docs/producer-policy.md.
+suppressions: []

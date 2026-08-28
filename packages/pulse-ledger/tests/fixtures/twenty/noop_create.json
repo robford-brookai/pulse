@@ -1,0 +1,40 @@
+{
+  "targetUrl": "https://pulse.example/webhooks/twenty",
+  "eventName": "patientProgram.created",
+  "objectMetadata": {
+    "id": "objmeta-patientprogram-0000-0000-0001",
+    "nameSingular": "patientProgram"
+  },
+  "workspaceId": "workspace-pulse-dev-0000-0001",
+  "webhookId": "webhook-pulse-dev-0000-0001",
+  "eventDate": "2026-08-06T15:14:00.020Z",
+  "record": {
+    "name": "Canary NoopCreate",
+    "id": "twenty-record-patientprogram-0004",
+    "createdAt": "2026-08-06T15:14:00.011Z",
+    "createdBy": {
+      "source": "API",
+      "workspaceMemberId": null,
+      "name": "pulse-dev",
+      "context": {}
+    },
+    "deletedAt": null,
+    "position": -17,
+    "updatedAt": "2026-08-06T15:14:00.011Z",
+    "updatedBy": {
+      "source": "API",
+      "workspaceMemberId": null,
+      "name": "pulse-dev",
+      "context": {}
+    },
+    "searchVector": "",
+    "programId": "twenty-record-program-0001",
+    "programCode": "rpm",
+    "canonicalPatientId": "DIM_PATIENT_CONFORMED-000104",
+    "lifecycleStatus": "PENDING_START",
+    "lifecycleStatusAsOf": "2026-08-06T15:14:00.011Z",
+    "qualificationStatus": "QUALIFIED",
+    "patientId": "twenty-record-patient-0004",
+    "qualificationStatusAsOf": "2026-08-06T15:14:00.011Z"
+  }
+}

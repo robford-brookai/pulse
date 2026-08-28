@@ -1,8 +1,24 @@
 # PULSE State Catalog — Schema and Generation
 
+> **Superseded in part (2026-08-03, `pulse-ledger-core` / DNA-784).** Two positions of this v1
+> are superseded. **Grain**: the `patient × program` entity grain gives way to the six-subject
+> model of object model v0.7 (Referral, Consent, Enrollment, BillingEpisode, Device, Contract,
+> each with its own grain — `design/migration/rpc-object-model-assessment.md`). **Legality**:
+> "transition legality remains flag-only at MVP" (Enforcer 1) gives way to write-time enforcement —
+> the command API validates every declared transition against the catalog's generated adjacency
+> and rejects illegal ones with the catalog reason and version (`openspec/changes/pulse-ledger-core/specs/command-api/spec.md`,
+> ADR-0003). The catalog-as-single-source model, generation targets, and versioning rules stand;
+> the generator now also emits Python transition tables and Pydantic command types
+> (`pulse_core.generated`). `catalog-authority` (2026-08-07) landed the authoritative
+> `catalog/state_catalog.yaml` at the repo root: the Appendix C seed is retired per its
+> retirement clause — the catalog file is the source of truth and the seed is deleted — and the
+> consumer contract is pinned once in `docs/contracts/publishes.md` (file at repo head, semver
+> `catalog_version` with MAJOR ⇔ breaking, `pulse_core.generated`, and the Snowflake `catalog`
+> schema as the warehouse read surface).
+
 | | |
 |---|---|
-| **Status** | Draft v1 |
+| **Status** | Draft v1 — superseded in part, see note above |
 | **Date** | 2026-07-28 |
 | **Owner** | Rob Ford, Data |
 | **Harvested from** | DNA-SPEC-DECLARED-STATE-PRM §3 |

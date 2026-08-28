@@ -16,23 +16,36 @@ vars:
   # Lint reaches the absorbed package; typecheck and test do not yet. These are separate vars so
   # each target's scope is readable at the point of use — a var that names packages/ocean while
   # the command runs against src is a false claim about what CI verifies (task 1.3).
-  LINT_PATHS: src tests packages/ocean
+  LINT_PATHS: src tests packages/archaeology packages/pulse-ledger packages/pulse-core packages/verdict-relay packages/schedules packages/identity packages/consent-ingress packages/synthea-seed packages/twenty-projection packages/ocean
   # Typecheck reaches ocean's libs but not its 16 services (task 1.4, DNA-779): the services
   # carry 217 mypy errors. Stated here rather than implied, so what CI verifies is readable
   # from this file.
-  TYPED_PATHS: src packages/ocean/libs/ocean-events/src packages/ocean/libs/ocean-broker/src packages/ocean/libs/ocean-connector-mcp/src
+  # schedules, identity, and consent-ingress typecheck under pyright strict (task 1.1, S1.1
+  # task 1.1), same as verdict-relay — see typecheck, not this mypy list.
+  TYPED_PATHS: src packages/pulse-ledger/src packages/pulse-core/src packages/ocean/libs/ocean-events/src packages/ocean/libs/ocean-broker/src packages/ocean/libs/ocean-connector-mcp/src
   # Tests reach ocean's libs here; the 14 service suites run in test:services, one pytest
   # process per service (task 4.14, DNA-781). They cannot join this list: every service ships a
   # top-level `src` package and imports itself as `from src.X`, and one interpreter cannot hold
   # sixteen different `src` packages in sys.modules. graph-projection moved from this list into
   # the loop with the rest. tests/test_taskfile_test_coverage.py pins this arrangement.
-  TESTED_PATHS: tests packages/ocean/libs
+  # The one explicit file at the end is `packages/ocean/tests/unit`'s only entry: ADR-0002 keeps
+  # that cross-service tree out of CI (~60 pre-existing failures), but this single test
+  # (snowflake-projection task 1.1) is a self-contained SQL/emitter-comparison check with none
+  # of that tree's fixtures, so it is named directly rather than pulling the whole directory in.
+  TESTED_PATHS: tests packages/archaeology/tests packages/pulse-ledger/tests packages/pulse-core/tests packages/verdict-relay/tests packages/schedules/tests packages/identity/tests packages/consent-ingress/tests packages/synthea-seed/tests packages/twenty-projection/tests packages/ocean/libs packages/ocean/tests/unit/test_stg_events_sql.py
   # Coverage covers ocean-events because it is the envelope every consumer depends on, and it is
   # at 100%. ocean-broker joins it at task 2.2: the reason it was excluded — that 2.2 would throw
   # its tests away — expired when 2.2 landed EventBridgePublisher and the event catalog, which are
   # what the library now is. Its config.py is the Kafka half, low-covered and deleted by task 9.2.
   # ocean-connector-mcp is outside this migration, still at 0%, tracked in DNA-779.
-  COV_PATHS: --cov=src/pkg_pulse --cov=packages/ocean/libs/ocean-events/src --cov=packages/ocean/libs/ocean-broker/src
+  # The pulse packages are covered from their first commit — placeholder-sized today, and the
+  # 80% floor applies as they grow rather than being retrofitted later.
+  # verdict-relay and schedules each carry their own 85% floor (s12-verdict-relay, s13-schedules);
+  # identity carries a 90% floor (s14-identity — wrong matches are the costliest bug in the
+  # system); consent-ingress carries an 85% floor (S1.1 task 1.1, same tier as verdict-relay and
+  # schedules). Each is enforced by the extra `coverage report` steps in `test` — the global
+  # fail_under cannot express a per-package floor.
+  COV_PATHS: --cov=src/pkg_pulse --cov=packages/archaeology/src --cov=packages/pulse-ledger/src --cov=packages/pulse-core/src --cov=packages/verdict-relay/src --cov=packages/schedules/src --cov=packages/identity/src --cov=packages/consent-ingress/src --cov=packages/synthea-seed/src --cov=packages/twenty-projection/src --cov=packages/ocean/libs/ocean-events/src --cov=packages/ocean/libs/ocean-broker/src
   CHANGE: ""
   VISIBILITY: --private
 
@@ -98,10 +111,30 @@ tasks:
       - uv run ruff format {{.LINT_PATHS}} --check
       - uv run ruff check {{.LINT_PATHS}}
 
+  twenty:gen:
+    desc: Regenerate the Twenty app's generated surfaces and the Metadata API operation-set artifact
+    # Reads state_catalog.yaml, the model definition, and packages/twenty-app/uid-map.json;
+    # writes packages/twenty-app/generated/ and artifact/operations.json. Pure file
+    # transformation — no network, and no path that applies anything to a Twenty instance
+    # (that is twenty:deploy). A UID the map lacks is an error naming the key, never a mint.
+    cmds:
+      - uv run python -m pulse_core.twenty_metadata
+
   typecheck:
-    desc: Type check with mypy (ocean libs covered; its 16 services are not — DNA-779)
+    desc: Type check — mypy on TYPED_PATHS (DNA-779), pyright on verdict-relay (s12), schedules (s13), identity (s14), consent-ingress (S1.1 task 1.1), archaeology (bf0a)
     cmds:
       - uv run mypy {{.TYPED_PATHS}}
+      # verdict-relay, schedules, identity, consent-ingress, and archaeology typecheck under
+      # pyright strict (s12-verdict-relay, s13-schedules, s14-identity, S1.1 task 1.1,
+      # bf0a-archaeology-access); pyright is a dev dependency of each package, installed by
+      # `uv sync --all-packages`.
+      - uv run pyright -p packages/archaeology
+      - uv run pyright -p packages/verdict-relay
+      - uv run pyright -p packages/schedules
+      - uv run pyright -p packages/identity
+      - uv run pyright -p packages/consent-ingress
+      - uv run pyright -p packages/synthea-seed
+      - uv run pyright -p packages/twenty-projection
 
   # --- 4. Test ---
 
@@ -109,6 +142,14 @@ tasks:
     desc: Run tests with coverage, then every ocean service suite (DNA-781)
     cmds:
       - uv run pytest {{.TESTED_PATHS}} --import-mode=importlib {{.COV_PATHS}} --cov-report=term-missing
+      # verdict-relay's, schedules's, and consent-ingress's per-package 85% floors
+      # (s12-verdict-relay, s13-schedules, S1.1 task 1.1), and identity's 90% floor
+      # (s14-identity), read from the combined run's coverage data — no second test run. The
+      # flag overrides the global fail_under.
+      - uv run coverage report --include="packages/verdict-relay/src/*" --fail-under=85
+      - uv run coverage report --include="packages/schedules/src/*" --fail-under=85
+      - uv run coverage report --include="packages/identity/src/*" --fail-under=90
+      - uv run coverage report --include="packages/consent-ingress/src/*" --fail-under=85
       - task: test:services
 
   test:services:
@@ -135,17 +176,238 @@ tasks:
     cmds:
       - uv run pytest {{.TESTS}} -m "slow or not slow" {{.COV_PATHS}} --cov-report=term-missing
 
+  test:integration:
+    desc: Run Docker-backed integration tests (LocalStack via testcontainers), e.g. the ledger relay smoke (4.5)
+    cmds:
+      - uv run pytest {{.TESTED_PATHS}} --import-mode=importlib -m integration
+
+  twenty:test:
+    desc: Type check and run the Twenty app's vitest suite (packages/twenty-app; no server, no network)
+    # The repo's first TypeScript package, deliberately contained: vitest only, no bundler,
+    # no publishing. `npm ci` reproduces from the committed root package-lock.json and is
+    # skipped when node_modules is already present, so a repeat run is just the suite.
+    # Reached from `check` (task 3.4), which is why main.yml's quality job sets node up
+    # before running it — a `check` that shells out to npm on a runner without node is red
+    # CI (docs/ci-lessons.md). tests/test_twenty_app_scaffold.py pins both halves together.
+    cmds:
+      - '[ -d node_modules ] || npm ci'
+      - npm run typecheck --workspace=@pulse/twenty-app
+      - npm run test --workspace=@pulse/twenty-app
+
   # --- 5. Gate ---
+
+  twenty:validate:
+    desc: Validate the committed Twenty artifact — schema, staleness, UID map, options, TS parity
+    # Reached from `check` (unlike twenty:gen/test/deploy) because it is Python-only by
+    # construction: the generated TypeScript is compared by parsing it as data, never by
+    # shelling out to npm, so this stays green on a runner with no node (docs/ci-lessons.md).
+    # Reads three committed files and writes nothing — the drift it catches is fixed by
+    # `task twenty:gen`, never by this target.
+    cmds:
+      - uv run python -m pulse_core.twenty_validate
+
+  catalog:release:
+    desc: Print the catalog release plan (deploy artifact; APPLY=1 executes, needs Snowflake creds)
+    # The deploy artifact for merges to main touching catalog/** (.github/workflows/
+    # catalog-release.yml), with the linear:sync posture: plan by default, `APPLY=1` is the only
+    # way to mutate, and APPLY=1 without credentials is an error rather than a silent no-op.
+    # Never reached from `check` — the check contract stays credential-free
+    # (tests/test_catalog_release_deploy.py pins both).
+    cmds:
+      - uv run python -m pulse_core.catalog_release_cli {{if .APPLY}}--apply{{end}}
+
+  snowflake:stg-events:
+    desc: Apply the STG_EVENTS.EVENTS view DDL to Snowflake (idempotent CREATE OR REPLACE; needs Snowflake credentials)
+    # snowflake-projection task 1.1: the committed shape is the reviewable artifact
+    # (packages/ocean/infra/snowflake/stg_events_events.sql); this target just replays it.
+    # CREATE OR REPLACE VIEW makes a re-run a no-op, so there is no plan/apply split like
+    # catalog:release's. Never reached from `check` — CI has no Snowflake credentials
+    # (docs/contracts/consumes.md posture); same guard as catalog:release above.
+    dir: packages/ocean
+    cmds:
+      - uv run python scripts/apply_snowflake_view.py infra/snowflake/stg_events_events.sql
+
+  synthea:regen:
+    desc: Regenerate the PROFILE synthetic population from the pinned JAR and verify its manifest (Java required; REPIN=1 re-pins)
+    # Deterministic generation receipted by checksum manifest (synthea-seed change). Java is a
+    # prerequisite of this target only — never reached from `check`, which must stay green on
+    # runners without Java (spec: "Regeneration is a task, never part of the check gate").
+    # Divergence from the committed manifest exits nonzero naming the files; REPIN=1 is the
+    # explicit re-pin path and its manifest diff is a reviewed change.
+    requires:
+      vars: [PROFILE]
+    cmds:
+      - uv run python -m synthea_seed.regen --profile {{.PROFILE}} {{if .REPIN}}--repin{{end}}
+
+  twenty:deploy:
+    desc: Replay the validated Twenty artifact against TARGET (dev|staging|prod; needs that target's credential)
+    # Dumb by design: reads a validated artifact file and a target, replays the operation set
+    # idempotently (create-if-absent keyed on universalIdentifier, update-if-drifted, never
+    # delete), emits a receipt of operation counts. Zero generation logic — promotion is the
+    # same file, next target. URL and credential resolve from the environment, never code.
+    # Never reached from `check`: it needs credentials, same posture as catalog:release.
+    requires:
+      vars: [TARGET]
+    cmds:
+      - uv run python -m pulse_core.twenty_deploy --target {{.TARGET}}
+
+  twenty:verify:
+    desc: Verify the deployed Twenty artifact by read-back against TARGET (dev|staging|prod; needs that target's credential)
+    # The 4.1 verification receipt: every artifact operation present on the target under its
+    # mapped universalIdentifier, then a re-apply asserting all no-ops. Exits nonzero on any
+    # mismatch; the printed receipt (names, counts, checksum — no workspace data) is the
+    # artifact to attach. Live-only, so never reached from `check` — same posture as
+    # twenty:deploy.
+    requires:
+      vars: [TARGET]
+    cmds:
+      - uv run python -m pulse_core.twenty_verify --target {{.TARGET}}
+
+  twenty:verify:live:
+    desc: Run the five projection cases against TARGET's live server (dev|staging|prod; needs that target's credential)
+    # The 4.2 verification receipt: the same five cases the unit suite runs with a faked client,
+    # run against a live server with the real one, so a projection defect that only appears
+    # against real SELECT storage, real relation columns, or real defaults is caught. Exits
+    # nonzero on any failed assertion; the JSON the run prints (case names, outcome statuses,
+    # catalog values — no record ids, no response bodies) is the artifact to attach. Its fixtures
+    # are synthetic and namespaced per run, and the run deletes them again.
+    # Live-only, so never reached from `check` — same posture as twenty:deploy and twenty:verify.
+    # The suite lives behind its own vitest config for the same reason: `task check`'s runner
+    # includes tests/ and cannot collect it.
+    requires:
+      vars: [TARGET]
+    env:
+      PULSE_LIVE_TARGET: "{{.TARGET}}"
+    cmds:
+      - '[ -d node_modules ] || npm ci'
+      - npm run test:live --workspace=@pulse/twenty-app
+
+  twenty:seed:
+    desc: Load the committed synthetic seed projection into TARGET (dev|staging|prod; needs that target's credential)
+    # Reads the committed, checksummed projection (pulse_core/generated/twenty_seed_dev.json) and
+    # upserts it idempotently — create-if-absent and patch-if-drifted on natural keys, never
+    # delete — chunked and paced to the instance's limits. No generator toolchain: the projection
+    # is the source, so seeding reproduces from a fresh clone. Target URL and credential resolve
+    # from the environment (twenty:deploy's resolution, reused verbatim). Never reached from
+    # `check`: it needs credentials, same posture as twenty:deploy and catalog:release.
+    requires:
+      vars: [TARGET]
+    cmds:
+      - uv run python -m pulse_core.twenty_seed --target {{.TARGET}}
+
+  twenty:app:build:
+    desc: Build the Twenty app and its generated API client against TARGET (dev|staging|prod; needs that target's remote)
+    # `twenty dev:build` generates the typed API client from the active remote, so even the
+    # build half of the SDK toolchain is credentialed — hence TARGET, and hence never reached
+    # from `check` (tests/test_twenty_app_scaffold.py pins it out, same posture as
+    # twenty:deploy). The remote must exist first: run `twenty:app:publish` once, or add it by
+    # hand with the remote:add line that target runs.
+    #
+    # `node_modules/.bin/twenty` after an unconditional `npm ci`, never `npx twenty`: the npm
+    # name `twenty` is squatted (an IP-geolocation tool), and npx silently falls back to it
+    # whenever the local bin is missing — a stale node_modules that predates the twenty-sdk
+    # dependency passes the `[ -d node_modules ]` guard and still has no local bin (7.2).
+    requires:
+      vars: [TARGET]
+    cmds:
+      - npm ci
+      - node_modules/.bin/twenty --remote {{.TARGET}} dev:build packages/twenty-app
+
+  twenty:app:publish:
+    desc: Build and publish the Twenty app to TARGET's server registry (dev|staging|prod; needs that target's credential)
+    # Publishes to the server registry (--private), never npm. The remote is (re-)added
+    # non-interactively first, resolving URL and credential from the same environment surface
+    # as twenty:deploy (`PULSE_TWENTY_<TARGET>_URL` / `PULSE_TWENTY_<TARGET>_TOKEN`) — the CLI
+    # writes them into a per-user config file, which is exactly why this is a developer/CD
+    # step and never reached from `check`. The server rejects an equal or lower semver, so
+    # bump `version` in packages/twenty-app/package.json in the same change as the model edit
+    # being published — the failed publish names the version, not the cause.
+    # Same npx hazard as twenty:app:build: the local bin or nothing.
+    requires:
+      vars: [TARGET]
+    cmds:
+      - npm ci
+      - node_modules/.bin/twenty remote:add --as {{.TARGET}} --url "$PULSE_TWENTY_{{upper .TARGET}}_URL" --api-key "$PULSE_TWENTY_{{upper .TARGET}}_TOKEN"
+      - node_modules/.bin/twenty app:publish --private --remote {{.TARGET}} packages/twenty-app
+
+  ledger:image:
+    desc: Build the pulse-ledger service image (API + relay, one image) and tag it TAG (needs Docker)
+    # Build context is the repo root — pulse-core is a workspace sibling that
+    # packages/pulse-ledger/Dockerfile installs from a sibling path, not from PyPI. The image runs
+    # `python -m pulse_ledger.api_server` by default; a relay deployment overrides the command with
+    # `python -m pulse_ledger.relay_worker` (same image, task 4.5's other process).
+    # Never reached from `check`: it needs a Docker daemon and, on an arm64 dev machine, an
+    # emulated amd64 build — neither belongs on every runner (tests/test_ledger_deploy_targets.py
+    # pins this the same way tests/test_catalog_release_deploy.py pins catalog:release).
+    requires:
+      vars: [TAG]
+    cmds:
+      - docker buildx build --platform linux/amd64 -f packages/pulse-ledger/Dockerfile -t pulse-ledger:{{.TAG}} .
+
+  ledger:migrate:
+    desc: Run the ledger's Alembic migrations to head against DATABASE_URL (needs a real Postgres)
+    # The same sequence `test_migration_000*.py` exercises against a throwaway cluster; this is
+    # the deploy-time invocation against the real one. Never reached from `check`, which never
+    # touches a live database (this repo's no-live-network posture).
+    dir: packages/pulse-ledger/infra/postgres
+    cmds:
+      - uv run --project ../.. alembic upgrade head
+
+  ledger:deploy:
+    desc: Roll the pulse-ledger API/relay deployment to TAG on TARGET (needs that target's credential)
+    # Dumb by design, same posture as twenty:deploy: push the image `ledger:image` already built,
+    # then re-point TARGET's deployment at TAG. No generation logic lives here.
+    # Never reached from `check`: it needs registry and cluster credentials.
+    requires:
+      vars: [TAG, TARGET]
+    cmds:
+      - docker push pulse-ledger:{{.TAG}}
+
+  projection:consume:
+    desc: Run the Twenty board projection consumer against TARGET's queue (dev|staging|prod; needs that target's credential)
+    # Credentialed and long-running: resolves the queue and Twenty REST credential from the
+    # environment (task 2.3's wiring), so it is never reached from `check` — same posture as
+    # twenty:deploy. tests/test_twenty_app_scaffold.py asserts it stays out;
+    # tests/test_twenty_projection_scaffold.py pins the TARGET requirement.
+    requires:
+      vars: [TARGET]
+    cmds:
+      - uv run python -m twenty_projection.consumer --target {{.TARGET}}
+
+  relay:run:
+    desc: Run one verdict-relay poll against TARGET's mart and ledger (dev|staging|prod; needs that target's credentials)
+    # The operator-facing invocation of the relay's production wiring (billing-state task 3.2,
+    # spec verdict-relay-trigger). Dumb by design, same posture as twenty:deploy: no logic here,
+    # just the schedules-package poll entry task 3.1 already wired
+    # (`schedules.cli verdict-relay-poll`), so the scheduled poll and a manual run share one
+    # production path and one receipt. Safe to re-run: a cursor already at the mart's watermark
+    # is a no-op run — zero declarations, all-zero receipt, exit zero.
+    # TARGET names which environment's credentials are loaded, exactly as ledger:deploy uses it.
+    # The variable names themselves are target-agnostic on purpose (`VERDICT_RELAY_*`, pinned in
+    # verdict_relay.production, values only in the deploy environment), so the target does not
+    # enumerate them here; a missing one fails startup naming that variable, before any
+    # connection.
+    # Never reached from `check`, which stays offline and credential-free:
+    # tests/test_verdict_relay_run_target.py pins both halves, and the target is on
+    # test_twenty_app_scaffold.py's credentialed-reachability list.
+    requires:
+      vars: [TARGET]
+    cmds:
+      - uv run python -m schedules.cli verdict-relay-poll
 
   # `check` is the contract between a developer's machine and CI:
   # .github/workflows/main.yml invokes exactly this target. Keep it CI-safe — openspec and
   # openlore are npm globals that runners do not install, so they belong in `verify`, not here.
+  # Node is different: main.yml's quality job installs it with a pinned setup-node step, so
+  # twenty:test is CI-safe by that provision rather than by needing no toolchain (task 3.4).
   check:
-    desc: All CI gates — lint, typecheck, tests, docs build (what main.yml runs)
+    desc: All CI gates — lint, typecheck, tests, Twenty app suite, docs build (what main.yml runs)
     cmds:
       - task: lint
       - task: typecheck
       - task: test
+      - task: twenty:validate
+      - task: twenty:test
       - task: workflow:lint
       - task: docs:lock-guard
       - task: docs:build

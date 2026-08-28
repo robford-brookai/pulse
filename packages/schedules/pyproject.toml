@@ -1,0 +1,46 @@
+[project]
+name = "schedules"
+version = "0.1.0"
+description = "PULSE clock-driven schedulers — month-open BillingEpisode declarer and D9 consent reconciliation sweep"
+requires-python = ">=3.10,<4.0"
+dependencies = [
+    # Command submission + classification, D16 idempotency, generated command types — the write
+    # boundary both jobs declare through (design decision 6).
+    "pulse-core",
+    # `pulse_ledger.reads.enumerate_state` — the current-state library read month-open enumerates
+    # from (design decision 2). Read module only; this package owns no schema of its own.
+    "pulse-ledger",
+    # `verdict_relay.run.run_relay` plus its `MartReader`/`Declarer`/production-wiring types — the
+    # poll entry (task 3.1) is a thin schedules-native wrapper over the existing relay, never a
+    # second implementation of its read-declare loop.
+    "verdict-relay",
+]
+
+[tool.uv.sources]
+pulse-core = { workspace = true }
+pulse-ledger = { workspace = true }
+verdict-relay = { workspace = true }
+
+[dependency-groups]
+dev = [
+    # Enforces the no-live-network posture (design decision 9). tests/conftest.py blocks sockets
+    # for every run that collects this package, flag or no flag — same pattern as verdict-relay.
+    "pytest-socket>=0.7.0",
+    # This package typechecks under pyright (see [tool.pyright] below); `task typecheck`
+    # runs it alongside the workspace mypy pass.
+    "pyright>=1.1.390",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/schedules"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.pyright]
+include = ["src", "tests"]
+typeCheckingMode = "strict"

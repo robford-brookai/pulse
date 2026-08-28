@@ -211,12 +211,23 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
+# Node (packages/twenty-app, the npm workspace). package-lock.json is committed —
+# `npm ci` in `task twenty:test` reproduces from it.
+node_modules/
+
+# Twenty CLI build output (`twenty dev:build`, run by the manifest smoke test) — derived from
+# the app source on every build, never committed.
+.twenty/
+
 # openlore analysis artifacts
 .openlore/
 
-# Thin-glue working state. handoffs/<change>/SUMMARY.md is the tracked receipt record
-# (WORKFLOW v2.1.0) — ignore the directory's CONTENTS, never the directory: a directory-level
-# `handoffs/` pattern would block the SUMMARY.md negation beneath it.
+# Terraform local state/init artifacts (packages/*/infra/terraform) — config only ships;
+# provider binaries and lock files are a deploy-time concern, not a commit-time one.
+**/.terraform/
+.terraform.lock.hcl
+
+# Thin-glue working state
 work_orders/
 handoffs/**
 !handoffs/*/

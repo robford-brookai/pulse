@@ -2,9 +2,20 @@
 
 *PULSE: Patient Unified Ledger of State & Events.*
 
+> **Superseded in part (2026-08-03, `pulse-ledger-core` / DNA-784).** The ingest posture of this
+> v1 — invalid transitions accepted-and-flagged with API-side rejection "deliberately deferred"
+> (see Idempotency and ordering) — is superseded: the ledger's command API rejects illegal
+> transitions at write time with the catalog reason and version (`openspec/changes/pulse-ledger-core/specs/command-api/spec.md`,
+> ADR-0003). Also superseded: `occurred_at` as the canonical business-time name (`effective_at`
+> is canonical; `occurred_at` survives as an accepted input alias), and the fixed
+> `patient | provider | clinic` entity model (generalized to subject-type × subject-key grains
+> per object model v0.7). The envelope's field vocabulary, actor/evidence model, and the two-vocabularies
+> distinction remain in force. The remaining Twenty-as-ingest posture falls under the queued
+> `v1-docs-cleanup` change (roadmap position P1).
+
 | | |
 |---|---|
-| **Status** | Draft v1 |
+| **Status** | Draft v1 — superseded in part, see note above |
 | **Date** | 2026-07-28 |
 | **Owner** | Rob Ford, Data |
 | **Audience** | Event producers (engineering, partner systems) |

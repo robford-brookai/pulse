@@ -1,0 +1,50 @@
+# Staging population regeneration (synthea-seed change, design.md decision 5). This workflow
+# is regeneration infrastructure, not CI: it is never reached from `task check`, main.yml stays
+# exactly `task check`, and Java exists only here — the cat4 CI-contract gate holds by
+# construction because the single run step resolves to a Taskfile target. Scheduled rather than
+# per-PR (50k patients is not inner-loop work); the artifact is what the staging loader
+# (environment-matrix, later) consumes. Synthetic data only — nothing here can touch PHI.
+name: Synthea regen
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly, Monday 06:00 UTC — refreshed per release cadence, cheap to re-dispatch on demand.
+    - cron: "0 6 * * 1"
+
+jobs:
+  regen-staging:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up the environment
+        uses: ./.github/actions/setup-python-env
+
+      # go-task is not preinstalled on runners. Same pin as main.yml.
+      - name: Install go-task
+        uses: arduino/setup-task@c0bc642852239c2689f73f4ea6459c29405f3c52 # v3.0.0
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Java is a prerequisite of `task synthea:regen` only — never of `task check`.
+      - name: Install Java
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # cat4: the run step resolves to a Taskfile target. Verifies the output against the
+      # committed staging manifest and fails naming diverging files; re-pinning is a reviewed
+      # change through REPIN=1 locally, never something this workflow does.
+      - name: Regenerate and verify the staging population
+        run: task synthea:regen PROFILE=staging
+
+      - name: Upload the staging population artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: synthea-staging-population
+          path: packages/synthea-seed/output/staging
+          if-no-files-found: error

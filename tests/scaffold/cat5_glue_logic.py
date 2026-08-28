@@ -6,10 +6,13 @@ scripts/collect_handoffs.py — on hand-built fixtures.
 Usage: uv run pytest tests/scaffold/cat5_glue_logic.py -v
 """
 
+import io
 import json
 import subprocess
+import urllib.error
 from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -665,6 +668,52 @@ def test_lint_exits_zero_when_the_live_check_is_skipped(tmp_path: Path, capsys: 
 # as an agent misbehaving rather than a tool overreaching.
 
 linear_sync = load_script("linear_sync.py")
+
+
+def test_resolve_tasks_md_finds_active_change(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    active = tmp_path / "openspec/changes/pulse-ledger-core"
+    active.mkdir(parents=True)
+    (active / "tasks.md").write_text("- [x] 1.1 Done\n")
+    monkeypatch.chdir(tmp_path)
+
+    assert linear_sync.resolve_tasks_md("pulse-ledger-core").resolve() == (active / "tasks.md").resolve()
+
+
+def test_resolve_tasks_md_falls_back_to_archive(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    archived = tmp_path / "openspec/changes/archive/2026-08-03-pulse-ledger-core"
+    archived.mkdir(parents=True)
+    (archived / "tasks.md").write_text("- [x] 1.1 Done\n")
+    monkeypatch.chdir(tmp_path)
+
+    assert linear_sync.resolve_tasks_md("pulse-ledger-core").resolve() == (archived / "tasks.md").resolve()
+
+
+def test_resolve_tasks_md_missing_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / "openspec/changes/archive").mkdir(parents=True)
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(linear_sync.SyncError, match=r"no tasks\.md found"):
+        linear_sync.resolve_tasks_md("pulse-ledger-core")
+
+
+def test_linear_client_surfaces_http_error_body() -> None:
+    """A bare `HTTP Error 400: Bad Request` hides the one thing that explains it — Linear's body."""
+    response_body = b'{"errors":[{"message":"Variable \\"$q\\" of required type \\"String!\\" was not provided."}]}'
+    http_error = urllib.error.HTTPError(
+        url="https://api.linear.app/graphql",
+        code=400,
+        msg="Bad Request",
+        hdrs=None,
+        fp=io.BytesIO(response_body),
+    )
+    try:
+        with patch("urllib.request.urlopen", side_effect=http_error):
+            client = linear_sync.LinearClient("fake-key")
+            with pytest.raises(linear_sync.SyncError, match="was not provided"):
+                client.query("query{ x }", {})
+    finally:
+        http_error.close()
+
 
 SYNC_TASKS_MD = """\
 # Tasks

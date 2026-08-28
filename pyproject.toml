@@ -35,6 +35,8 @@ dev = [
     # Used directly by the tests/scaffold gates. pyyaml is otherwise only a
     # transitive mkdocs dependency; tomllib is stdlib from 3.11 and CI tests 3.10.
     "pyyaml>=6.0",
+    # Stubs for pulse_core.catalog_gen, which reads the state catalog seed under strict mypy.
+    "types-pyyaml>=6.0",
     "tomli>=2.0; python_version < '3.11'",
     # The mkdocs stack is pinned to its 1.x-era majors (DNA-782): mkdocs v2 is a ground-up
     # rewrite with no plugin system or migration path that may ship to PyPI under the same
@@ -44,6 +46,9 @@ dev = [
     "mkdocs-material>=9.7.6,<10",
     "mkdocstrings[python]>=1.0.3,<2",
     "boto3-stubs[events]>=1.42.0",
+    # Starlette's TestClient transport, used by the ledger command-API suite. It speaks ASGI
+    # in-process — no socket, so the no-live-network posture holds.
+    "httpx>=0.28.1",
 ]
 
 [build-system]
@@ -55,6 +60,15 @@ packages = ["src/pkg_pulse"]
 
 [tool.uv.workspace]
 members = [
+    "packages/archaeology",
+    "packages/pulse-ledger",
+    "packages/pulse-core",
+    "packages/verdict-relay",
+    "packages/schedules",
+    "packages/identity",
+    "packages/consent-ingress",
+    "packages/synthea-seed",
+    "packages/twenty-projection",
     "packages/ocean",
     "packages/ocean/libs/ocean-events",
     "packages/ocean/libs/ocean-broker",
@@ -62,6 +76,15 @@ members = [
 ]
 
 [tool.uv.sources]
+archaeology = { workspace = true }
+pulse-ledger = { workspace = true }
+pulse-core = { workspace = true }
+verdict-relay = { workspace = true }
+schedules = { workspace = true }
+identity = { workspace = true }
+consent-ingress = { workspace = true }
+synthea-seed = { workspace = true }
+twenty-projection = { workspace = true }
 ocean-events = { workspace = true }
 ocean-broker = { workspace = true }
 ocean-connector-mcp = { workspace = true }
@@ -90,12 +113,29 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 # Scaffold gates 7 and 9 spin up a git sandbox and a fresh-clone `uv sync`.
 # They are excluded from the default run; `task test:all` includes them.
-markers = ["slow: sandbox and fresh-clone gates, excluded from the default run"]
-addopts = '-m "not slow"'
+# `integration` (task 4.5) needs Docker (LocalStack via testcontainers) and no live network in
+# CI by default (see Conventions in CLAUDE.md); `task test:integration` runs it explicitly.
+markers = [
+    "slow: sandbox and fresh-clone gates, excluded from the default run",
+    "integration: needs Docker, excluded from the default run",
+]
+addopts = '-m "not slow and not integration"'
 # The scaffold gates are named cat1_structure.py .. cat9_golden_workflow.py so the filename
 # states which gate it is. Without this they match no default pattern and are silently skipped
 # by `task test` and CI, while still passing when run by explicit path.
 python_files = ["test_*.py", "cat[0-9]_*.py"]
+# Leaked OS resources fail the run. Both lines are load-bearing and neither works alone:
+# Python ignores ResourceWarning by default, so the first surfaces it at all; a warning raised
+# during garbage collection cannot propagate, so pytest re-reports it as an unraisable-exception
+# warning, and the second is what turns that into a failure. Verified against the unclosed
+# sqlite3.Connection in graph-projection's handler tests: with only one filter the run stayed
+# green. Its own attribution is unreliable — the warning names whichever test was executing when
+# the collector happened to fire, not the test that leaked — so the message points at the wrong
+# place and the failure is the signal, not the location.
+filterwarnings = [
+    "error::ResourceWarning",
+    "error::pytest.PytestUnraisableExceptionWarning",
+]
 
 [tool.coverage.report]
 # Applies wherever coverage runs (`task test`, tox), not just in CI. The floor is currently
@@ -152,8 +192,18 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]
 
-# Ocean's tests live at packages/ocean/tests and packages/ocean/*/*/tests, which the "tests/*"
-# pattern above does not reach. Same exemption, same reason: pytest asserts are the point.
+# Package tests live under packages/*, which the "tests/*" pattern above does not reach.
+# Same exemption, same reason: pytest asserts are the point.
+"packages/archaeology/tests/**" = ["S101"]
+"packages/pulse-ledger/tests/**" = ["S101"]
+"packages/pulse-core/tests/**" = ["S101"]
+"packages/verdict-relay/tests/**" = ["S101"]
+"packages/schedules/tests/**" = ["S101"]
+"packages/identity/tests/**" = ["S101"]
+"packages/consent-ingress/tests/**" = ["S101"]
+"packages/synthea-seed/tests/**" = ["S101"]
+"packages/twenty-projection/tests/**" = ["S101"]
+
 "packages/ocean/tests/**" = ["S101", "S105", "B017"]
 "packages/ocean/**/tests/**" = ["S101", "S105", "B017"]
 

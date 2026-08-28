@@ -1,0 +1,40 @@
+[project]
+name = "synthea-seed"
+version = "0.1.0"
+description = "PULSE deterministic synthetic population — pinned Synthea generation receipted by checksum manifest, with declarative Brook fixture overlays (runtime readiness §2.2)"
+requires-python = ">=3.10,<4.0"
+dependencies = [
+    # Pin config, manifest, and overlay schemas. Same floor pulse-core pins, so the
+    # workspace resolves one pydantic.
+    "pydantic>=2.7",
+    # Pin config and overlay fixtures are YAML — the declarative format the design fixes
+    # for overlays (design.md decision 3).
+    "pyyaml>=6.0",
+]
+
+[dependency-groups]
+dev = [
+    # No live network in any test: generation never runs in tests, and the JAR fetcher is
+    # exercised only through an injected fake. This hook blocks sockets for every run that
+    # collects this package — same pattern as consent-ingress, verdict-relay, and schedules.
+    "pytest-socket>=0.7.0",
+    # This package typechecks under pyright strict (see [tool.pyright] below); `task typecheck`
+    # runs it alongside the workspace mypy pass.
+    "pyright>=1.1.390",
+    # Stubs for the YAML loads in pin and overlay parsing.
+    "types-pyyaml>=6.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/synthea_seed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.pyright]
+include = ["src", "tests"]
+typeCheckingMode = "strict"

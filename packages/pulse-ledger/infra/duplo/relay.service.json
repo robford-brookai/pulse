@@ -1,0 +1,44 @@
+{
+  "Name": "pulse-ledger-relay",
+  "AgentPlatform": 7,
+  "Replicas": 1,
+  "DockerImage": "__PULSE_LEDGER_IMAGE__",
+  "OtherDockerConfig": {
+    "command": [
+      "python",
+      "-m",
+      "pulse_ledger.relay_worker"
+    ],
+    "EnvFrom": [
+      {
+        "secretRef": {
+          "name": "pulse-ledger-api-secret"
+        }
+      }
+    ],
+    "Env": [
+      {
+        "name": "OCEAN_EVENT_BUS_NAME",
+        "value": "duploservices-dev01-brook-ocean"
+      },
+      {
+        "name": "AWS_REGION",
+        "value": "us-east-1"
+      },
+      {
+        "name": "AWS_DEFAULT_REGION",
+        "value": "us-east-1"
+      }
+    ],
+    "resources": {
+      "requests": {
+        "cpu": "50m",
+        "memory": "500Mi"
+      },
+      "limits": {
+        "cpu": "500m",
+        "memory": "500Mi"
+      }
+    }
+  }
+}

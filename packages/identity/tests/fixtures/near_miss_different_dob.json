@@ -1,0 +1,34 @@
+{
+  "kind": "decision",
+  "case": "near_miss_different_dob",
+  "description": "Same name, different DOB must never match. An existing person and a referral share the identical normalized name and sex, but the DOB differs, so the composite digest differs and the existing person is never a candidate. The decision mints instead of matching.",
+  "referral": {
+    "identifiers": [],
+    "demographics": {
+      "first_name": "Morgan",
+      "last_name": "Delacroix",
+      "dob": "1990-03-04",
+      "sex": "F"
+    }
+  },
+  "existing_persons": [
+    {
+      "person_id": "person-near-miss-decoy",
+      "identifiers": [
+        {
+          "system": "MRN-ACME",
+          "value": "SYN-0005"
+        }
+      ],
+      "demographics": {
+        "first_name": "Morgan",
+        "last_name": "Delacroix",
+        "dob": "1985-03-04",
+        "sex": "F"
+      }
+    }
+  ],
+  "expected_decision": "mint",
+  "expected_rule_id": "composite_none",
+  "must_not_match_person_id": "person-near-miss-decoy"
+}

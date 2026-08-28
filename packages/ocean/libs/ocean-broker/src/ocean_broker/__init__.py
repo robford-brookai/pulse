@@ -1,4 +1,4 @@
-"""ocean-broker: the OCEAN event catalog and publisher, and the Kafka config factory."""
+"""ocean-broker: the OCEAN event catalog and the EventBridge publisher."""
 
 from ocean_broker.catalog import (
     EVENT_SOURCE,
@@ -12,8 +12,7 @@ from ocean_broker.catalog import (
     pattern_matches,
     rule_pattern,
 )
-from ocean_broker.config import build_consumer_config, build_producer_config
-from ocean_broker.publisher import EventBridgePublisher
+from ocean_broker.publisher import EventBridgePublisher, FailureMode, PublishFailed
 
 __all__ = [
     "EVENT_SOURCE",
@@ -22,10 +21,10 @@ __all__ = [
     "TOPIC_PREFIX",
     "EventBridgeAddress",
     "EventBridgePublisher",
+    "FailureMode",
+    "PublishFailed",
     "address_for",
     "addressing_table",
-    "build_consumer_config",
-    "build_producer_config",
     "domain_for_topic",
     "pattern_matches",
     "rule_pattern",

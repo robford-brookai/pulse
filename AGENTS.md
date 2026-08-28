@@ -53,13 +53,41 @@ Do NOT include:
 - Style or formatting decisions
 - Non-plan-changing refactors
 
+### Review conventions
+
+- A change introducing a new writer credential or ingress package must add or update the
+  matching row in `docs/contracts/producer-registry.md` in the same change. An unregistered
+  producer is a defect, not a variant — its absence is a finding to resolve before the change
+  lands, never a gap to grandfather in.
+
 ### Quality
 
-- Run `task check` before committing — lint, typecheck, tests, docs build. This is exactly what
-  CI runs, so a green `check` means a green pipeline.
+- Run `task check` before committing — lint, typecheck, tests, the Twenty app suite, docs build.
+  This is exactly what CI runs, so a green `check` means a green pipeline. The Twenty app suite
+  needs node 22+ on PATH; CI installs it with a pinned setup-node step in `.github/workflows/main.yml`.
 - `task fmt` applies the formatting and fixable lint rules that `task lint` only reports.
 - `openlore drift` runs automatically via pre-commit hook — fix drift before pushing.
 - One task = one commit.
+
+### Shipping
+
+Committing is not finishing. When the task is done and `task check` is green, ship it in the same
+session, without being asked:
+
+1. `git push -u origin <branch>`
+2. `gh pr create --base main` — **ready for review. Never `--draft`.** A draft withholds finished
+   work from the human merge review that is supposed to consume it, and reads as "still working"
+   when nobody is. Draft is only for work you are genuinely stopping mid-task.
+3. `gh pr checks --watch` until every check passes. **Red CI is yours to fix, not the reviewer's
+   to discover.** A green `task check` should mean green CI — if CI fails anyway, that gap is
+   itself the bug, so fix it and note it in `docs/ci-lessons.md`.
+4. Report the PR number and the check results.
+
+Do not merge, and do not push to `main` — `merge` is a human step (`WORKFLOW.md`). You are opening
+the surface review reads, not landing the work.
+
+**A finished task parked at a local commit is an unfinished task.** If something genuinely blocks
+shipping (no remote, an explicit instruction not to open a PR), say so and say where the work is.
 
 ### When to Stop
 

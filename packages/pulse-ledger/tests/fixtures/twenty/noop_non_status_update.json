@@ -1,0 +1,43 @@
+{
+  "targetUrl": "https://pulse.example/webhooks/twenty",
+  "eventName": "patientProgram.updated",
+  "objectMetadata": {
+    "id": "objmeta-patientprogram-0000-0000-0001",
+    "nameSingular": "patientProgram"
+  },
+  "workspaceId": "workspace-pulse-dev-0000-0001",
+  "webhookId": "webhook-pulse-dev-0000-0001",
+  "eventDate": "2026-08-06T15:18:00.017Z",
+  "record": {
+    "name": "Canary NoopNonStatus",
+    "id": "twenty-record-patientprogram-0006",
+    "createdAt": "2026-08-01T09:25:00.000Z",
+    "createdBy": {
+      "source": "API",
+      "workspaceMemberId": null,
+      "name": "pulse-dev",
+      "context": {}
+    },
+    "deletedAt": null,
+    "position": -15,
+    "updatedAt": "2026-08-06T15:18:00.009Z",
+    "updatedBy": {
+      "source": "MANUAL",
+      "workspaceMemberId": "wsm-0001-canary-nurse",
+      "name": "Canary CareCoordinator",
+      "context": {}
+    },
+    "searchVector": "",
+    "programId": "twenty-record-program-0001",
+    "programCode": "rpm",
+    "canonicalPatientId": "DIM_PATIENT_CONFORMED-000106",
+    "lifecycleStatus": "ACTIVE",
+    "lifecycleStatusAsOf": "2026-08-03T09:00:00.000Z",
+    "qualificationStatus": "QUALIFIED",
+    "patientId": "twenty-record-patient-0006",
+    "qualificationStatusAsOf": "2026-08-06T15:18:00.009Z"
+  },
+  "updatedFields": [
+    "qualificationStatus"
+  ]
+}

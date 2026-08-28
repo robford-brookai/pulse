@@ -31,7 +31,7 @@ Fix a template-level bug in the template, not here — a fix applied downstream 
 
 ```bash
 task              # list commands, grouped by area, in workflow order
-task check        # lint, typecheck, tests, docs build — exactly what CI runs
+task check        # lint, typecheck, tests, Twenty app suite, docs build — exactly what CI runs
 task fmt          # apply formatting and fixable lint rules
 task test:all     # includes the slow scaffold gates (git sandbox, fresh-clone uv sync)
 task verify CHANGE=<id>   # check + openlore drift + openspec validate
@@ -41,9 +41,7 @@ task pre-commit   # all hooks
 Single test or gate:
 
 ```bash
-uv run pytest tests/test_foo.py::test_foo
 uv run pytest tests/scaffold/cat5_glue_logic.py
-uv run pytest tests/scaffold -m "slow or not slow"
 bash tests/scaffold/cat2_toolchain.sh      # gates 2, 4, 7 are shell scripts, run directly
 ```
 
@@ -141,5 +139,9 @@ prod-touching. `<id>` is the active change — the sole non-archive directory in
   main. Merge with a merge commit, not a squash, whenever a branch carries imported history.
 - Cross-repo integration goes through `docs/contracts/publishes.md` and `consumes.md` — a published
   Snowflake object, API, or released package. Never side-clone another repo into this one.
-- Python 3.10–3.14 are all supported and tested; mypy runs strict (`disallow_untyped_defs`),
-  coverage floor is 80%.
+- **Ad-hoc markdown goes in `.planning/`** — status reports, analyses, one-off summaries, as
+  `.planning/reports/YYYY-MM-DD-topic.md`. A loose `STATUS.md` or `NOTES.md` at the repo root is
+  blocked on write by a `PreToolUse` hook, so choosing the path afterwards means redoing the file.
+  The trees that already have a home keep it: `design/` for program and architecture docs, `docs/`
+  for published pages, `openspec/` `work_orders/` `handoffs/` for the ADE workflow, and
+  `HANDOFF.md` at a worktree root.

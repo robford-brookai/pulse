@@ -283,6 +283,45 @@ def test_contracts_forbid_side_cloning() -> None:
     )
 
 
+def test_consumes_md_registers_customerio_export() -> None:
+    """5.1: the forward consent ingress's Snowflake read must be a named, pinned entry.
+
+    Names both landing schemas and the pinned `CONTRACT_COLUMNS` set (task 2.1) so a column
+    drop on either side of the contract is traceable to this entry, not just this task's diff.
+    """
+    consumes = (ROOT / "docs/contracts/consumes.md").read_text()
+    assert "streamline.cio_raw" in consumes, "consumes.md must name the cio_raw landing schema"
+    assert "streamline.cio_prod" in consumes, "consumes.md must name the cio_prod landing schema"
+    assert "ADR-0005" in consumes, "consumes.md must cross-link ADR-0005 as the source of the export mechanism"
+    contract_columns = ("subject_key", "channel", "to_state", "message_id", "event_time")
+    for column in contract_columns:
+        assert f"`{column}`" in consumes, f"consumes.md must name pinned column {column!r}"
+
+
+def test_consumes_md_registers_twenty_metadata_api() -> None:
+    """pulse-app-scaffold 3.5: the Metadata API the artifact serializes against is a named entry.
+
+    The entry must name the committed artifact path and the version keys the artifact pins its
+    shape with, and those values must equal the committed artifact's — a doc that pins a version
+    the artifact no longer carries is the drift this gate exists to catch. The upstream image tag
+    is named too, because that is what fixes the server-side shape at deploy time.
+    """
+    consumes = (ROOT / "docs/contracts/consumes.md").read_text()
+    artifact_path = "packages/twenty-app/artifact/operations.json"
+    assert artifact_path in consumes, f"consumes.md must name the artifact path {artifact_path!r}"
+    artifact = json.loads((ROOT / artifact_path).read_text())
+    for key in ("artifactVersion", "catalogVersion"):
+        assert f"`{key}`" in consumes, f"consumes.md must name the pinned version key {key!r}"
+        assert f"`{artifact[key]}`" in consumes, (
+            f"consumes.md must pin {key} to the committed artifact's value {artifact[key]!r}"
+        )
+    assert "twentycrm/twenty" in consumes, (
+        "consumes.md must name the pinned upstream image the Metadata API shape follows"
+    )
+    for issue in ("DNA-908", "DNA-909"):
+        assert issue in consumes, f"consumes.md must cross-link {issue}"
+
+
 def test_adr_log_is_append_only_and_seeded() -> None:
     adr_dir = ROOT / "docs/adr"
     numbered = sorted(p for p in adr_dir.glob("ADR-*.md") if not p.name.startswith("ADR-0000"))
@@ -429,3 +468,96 @@ def test_workflow_does_not_recommend_install_hook() -> None:
             assert re.search(r"\b(not|never|do not)\b", line, re.I), (
                 f"WORKFLOW.md mentions --install-hook without warning against it: {line.strip()}"
             )
+
+
+def test_publishes_md_registers_twenty_projection() -> None:
+    """twenty-projection 3.3: the projection's consumed queue and written board surface are
+    named, pinned entries — the queue row so infra knows a bus consumer exists, the written
+    row so nothing else claims the projected columns.
+    """
+    publishes = (ROOT / "docs/contracts/publishes.md").read_text()
+    assert "twenty-projection" in publishes, "publishes.md must register the twenty-projection change"
+    assert "`projectionSeq`" in publishes, "publishes.md must name the watermark column"
+    assert "lifecycleStatus" in publishes, "publishes.md must name the written status column"
+    assert "SQS" in publishes, "publishes.md must record the projection's consumed queue"
+    assert "runbooks/twenty-projection.md" in publishes, "publishes.md must link the projection runbook"
+
+
+def test_twenty_projection_runbook_exists_and_covers_operations() -> None:
+    """twenty-projection 3.3: the runbook exists, is navigable, and covers the four operator
+    concerns the tasks file names — running the consumer, watermark semantics, orphan triage,
+    and rollback."""
+    path = ROOT / "docs/runbooks/twenty-projection.md"
+    assert path.exists(), "docs/runbooks/twenty-projection.md is missing"
+    runbook = path.read_text()
+    lowered = runbook.lower()
+    for topic in ("watermark", "orphan", "rollback"):
+        assert topic in lowered, f"twenty-projection runbook must cover {topic!r}"
+    assert "projection:consume" in runbook, "the runbook must name the consumer's task target"
+    nav = yaml.safe_load((ROOT / "mkdocs.yml").read_text())
+    nav_text = json.dumps(nav.get("nav", []))
+    assert "runbooks/twenty-projection.md" in nav_text, "mkdocs.yml nav must include the twenty-projection runbook"
+
+
+def test_twenty_webhook_runbook_heal_back_is_shipped_behavior() -> None:
+    """twenty-projection 3.3: the heal-back boundary section describes the shipped write, not
+    the pre-projection debt."""
+    runbook = (ROOT / "docs/runbooks/twenty-webhook.md").read_text()
+    assert "until the heal-back write ships" not in runbook, (
+        "twenty-webhook.md still describes the heal-back gap as future work"
+    )
+    lowered = runbook.lower()
+    assert "state of record" in lowered and "heal" in lowered, (
+        "twenty-webhook.md must describe the shipped heal-back behavior"
+    )
+    assert "echo_of_record" in runbook, "twenty-webhook.md must name the echo termination the heal loop relies on"
+
+
+#: The three verdict types `verdict_relay.config` registers (billing-state task 2.2). A registered
+#: type is a published contract on both sides — the mart must produce it, consumers see its paired
+#: transition on the bus — so both contract docs name all three or the registration is invisible.
+BILLING_STATE_VERDICT_TYPES = ("billing_eligibility", "coverage_eligibility", "benefits_verification")
+
+
+def test_publishes_md_registers_billing_state_paired_transitions() -> None:
+    """billing-state 3.3: the coverage subject and the relay's paired declare→transition are
+    published surfaces — a consumer of the `patient-state` bus now sees `coverage` subjects and
+    relay-attributed transition events it never saw before."""
+    publishes = (ROOT / "docs/contracts/publishes.md").read_text()
+    assert "billing-state" in publishes, "publishes.md must register the billing-state change"
+    assert "coverage" in publishes, "publishes.md must name the coverage subject"
+    for verdict_type in BILLING_STATE_VERDICT_TYPES:
+        assert verdict_type in publishes, f"publishes.md must name the registered verdict type {verdict_type!r}"
+    for state in ("verified_active", "verified_inactive", "qualified"):
+        assert state in publishes, f"publishes.md must name the paired target state {state!r}"
+    assert "declare_transition" in publishes, "publishes.md must name the paired command"
+    assert "patient-state" in publishes, "publishes.md must place the new events on the patient-state domain"
+    assert "runbooks/billing-state.md" in publishes, "publishes.md must link the billing-state runbook"
+
+
+def test_consumes_md_verdict_mart_row_names_the_registered_verdict_types() -> None:
+    """billing-state 3.3: the verdict-mart entry is what tells the warehouse workstream which
+    `verdict_type` values this repo will carry — an unregistered type fails row validation, so the
+    list is a hard dependency, not documentation colour."""
+    consumes = (ROOT / "docs/contracts/consumes.md").read_text()
+    for verdict_type in BILLING_STATE_VERDICT_TYPES:
+        assert verdict_type in consumes, f"consumes.md must name the registered verdict type {verdict_type!r}"
+    assert "transition_by_outcome" in consumes, "consumes.md must name the pairing configuration"
+    assert "verdict_relay/config.py" in consumes, "consumes.md must cite where the registered types live"
+
+
+def test_billing_state_runbook_exists_and_covers_operations() -> None:
+    """billing-state 3.3: the runbook exists, is navigable, and covers the five operator concerns
+    the tasks file names — pairing semantics, poll cadence, no-op runs, transition-rejected
+    triage, and rollback."""
+    path = ROOT / "docs/runbooks/billing-state.md"
+    assert path.exists(), "docs/runbooks/billing-state.md is missing"
+    runbook = path.read_text()
+    lowered = runbook.lower()
+    for topic in ("pairing", "poll", "no-op", "rollback"):
+        assert topic in lowered, f"billing-state runbook must cover {topic!r}"
+    assert "transition_rejected" in runbook, "the runbook must name the transition-rejected count"
+    assert "relay:run" in runbook, "the runbook must name the relay's task target"
+    nav = yaml.safe_load((ROOT / "mkdocs.yml").read_text())
+    nav_text = json.dumps(nav.get("nav", []))
+    assert "runbooks/billing-state.md" in nav_text, "mkdocs.yml nav must include the billing-state runbook"

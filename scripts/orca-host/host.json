@@ -1,0 +1,30 @@
+{
+  "FriendlyName": "orca",
+  "TenantId": "1ed360d0-de08-4180-8a40-266b369ae3f6",
+  "ImageId": "ami-08bb6a898f5748a8e",
+  "Capacity": "m7i.2xlarge",
+  "Arch": "amd64",
+  "AgentPlatform": 0,
+  "IsMinion": true,
+  "Cloud": 0,
+  "Zone": 0,
+  "KeyPairType": 2,
+  "EncryptDisk": false,
+  "NetworkInterfaces": [
+    {
+      "SubnetId": "subnet-0bbe0e96d20fe1a26",
+      "AssociatePublicIpAddress": false,
+      "DeviceIndex": 0
+    }
+  ],
+  "MetaData": [
+    {
+      "Key": "EnableHibernation",
+      "Value": "False"
+    },
+    {
+      "Key": "OsDiskSize",
+      "Value": "100"
+    }
+  ]
+}
