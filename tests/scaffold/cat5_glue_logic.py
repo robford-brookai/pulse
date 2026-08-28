@@ -579,7 +579,9 @@ def test_v2_1_replan_is_wired() -> None:
     steps = {s["id"]: s for s in block["steps"]}
     assert "replan" in steps, "the replan step is gone"
     assert steps["execute"]["next"].get("plan_amendment") == "replan"
-    assert steps["replan"]["next"].get("pass") == "sync_linear"
+    # dispatch, not sync_linear: v2.0.5 ordered dispatch first (the sub-issue description IS
+    # the work-order body), and the replan tail follows the same order.
+    assert steps["replan"]["next"].get("pass") == "dispatch"
     assert "G_MECE" in str(steps["replan"].get("gate", ""))
 
 

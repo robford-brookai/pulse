@@ -78,8 +78,8 @@ ade_workflow:
       - "openspec/changes/<id>/ absent"                          : step=propose
       - "tasks.md missing model/deps annotations or MECE unchecked": step=validate
       - "an open replan PR amends openspec/changes/<id>/tasks.md" : step=replan
-      - "linear sub-issues out of sync with tasks.md"             : step=sync_linear
       - "unchecked tasks whose deps are all checked"              : step=dispatch
+      - "linear sub-issues out of sync with tasks.md"             : step=sync_linear
       - "any sub-issue status in [Todo, In Progress, Blocked]"    : step=execute
       - "any sub-issue status in [In Review]"                     : step=merge
       - "handoffs/<id>/SUMMARY.md absent from the tracked tree"   : step=collect
@@ -91,8 +91,9 @@ ade_workflow:
     # human comment plus a drag back to In Progress. Escalation never fires on
     # status; it fires only on verification failure.
     # A tasks.md amendment that has already merged resolves forward through
-    # sync_linear and dispatch — those two rules ARE the tail of replan, so an
-    # agent landing after the replan PR merged simply continues it.
+    # dispatch then sync_linear — those two rules ARE the tail of replan (in the
+    # v2.0.5 order, dispatch first: the sub-issue description is the work-order
+    # body), so an agent landing after the replan PR merged simply continues it.
     # Local worktree existence is H7 hygiene, reported at merge — never a
     # resolution input. Spent worktrees on one machine must not park the change
     # for every other machine.
@@ -239,14 +240,6 @@ ade_workflow:
                 issue-id token [<TEAM>-<n>] into that task's line in tasks.md.
                 Id tokens only, never rewritten once present, never any other
                 content; dry runs print the pending write-back and write nothing
-      next: dispatch
-
-    - id: dispatch
-      actor: tool + router
-      run: task dispatch CHANGE=<id>
-      behavior: emit work_orders/<id>/<task>.md per dispatch-template v1;
-                release only wave-eligible tasks (deps merged);
-                serial-lane tasks release alone
       next: execute
 
     - id: execute
@@ -278,9 +271,10 @@ ade_workflow:
       behavior: the amendment is a decision, so it is a PR — never a direct push
                 (main_access names checkbox state and id tokens as the only
                 tasks.md content eligible there). In-flight tasks are unaffected;
-                the merged amendment flows through sync_linear and dispatch for
-                the delta
-      next: {pass: sync_linear, fail: replan}   # revise the amendment, not the change
+                the merged amendment flows through dispatch then sync_linear for
+                the delta — dispatch first, since the sub-issue description IS
+                the work-order body (v2.0.5)
+      next: {pass: dispatch, fail: replan}   # revise the amendment, not the change
 
     - id: halt
       actor: human
@@ -365,7 +359,7 @@ A change begins at **propose**: OpenSpec scaffolds the change folder, Fable-tier
 
 **Execute** is one agent per task per worktree, claimed through Orca's Linear panel or the CLI, gated on hardening (and, for anything tagged destructive or prod-touching, on a human-approved PR carrying the task's runbook or artifacts — those tasks actually leave this lane entirely, per the lanes block). The agent orients, writes tests first, implements, verifies, writes a HANDOFF with its receipt, and commits once — then ships that commit without being asked: push, open a PR against main **ready for review, never a draft**, and watch `gh pr checks` to green. Red CI belongs to the agent that made it red, not to the reviewer who finds it. A draft PR is the same failure in a quieter form: it withholds finished work from the review step that is supposed to consume it, and reads as "still working" when nobody is. The task is done when the diff is on a green, reviewable PR — a finished task parked at a local commit is an unfinished task. Verification failure feeds **escalate**: two attempts per tier, fresh worktree per rung, and failure at the ceiling returns the task to validate as a spec defect rather than a bigger-model problem. Design drift halts the worktree and flags for human review. A sub-issue dragged to Blocked parks the change at execute — state resolution reads Blocked as "wave not done," the unblock path is a human comment plus a drag back to In Progress, and escalation never fires on status, only on verification failure.
 
-Mid-change discovery — a missing task, a task that needs widening, a dependency edge that proved wrong — takes the **replan** edge. The amendment is a decision, so it is a PR against `tasks.md`, checked by G_MECE over the delta only (revalidating a fifty-task file to add two tasks is exactly the friction that used to push amendments straight to main), then flows through sync-linear and dispatch while in-flight tasks continue undisturbed. The first real change hit this at least eight times with no legal edge for it; now it has one, and `main_access` is correspondingly narrower — checkbox state and issue-id tokens are the only tasks.md content that may reach main without review.
+Mid-change discovery — a missing task, a task that needs widening, a dependency edge that proved wrong — takes the **replan** edge. The amendment is a decision, so it is a PR against `tasks.md`, checked by G_MECE over the delta only (revalidating a fifty-task file to add two tasks is exactly the friction that used to push amendments straight to main), then flows through dispatch and sync-linear (in that order, per v2.0.5 — the sub-issue description is the work-order body) while in-flight tasks continue undisturbed. The first real change hit this at least eight times with no legal edge for it; now it has one, and `main_access` is correspondingly narrower — checkbox state and issue-id tokens are the only tasks.md content that may reach main without review.
 
 The two out-of-lane routes have a named runner: the Open Engine queue in team CCC, executed under the open-agent-engine skill with its AGENT receipt tokens. Operational discovery (anything reading production data) runs as a single controlled Claude Code session with scoped credentials, receipts on the issue. Destructive ops (anything with no reviewable diff — force-pushes, repo archives, production loads) run as operator runbooks with agent-prepared scripts, where G_APPROVAL maps onto the skill's AGENT HUMAN HOLD gate. The CCC team keeps its Agent-prefixed statuses and the DNA team keeps standard ones, so the two claim surfaces are mutually invisible by construction, and cross-team dependencies ride ordinary Linear issue relations.
 
@@ -392,7 +386,7 @@ flowchart TB
   E -- design drift --> HALT[halt · human review]
   HALT --> V
   E -- plan amendment --> RP[replan<br/>PR amending tasks.md<br/>gate: G_MECE on the delta]
-  RP -- pass --> SL
+  RP -- pass --> D
   E -- wave done --> C[collect<br/>handoffs + tier economics<br/>SUMMARY.md tracked]
   C --> DU[doc_update<br/>fable · spec deltas only]
   DU --> VER{verify<br/>lint · test · drift · spec}

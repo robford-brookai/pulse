@@ -600,8 +600,8 @@ def main():
             "Next steps (pre-filled):\n"
             f"  openspec validate {args.change}        # or `task replan CHANGE={args.change}`, which ran both\n"
             "  open the amendment PR — review-and-merge is the only human step\n"
-            f"  task linear:sync CHANGE={args.change}  # after the PR merges\n"
-            f"  task dispatch CHANGE={args.change}"
+            f"  task dispatch CHANGE={args.change}     # after the PR merges — work orders first\n"
+            f"  task linear:sync CHANGE={args.change}  # sub-issue description IS the work-order body"
         )
         sys.exit(0)
 
