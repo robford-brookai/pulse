@@ -65,7 +65,12 @@ values live in the deploy environment. **The dev mart address is decided** (DNA-
 `Brookai/streamline#20`): `VERDICT_RELAY_SNOWFLAKE_DATABASE=STREAMLINE`,
 `VERDICT_RELAY_SNOWFLAKE_SCHEMA=OCEAN_MARTS`, `VERDICT_RELAY_SNOWFLAKE_TABLE=OCEAN_VERDICTS` —
 the dbt-materialized verdict mart in the streamline project, publisher-pinned in that repo's
-`docs/contracts/publishes.md`. Account/user/password/warehouse remain per-target credentials. A missing variable fails startup naming exactly that
+`docs/contracts/publishes.md`. Account/user/warehouse remain per-target credentials; the
+Snowflake credential itself is exactly one of `VERDICT_RELAY_SNOWFLAKE_PASSWORD` or
+`VERDICT_RELAY_SNOWFLAKE_PRIVATE_KEY_PATH` (both set fails startup naming both). Key-pair JWT
+exists because Snowflake's 2026 BCR bars passwords on TYPE=SERVICE users and enforces MFA
+enrollment on TYPE=PERSON — a password-only headless reader is no longer provisionable, and the
+streamline account's relay reader is a SERVICE key-pair identity. A missing variable fails startup naming exactly that
 variable, before any Snowflake or ledger connection is attempted — so a misconfigured deploy tells
 you which variable, not "connection refused". No credential value reaches a log, a receipt, or an
 error message.
