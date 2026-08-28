@@ -357,6 +357,10 @@ async def test_dead_consumer_is_surfaced_not_swallowed(harness, monkeypatch, sta
         "log",
         SimpleNamespace(error=lambda event, **kw: errors.append({"event": event, **kw})),
     )
+    # DNA-1259 made a dead consumer call os._exit(1); unpatched, it takes pytest down with it —
+    # the suite dies mid-run with no summary, which is exactly how it failed in CI.
+    terminated: list[bool] = []
+    monkeypatch.setattr(harness.main, "_terminate_process", lambda: terminated.append(True))
 
     async def _boom() -> None:
         raise RuntimeError("consumer died")
@@ -367,12 +371,14 @@ async def test_dead_consumer_is_surfaced_not_swallowed(harness, monkeypatch, sta
     harness.main._log_consumer_exit(task)
 
     assert [e["event"] for e in errors] == ["consumer_exited"]
+    assert terminated == [True], "a dead consumer must take the process down (DNA-1259)"
 
     cancelled = asyncio.get_running_loop().create_task(asyncio.sleep(60))
     cancelled.cancel()
     with pytest.raises(asyncio.CancelledError):
         await cancelled
     harness.main._log_consumer_exit(cancelled)
+    assert terminated == [True], "orderly cancellation is not a death — no exit"
 
     assert len(errors) == 1  # cancellation is a normal shutdown, not an error
     stage_log.observe(surfaced_errors=[e["event"] for e in errors])
