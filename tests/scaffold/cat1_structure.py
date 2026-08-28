@@ -63,8 +63,10 @@ COMMITTED = [
 # matches a query git can tell is a directory, and these paths often do not exist yet.
 GENERATED = [".openlore/", ".openlore/analysis/"]
 
-# Per-session working state. Gitignored, may not exist at all.
-PER_SESSION = ["work_orders/", "handoffs/", "HANDOFF.md"]
+# Per-session working state. Gitignored, may not exist at all. handoffs/ itself is NOT here:
+# since WORKFLOW v2.1.0 its per-change SUMMARY.md is the tracked receipt record, so the ignore
+# covers the directory's contents (scratch, per-task HANDOFFs) rather than the directory.
+PER_SESSION = ["work_orders/", "handoffs/some-change/scratch-note.md", "HANDOFF.md"]
 
 # Written by bootstrap.sh into the generated repo and committed there, but deliberately absent
 # from the template itself: repo-ade is not generated from anything, so a version stamp here
@@ -129,6 +131,23 @@ def test_bootstrap_recreates_empty_scaffold_dirs(rel: str) -> None:
 @pytest.mark.parametrize("rel", PER_SESSION + GENERATED)
 def test_working_state_is_gitignored(rel: str) -> None:
     assert git("check-ignore", rel).returncode == 0, f"{rel} must be gitignored"
+
+
+def test_collect_summary_is_trackable() -> None:
+    """The tier-economics receipt record must survive the workstation (WORKFLOW v2.1.0).
+
+    Gitignore negation is the trap this gate exists for: a directory-level `handoffs/` pattern
+    blocks every negation beneath it, so the ignore must cover contents (`handoffs/**`), not the
+    directory. If this fails, `task collect` output silently never enters the record again.
+    """
+    assert git("check-ignore", "handoffs/some-change/SUMMARY.md").returncode != 0, (
+        "handoffs/<change>/SUMMARY.md must be trackable — it is the receipt record"
+    )
+
+
+def test_deep_handoff_scratch_stays_ignored() -> None:
+    """The SUMMARY.md negation must not accidentally re-include nested scratch."""
+    assert git("check-ignore", "handoffs/some-change/notes/deep.md").returncode == 0
 
 
 def test_template_handoff_is_not_ignored() -> None:

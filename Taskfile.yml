@@ -490,6 +490,11 @@ tasks:
   # --- 9. Work distribution (thin glue) ---
   # Alphabetical, per the listing convention. The pipeline runs dispatch, collect, sync-docs.
 
+  checkoff:
+    desc: Flip tasks.md checkboxes for merged tasks (needs CHANGE; COMMIT=1 to commit; COMMIT_SHA=<sha> to record one merge)
+    cmds:
+      - uv run python scripts/checkoff_tasks.py --change {{.CHANGE}} {{if .COMMIT}}--commit{{end}} {{if .COMMIT_SHA}}--commit-sha {{.COMMIT_SHA}}{{end}}
+
   collect:
     desc: Collect HANDOFF.md files from Orca worktrees (needs CHANGE)
     cmds:
@@ -499,6 +504,13 @@ tasks:
     desc: Parse OpenSpec tasks.md and emit work-order files (needs CHANGE)
     cmds:
       - uv run python scripts/dispatch_tasks.py --change {{.CHANGE}}
+
+  replan:
+    desc: Validate a tasks.md amendment — delta G_MECE + spec validation, no human gate (needs CHANGE)
+    # openspec is an npm global CI runners do not have, so this stays out of `check`, like verify.
+    cmds:
+      - uv run python scripts/dispatch_tasks.py --change {{.CHANGE}} --validate-only
+      - openspec validate {{.CHANGE}}
 
   linear:sync:
     desc: Project tasks.md into Linear issues (needs CHANGE; plan only unless APPLY=1)

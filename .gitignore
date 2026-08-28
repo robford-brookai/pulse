@@ -229,7 +229,9 @@ node_modules/
 
 # Thin-glue working state
 work_orders/
-handoffs/
+handoffs/**
+!handoffs/*/
+!handoffs/*/SUMMARY.md
 
 # HANDOFF.md (per-worktree, not committed; templates/HANDOFF.md stays tracked)
 /HANDOFF.md

@@ -509,6 +509,29 @@ def emit_work_orders(tasks: list[dict], change: str, output_dir: Path) -> list[P
     return paths
 
 
+def _enforce_hardening(args) -> None:
+    """G_HARDENING blocks execute, and dispatch is what makes execute possible — so this is where
+    it has to bite. Work orders are still written; only the release is withheld, because the plan
+    is useful to read while the gate is being closed."""
+    hardening = hardening_problems(args.agent, date.today())
+    if hardening and not args.skip_hardening:
+        print(f"G_HARDENING blocks dispatch for `{args.change}`:", file=sys.stderr)
+        for problem in hardening:
+            print(f"  - {problem}", file=sys.stderr)
+        print(
+            "\nAppendix A of docs/process/dispatch-template.md defines the checklist. "
+            "Re-run it, update .orca/hardening-receipt.json, and dispatch again.\n"
+            "--skip-hardening releases anyway and says so — for a deliberate, receipted exception.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    if hardening:
+        print(f"WARNING: releasing with G_HARDENING unmet ({len(hardening)} problem(s)):", file=sys.stderr)
+        for problem in hardening:
+            print(f"  - {problem}", file=sys.stderr)
+        print("", file=sys.stderr)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Dispatch OpenSpec tasks as Orca work-orders")
     parser.add_argument("--change", required=True, help="OpenSpec change name")
@@ -540,6 +563,15 @@ def main():
         ),
     )
     parser.add_argument(
+        "--validate-only",
+        action="store_true",
+        help=(
+            "Run the mechanical G_MECE checks and stop — no hardening gate, no work-order "
+            "emission. The replan path: an agent validates a tasks.md amendment before opening "
+            "the PR. No gate here ever needs a human comment."
+        ),
+    )
+    parser.add_argument(
         "--all-waves",
         action="store_true",
         help=(
@@ -562,26 +594,18 @@ def main():
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
 
-    # G_HARDENING blocks execute, and dispatch is what makes execute possible — so this is where
-    # it has to bite. Work orders are still written; only the release is withheld, because the
-    # plan is useful to read while the gate is being closed.
-    hardening = hardening_problems(args.agent, date.today())
-    if hardening and not args.skip_hardening:
-        print(f"G_HARDENING blocks dispatch for `{args.change}`:", file=sys.stderr)
-        for problem in hardening:
-            print(f"  - {problem}", file=sys.stderr)
+    if args.validate_only:
+        print(f"G_MECE mechanical checks pass for `{args.change}` ({len(tasks)} tasks).")
         print(
-            "\nAppendix A of docs/process/dispatch-template.md defines the checklist. "
-            "Re-run it, update .orca/hardening-receipt.json, and dispatch again.\n"
-            "--skip-hardening releases anyway and says so — for a deliberate, receipted exception.",
-            file=sys.stderr,
+            "Next steps (pre-filled):\n"
+            f"  openspec validate {args.change}        # or `task replan CHANGE={args.change}`, which ran both\n"
+            "  open the amendment PR — review-and-merge is the only human step\n"
+            f"  task dispatch CHANGE={args.change}     # after the PR merges — work orders first\n"
+            f"  task linear:sync CHANGE={args.change}  # sub-issue description IS the work-order body"
         )
-        sys.exit(1)
-    if hardening:
-        print(f"WARNING: releasing with G_HARDENING unmet ({len(hardening)} problem(s)):", file=sys.stderr)
-        for problem in hardening:
-            print(f"  - {problem}", file=sys.stderr)
-        print("", file=sys.stderr)
+        sys.exit(0)
+
+    _enforce_hardening(args)
 
     output_dir = Path(args.output) / args.change
     paths = emit_work_orders(tasks, args.change, output_dir)

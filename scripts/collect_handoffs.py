@@ -141,6 +141,22 @@ def summarize_handoffs(handoffs: list[Path], change: str) -> str:
     return "\n".join(lines)
 
 
+def summary_is_ignored(summary_path: Path) -> bool:
+    """True when git would ignore the summary — the silent-loss failure this guards against.
+
+    handoffs/<change>/SUMMARY.md is the tracked receipt record per WORKFLOW v2.1.0; a repo whose
+    .gitignore still carries the old directory-level `handoffs/` pattern would take the write and
+    then never commit it, and nothing downstream would notice the record was missing. Outside a
+    git repo (cat9 collects into plain temp dirs) nothing can be ignored, so that is a pass.
+    """
+    result = subprocess.run(  # noqa: S603
+        ["git", "-C", str(summary_path.parent), "check-ignore", "--quiet", summary_path.name],  # noqa: S607
+        capture_output=True,
+        check=False,
+    )
+    return result.returncode == 0
+
+
 def main():
     parser = argparse.ArgumentParser(description="Collect HANDOFF.md files from Orca worktrees")
     parser.add_argument("--change", required=True, help="OpenSpec change name")
@@ -189,6 +205,15 @@ def main():
         summary_path = Path(args.output) / args.change / "SUMMARY.md"
         summary_path.write_text(summary)
         print(f"\nSummary written to {summary_path}")
+        if summary_is_ignored(summary_path):
+            print(
+                f"\nError: {summary_path} is gitignored, so the receipt record cannot enter the "
+                "repo. Narrow .gitignore to ignore handoffs/ CONTENTS (handoffs/**) and negate "
+                "handoffs/*/SUMMARY.md — a directory-level pattern blocks the negation.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        print("Commit it with the change — SUMMARY.md is the tracked receipt record.")
     else:
         print("\nNo HANDOFF.md files found in any worktree.")
 

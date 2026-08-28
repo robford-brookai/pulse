@@ -328,6 +328,34 @@ def test_summarize_handoffs_documents_the_empty_case() -> None:
     assert collect.summarize_handoffs([], "add-auth") == ("No HANDOFF.md files found for change 'add-auth'.")
 
 
+def _git_repo_with_ignore(tmp_path: Path, pattern: str) -> Path:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)  # noqa: S603, S607
+    (tmp_path / ".gitignore").write_text(pattern + "\n")
+    summary = tmp_path / "handoffs" / "c" / "SUMMARY.md"
+    summary.parent.mkdir(parents=True)
+    summary.write_text("# SUMMARY\n")
+    return summary
+
+
+def test_collect_detects_an_ignored_summary(tmp_path: Path) -> None:
+    """The regression this guards: a directory-level `handoffs/` ignore silently loses the
+    receipt record — the escalation ladder's own evidence never enters the repo."""
+    assert collect.summary_is_ignored(_git_repo_with_ignore(tmp_path, "handoffs/"))
+
+
+def test_collect_accepts_a_trackable_summary(tmp_path: Path) -> None:
+    assert not collect.summary_is_ignored(
+        _git_repo_with_ignore(tmp_path, "handoffs/**\n!handoffs/*/\n!handoffs/*/SUMMARY.md")
+    )
+
+
+def test_summary_check_outside_a_repo_is_not_an_error(tmp_path: Path) -> None:
+    """cat9 collects into plain temp dirs; no repo means nothing can be ignored."""
+    summary = tmp_path / "handoffs" / "c" / "SUMMARY.md"
+    summary.parent.mkdir(parents=True)
+    assert not collect.summary_is_ignored(summary)
+
+
 # --- workflow.py: WORKFLOW.md's block is the source of truth, so something must read it --------
 #
 # The block sat in WORKFLOW.md for two revisions declaring itself "parsed by thin glue" while
@@ -439,6 +467,139 @@ def test_lane_excluded_steps_must_reference_a_real_step(tmp_path: Path) -> None:
 def test_gate_reference_must_exist(tmp_path: Path) -> None:
     block, _ = workflow.load(_workflow_md(tmp_path, MINIMAL.replace("gate: G_ONE", "gate: G_MISSING")))
     assert any("G_MISSING" in e for e in workflow.check_structure(block))
+
+
+# --- checkoff_tasks.py: merged PRs flip their own boxes, nobody hand-types the commit -----------
+#
+# The first real change put 25 hand-typed `chore: check off` commits on main. Each was
+# load-bearing (dispatch reads checked boxes to release waves), none was reviewable content.
+# checkoff derives the flips from main's own history instead.
+
+checkoff = load_script("checkoff_tasks.py")
+
+CHECKOFF_MD = """\
+# Tasks
+
+## 1. Wave 0
+
+- [ ] 1.1 First task
+      `[model: sonnet | deps: — | lane: repo_change | wave: 0]`
+- [x] 1.2 Already recorded
+- [ ] 2.3 Later task
+"""
+
+
+def test_subject_ids_follow_the_convention() -> None:
+    """The `(X.Y[, TEAM-n])` convention, as observed on the ocean run's actual merge subjects."""
+    cases = {
+        "fix(ocean): set AWS_DEFAULT_REGION (6.7) (#65)": {"6.7"},
+        "test(ocean): record equivalence — EQUIVALENT (8.2, DNA-774) (#63)": {"8.2"},
+        "feat(catalog): subscribe event-store (5.8, DNA-783) (#54)": {"5.8"},
+        "chore: check off 6.7 and 10.1": set(),  # checkoff's own commits never re-match
+        "feat(zcc-connector): publish through EventBridge, not Redpanda (#31)": set(),
+        "3.1 [DNA-738] graph-projection: sequence guard (#33)": set(),  # bare prefix, no parens
+    }
+    for subject, expected in cases.items():
+        assert checkoff.subject_task_ids(subject) == expected, subject
+
+
+def test_flip_checks_exactly_the_merged_boxes() -> None:
+    new, flipped, unknown = checkoff.flip(CHECKOFF_MD, {"1.1"})
+    assert flipped == ["1.1"]
+    assert unknown == []
+    assert "- [x] 1.1 First task" in new
+    assert "- [ ] 2.3 Later task" in new, "an unmerged task must stay unchecked"
+
+
+def test_flip_touches_only_checkbox_state() -> None:
+    new, _, _ = checkoff.flip(CHECKOFF_MD, {"1.1"})
+    diff = [(a, b) for a, b in zip(CHECKOFF_MD.splitlines(), new.splitlines(), strict=True) if a != b]
+    assert all(a.replace("[ ]", "[x]", 1) == b for a, b in diff), "flip changed more than a checkbox"
+    assert len(CHECKOFF_MD.splitlines()) == len(new.splitlines())
+
+
+def test_flip_is_idempotent() -> None:
+    """An already-checked task is a no-op, so rerunning after new merges is always safe."""
+    new, flipped, _ = checkoff.flip(CHECKOFF_MD, {"1.2"})
+    assert flipped == []
+    assert new == CHECKOFF_MD
+
+
+def test_flip_refuses_unknown_ids() -> None:
+    """A subject referencing a task this change does not have is a defect, not a silent skip."""
+    _, flipped, unknown = checkoff.flip(CHECKOFF_MD, {"9.9"})
+    assert unknown == ["9.9"]
+    assert flipped == []
+
+
+def test_explicit_commits_bypass_the_history_scan(tmp_path: Path) -> None:
+    """--commit <sha>: the coordinator names the merge it just saw, nothing else is consulted."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)  # noqa: S603, S607
+
+    def commit(subject: str) -> str:
+        subprocess.run(  # noqa: S603
+            [  # noqa: S607
+                "git",
+                "-C",
+                str(tmp_path),
+                "-c",
+                "user.email=t@test.invalid",
+                "-c",
+                "user.name=T",
+                "commit",
+                "--allow-empty",
+                "-q",
+                "-m",
+                subject,
+            ],
+            check=True,
+        )
+        return subprocess.run(  # noqa: S603
+            ["git", "-C", str(tmp_path), "rev-parse", "HEAD"],  # noqa: S607
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+
+    wanted = commit("feat: the one Rob merged (1.1, DNA-900)")
+    commit("feat: a different merge (2.3)")
+
+    sources = checkoff.sources_for_commits([wanted], cwd=tmp_path)
+    assert set(sources) == {"1.1"}, "only the named commit's ids may be recorded"
+
+
+def test_checkoff_report_prefills_the_next_command() -> None:
+    report = checkoff.next_steps("my-change")
+    assert "task dispatch CHANGE=my-change" in report, "the follow-up must be copy-runnable"
+
+
+def test_v2_1_replan_is_wired() -> None:
+    """v2.1.0 regression: replan exists, execute reaches it, and it flows back through sync."""
+    block, _ = workflow.load(ROOT / "WORKFLOW.md")
+    steps = {s["id"]: s for s in block["steps"]}
+    assert "replan" in steps, "the replan step is gone"
+    assert steps["execute"]["next"].get("plan_amendment") == "replan"
+    # dispatch, not sync_linear: v2.0.5 ordered dispatch first (the sub-issue description IS
+    # the work-order body), and the replan tail follows the same order.
+    assert steps["replan"]["next"].get("pass") == "dispatch"
+    assert "G_MECE" in str(steps["replan"].get("gate", ""))
+
+
+def test_state_resolution_reads_no_machine_local_state() -> None:
+    """v2.1.0 regression: every resolution rule must be computable on a fresh clone.
+
+    v2.0.3 keyed three rules on gitignored paths (work_orders/ staleness, an untracked
+    SUMMARY.md, local worktree existence), so two machines could resolve the same change to
+    different steps. Comments in the block may still discuss those paths; the rules may not.
+    """
+    block, _ = workflow.load(ROOT / "WORKFLOW.md")
+    rules = [
+        condition for entry in block["state_resolution"]["order"] if isinstance(entry, dict) for condition in entry
+    ]
+    offenders = [r for r in rules if "work_orders/" in r or "worktree" in r.lower()]
+    assert offenders == [], f"resolution rules read machine-local state: {offenders}"
+    summary_rules = [r for r in rules if "SUMMARY.md absent" in r]
+    assert all("tracked" in r for r in summary_rules), "the collect rule must read the tracked tree"
 
 
 def test_gate_blocks_must_reference_a_real_step(tmp_path: Path) -> None:
@@ -666,6 +827,89 @@ def test_status_guard_rejects_a_write_outside_the_unstarted_band() -> None:
     linear_sync.assert_status_writes_are_legal([{"kind": "create_sub", "state": "Todo"}], statuses)
     with pytest.raises(linear_sync.SyncError, match="does not own"):
         linear_sync.assert_status_writes_are_legal([{"kind": "create_sub", "state": "In Progress"}], statuses)
+
+
+# --- linear_sync id write-back: the ONE sanctioned reverse edge ---------------------------------
+#
+# The id is the one fact Linear mints. The first real change spent whole commits hand-copying
+# `[DNA-nnn]` tokens into tasks.md; the write-back inserts them on create, and nothing else ever
+# flows Linear -> repo.
+
+WRITEBACK_MD = """\
+# Tasks
+
+- [ ] 1.1 New task  `[lane: repo_change]`
+- [x] 1.2 [DNA-734] Old task with an id  `[lane: repo_change]`
+- [ ] 2.1 Untouched sibling  `[lane: repo_change]`
+"""
+
+
+def test_write_back_inserts_the_id_after_the_task_key() -> None:
+    new, written = linear_sync.write_back_ids(WRITEBACK_MD, {"1.1": "DNA-812"})
+    assert written == ["1.1"]
+    assert "- [ ] 1.1 [DNA-812] New task" in new
+
+
+def test_write_back_never_rewrites_an_existing_token() -> None:
+    new, written = linear_sync.write_back_ids(WRITEBACK_MD, {"1.2": "DNA-999"})
+    assert written == []
+    assert "[DNA-734]" in new
+    assert "DNA-999" not in new
+
+
+def test_write_back_touches_only_the_written_line() -> None:
+    new, _ = linear_sync.write_back_ids(WRITEBACK_MD, {"1.1": "DNA-812"})
+    old_lines, new_lines = WRITEBACK_MD.splitlines(), new.splitlines()
+    changed = [(a, b) for a, b in zip(old_lines, new_lines, strict=True) if a != b]
+    assert len(changed) == 1
+    assert changed[0][1] == changed[0][0].replace("1.1 ", "1.1 [DNA-812] ", 1)
+
+
+class _FakeClient:
+    """Answers create mutations with minted identifiers; fails on demand."""
+
+    def __init__(self, fail_on_key: str | None = None) -> None:
+        self.minted = 0
+        self._fail_on_key = fail_on_key
+
+    def query(self, document: str, variables: dict) -> dict:
+        title = variables.get("input", {}).get("title", "")
+        if self._fail_on_key and title.startswith(self._fail_on_key):
+            raise linear_sync.SyncError("boom")
+        self.minted += 1
+        return {
+            "issueCreate": {"success": True, "issue": {"id": f"uuid-{self.minted}", "identifier": f"DNA-{self.minted}"}}
+        }
+
+
+def _apply_ctx() -> dict:
+    return {"team_id": "t", "todo_state_id": "s", "project_id": None, "states": {}}
+
+
+def test_apply_reports_created_identifiers_for_the_write_back(tmp_path: Path) -> None:
+    _, desired = _synced(tmp_path)
+    ops = linear_sync.plan(desired, {}, parent_exists=False, change="c")
+    created: dict[str, str] = {}
+    linear_sync.apply_plan(_FakeClient(), ops, desired, _apply_ctx(), "c", created)
+    assert set(created) == {"1.2", "1.3"}, "every created sub-issue must surface its identifier"
+
+
+def test_a_failed_create_writes_no_phantom_id(tmp_path: Path) -> None:
+    """Partial apply: identifiers minted before the failure survive; the failed one never appears."""
+    _, desired = _synced(tmp_path)
+    ops = linear_sync.plan(desired, {}, parent_exists=False, change="c")
+    created: dict[str, str] = {}
+    with pytest.raises(linear_sync.SyncError):
+        linear_sync.apply_plan(_FakeClient(fail_on_key="1.3"), ops, desired, _apply_ctx(), "c", created)
+    assert "1.3" not in created
+    assert "1.2" in created, "an id minted before the failure must not be lost"
+
+
+def test_dry_run_plan_names_the_pending_write_back(tmp_path: Path) -> None:
+    _, desired = _synced(tmp_path)
+    ops = linear_sync.plan(desired, {}, parent_exists=False, change="c")
+    rendered = linear_sync.render_plan(ops, [])
+    assert "written back" in rendered.lower(), "the dry run must say ids will be written back on apply"
 
 
 def test_target_comes_from_workflow_md_not_the_api_key(tmp_path: Path) -> None:

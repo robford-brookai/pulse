@@ -1,5 +1,9 @@
 # HANDOFF
 
+<!-- Content rule: receipts and spec-relevant deltas ONLY. This file feeds the collected
+     handoffs/<change>/SUMMARY.md, which is TRACKED — so no operational detail, no credentials,
+     and no PHI, ever. A HANDOFF carrying any of those is a review-reject. -->
+
 **Worktree**: <!-- worktree/branch name -->
 **Change**: <!-- OpenSpec change name -->
 **Task ID**: <!-- e.g. task-001 -->
