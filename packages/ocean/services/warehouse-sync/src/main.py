@@ -181,13 +181,26 @@ async def _consume_loop(queue_url: str, *, sqs_client: Any = None) -> None:
         log.info("consumer_closed")
 
 
+def _terminate_process() -> None:
+    """Exit nonzero immediately. Module-level seam so tests can observe the call."""
+    os._exit(1)
+
+
 def _log_consumer_exit(task: asyncio.Task) -> None:
-    """Surface a consumer that died. Without this the exception is swallowed."""
+    """Surface a consumer that died — then take the process down with it.
+
+    Logging alone leaves uvicorn serving /health green over a dead loop: on dev a Snowflake
+    session-token expiry (390114) killed the consumer and the queue backed up silently behind a
+    Running pod (DNA-1259). Exiting nonzero makes the platform restart the pod, which
+    re-authenticates fresh — a Running pod is a consuming pod again. Orderly cancellation
+    (shutdown) is not a death and exits nothing.
+    """
     if task.cancelled():
         return
     exc = task.exception()
     if exc is not None:
         log.error("consumer_exited", error=str(exc), exc_info=exc)
+        _terminate_process()
 
 
 @app.on_event("startup")

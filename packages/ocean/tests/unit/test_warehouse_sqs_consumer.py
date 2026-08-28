@@ -226,6 +226,45 @@ async def test_loop_empty_receive_flushes_nothing(sf: tuple[_Conn, _Cursor]) -> 
     assert sqs.deleted == []
 
 
+# --- a dead consumer takes the process down (DNA-1259) ---------------------------
+
+
+async def test_consumer_death_terminates_the_process(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A consumer task that dies must kill the process, not just log: uvicorn keeps /health
+    green over a dead loop, so on dev a Snowflake session-token expiry (390114) left a Running
+    pod with a silently backing-up queue. Exiting nonzero makes the pod restart and
+    re-authenticate fresh."""
+    terminated: list[bool] = []
+    monkeypatch.setattr(main, "_terminate_process", lambda: terminated.append(True))
+
+    async def dying() -> None:
+        raise RuntimeError("Authentication token has expired")
+
+    task = asyncio.get_event_loop().create_task(dying())
+    await asyncio.gather(task, return_exceptions=True)
+
+    main._log_consumer_exit(task)
+
+    assert terminated == [True]
+
+
+async def test_cancelled_consumer_does_not_terminate_the_process(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Shutdown cancellation is orderly, not a death — no exit."""
+    terminated: list[bool] = []
+    monkeypatch.setattr(main, "_terminate_process", lambda: terminated.append(True))
+
+    async def forever() -> None:
+        await asyncio.sleep(3600)
+
+    task = asyncio.get_event_loop().create_task(forever())
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
+
+    main._log_consumer_exit(task)
+
+    assert terminated == []
+
+
 async def test_loop_batches_across_receives(sf: tuple[_Conn, _Cursor], monkeypatch: pytest.MonkeyPatch) -> None:
     """Below the size threshold and inside the timeout, messages accumulate."""
     monkeypatch.setattr(main, "BATCH_TIMEOUT_S", 3600.0)
