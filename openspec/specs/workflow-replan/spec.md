@@ -24,10 +24,10 @@ the step, and `task workflow:lint` SHALL pass.
 
 ### Requirement: The delta G_MECE check is tool-run
 The system SHALL provide `task replan CHANGE=<id>` running the mechanical G_MECE assertions over
-tasks.md (lanes known, deps resolve, serial flags justified, waves monotonic, spec validation)
-and printing the pre-filled follow-up commands on pass. No gate in the replan path SHALL require
-a human comment — G_APPROVAL remains the only comment-gated check, and only on tasks tagged
-destructive or prod-touching.
+tasks.md (lane tokens known, deps resolve, serial flags justified, waves monotonic, spec
+validation) and printing the pre-filled follow-up commands on pass. No gate in the replan path
+SHALL require a human comment — no comment-gated check exists anywhere in the workflow
+(WORKFLOW.md v2.2.0 removed the last one).
 
 #### Scenario: Agent validates an amendment without human gate work
 - **GIVEN** an agent has amended tasks.md on a replan branch

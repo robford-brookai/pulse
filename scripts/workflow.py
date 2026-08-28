@@ -30,7 +30,7 @@ import yaml
 
 WORKFLOW_MD = Path("WORKFLOW.md")
 
-REQUIRED_TOP_LEVEL = ("version", "linear", "state_resolution", "gates", "lanes", "routing", "steps")
+REQUIRED_TOP_LEVEL = ("version", "linear", "state_resolution", "gates", "live_execution", "routing", "steps")
 # `agent(fable, review-assist)` / `agent(per work-order model field)` — first argument only.
 ACTOR_TIER_RE = re.compile(r"agent\(\s*([a-z0-9_-]+)")
 GATE_TOKEN_RE = re.compile(r"\bG_[A-Z_]+\b")
@@ -82,7 +82,7 @@ def _next_targets(step: dict) -> list[str]:
 
 
 def _gate_names(value) -> list[str]:
-    """Gate references, tolerating `G_APPROVAL if tagged` and lists of gates."""
+    """Gate references, tolerating conditional suffixes and lists of gates."""
     items = value if isinstance(value, list) else [value]
     names: list[str] = []
     for item in items:
@@ -142,20 +142,15 @@ def _check_gates(gates: dict, known: set[str]) -> list[str]:
     return errors
 
 
-def _check_lanes(lanes: dict, known: set[str]) -> list[str]:
+def _check_live_execution(block: object, known: set[str]) -> list[str]:
     """`excluded_steps` is load-bearing — dispatch reads it to decide what never becomes a work order."""
-    errors: list[str] = []
-    for name, lane in lanes.items():
-        if not isinstance(lane, dict):
-            errors.append(f"lane {name} must be a mapping")
-            continue
-        errors += [
-            f"lane {name}: `excluded_steps` names {e!r}, which is not a step id. "
-            f"Known steps: {', '.join(sorted(known))}"
-            for e in lane.get("excluded_steps") or []
-            if e not in known
-        ]
-    return errors
+    if not isinstance(block, dict):
+        return ["live_execution must be a mapping"]
+    return [
+        f"live_execution: `excluded_steps` names {e!r}, which is not a step id. Known steps: {', '.join(sorted(known))}"
+        for e in block.get("excluded_steps") or []
+        if e not in known
+    ]
 
 
 def _check_routing(routing: dict) -> list[str]:
@@ -194,7 +189,7 @@ def check_structure(workflow: dict) -> list[str]:
         + id_errors
         + _check_step_refs(steps, known, set(gates), routing.get("tiers") or [])
         + _check_gates(gates, known)
-        + _check_lanes(workflow.get("lanes") or {}, known)
+        + _check_live_execution(workflow.get("live_execution") or {}, known)
         + _check_routing(routing)
     )
 

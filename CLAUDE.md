@@ -100,9 +100,10 @@ Constraints these gates enforce, which are easy to break by accident:
 
 ## Coordinator standing orders (the agent on main)
 
-The human's role in the change cycle is review-and-merge, nothing else. Every gate below is
-tool-run; the only comment-gated check anywhere is G_APPROVAL, on tasks tagged destructive or
-prod-touching. `<id>` is the active change — the sole non-archive directory in
+The human's role in the change cycle is review-and-merge, nothing else. Every gate is tool-run;
+the human's only check surface is ordinary PR review. Tasks tagged destructive or prod-touching
+never enter a worktree — they are tracked as GitHub issues and run attended after their runbook
+PR merges (WORKFLOW.md `live_execution`). `<id>` is the active change — the sole non-archive directory in
 `openspec/changes/`; resolve it once and fill it into every command.
 
 - **After each PR merge you observe or perform** (the merge commit is `<sha>` on main):

@@ -166,7 +166,7 @@ def test_unannotated_tasks_are_dispatchable_repo_change(tmp_path: Path) -> None:
     assert all(t["deps"] == [] for t in tasks)
 
 
-def test_out_of_lane_tasks_get_no_work_order(tmp_path: Path) -> None:
+def test_live_execution_tasks_get_no_work_order(tmp_path: Path) -> None:
     tasks = _parse(tmp_path, ANNOTATED_MD)
     paths = dispatch.emit_work_orders(tasks, "c", tmp_path / "out")
     assert [p.name for p in paths] == ["task-001.md", "task-002.md", "task-003.md"]
@@ -174,7 +174,7 @@ def test_out_of_lane_tasks_get_no_work_order(tmp_path: Path) -> None:
 
 
 def test_task_ids_stay_positional_when_a_lane_is_skipped(tmp_path: Path) -> None:
-    """Skipping an out-of-lane task must not renumber the rest — task IDs are quoted in issues.
+    """Skipping a live-execution task must not renumber the rest — task IDs are quoted in issues.
 
     1.1 becomes destructive_ops here and 1.4 already is, so the two survivors keep the
     positional IDs 002 and 003 rather than sliding down to 001 and 002.
@@ -195,7 +195,7 @@ def test_serial_task_releases_alone(tmp_path: Path) -> None:
     assert [t["key"] for t, _ in held] == ["1.3"]
 
 
-def test_dependency_on_an_out_of_lane_task_holds_the_dependent(tmp_path: Path) -> None:
+def test_dependency_on_a_live_execution_task_holds_the_dependent(tmp_path: Path) -> None:
     """The ocean-eventbridge-migration case: the import waits on a credential rotation run by a human."""
     md = """\
 - [ ] 1.1 Rotate credentials  `[lane: destructive_ops | wave: 0]`
@@ -205,7 +205,7 @@ def test_dependency_on_an_out_of_lane_task_holds_the_dependent(tmp_path: Path) -
     assert ready == []
     (task, blockers) = held[0]
     assert task["key"] == "1.2"
-    assert "other queue" in blockers[0]
+    assert "live execution" in blockers[0]
 
 
 def test_done_tasks_are_not_released_and_unblock_dependents(tmp_path: Path) -> None:
@@ -384,11 +384,9 @@ ade_workflow:
   gates:
     G_ONE:
       blocks: [execute]
-  lanes:
-    repo_change:
-      description: default
-    destructive_ops:
-      excluded_steps: [execute]
+  live_execution:
+    tracking: github_issue
+    excluded_steps: [execute]
   routing:
     tiers: [sonnet, opus]
     default: {model: sonnet, max_tier: opus}
@@ -737,7 +735,7 @@ def _synced(tmp_path: Path) -> tuple[list[dict], list[dict]]:
     return tasks, linear_sync.desired_subissues("c", tasks, tmp_path / "wo")
 
 
-def test_out_of_lane_tasks_are_not_synced(tmp_path: Path) -> None:
+def test_live_execution_tasks_are_not_synced(tmp_path: Path) -> None:
     """destructive_ops runs on the Open Engine queue, which has its own status vocabulary."""
     _, desired = _synced(tmp_path)
     assert [d["key"] for d in desired] == ["1.2", "1.3"]

@@ -79,7 +79,7 @@ Dispatch parses these from the change's `tasks.md`. Per task, one header block:
 ### task-003 — Token refresh endpoint  [model: sonnet | max: opus | deps: task-001 | parallel: yes | scenarios: S-07, S-08]
 ```
 
-Two further keys come from WORKFLOW.md v2's `lanes` block, and a GitHub-flavored checkbox list carries the same annotations inline:
+Two further keys come from WORKFLOW.md's `live_execution` block (v2.2.0; the lane tokens survive from the retired v2 `lanes` block), and a GitHub-flavored checkbox list carries the same annotations inline:
 
 ```markdown
 - [ ] 2.1 Emit the topic mapping  [model: opus | deps: 1.3 | lane: repo_change | wave: 1]
@@ -92,7 +92,7 @@ Defaults when omitted: `model: sonnet`, `max: opus`, `attempts_per_tier: 2`, `pa
 
 The Phase 2 MECE check extends by three assertions: every task declares or defaults a model, every dependency edge names an existing task, and every `parallel: no` task states why in its body (almost always: touches a generated surface or a shared root file).
 
-**`lane` is enforced, not advisory.** `scripts/dispatch_tasks.py` writes no work-order file for a task in an excluded lane. This is the one annotation whose absence is dangerous rather than merely untidy: a `destructive_ops` task without its lane declared becomes an ordinary work order, and an Orca agent will pick up a production teardown. Declare the lane on anything that has no reviewable diff.
+**`lane` is enforced, not advisory.** `scripts/dispatch_tasks.py` writes no work-order file for a task marked `destructive_ops` or `operational_discovery` — such a task is tracked as a GitHub issue and run attended after its runbook PR merges, per WORKFLOW.md `live_execution`. This is the one annotation whose absence is dangerous rather than merely untidy: a `destructive_ops` task without its lane declared becomes an ordinary work order, and an Orca agent will pick up a production teardown. Declare the lane on anything that has no reviewable diff.
 
 **`wave` is a label, and the graph is the truth.** Dispatch derives release order from `deps` alone. A declared `wave` is cross-checked for one property — nothing may sit in a wave earlier than something it depends on — and is otherwise documentation. It is deliberately coarser than dependency depth: one wave may contain an ordered chain, and `2a`/`2b`/`2c` split a single depth into human-sized releases.
 
@@ -115,7 +115,7 @@ Two rules ride along:
 
 **Waves.** Dispatch releases only tasks whose `depends_on` are merged. Orca will happily parallelize a dependency chain if allowed — the wave gate is what stops it. Within a wave, everything `parallel: yes` may run concurrently in separate worktrees. "Merged" is read off `tasks.md`: a checked box is a merged task, so checking one off is the act that opens the next wave — and `task checkoff CHANGE=<id>` is the normal actor for that flip, deriving it from merge subjects' `(X.Y[, TEAM-n])` tag rather than a hand-typed commit. The subject tag is therefore normative: dispatch writes the task id into the work-order title, the PR title inherits it, and checkoff reads it back. Hand-flipping stays legal under `main_access`; it is just the slow way.
 
-A dependency on an out-of-lane task holds its dependent exactly like any other, and dispatch names the lane when it reports the block. That work is real; it simply happens on another queue.
+A dependency on a live-execution task holds its dependent exactly like any other, and dispatch names the lane when it reports the block. That work is real; it simply happens outside the worktree cycle, on a GitHub issue.
 
 **Serial lane.** `parallel: no` tasks run alone — nothing else from the change in flight. Standing members of the serial lane: anything regenerating catalog surfaces (Twenty metadata, FSH, warehouse seeds, command types), anything editing workspace roots (`pyproject.toml`, CI config, pre-commit), anything touching AGENTS.md or the OpenSpec main specs. These merge clean and disagree semantically — the exact anti-pattern the research flagged — so they never share a wave.
 

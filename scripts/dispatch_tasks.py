@@ -48,8 +48,9 @@ DEFAULTS = {
     "lane": "repo_change",
 }
 
-# WORKFLOW.md v2 `lanes`. Both non-default lanes exclude the dispatch step, so neither
-# may produce a work-order file. Their runner is the Open Engine queue (team CCC).
+# WORKFLOW.md `live_execution` (v2.2.0): a lane token other than repo_change marks a task
+# whose effect no git diff captures. No work-order file — it is tracked as a GitHub issue
+# on this repo and run attended after its runbook PR merges.
 EXCLUDED_LANES = {"destructive_ops", "operational_discovery"}
 KNOWN_LANES = {"repo_change"} | EXCLUDED_LANES
 
@@ -387,9 +388,9 @@ def compute_waves(tasks: list[dict]) -> dict[str, int]:
 def releasable(tasks: list[dict]) -> tuple[list[dict], list[tuple[dict, list[str]]]]:
     """Split dispatchable, unfinished tasks into (released now, held with reasons).
 
-    A task releases when every task it depends on is checked off. A dependency on an
-    out-of-lane task holds it just the same — that work is real, it simply happens on another
-    queue, and pretending otherwise is how a teardown ends up in a worktree.
+    A task releases when every task it depends on is checked off. A dependency on a
+    live-execution task holds it just the same — that work is real, it simply happens outside
+    the worktree cycle, and pretending otherwise is how a teardown ends up in a worktree.
 
     If any releasable task is serial, only that task releases: the serial lane runs alone.
     """
@@ -405,7 +406,7 @@ def releasable(tasks: list[dict]) -> tuple[list[dict], list[tuple[dict, list[str
             dep_task = by_key.get(dep)
             if dep_task is None or dep_task["done"]:
                 continue
-            where = "" if dep_task["dispatchable"] else f" [{dep_task['lane']}, other queue]"
+            where = "" if dep_task["dispatchable"] else f" [{dep_task['lane']}, live execution]"
             blockers.append(f"{dep}{where}")
         if blockers:
             held.append((task, blockers))
@@ -616,7 +617,7 @@ def main():
     selected = pending if args.all_waves else ready
 
     print(f"Emitted {len(paths)} work-orders to {output_dir}/")
-    _report_out_of_lane([t for t in tasks if not t["dispatchable"]])
+    _report_live_execution([t for t in tasks if not t["dispatchable"]])
     print()
 
     if not selected:
@@ -645,14 +646,18 @@ def main():
     print(f"  task sync-docs CHANGE={args.change}")
 
 
-def _report_out_of_lane(out_of_lane: list[dict]) -> None:
-    if not out_of_lane:
+def _report_live_execution(live_execution: list[dict]) -> None:
+    if not live_execution:
         return
     print()
-    print(f"Out of lane — no work order written, runner is the Open Engine queue ({len(out_of_lane)}):")
-    for task in out_of_lane:
+    print(f"Live execution — no work order written ({len(live_execution)}):")
+    for task in live_execution:
         print(f"  {task['key']:<6} [{task['lane']}] {task['title'][:72]}")
-    print("  These need a G_APPROVAL comment and an operator. They never enter a worktree.")
+    print(
+        "  Track each on a GitHub issue (gh issue create). The runbook or scripts it needs\n"
+        "  merge by ordinary PR; run it attended after that merge, receipts on the issue.\n"
+        "  These never enter a worktree."
+    )
 
 
 def _report_held(held: list[tuple[dict, list[str]]], waves: dict[str, int], heading: str) -> None:
