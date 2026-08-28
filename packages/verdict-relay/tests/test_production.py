@@ -7,6 +7,8 @@ for the whole suite, so a test that reached for a real connection would fail lou
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -16,14 +18,17 @@ from verdict_relay.production import (
     SNOWFLAKE_ACCOUNT_ENV_VAR,
     SNOWFLAKE_DATABASE_ENV_VAR,
     SNOWFLAKE_PASSWORD_ENV_VAR,
+    SNOWFLAKE_PRIVATE_KEY_PATH_ENV_VAR,
     SNOWFLAKE_SCHEMA_ENV_VAR,
     SNOWFLAKE_TABLE_ENV_VAR,
     SNOWFLAKE_USER_ENV_VAR,
     SNOWFLAKE_WAREHOUSE_ENV_VAR,
     WRITER_ID,
+    ConflictingProductionVariablesError,
     MissingProductionVariableError,
     ProductionConfig,
     SnowflakeRowSource,
+    _snowflake_connect,
     build_production_dependencies,
     resolve_production_config,
 )
@@ -91,6 +96,120 @@ class TestMissingVariableFailsStartupByName:
             resolve_production_config(env)
 
         assert env.lookups[-1] == SNOWFLAKE_USER_ENV_VAR
+
+
+class TestKeyPairCredentialResolvesInLieuOfPassword:
+    """The Snowflake credential is exactly one of password / private-key path. Key-pair JWT is
+    the service-auth family Snowflake's 2026 BCR still provisions for headless readers (no
+    passwords on TYPE=SERVICE; MFA enrollment enforced on TYPE=PERSON), so the relay accepts a
+    `VERDICT_RELAY_SNOWFLAKE_PRIVATE_KEY_PATH` in lieu of the password — a key-pair deploy is not
+    a missing variable, a credential-less deploy still names the password variable, and both set
+    is a misconfiguration that fails startup naming both variables, never a value."""
+
+    KEY_PATH_VALUE = "/run/secrets/fixture_key.p8"
+
+    @staticmethod
+    def _key_path_env() -> dict[str, str]:
+        env = {name: value for name, value in COMPLETE_ENV.items() if name != SNOWFLAKE_PASSWORD_ENV_VAR}
+        env[SNOWFLAKE_PRIVATE_KEY_PATH_ENV_VAR] = TestKeyPairCredentialResolvesInLieuOfPassword.KEY_PATH_VALUE
+        return env
+
+    def test_a_private_key_path_resolves_in_lieu_of_the_password(self) -> None:
+        config = resolve_production_config(self._key_path_env())
+
+        assert config.snowflake_private_key_path == self.KEY_PATH_VALUE
+        assert config.snowflake_password is None
+
+    def test_a_password_environment_still_resolves_password_shaped(self) -> None:
+        config = resolve_production_config(COMPLETE_ENV)
+
+        assert config.snowflake_password == COMPLETE_ENV[SNOWFLAKE_PASSWORD_ENV_VAR]
+        assert config.snowflake_private_key_path is None
+
+    def test_neither_credential_fails_naming_the_password_variable(self) -> None:
+        env = {name: value for name, value in COMPLETE_ENV.items() if name != SNOWFLAKE_PASSWORD_ENV_VAR}
+
+        with pytest.raises(MissingProductionVariableError) as exc_info:
+            resolve_production_config(env)
+
+        assert exc_info.value.name == SNOWFLAKE_PASSWORD_ENV_VAR
+
+    def test_both_credentials_fail_naming_both_variables_and_never_a_value(self) -> None:
+        env = dict(COMPLETE_ENV)
+        env[SNOWFLAKE_PRIVATE_KEY_PATH_ENV_VAR] = self.KEY_PATH_VALUE
+
+        with pytest.raises(ConflictingProductionVariablesError) as exc_info:
+            resolve_production_config(env)
+
+        assert exc_info.value.names == (SNOWFLAKE_PASSWORD_ENV_VAR, SNOWFLAKE_PRIVATE_KEY_PATH_ENV_VAR)
+        message = str(exc_info.value)
+        assert SNOWFLAKE_PASSWORD_ENV_VAR in message
+        assert SNOWFLAKE_PRIVATE_KEY_PATH_ENV_VAR in message
+        for value in env.values():
+            assert value not in message
+
+
+class TestSnowflakeConnectSelectsTheAuthFamily:
+    """`_snowflake_connect` follows the resolved credential: password connects exactly as before;
+    a private-key path loads the real PEM (an actual generated RSA key, no fake serialization)
+    and connects key-pair JWT. The connector module is injected through `sys.modules` — the same
+    lazy-import seam the production code uses — so no connection is ever attempted (conftest
+    blocks sockets anyway)."""
+
+    class _FakeConnectorModule:
+        """Stands in for `snowflake.connector`; records the kwargs of the one `connect` call."""
+
+        def __init__(self) -> None:
+            self.kwargs: dict[str, Any] | None = None
+
+        def connect(self, **kwargs: Any) -> object:
+            self.kwargs = kwargs
+            return object()
+
+    def test_a_password_config_connects_with_the_password_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        fake = self._FakeConnectorModule()
+        monkeypatch.setitem(sys.modules, "snowflake.connector", fake)
+        config = resolve_production_config(COMPLETE_ENV)
+
+        _snowflake_connect(config)
+
+        assert fake.kwargs is not None
+        assert fake.kwargs["password"] == COMPLETE_ENV[SNOWFLAKE_PASSWORD_ENV_VAR]
+        assert fake.kwargs["account"] == COMPLETE_ENV[SNOWFLAKE_ACCOUNT_ENV_VAR]
+        assert "private_key" not in fake.kwargs
+        assert "authenticator" not in fake.kwargs
+
+    def test_a_key_path_config_loads_the_pem_and_connects_keypair_jwt(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
+
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        pem = key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        key_path = tmp_path / "relay_fixture_key.p8"
+        key_path.write_bytes(pem)
+
+        env = {name: value for name, value in COMPLETE_ENV.items() if name != SNOWFLAKE_PASSWORD_ENV_VAR}
+        env[SNOWFLAKE_PRIVATE_KEY_PATH_ENV_VAR] = str(key_path)
+        config = resolve_production_config(env)
+
+        fake = self._FakeConnectorModule()
+        monkeypatch.setitem(sys.modules, "snowflake.connector", fake)
+
+        _snowflake_connect(config)
+
+        assert fake.kwargs is not None
+        assert fake.kwargs["authenticator"] == "SNOWFLAKE_JWT"
+        # The connector takes the key as DER PKCS8 bytes, never the path or the PEM text.
+        assert isinstance(fake.kwargs["private_key"], bytes)
+        assert fake.kwargs["private_key"] != pem
+        assert "password" not in fake.kwargs
+        assert fake.kwargs["account"] == COMPLETE_ENV[SNOWFLAKE_ACCOUNT_ENV_VAR]
 
 
 class TestBuildProductionDependencies:
