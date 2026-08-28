@@ -506,7 +506,7 @@ tasks:
       - uv run python scripts/dispatch_tasks.py --change {{.CHANGE}}
 
   replan:
-    desc: Validate a tasks.md amendment — delta G_MECE + spec validation, no human gate (needs CHANGE)
+    desc: Validate a tasks.md amendment — delta plan-validation checks + spec validation, no human gate (needs CHANGE)
     # openspec is an npm global CI runners do not have, so this stays out of `check`, like verify.
     cmds:
       - uv run python scripts/dispatch_tasks.py --change {{.CHANGE}} --validate-only

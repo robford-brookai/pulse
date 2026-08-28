@@ -30,10 +30,14 @@ import yaml
 
 WORKFLOW_MD = Path("WORKFLOW.md")
 
-REQUIRED_TOP_LEVEL = ("version", "linear", "state_resolution", "gates", "lanes", "routing", "steps")
+REQUIRED_TOP_LEVEL = ("version", "linear", "state_resolution", "gates", "live_execution", "routing", "steps")
 # `agent(fable, review-assist)` / `agent(per work-order model field)` — first argument only.
 ACTOR_TIER_RE = re.compile(r"agent\(\s*([a-z0-9_-]+)")
-GATE_TOKEN_RE = re.compile(r"\bG_[A-Z_]+\b")
+# Gates are named in plain snake_case (v2.2.0). Legacy `G_*`-style tokens (G_MECE, G_HARDENING)
+# are rejected outright wherever they appear in a projection — retired nomenclature must not
+# creep back.
+LEGACY_GATE_RE = re.compile(r"\bG_[A-Z_]+\b")
+GATE_MENTION_RE = re.compile(r"\bgate:\s*([A-Za-z_][A-Za-z0-9_]*)")
 VERSION_HEADER_RE = re.compile(r"\*\*Status:\*\*\s*v([0-9]+(?:\.[0-9]+)*)")
 
 
@@ -82,12 +86,9 @@ def _next_targets(step: dict) -> list[str]:
 
 
 def _gate_names(value) -> list[str]:
-    """Gate references, tolerating `G_APPROVAL if tagged` and lists of gates."""
+    """Gate references: a plain name, or a list of them."""
     items = value if isinstance(value, list) else [value]
-    names: list[str] = []
-    for item in items:
-        names.extend(GATE_TOKEN_RE.findall(str(item)))
-    return names
+    return [name for item in items if (name := str(item).strip())]
 
 
 def _step_ids(steps: list) -> tuple[list[str], list[str]]:
@@ -142,20 +143,15 @@ def _check_gates(gates: dict, known: set[str]) -> list[str]:
     return errors
 
 
-def _check_lanes(lanes: dict, known: set[str]) -> list[str]:
+def _check_live_execution(block: object, known: set[str]) -> list[str]:
     """`excluded_steps` is load-bearing — dispatch reads it to decide what never becomes a work order."""
-    errors: list[str] = []
-    for name, lane in lanes.items():
-        if not isinstance(lane, dict):
-            errors.append(f"lane {name} must be a mapping")
-            continue
-        errors += [
-            f"lane {name}: `excluded_steps` names {e!r}, which is not a step id. "
-            f"Known steps: {', '.join(sorted(known))}"
-            for e in lane.get("excluded_steps") or []
-            if e not in known
-        ]
-    return errors
+    if not isinstance(block, dict):
+        return ["live_execution must be a mapping"]
+    return [
+        f"live_execution: `excluded_steps` names {e!r}, which is not a step id. Known steps: {', '.join(sorted(known))}"
+        for e in block.get("excluded_steps") or []
+        if e not in known
+    ]
 
 
 def _check_routing(routing: dict) -> list[str]:
@@ -194,7 +190,7 @@ def check_structure(workflow: dict) -> list[str]:
         + id_errors
         + _check_step_refs(steps, known, set(gates), routing.get("tiers") or [])
         + _check_gates(gates, known)
-        + _check_lanes(workflow.get("lanes") or {}, known)
+        + _check_live_execution(workflow.get("live_execution") or {}, known)
         + _check_routing(routing)
     )
 
@@ -291,16 +287,17 @@ def check_projections(workflow: dict, text: str) -> list[str]:
         for sid in sorted(ids):
             if not re.search(rf"\b{re.escape(sid)}\b", diagram):
                 errors.append(f"diagram omits step {sid!r}, which the YAML defines")
-        for gate in sorted(GATE_TOKEN_RE.findall(diagram)):
+        for gate in sorted(set(GATE_MENTION_RE.findall(diagram))):
             if gate not in gates:
                 errors.append(f"diagram names gate {gate}, which the YAML does not define")
+        for legacy in sorted(set(LEGACY_GATE_RE.findall(diagram))):
+            errors.append(f"diagram uses legacy gate nomenclature {legacy} — gates are plain names since v2.2.0")
 
     # Prose is looser: it must not invent a gate, but is not required to mention every step.
     prose_match = re.search(r"## 3\. Prose walkthrough.*?(?=\n## )", text, re.DOTALL)
     if prose_match:
-        for gate in sorted(set(GATE_TOKEN_RE.findall(prose_match.group(0)))):
-            if gate not in gates:
-                errors.append(f"prose names gate {gate}, which the YAML does not define")
+        for legacy in sorted(set(LEGACY_GATE_RE.findall(prose_match.group(0)))):
+            errors.append(f"prose uses legacy gate nomenclature {legacy} — gates are plain names since v2.2.0")
 
     header = VERSION_HEADER_RE.search(text)
     if header and str(workflow.get("version")) != header.group(1):

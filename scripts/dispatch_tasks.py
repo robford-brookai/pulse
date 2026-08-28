@@ -15,9 +15,9 @@ onorca.dev/docs/cli/reference and the installed binary, 2026-07-31). Requires
 
 Release is gated three ways, per WORKFLOW.md v2 and docs/process/dispatch-template.md §4:
 
-* **Lane.** `destructive_ops` and `operational_discovery` declare
-  `excluded_steps: [dispatch, ...]`. Those tasks get NO work-order file — they run on the
-  Open Engine queue as operator runbooks, and a file that exists is a file Orca can claim.
+* **Lane.** A `destructive_ops` or `operational_discovery` token marks a live-execution
+  task (WORKFLOW.md `live_execution`). It gets NO work-order file — it is tracked as a
+  GitHub issue and run attended, and a file that exists is a file Orca can claim.
 * **Wave.** A task releases only once every task it depends on is checked off. Waves are
   *derived* from the dependency graph, never trusted from a hand-written label; a declared
   `wave:` that disagrees with the graph is an error, because the label is the thing that rots.
@@ -48,8 +48,9 @@ DEFAULTS = {
     "lane": "repo_change",
 }
 
-# WORKFLOW.md v2 `lanes`. Both non-default lanes exclude the dispatch step, so neither
-# may produce a work-order file. Their runner is the Open Engine queue (team CCC).
+# WORKFLOW.md `live_execution` (v2.2.0): a lane token other than repo_change marks a task
+# whose effect no git diff captures. No work-order file — it is tracked as a GitHub issue
+# on this repo and run attended after its runbook PR merges.
 EXCLUDED_LANES = {"destructive_ops", "operational_discovery"}
 KNOWN_LANES = {"repo_change"} | EXCLUDED_LANES
 
@@ -63,9 +64,9 @@ class DispatchError(Exception):
     """A tasks.md defect that must stop dispatch rather than be worked around."""
 
 
-# --- G_HARDENING -------------------------------------------------------------------------------
+# --- hardening gate -------------------------------------------------------------------------------
 #
-# WORKFLOW.md declares `G_HARDENING blocks: [execute]` and nothing enforced it. Two worktrees were
+# WORKFLOW.md declares the hardening gate blocks execute and nothing enforced it. Two worktrees were
 # launched straight through it before anyone noticed, and the audit that followed (DNA-777) found
 # Orca spawning every agent with --dangerously-skip-permissions. A gate that only exists in prose
 # is not a gate.
@@ -110,7 +111,7 @@ def live_agent_bypass(agent: str, profile: Path | None = None) -> str | None:
 
 
 def hardening_problems(agent: str, today: date, receipt_path: Path | None = None) -> list[str]:
-    """Why G_HARDENING does not currently permit dispatch. Empty means it does."""
+    """Why the hardening gate does not currently permit dispatch. Empty means it does."""
     receipt_path = receipt_path or HARDENING_RECEIPT
     problems: list[str] = []
 
@@ -125,7 +126,7 @@ def hardening_problems(agent: str, today: date, receipt_path: Path | None = None
         receipt = json.loads(receipt_path.read_text())
     except FileNotFoundError:
         problems.append(
-            f"no G_HARDENING receipt at {receipt_path}. Run the Appendix A checklist and record it — "
+            f"no hardening receipt at {receipt_path}. Run the Appendix A checklist and record it — "
             "the gate is per-workstation, so the file is gitignored and not inherited from anyone else."
         )
         return problems
@@ -288,7 +289,7 @@ def _annotate(task: dict, index: int) -> None:
 
 
 def validate(tasks: list[dict]) -> None:
-    """Fail on the tasks.md defects G_MECE is supposed to catch.
+    """Fail on the tasks.md defects plan validation is supposed to catch.
 
     Raising here is the point. The failure this replaces was silent: dispatch emitted a work
     order for an MSK teardown because nothing ever asked what lane it was in.
@@ -302,12 +303,12 @@ def validate(tasks: list[dict]) -> None:
         if task["lane"] not in KNOWN_LANES:
             errors.append(f"{label}: unknown lane {task['lane']!r}, expected one of {sorted(KNOWN_LANES)}")
 
-        # G_MECE: deps_reference_existing_tasks
+        # plan_validation: deps_reference_existing_tasks
         for dep in task["deps"]:
             if dep not in by_key:
                 errors.append(f"{label}: deps references {dep!r}, which is not a task in this file")
 
-        # G_MECE: serial_flags_justified
+        # plan_validation: serial_flags_justified
         if not task["parallel"] and not task["serial_reason"]:
             errors.append(
                 f"{label}: is serial (parallel: no) but states no reason. "
@@ -387,9 +388,9 @@ def compute_waves(tasks: list[dict]) -> dict[str, int]:
 def releasable(tasks: list[dict]) -> tuple[list[dict], list[tuple[dict, list[str]]]]:
     """Split dispatchable, unfinished tasks into (released now, held with reasons).
 
-    A task releases when every task it depends on is checked off. A dependency on an
-    out-of-lane task holds it just the same — that work is real, it simply happens on another
-    queue, and pretending otherwise is how a teardown ends up in a worktree.
+    A task releases when every task it depends on is checked off. A dependency on a
+    live-execution task holds it just the same — that work is real, it simply happens outside
+    the worktree cycle, and pretending otherwise is how a teardown ends up in a worktree.
 
     If any releasable task is serial, only that task releases: the serial lane runs alone.
     """
@@ -405,7 +406,7 @@ def releasable(tasks: list[dict]) -> tuple[list[dict], list[tuple[dict, list[str
             dep_task = by_key.get(dep)
             if dep_task is None or dep_task["done"]:
                 continue
-            where = "" if dep_task["dispatchable"] else f" [{dep_task['lane']}, other queue]"
+            where = "" if dep_task["dispatchable"] else f" [{dep_task['lane']}, live execution]"
             blockers.append(f"{dep}{where}")
         if blockers:
             held.append((task, blockers))
@@ -510,12 +511,12 @@ def emit_work_orders(tasks: list[dict], change: str, output_dir: Path) -> list[P
 
 
 def _enforce_hardening(args) -> None:
-    """G_HARDENING blocks execute, and dispatch is what makes execute possible — so this is where
+    """The hardening gate blocks execute, and dispatch is what makes execute possible — so this is where
     it has to bite. Work orders are still written; only the release is withheld, because the plan
     is useful to read while the gate is being closed."""
     hardening = hardening_problems(args.agent, date.today())
     if hardening and not args.skip_hardening:
-        print(f"G_HARDENING blocks dispatch for `{args.change}`:", file=sys.stderr)
+        print(f"The hardening gate blocks dispatch for `{args.change}`:", file=sys.stderr)
         for problem in hardening:
             print(f"  - {problem}", file=sys.stderr)
         print(
@@ -526,7 +527,7 @@ def _enforce_hardening(args) -> None:
         )
         sys.exit(1)
     if hardening:
-        print(f"WARNING: releasing with G_HARDENING unmet ({len(hardening)} problem(s)):", file=sys.stderr)
+        print(f"WARNING: releasing with the hardening gate unmet ({len(hardening)} problem(s)):", file=sys.stderr)
         for problem in hardening:
             print(f"  - {problem}", file=sys.stderr)
         print("", file=sys.stderr)
@@ -558,7 +559,7 @@ def main():
         "--skip-hardening",
         action="store_true",
         help=(
-            "Release even though G_HARDENING is not satisfied. Prints what was skipped. "
+            "Release even though the hardening gate is not satisfied. Prints what was skipped. "
             "For a deliberate, receipted exception — not for getting past a red gate."
         ),
     )
@@ -566,7 +567,7 @@ def main():
         "--validate-only",
         action="store_true",
         help=(
-            "Run the mechanical G_MECE checks and stop — no hardening gate, no work-order "
+            "Run the mechanical plan-validation checks and stop — no hardening gate, no work-order "
             "emission. The replan path: an agent validates a tasks.md amendment before opening "
             "the PR. No gate here ever needs a human comment."
         ),
@@ -595,7 +596,7 @@ def main():
         sys.exit(1)
 
     if args.validate_only:
-        print(f"G_MECE mechanical checks pass for `{args.change}` ({len(tasks)} tasks).")
+        print(f"Plan-validation mechanical checks pass for `{args.change}` ({len(tasks)} tasks).")
         print(
             "Next steps (pre-filled):\n"
             f"  openspec validate {args.change}        # or `task replan CHANGE={args.change}`, which ran both\n"
@@ -616,7 +617,7 @@ def main():
     selected = pending if args.all_waves else ready
 
     print(f"Emitted {len(paths)} work-orders to {output_dir}/")
-    _report_out_of_lane([t for t in tasks if not t["dispatchable"]])
+    _report_live_execution([t for t in tasks if not t["dispatchable"]])
     print()
 
     if not selected:
@@ -645,14 +646,18 @@ def main():
     print(f"  task sync-docs CHANGE={args.change}")
 
 
-def _report_out_of_lane(out_of_lane: list[dict]) -> None:
-    if not out_of_lane:
+def _report_live_execution(live_execution: list[dict]) -> None:
+    if not live_execution:
         return
     print()
-    print(f"Out of lane — no work order written, runner is the Open Engine queue ({len(out_of_lane)}):")
-    for task in out_of_lane:
+    print(f"Live execution — no work order written ({len(live_execution)}):")
+    for task in live_execution:
         print(f"  {task['key']:<6} [{task['lane']}] {task['title'][:72]}")
-    print("  These need a G_APPROVAL comment and an operator. They never enter a worktree.")
+    print(
+        "  Track each on a GitHub issue (gh issue create). The runbook or scripts it needs\n"
+        "  merge by ordinary PR; run it attended after that merge, receipts on the issue.\n"
+        "  These never enter a worktree."
+    )
 
 
 def _report_held(held: list[tuple[dict, list[str]]], waves: dict[str, int], heading: str) -> None:

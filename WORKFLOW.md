@@ -1,6 +1,6 @@
 # WORKFLOW — repo-ade ADE Stack v2
 
-**Status:** v2.1.0 — supersedes v1 WORKFLOW.md | **Owner:** Ford
+**Status:** v2.2.0 — supersedes v1 WORKFLOW.md | **Owner:** Ford
 **Scope:** The goal workflow for repo-ade-born repos (PULSE first), in three renderings: executable YAML (the source of truth), prose walkthrough, and diagram. The YAML block is parsed by `scripts/workflow.py` and read directly by agents via `orient()`. **Editing the YAML changes dispatch behavior. The prose and diagram are projections of the YAML — `task workflow:lint` fails if either names a step or gate the YAML does not define, or omits a step it does.** Same doctrine as the state catalog: one generative artifact, multiple emitted surfaces, CI fails on drift.
 
 > **Projections are checked, not generated.** An earlier revision said the prose and diagram
@@ -20,7 +20,7 @@
 
 ## 0. TL;DR
 
-One OpenSpec change = one Linear parent issue = one directory of dispatched work orders. One task = one Linear sub-issue = one work-order file = one Orca worktree = one commit. The repo is the record, Linear is the projection — sub-issues mirror work-order files so Orca's native Linear integration can claim them, but the file is canonical and the sync is one-directional. The queue lives in the **DNA team** with standard Linear statuses; the Open Engine queue (team CCC, Agent-prefixed statuses) is a separate protocol that serves as the runner for the two out-of-lane routes. Dispatch is wave-gated with a serial lane, execution routes by model tier with an escalation ladder instead of fan-out, and four gates (hardening, MECE, drift, approval) block specific transitions. An agent anywhere in the cycle computes its next step from the `steps[].next` graph plus the `agent_protocol` state-resolution order — no ambiguity, no tribal knowledge.
+One OpenSpec change = one Linear parent issue = one directory of dispatched work orders. One task = one Linear sub-issue = one work-order file = one Orca worktree = one commit. The repo is the record, Linear is the projection — sub-issues mirror work-order files so Orca's native Linear integration can claim them, but the file is canonical and the sync is one-directional. The queue lives in the **DNA team** with standard Linear statuses; live-execution tasks — work whose effect no git diff captures — are tracked as GitHub issues on this repo, never as Linear sub-issues. Dispatch is wave-gated with a serial lane, execution routes by model tier with an escalation ladder instead of fan-out, and three gates (hardening, MECE, drift) block specific transitions. An agent anywhere in the cycle computes its next step from the `steps[].next` graph plus the `agent_protocol` state-resolution order — no ambiguity, no tribal knowledge.
 
 ## 1. Grain map
 
@@ -33,13 +33,13 @@ One OpenSpec change = one Linear parent issue = one directory of dispatched work
 
 Sub-issues are the Orca claim surface: its Linear integration creates a worktree from the sub-issue, whose description *is* the dispatched work-order body. Direction of truth: the `linear:sync` target writes files → sub-issues, never back. A sub-issue edited by hand in Linear is drift and gets overwritten at next sync — spec changes go through the file.
 
-Out-of-lane work (operational discovery, destructive ops) is executed by the Open Engine queue in team **CCC** under the `open-agent-engine` skill and its receipt-token protocol. The two teams keep disjoint status vocabularies by construction — DNA is standard Todo / In Progress / In Review, CCC is Agent Todo / Agent Working / Agent Review — so neither claim surface can see or misread the other. Cross-team dependencies are expressed as Linear issue relations (the OCN-4 ← DNA-695 block is the existing precedent).
+Live-execution work — a task whose effect is not a reviewable git diff, because it reads or mutates a live system (production reads, production loads, force-pushes, repo administration) — is tracked as a **GitHub issue on this repo**, never a Linear sub-issue. Whatever the run needs that *is* reviewable — a runbook, scripts, committed artifacts — merges by ordinary PR, approved by the developer like any other PR; the attended run happens after that merge, and its receipts land on the GitHub issue. (The Open Engine queue in team CCC that previously ran this work is retired; nothing routes there.)
 
 ## 2. The workflow, executable
 
 ```yaml
 ade_workflow:
-  version: 2.1.0
+  version: 2.2.0
   source_of_truth: WORKFLOW.md            # this file, this block
   renderings: [prose_section_3, diagram_section_4]   # checked for correspondence, not generated
   parser: scripts/workflow.py             # thin glue; `task workflow:lint` validates this block
@@ -98,47 +98,34 @@ ade_workflow:
     # resolution input. Spent worktrees on one machine must not park the change
     # for every other machine.
 
-  gates:
-    G_HARDENING:
+  gates:                                 # plain names since v2.2.0 — the G_* nomenclature is
+                                         # retired, and workflow:lint rejects legacy tokens
+    hardening_receipt:
       checks: [H1_telemetry, H2_daemon_localhost, H3_version_pin, H4_permission_defaults]
       receipt: linear_issue_link
       rerun_on: orca_version_change
       blocks: [execute]
-    G_MECE:
+    plan_validation:                     # the MECE pass over tasks.md
       checks: [every_requirement_has_scenario, tasks_atomic_2h, task_scenario_bijection_covered,
                no_scope_overlap, deps_explicit, model_declared_or_default,
                deps_reference_existing_tasks, serial_flags_justified]
       blocks: [dispatch]
-    G_DRIFT:
+    drift_check:
       checks: [openlore_drift_clean, no_unreviewed_design_drift_flags]
       blocks: [archive]
-    G_APPROVAL:
-      applies_to: tasks_tagged_destructive_or_prod_touching
-      requires: human_approved_pr        # the PR carrying the task's runbook, scripts, or
-                                         # committed artifacts, approved or merged by a human.
-                                         # The review IS the approval receipt. v2.0.7 replaced
-                                         # the Linear-comment ceremony: comment approvals had
-                                         # no acknowledgment and no validation, so they could
-                                         # land on the wrong issue (or the right one) and
-                                         # silently change nothing — four were lost this way.
-      blocks: [execute]
-
-  lanes:
-    repo_change:
-      description: default lane — everything below
-    operational_discovery:
-      trigger: task reads production data (BF-0b class)
-      route: single controlled Claude Code session, scoped runtime creds,
-             outside Orca until G_HARDENING; receipts on the Linear sub-issue
-      runner: open_engine_queue            # team CCC, open-agent-engine skill,
-                                           # receipts per its AGENT token protocol
-      excluded_steps: [execute]            # runs as a controlled session, not an Orca worktree
-    destructive_ops:
-      trigger: no reviewable diff exists (force-push, repo archive, prod load)
-      route: operator runbook, agent-prepared scripts, G_APPROVAL mandatory
-      runner: open_engine_queue            # same runner; approval gates map to
-                                           # AGENT HUMAN HOLD on the CCC issue
-      excluded_steps: [dispatch, execute, merge]
+  live_execution:                        # v2.2.0 — replaces the v2.0–v2.1 out-of-lane lanes
+    trigger: a task whose effect no git diff captures — it reads or mutates a live
+             system (production reads and loads, force-pushes, repo administration)
+    marker: a tasks.md lane token other than repo_change (operational_discovery and
+            destructive_ops survive as markers only — there is no separate protocol)
+    tracking: github_issue               # one GitHub issue on this repo per task; receipts
+                                         # land there, never on a Linear sub-issue. The Open
+                                         # Engine queue (team CCC) is retired
+    artifact: the runbook, scripts, or committed pieces the run needs, merged by ordinary
+              PR — the developer's PR review is the approval; no gate object exists for it
+    execution: attended session after that PR merges — never an unattended Orca worktree
+    excluded_steps: [execute]            # dispatch writes no work order; the GitHub issue
+                                         # is the claim surface
 
   routing:
     tiers: [sonnet, opus, fable]
@@ -206,7 +193,7 @@ ade_workflow:
     - id: validate
       actor: human + agent(fable, review-assist)
       run: openspec validate <id>
-      gate: G_MECE
+      gate: plan_validation
       next: {pass: dispatch, fail: propose}   # revise docs, re-validate
 
     # dispatch precedes sync_linear: the sub-issue description IS the work-order
@@ -245,7 +232,7 @@ ade_workflow:
     - id: execute
       actor: agent(per work-order model field)
       per: task
-      gate: [G_HARDENING, G_APPROVAL if tagged]
+      gate: hardening_receipt
       run: |
         orca worktree create <task>          # or claim sub-issue via Orca Linear panel
         agent reads AGENTS.md, calls orient(), reads spec_refs,
@@ -266,7 +253,7 @@ ade_workflow:
       trigger: mid-change discovery — a missing task, a task that needs widening,
                a dependency edge that proved wrong
       run: task replan CHANGE=<id>, then a PR amending openspec/changes/<id>/tasks.md
-      gate: G_MECE                          # delta-scoped — the amended and added tasks
+      gate: plan_validation                # delta-scoped — the amended and added tasks
                                             # only, never a revalidation of the whole file
       behavior: the amendment is a decision, so it is a PR — never a direct push
                 (main_access names checkbox state and id tokens as the only
@@ -328,7 +315,7 @@ ade_workflow:
 
     - id: archive
       actor: tool
-      gate: G_DRIFT
+      gate: drift_check
       run: task spec:archive CHANGE=<id>
       behavior: deltas merge to openspec/specs/, change folder cleaned,
                 parent issue -> Done with receipts
@@ -353,15 +340,15 @@ ade_workflow:
 
 ## 3. Prose walkthrough (projection of §2)
 
-A change begins at **propose**: OpenSpec scaffolds the change folder, Fable-tier assistance shapes proposal, design, specs, and tasks. **Validate** runs the tool check plus the extended MECE gate — scenarios cover tasks, tasks are atomic, dependencies explicit, every task carries or defaults its model and parallel flags. Failure loops to propose, and nothing dispatches until G_MECE holds.
+A change begins at **propose**: OpenSpec scaffolds the change folder, Fable-tier assistance shapes proposal, design, specs, and tasks. **Validate** runs the tool check plus the extended MECE gate — scenarios cover tasks, tasks are atomic, dependencies explicit, every task carries or defaults its model and parallel flags. Failure loops to propose, and nothing dispatches until plan validation holds.
 
 **Sync-linear** projects the plan into Linear: one parent issue for the change and one sub-issue per task, all in the DNA team under the PULSE / Declared-State Funnel project, with team and project passed explicitly on every mutation. Sub-issue descriptions are the work-order bodies. Status writes follow the one-writer-per-band rule: sync resolves DNA's Todo state ID once per run and passes it on every create so triage intake can never intercept a new sub-issue, heals only the Triage→Todo edge on updates, and never touches anything from In Progress onward — that band belongs to agents and Orca, and the terminal band belongs to humans at merge and archive. The repo is the record and the sync is one-directional — Linear is where humans watch, comment, and approve, not where specs live. One reverse edge is sanctioned, because the id is the one fact Linear mints: after a create succeeds on an apply run, sync writes the `[DNA-nnn]` token back into that task's line in tasks.md — id tokens only, never rewritten once present, never any other content. The first real change spent whole commits hand-copying those ids, and hand-copying is how they drift. **Dispatch** then emits the work-order files per the dispatch template, releasing tasks in waves as dependencies merge, with serial-lane tasks (generated surfaces, workspace roots) running alone.
 
-**Execute** is one agent per task per worktree, claimed through Orca's Linear panel or the CLI, gated on hardening (and, for anything tagged destructive or prod-touching, on a human-approved PR carrying the task's runbook or artifacts — those tasks actually leave this lane entirely, per the lanes block). The agent orients, writes tests first, implements, verifies, writes a HANDOFF with its receipt, and commits once — then ships that commit without being asked: push, open a PR against main **ready for review, never a draft**, and watch `gh pr checks` to green. Red CI belongs to the agent that made it red, not to the reviewer who finds it. A draft PR is the same failure in a quieter form: it withholds finished work from the review step that is supposed to consume it, and reads as "still working" when nobody is. The task is done when the diff is on a green, reviewable PR — a finished task parked at a local commit is an unfinished task. Verification failure feeds **escalate**: two attempts per tier, fresh worktree per rung, and failure at the ceiling returns the task to validate as a spec defect rather than a bigger-model problem. Design drift halts the worktree and flags for human review. A sub-issue dragged to Blocked parks the change at execute — state resolution reads Blocked as "wave not done," the unblock path is a human comment plus a drag back to In Progress, and escalation never fires on status, only on verification failure.
+**Execute** is one agent per task per worktree, claimed through Orca's Linear panel or the CLI, gated on hardening. (A task whose effect is running something against a live system never reaches this step at all — it follows the live-execution path below.) The agent orients, writes tests first, implements, verifies, writes a HANDOFF with its receipt, and commits once — then ships that commit without being asked: push, open a PR against main **ready for review, never a draft**, and watch `gh pr checks` to green. Red CI belongs to the agent that made it red, not to the reviewer who finds it. A draft PR is the same failure in a quieter form: it withholds finished work from the review step that is supposed to consume it, and reads as "still working" when nobody is. The task is done when the diff is on a green, reviewable PR — a finished task parked at a local commit is an unfinished task. Verification failure feeds **escalate**: two attempts per tier, fresh worktree per rung, and failure at the ceiling returns the task to validate as a spec defect rather than a bigger-model problem. Design drift halts the worktree and flags for human review. A sub-issue dragged to Blocked parks the change at execute — state resolution reads Blocked as "wave not done," the unblock path is a human comment plus a drag back to In Progress, and escalation never fires on status, only on verification failure.
 
-Mid-change discovery — a missing task, a task that needs widening, a dependency edge that proved wrong — takes the **replan** edge. The amendment is a decision, so it is a PR against `tasks.md`, checked by G_MECE over the delta only (revalidating a fifty-task file to add two tasks is exactly the friction that used to push amendments straight to main), then flows through dispatch and sync-linear (in that order, per v2.0.5 — the sub-issue description is the work-order body) while in-flight tasks continue undisturbed. The first real change hit this at least eight times with no legal edge for it; now it has one, and `main_access` is correspondingly narrower — checkbox state and issue-id tokens are the only tasks.md content that may reach main without review.
+Mid-change discovery — a missing task, a task that needs widening, a dependency edge that proved wrong — takes the **replan** edge. The amendment is a decision, so it is a PR against `tasks.md`, checked by plan validation over the delta only (revalidating a fifty-task file to add two tasks is exactly the friction that used to push amendments straight to main), then flows through dispatch and sync-linear (in that order, per v2.0.5 — the sub-issue description is the work-order body) while in-flight tasks continue undisturbed. The first real change hit this at least eight times with no legal edge for it; now it has one, and `main_access` is correspondingly narrower — checkbox state and issue-id tokens are the only tasks.md content that may reach main without review.
 
-The two out-of-lane routes have a named runner: the Open Engine queue in team CCC, executed under the open-agent-engine skill with its AGENT receipt tokens. Operational discovery (anything reading production data) runs as a single controlled Claude Code session with scoped credentials, receipts on the issue. Destructive ops (anything with no reviewable diff — force-pushes, repo archives, production loads) run as operator runbooks with agent-prepared scripts, where G_APPROVAL maps onto the skill's AGENT HUMAN HOLD gate. The CCC team keeps its Agent-prefixed statuses and the DNA team keeps standard ones, so the two claim surfaces are mutually invisible by construction, and cross-team dependencies ride ordinary Linear issue relations.
+Work whose effect no git diff captures — production reads, production loads, force-pushes, repo administration — follows the **live-execution** path instead of the worktree cycle. Its tasks.md line carries a lane token other than `repo_change`, dispatch writes no work order for it, and it is tracked as a GitHub issue on this repo, never a Linear sub-issue. Whatever the run needs that is reviewable — a runbook, scripts, committed artifacts — merges by ordinary PR, and the developer's review of that PR is the approval: there is no separate gate object, no comment ceremony, and no second protocol. The run itself happens in an attended session after the merge, and its receipts (subject keys, counts, timings — never PHI) land on the GitHub issue. The Open Engine queue — team CCC, the open-agent-engine skill, its Agent-prefixed statuses and receipt tokens — is retired; nothing routes there.
 
 When the wave completes, **collect** gathers handoffs and the tier-economics summary — and `handoffs/<id>/SUMMARY.md` is tracked, because a receipt record that lives only on one workstation is not a record; per-task scratch stays ignored, and the summary carries receipts and spec deltas only, never operational detail or PHI. **Doc-update** folds spec-relevant deltas back into the change specs in a fresh Fable worktree, and **verify** runs the full quality gate — failures route back through dispatch as new or reopened tasks, never as hand edits to worktree output. **Merge** is the human moment: Orca's diff review, hunk annotation, winners to main, spent worktrees deleted — a hygiene step (H7) on the machine that owns them, never something another machine's state resolution waits on. `task checkoff` then flips the merged tasks' boxes from main's own history, which is the act that opens the next wave — the first real change hand-typed twenty-five of those commits, and none of them carried anything a reviewer could review. Squash is the normal method, but anything carrying imported history takes a merge commit — a squashed subtree import destroys the history it existed to preserve and looks identical in the diff. **Archive** (gated on clean drift) folds delta specs into the baseline and closes the parent issue with receipts, and **refresh** means the next change's `orient()` already knows everything this one shipped.
 
@@ -375,32 +362,27 @@ Decisions themselves have a landing rule, per `decision_protocol`: a decision re
 
 ```mermaid
 flowchart TB
-  P[propose<br/>fable] --> V{validate<br/>G_MECE}
+  P[propose<br/>fable] --> V{validate<br/>gate: plan_validation}
   V -- fail --> P
   V -- pass --> D[dispatch<br/>router · waves · serial lane<br/>emits work_orders/]
   D --> SL[sync_linear<br/>team DNA · parent + sub-issues<br/>description = work-order body<br/>status writes: unstarted band only]
-  SL --> E[execute<br/>1 task = 1 worktree = 1 commit<br/>push + ready PR + green CI<br/>gate: G_HARDENING<br/>Blocked parks here]
+  SL --> E[execute<br/>1 task = 1 worktree = 1 commit<br/>push + ready PR + green CI<br/>gate: hardening_receipt<br/>Blocked parks here]
   E -- verification fail --> ESC{escalate<br/>fresh worktree,<br/>next tier}
   ESC -- tier available --> E
   ESC -- at max_tier --> V
   E -- design drift --> HALT[halt · human review]
   HALT --> V
-  E -- plan amendment --> RP[replan<br/>PR amending tasks.md<br/>gate: G_MECE on the delta]
+  E -- plan amendment --> RP[replan<br/>PR amending tasks.md<br/>gate: plan_validation, delta only]
   RP -- pass --> D
   E -- wave done --> C[collect<br/>handoffs + tier economics<br/>SUMMARY.md tracked]
   C --> DU[doc_update<br/>fable · spec deltas only]
   DU --> VER{verify<br/>lint · test · drift · spec}
   VER -- fail --> D
   VER -- pass --> M[merge<br/>human · Orca diff UI<br/>delete worktrees H7<br/>task checkoff flips boxes]
-  M --> A[archive<br/>gate: G_DRIFT<br/>deltas → main specs]
+  M --> A[archive<br/>gate: drift_check<br/>deltas → main specs]
   A --> R[refresh<br/>orient includes new baseline]
   R --> P
-  subgraph LANES[out-of-lane routes — runner: Open Engine queue, team CCC]
-    OD[operational discovery<br/>controlled session, no Orca]
-    DO[destructive ops<br/>runbook + G_APPROVAL<br/>= AGENT HUMAN HOLD]
-  end
-  D -. prod-touching task .-> OD
-  D -. no reviewable diff .-> DO
+  D -. live-execution task .-> LE[live execution<br/>GitHub issue · runbook PR<br/>developer-approved · attended run]
 ```
 
 ## 5. What changed from v1
@@ -408,6 +390,22 @@ flowchart TB
 Sub-issue grain added (Linear parent/sub mapping to change/task, one-directional sync, Orca claims sub-issues). Model routing and the escalation ladder embedded in dispatch and execute. Gates made explicit objects with named blocking edges (hardening, MECE-extended, drift, approval). Lanes formalized so prod-touching and destructive work route out of Orca by rule instead of by memory. State-resolution order added so an agent landing mid-change computes its step deterministically. Edit protocol added: this YAML is the workflow, renderings regenerate, step ids are stable.
 
 ## Change log
+
+**v2.2.0 (2026-08-28):** The out-of-lane concept and its runner are retired, and G_APPROVAL is
+deleted as a gate object. The Open Engine queue (Linear team CCC, the `open-agent-engine` skill,
+AGENT receipt tokens, Agent-prefixed statuses) was an artifact of an abandoned work process; the
+`lanes` block that routed to it is replaced by a single `live_execution` block. What remains of
+the distinction is the only part that was ever material: a task whose effect no git diff captures
+(production reads and loads, force-pushes, repo administration) cannot be accepted by CI or
+reviewed before it takes effect, so it never enters a worktree. Such a task is now tracked as a
+**GitHub issue on this repo** (never a Linear sub-issue), its reviewable artifact — runbook,
+scripts — merges by ordinary PR, and the developer's PR review is the approval; there is no named
+gate, because "a human approves PRs" is how every PR works, not a workflow object. The tasks.md
+lane tokens (`operational_discovery`, `destructive_ops`) survive as markers only, so existing
+plans keep parsing. The G_* gate nomenclature is retired with it: the three remaining gates are
+plain names — `hardening_receipt`, `plan_validation` (the MECE pass), `drift_check` — and
+`workflow:lint` now rejects any legacy `G_*`-style token (`G_MECE`, `G_HARDENING`, …) in either projection, so the retired
+vocabulary cannot creep back. Changelog entries keep their original wording as history.
 
 **v2.1.0 (2026-08-27):** Four rules the ocean-eventbridge-migration run (56 tasks, 58 PRs) proved
 were missing, shipped as OpenSpec change `workflow-v2-1-efficiency`. (1) **`replan`** — mid-change
