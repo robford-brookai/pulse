@@ -79,7 +79,7 @@ its own justification. Default model is `sonnet`, stated explicitly per
       no hardening gate, no emission); the target runs it plus `openspec validate` and prints the
       pre-filled sync/dispatch follow-ups. WORKFLOW.md replan step names the target.
       `[model: sonnet | deps: 1.1 | lane: repo_change | wave: 4]`
-- [ ] 6.3 CLAUDE.md gains standing orders for the coordinator (the agent on main): checkoff with
+- [x] 6.3 CLAUDE.md gains standing orders for the coordinator (the agent on main): checkoff with
       the merged SHA after each PR merge, replan validation before opening amendment PRs, collect
       + commit SUMMARY.md at wave end — every command pre-filled with the active change id, which
       is the sole non-archive entry in `openspec/changes/`.

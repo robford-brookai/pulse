@@ -100,6 +100,28 @@ Constraints these gates enforce, which are easy to break by accident:
 - Placeholders in committed docs are inline code, never link syntax: `mkdocs build -s` treats a
   broken link as an error.
 
+## Coordinator standing orders (the agent on main)
+
+The human's role in the change cycle is review-and-merge, nothing else. Every gate below is
+tool-run; the only comment-gated check anywhere is G_APPROVAL, on tasks tagged destructive or
+prod-touching. `<id>` is the active change — the sole non-archive directory in
+`openspec/changes/`; resolve it once and fill it into every command.
+
+- **After each PR merge you observe or perform** (the merge commit is `<sha>` on main):
+  `task checkoff CHANGE=<id> COMMIT=1 COMMIT_SHA=<sha>` — then `task check` and push, per
+  `main_access`. Batch is fine: omit `COMMIT_SHA` to sweep everything merged so far. The flip
+  opens the next wave, so follow with `task dispatch CHANGE=<id>`.
+- **After `task linear:sync CHANGE=<id> APPLY=1`**: commit the `[DNA-nnn]` id tokens it wrote
+  into tasks.md (mechanical, `main_access`-eligible).
+- **When the plan needs amending mid-change** (new task, widened scope, changed dep): branch,
+  amend tasks.md, run `task replan CHANGE=<id>` until green, open a small PR. Never push a plan
+  amendment directly to main — checkbox state and id tokens are the only tasks.md content
+  eligible there.
+- **When a wave completes**: `task collect CHANGE=<id>`, then commit
+  `handoffs/<id>/SUMMARY.md` — it is the tracked receipt record.
+- Never ask the human to run a gate, comment a gate, or construct a command; hand them PRs to
+  review and merge, pre-filled commands otherwise.
+
 ## Data sensitivity (PHI)
 
 - No PHI in logs, commits, test fixtures, error messages, or docs. Synthetic data only.
