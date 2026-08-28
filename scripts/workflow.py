@@ -33,8 +33,9 @@ WORKFLOW_MD = Path("WORKFLOW.md")
 REQUIRED_TOP_LEVEL = ("version", "linear", "state_resolution", "gates", "live_execution", "routing", "steps")
 # `agent(fable, review-assist)` / `agent(per work-order model field)` — first argument only.
 ACTOR_TIER_RE = re.compile(r"agent\(\s*([a-z0-9_-]+)")
-# Gates are named in plain snake_case (v2.2.0). The legacy `G_UPPER` tokens are rejected
-# outright wherever they appear in a projection — retired nomenclature must not creep back.
+# Gates are named in plain snake_case (v2.2.0). Legacy `G_*`-style tokens (G_MECE, G_HARDENING)
+# are rejected outright wherever they appear in a projection — retired nomenclature must not
+# creep back.
 LEGACY_GATE_RE = re.compile(r"\bG_[A-Z_]+\b")
 GATE_MENTION_RE = re.compile(r"\bgate:\s*([A-Za-z_][A-Za-z0-9_]*)")
 VERSION_HEADER_RE = re.compile(r"\*\*Status:\*\*\s*v([0-9]+(?:\.[0-9]+)*)")

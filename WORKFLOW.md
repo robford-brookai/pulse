@@ -404,7 +404,7 @@ gate, because "a human approves PRs" is how every PR works, not a workflow objec
 lane tokens (`operational_discovery`, `destructive_ops`) survive as markers only, so existing
 plans keep parsing. The G_* gate nomenclature is retired with it: the three remaining gates are
 plain names — `hardening_receipt`, `plan_validation` (the MECE pass), `drift_check` — and
-`workflow:lint` now rejects a legacy `G_UPPER` token in either projection, so the retired
+`workflow:lint` now rejects any legacy `G_*`-style token (`G_MECE`, `G_HARDENING`, …) in either projection, so the retired
 vocabulary cannot creep back. Changelog entries keep their original wording as history.
 
 **v2.1.0 (2026-08-27):** Four rules the ocean-eventbridge-migration run (56 tasks, 58 PRs) proved
