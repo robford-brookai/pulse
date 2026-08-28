@@ -141,6 +141,19 @@ G_APPROVAL comment, never a worktree.
 
 ## 4. Wave 3 — live verification (operator lane)
 
+- [ ] 4.0 Registration commands land state-bearing at their entry state (DNA-1261, discovered
+      in flight): `open_billing_episode` commits non-state-bearing today (the catalog command
+      carries no `to_state`), so an opened episode never reaches `current_state` and the
+      relay's paired first transition rejects as a genesis violation. Add an explicit
+      implied-`to_state` mapping at the wire boundary (`coerce_declaration_fields`), derived
+      from the catalog's adjacency (`INITIAL_STATES`), covering exactly
+      `open_billing_episode → open`; an explicit `to_state` in the body always wins. Registry
+      subjects (`mint_person`) stay non-state-bearing by design; `resolve_referral`'s implied
+      transition is out of scope (its own issue). Tests: an open commits state-bearing at
+      `open` and `current_state` holds it; a body with explicit `to_state` bypasses the map;
+      a subsequent transition to `qualified` validates from `open`.
+      `[model: sonnet | deps: — | lane: repo_change | wave: 3]`
+
 - [ ] 4.1 Live declare-back on dev: run the migrated schema and the relay against the real
       mart (once the mart carries the new verdict types — open question 2); verify (a) a
       billing-eligibility row moves its episode to `qualified`/`not_qualified` in
@@ -152,6 +165,6 @@ G_APPROVAL comment, never a worktree.
       change's Linear parent.
       Verify: a repo-committed verification script exits nonzero on any failed check; its
       output is the receipt.
-      `[model: sonnet | deps: 1.2, 2.3, 3.2, 3.3 | lane: operational_discovery | wave: 3]`
+      `[model: sonnet | deps: 1.2, 2.3, 3.2, 3.3, 4.0 | lane: operational_discovery | wave: 3]`
       Gate: G_APPROVAL comment from Rob on the tracking issue; operator queue, never a
       worktree.
