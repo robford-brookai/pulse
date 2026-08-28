@@ -84,7 +84,7 @@ from pulse_ledger.twenty.mapping import (
     Unmapped,
     interpret,
 )
-from pulse_ledger.validation import IllegalTransitionError
+from pulse_ledger.validation import INITIAL_STATES, IllegalTransitionError
 
 logger = logging.getLogger(__name__)
 
@@ -235,11 +235,34 @@ def _parse_uuid(name: str, value: object) -> uuid.UUID:
         raise UnparseableUuidError(name) from exc
 
 
+def _single_initial_state(subject_type: str) -> str:
+    """The subject's one derived entry state — refuses at import time if the catalog ever grows a
+    second entry point for it, so the implied mapping below can never silently pick one."""
+    (state,) = INITIAL_STATES[subject_type]
+    return state
+
+
+#: Commands whose `to_state` is implied by the command itself rather than carried on the wire —
+#: exactly the registration commands that open a state-machine subject at its entry state
+#: (ledger-record delta, DNA-1261). Explicit and per-command, never a blanket rule over bodies
+#: lacking `to_state`: registry subjects (`mint_person`) have no state machine and stay
+#: non-state-bearing by design, holds/gaps are non-state-bearing on purpose, and
+#: `resolve_referral`'s implied *transition* is a different semantic owned by its own change.
+IMPLIED_TO_STATE_BY_EVENT_TYPE: Mapping[str, str] = {
+    "open_billing_episode": _single_initial_state("billing_episode"),
+}
+
+
 def coerce_declaration_fields(body: Mapping[str, object]) -> dict[str, object]:
     """Turn a decoded JSON body into the types `Declaration` expects.
 
     Unknown fields are an error rather than an omission: a writer that misspells `subject_key`
     should hear about it, not commit an event without one.
+
+    A registration command's implied `to_state` is supplied here, at the wire boundary, so the
+    event commits state-bearing at the subject's entry state (DNA-1261: an `open_billing_episode`
+    without it never reached `current_state`, and the first paired transition rejected as a
+    genesis violation). An explicit `to_state` in the body always wins.
     """
     unknown = tuple(
         sorted(set(body) - _DECLARATION_FIELDS - {"occurred_at", "rule_version", "recorded_at", "event_id"})
@@ -247,6 +270,10 @@ def coerce_declaration_fields(body: Mapping[str, object]) -> dict[str, object]:
     if unknown:
         raise UnknownDeclarationFieldError(unknown)
     coerced = dict(body)
+    if coerced.get("to_state") is None:
+        implied = IMPLIED_TO_STATE_BY_EVENT_TYPE.get(str(coerced.get("event_type", "")))
+        if implied is not None:
+            coerced["to_state"] = implied
     for name in _TIMESTAMP_FIELDS:
         if coerced.get(name) is not None:
             coerced[name] = _parse_timestamp(name, coerced[name])
