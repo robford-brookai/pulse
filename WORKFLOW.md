@@ -217,7 +217,7 @@ ade_workflow:
       actor: human + agent(fable)
       trigger: mid-change discovery — a missing task, a task that needs widening,
                a dependency edge that proved wrong
-      run: PR amending openspec/changes/<id>/tasks.md
+      run: task replan CHANGE=<id>, then a PR amending openspec/changes/<id>/tasks.md
       gate: G_MECE                          # delta-scoped — the amended and added tasks
                                             # only, never a revalidation of the whole file
       behavior: the amendment is a decision, so it is a PR — never a direct push
