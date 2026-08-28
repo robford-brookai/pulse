@@ -25,6 +25,23 @@ the step, and `task workflow:lint` SHALL pass.
 - **WHEN** G_MECE is checked on the delta
 - **THEN** the amendment is rejected back to replan and no work order is emitted for it
 
+### Requirement: The delta G_MECE check is tool-run
+The system SHALL provide `task replan CHANGE=<id>` running the mechanical G_MECE assertions over
+tasks.md (lanes known, deps resolve, serial flags justified, waves monotonic, spec validation)
+and printing the pre-filled follow-up commands on pass. No gate in the replan path SHALL require
+a human comment — G_APPROVAL remains the only comment-gated check, and only on tasks tagged
+destructive or prod-touching.
+
+#### Scenario: Agent validates an amendment without human gate work
+- **GIVEN** an agent has amended tasks.md on a replan branch
+- **WHEN** `task replan CHANGE=<id>` runs and passes
+- **THEN** the output names the PR as the next step, and no human comment is requested anywhere
+
+#### Scenario: A broken amendment fails with the defect named
+- **GIVEN** an amendment adds a task depending on a task id that does not exist
+- **WHEN** `task replan CHANGE=<id>` runs
+- **THEN** it exits nonzero naming the dangling dependency
+
 ### Requirement: Plan amendments carry review
 A tasks.md edit that adds a task, widens a task's scope, or changes a dependency edge SHALL reach
 main by pull request; the `main_access` direct-push exemption SHALL apply only to checkbox state

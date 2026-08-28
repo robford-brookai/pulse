@@ -58,9 +58,30 @@ def flip(content: str, ids: set[str]) -> tuple[str, list[str], list[str]]:
     return "".join(lines), flipped, sorted(ids - known)
 
 
-def _git(*args: str) -> str:
-    result = subprocess.run(["git", *args], capture_output=True, text=True, check=True)  # noqa: S603, S607
+def _git(*args: str, cwd: Path | None = None) -> str:
+    result = subprocess.run(  # noqa: S603
+        ["git", *args],  # noqa: S607
+        capture_output=True,
+        text=True,
+        check=True,
+        cwd=cwd,
+    )
     return result.stdout.strip()
+
+
+def sources_for_commits(shas: list[str], cwd: Path | None = None) -> dict[str, list[str]]:
+    """Task id -> source lines, for explicitly named commits only.
+
+    The coordinator path: it just watched a specific PR merge and passes that SHA, so nothing
+    else in history is consulted — no scan, no scoping question, no cross-change ambiguity.
+    """
+    sources: dict[str, list[str]] = {}
+    for sha in shas:
+        line = _git("log", "-1", "--format=%h%x09%s", sha, cwd=cwd)
+        short, _, subject = line.partition("\t")
+        for task_id in subject_task_ids(subject):
+            sources.setdefault(task_id, []).append(f"{short} {subject}")
+    return sources
 
 
 def merged_ids(tasks_md: Path) -> dict[str, list[str]]:
@@ -80,6 +101,16 @@ def merged_ids(tasks_md: Path) -> dict[str, list[str]]:
     return sources
 
 
+def next_steps(change: str) -> str:
+    """The pre-filled follow-up, so a coordinator agent constructs no command itself."""
+    return (
+        "Next steps (pre-filled):\n"
+        "  task check                                 # main_access condition before pushing\n"
+        f"  task dispatch CHANGE={change}             # the flip may have opened a wave\n"
+        f"  task collect CHANGE={change}              # if that flip completed the wave"
+    )
+
+
 def commit_message(flipped: list[str], sources: dict[str, list[str]]) -> str:
     lines = [f"chore: check off {', '.join(flipped)} — recorded from merged history", ""]
     lines += ["Mechanical state update per main_access: checkbox flips only, derived from:"]
@@ -91,6 +122,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Flip tasks.md checkboxes for merged tasks")
     parser.add_argument("--change", required=True, help="OpenSpec change id")
     parser.add_argument("--commit", action="store_true", help="commit the flip (tasks.md alone)")
+    parser.add_argument(
+        "--commit-sha",
+        action="append",
+        default=[],
+        metavar="SHA",
+        help="record only these merge commits (repeatable) instead of scanning history",
+    )
     args = parser.parse_args()
 
     tasks_md = Path("openspec/changes") / args.change / "tasks.md"
@@ -98,7 +136,7 @@ def main() -> int:
         print(f"Error: {tasks_md} not found", file=sys.stderr)
         return 1
 
-    sources = merged_ids(tasks_md)
+    sources = sources_for_commits(args.commit_sha) if args.commit_sha else merged_ids(tasks_md)
     content = tasks_md.read_text()
     new_content, flipped, unknown = flip(content, set(sources))
     if unknown:
@@ -119,9 +157,10 @@ def main() -> int:
     if args.commit:
         _git("add", str(tasks_md))
         _git("commit", "-m", message, "--", str(tasks_md))
-        print("Committed (tasks.md alone). Run `task check` before pushing, per main_access.")
+        print("Committed (tasks.md alone).")
     else:
         print("Not committed. Suggested message:\n" + message)
+    print(next_steps(args.change))
     return 0
 
 

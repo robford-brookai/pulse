@@ -28,6 +28,26 @@ id carried in the merge's commit subject (the `(X.Y[, DNA-nnn])` convention).
 - **WHEN** `task checkoff CHANGE=<id>` runs
 - **THEN** the tool reports the unmatched id and exits nonzero without writing anything
 
+### Requirement: Check-off accepts explicit commits
+The system SHALL accept one or more explicit commit refs (`--commit <sha>`, `COMMIT_SHA` via the
+task target) and record only those commits' subjects, bypassing the history scan; unknown-id
+refusal applies unchanged.
+
+#### Scenario: Coordinator records the PR it just saw merge
+- **GIVEN** merge commit `abc1234` carries `(3.2, DNA-801)` in its subject
+- **WHEN** `checkoff --change <id> --commit abc1234` runs
+- **THEN** only task 3.2's checkbox flips, regardless of what else history holds
+
+### Requirement: Check-off prints the pre-filled next step
+On flipping any boxes, the system SHALL print the exact follow-up commands with the change id
+filled in (commit-and-push path, then `task dispatch CHANGE=<id>` for the wave that just opened),
+so a coordinator agent needs no command construction.
+
+#### Scenario: Output is copy-runnable
+- **GIVEN** checkoff flips 3.2
+- **WHEN** it reports
+- **THEN** the output contains `task dispatch CHANGE=<id>` with the literal change id
+
 ### Requirement: Check-off commits under main_access conditions
 The checkoff commit SHALL satisfy every `main_access` direct-push condition: `task check` green
 first, the commit touches only tasks.md checkbox state, one focused commit, and a message that

@@ -229,9 +229,9 @@ tasks:
   # Alphabetical, per the listing convention. The pipeline runs dispatch, collect, sync-docs.
 
   checkoff:
-    desc: Flip tasks.md checkboxes for merged tasks, from git history (needs CHANGE; COMMIT=1 to commit)
+    desc: Flip tasks.md checkboxes for merged tasks (needs CHANGE; COMMIT=1 to commit; COMMIT_SHA=<sha> to record one merge)
     cmds:
-      - uv run python scripts/checkoff_tasks.py --change {{.CHANGE}} {{if .COMMIT}}--commit{{end}}
+      - uv run python scripts/checkoff_tasks.py --change {{.CHANGE}} {{if .COMMIT}}--commit{{end}} {{if .COMMIT_SHA}}--commit-sha {{.COMMIT_SHA}}{{end}}
 
   collect:
     desc: Collect HANDOFF.md files from Orca worktrees (needs CHANGE)

@@ -529,6 +529,47 @@ def test_flip_refuses_unknown_ids() -> None:
     assert flipped == []
 
 
+def test_explicit_commits_bypass_the_history_scan(tmp_path: Path) -> None:
+    """--commit <sha>: the coordinator names the merge it just saw, nothing else is consulted."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)  # noqa: S603, S607
+
+    def commit(subject: str) -> str:
+        subprocess.run(  # noqa: S603
+            [  # noqa: S607
+                "git",
+                "-C",
+                str(tmp_path),
+                "-c",
+                "user.email=t@test.invalid",
+                "-c",
+                "user.name=T",
+                "commit",
+                "--allow-empty",
+                "-q",
+                "-m",
+                subject,
+            ],
+            check=True,
+        )
+        return subprocess.run(  # noqa: S603
+            ["git", "-C", str(tmp_path), "rev-parse", "HEAD"],  # noqa: S607
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+
+    wanted = commit("feat: the one Rob merged (1.1, DNA-900)")
+    commit("feat: a different merge (2.3)")
+
+    sources = checkoff.sources_for_commits([wanted], cwd=tmp_path)
+    assert set(sources) == {"1.1"}, "only the named commit's ids may be recorded"
+
+
+def test_checkoff_report_prefills_the_next_command() -> None:
+    report = checkoff.next_steps("my-change")
+    assert "task dispatch CHANGE=my-change" in report, "the follow-up must be copy-runnable"
+
+
 def test_v2_1_replan_is_wired() -> None:
     """v2.1.0 regression: replan exists, execute reaches it, and it flows back through sync."""
     block, _ = workflow.load(ROOT / "WORKFLOW.md")

@@ -68,3 +68,19 @@ its own justification. Default model is `sonnet`, stated explicitly per
       here.
       `[model: sonnet | deps: 5.1 | lane: repo_change | wave: 3]`
       Filed: robford-brookai/repo-ade#6
+
+## 6. Coordinator ergonomics (amendment — review-and-merge is the only human step)
+
+- [x] 6.1 `scripts/checkoff_tasks.py`: accept repeatable `--commit <sha>` to record explicit
+      merge commits, and print pre-filled follow-up commands (`task dispatch CHANGE=<id>`) after
+      any flip. Taskfile passes `COMMIT_SHA`. Tests first.
+      `[model: sonnet | deps: 2.1 | lane: repo_change | wave: 4]`
+- [ ] 6.2 `task replan CHANGE=<id>`: dispatch gains `--validate-only` (mechanical G_MECE checks,
+      no hardening gate, no emission); the target runs it plus `openspec validate` and prints the
+      pre-filled sync/dispatch follow-ups. WORKFLOW.md replan step names the target.
+      `[model: sonnet | deps: 1.1 | lane: repo_change | wave: 4]`
+- [ ] 6.3 CLAUDE.md gains standing orders for the coordinator (the agent on main): checkoff with
+      the merged SHA after each PR merge, replan validation before opening amendment PRs, collect
+      + commit SUMMARY.md at wave end — every command pre-filled with the active change id, which
+      is the sole non-archive entry in `openspec/changes/`.
+      `[model: sonnet | deps: 6.1, 6.2 | lane: repo_change | wave: 5]`
