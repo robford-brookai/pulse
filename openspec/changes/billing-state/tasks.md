@@ -141,7 +141,7 @@ G_APPROVAL comment, never a worktree.
 
 ## 4. Wave 3 — live verification (operator lane)
 
-- [ ] 4.0 Registration commands land state-bearing at their entry state (DNA-1261, discovered
+- [x] 4.0 Registration commands land state-bearing at their entry state (DNA-1261, discovered
       in flight): `open_billing_episode` commits non-state-bearing today (the catalog command
       carries no `to_state`), so an opened episode never reaches `current_state` and the
       relay's paired first transition rejects as a genesis violation. Add an explicit
