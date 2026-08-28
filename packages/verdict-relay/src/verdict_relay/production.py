@@ -86,9 +86,7 @@ class ConflictingProductionVariablesError(RuntimeError):
 
     def __init__(self, first: str, second: str) -> None:
         self.names = (first, second)
-        super().__init__(
-            f"environment variables {first} and {second} are mutually exclusive; set exactly one"
-        )
+        super().__init__(f"environment variables {first} and {second} are mutually exclusive; set exactly one")
 
 
 @dataclass(frozen=True)
@@ -139,9 +137,7 @@ def resolve_production_config(env: Mapping[str, str] | None = None) -> Productio
         values[name] = value
 
     if SNOWFLAKE_PASSWORD_ENV_VAR in values and source.get(SNOWFLAKE_PRIVATE_KEY_PATH_ENV_VAR) is not None:
-        raise ConflictingProductionVariablesError(
-            SNOWFLAKE_PASSWORD_ENV_VAR, SNOWFLAKE_PRIVATE_KEY_PATH_ENV_VAR
-        )
+        raise ConflictingProductionVariablesError(SNOWFLAKE_PASSWORD_ENV_VAR, SNOWFLAKE_PRIVATE_KEY_PATH_ENV_VAR)
 
     return ProductionConfig(
         pulse_core_base_url=values[PULSE_CORE_BASE_URL_ENV_VAR],

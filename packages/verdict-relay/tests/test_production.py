@@ -28,7 +28,7 @@ from verdict_relay.production import (
     MissingProductionVariableError,
     ProductionConfig,
     SnowflakeRowSource,
-    _snowflake_connect,
+    _snowflake_connect,  # pyright: ignore[reportPrivateUsage]  # exercising the auth-family switch directly, per module docstring
     build_production_dependencies,
     resolve_production_config,
 )
