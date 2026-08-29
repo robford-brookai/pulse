@@ -162,9 +162,10 @@ G_APPROVAL comment, never a worktree.
       all-replays with zero new events (the replay-safety demo); (d) a row against a
       `reported` episode counts transition-rejected without retry. Receipt (subject keys,
       states, counts, wall-clock timings — no payload values, no payer identifiers) to this
-      change's Linear parent.
+      task's GitHub tracking issue.
       Verify: a repo-committed verification script exits nonzero on any failed check; its
       output is the receipt.
       `[model: sonnet | deps: 1.2, 2.3, 3.2, 3.3, 4.0 | lane: operational_discovery | wave: 3]`
-      Gate: G_APPROVAL comment from Rob on the tracking issue; operator queue, never a
-      worktree.
+      Gate: runbook merged by ordinary PR — the developer's PR review is the approval, no
+      gate object; execution is an attended session after that PR merges, never an
+      unattended Orca worktree.
