@@ -154,7 +154,7 @@ G_APPROVAL comment, never a worktree.
       a subsequent transition to `qualified` validates from `open`.
       `[model: sonnet | deps: — | lane: repo_change | wave: 3]`
 
-- [ ] 4.1 Live declare-back on dev: run the migrated schema and the relay against the real
+- [x] 4.1 Live declare-back on dev: run the migrated schema and the relay against the real
       mart (once the mart carries the new verdict types — open question 2); verify (a) a
       billing-eligibility row moves its episode to `qualified`/`not_qualified` in
       `current_state` and the transition event lands on the `patient-state` bus; (b) a
