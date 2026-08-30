@@ -25,8 +25,8 @@ guaranteed to carry every case this task needs to prove. Four checks, in order:
     `(patient, payer)` pair. After `run_relay`, `state_of_record` for the coverage subject is
     `verified_active` with no separate genesis event — the mint-on-first-declare rule
     (`docs/runbooks/billing-state.md` #Pairing semantics).
-3.  An immediate second `run_relay` against the same reader/declarer (same persisted cursor and
-    watermarks) declares and transitions nothing — the replay-safety property.
+3.  An immediate second `run_relay` against the same persisted cursor and watermarks declares
+    and transitions nothing — the replay-safety property.
 4.  The check-1 episode is driven from `qualified` to `reported` directly through
     `PulseCoreClient.submit_command`, then one more positive `billing_eligibility` row is
     declared against it. The verdict itself still commits (declared, since it is a fresh row),
@@ -71,7 +71,7 @@ import json
 import os
 import sys
 import uuid
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import UTC, date, datetime
 from typing import Any
 
@@ -205,7 +205,7 @@ def step_billing_declare_back(
     conn: psycopg.Connection,
     client: PulseCoreClient,
     reader: MartReader,
-    declarer: Declarer,
+    make_declarer: Callable[[], Declarer],
     config: ProductionConfig,
 ) -> str:
     """1/4 (task 4.1 check a): a positive billing_eligibility verdict qualifies its episode."""
@@ -232,7 +232,7 @@ def step_billing_declare_back(
         computed_at=now,
     )
 
-    receipt = run_relay(reader, declarer)
+    receipt = run_relay(reader, make_declarer())
     # `transitioned` is the closest available proxy in this repo for "the transition landed on
     # the patient-state bus" — there is no separate bus-read surface here, so this asserts the
     # paired `declare_transition` committed, not the broadcast itself (module docstring, check 1).
@@ -256,7 +256,7 @@ def step_billing_declare_back(
 def step_coverage_mint_and_transition(
     conn: psycopg.Connection,
     reader: MartReader,
-    declarer: Declarer,
+    make_declarer: Callable[[], Declarer],
     config: ProductionConfig,
 ) -> str:
     """2/4 (task 4.1 check b): a positive coverage_eligibility verdict mints and transitions a
@@ -279,7 +279,7 @@ def step_coverage_mint_and_transition(
         computed_at=now,
     )
 
-    receipt = run_relay(reader, declarer)
+    receipt = run_relay(reader, make_declarer())
     _check(receipt.transitioned == 1, f"expected exactly one transitioned in this batch, got {receipt.transitioned}")
 
     state = state_of_record(conn, COVERAGE_SUBJECT_TYPE, subject_id)
@@ -292,9 +292,9 @@ def step_coverage_mint_and_transition(
     return subject_id
 
 
-def step_immediate_rerun_is_noop(reader: MartReader, declarer: Declarer) -> None:
+def step_immediate_rerun_is_noop(reader: MartReader, make_declarer: Callable[[], Declarer]) -> None:
     """3/4 (task 4.1 check c): an immediate rerun against the same cursor state changes nothing."""
-    receipt = run_relay(reader, declarer)
+    receipt = run_relay(reader, make_declarer())
     _check(receipt.declared == 0, f"expected zero newly-declared rows on the immediate rerun, got {receipt.declared}")
     _check(receipt.transitioned == 0, f"expected zero transitions on the immediate rerun, got {receipt.transitioned}")
     _print_receipt(
@@ -312,7 +312,7 @@ def step_reported_transition_rejected(
     conn: psycopg.Connection,
     client: PulseCoreClient,
     reader: MartReader,
-    declarer: Declarer,
+    make_declarer: Callable[[], Declarer],
     config: ProductionConfig,
     billing_subject_key: str,
 ) -> None:
@@ -350,7 +350,7 @@ def step_reported_transition_rejected(
         computed_at=now,
     )
 
-    receipt = run_relay(reader, declarer)
+    receipt = run_relay(reader, make_declarer())
     _check(
         receipt.transition_rejected == 1,
         f"expected exactly one transition_rejected, got {receipt.transition_rejected}",
@@ -392,26 +392,33 @@ def main(argv: list[str] | None = None, env: Mapping[str, str] | None = None) ->
 
     row_source, cursor_store, client = build_production_dependencies(config)
     reader = MartReader(row_source, cursor_store)
-    declarer = Declarer(
-        client,
-        subject_type_by_verdict=SUBJECT_TYPE_BY_VERDICT,
-        transition_by_outcome=TRANSITION_BY_OUTCOME,
-        watermarks=reader.watermarks,
-    )
+
+    def make_declarer() -> Declarer:
+        # One Declarer per `run_relay` pass, exactly as production wires it (`schedules.cli`
+        # builds one per process, and a poll pass is one process): `DeclarerCounts` never
+        # resets, so a shared instance would make every receipt after the first cumulative —
+        # each step here asserts on its own pass's counts. Watermarks re-seed from the durable
+        # cursor each pass, so replay safety is unaffected.
+        return Declarer(
+            client,
+            subject_type_by_verdict=SUBJECT_TYPE_BY_VERDICT,
+            transition_by_outcome=TRANSITION_BY_OUTCOME,
+            watermarks=reader.watermarks,
+        )
 
     try:
         with psycopg.connect(args.database_url, autocommit=True) as conn:
             print("\n[1/4] a positive billing_eligibility verdict qualifies a fresh episode")
-            billing_subject_key = step_billing_declare_back(conn, client, reader, declarer, config)
+            billing_subject_key = step_billing_declare_back(conn, client, reader, make_declarer, config)
 
             print("\n[2/4] a positive coverage_eligibility verdict mints and transitions an unseen subject")
-            step_coverage_mint_and_transition(conn, reader, declarer, config)
+            step_coverage_mint_and_transition(conn, reader, make_declarer, config)
 
             print("\n[3/4] an immediate rerun changes nothing")
-            step_immediate_rerun_is_noop(reader, declarer)
+            step_immediate_rerun_is_noop(reader, make_declarer)
 
             print("\n[4/4] a verdict against a reported episode counts transition_rejected, not the verdict")
-            step_reported_transition_rejected(conn, client, reader, declarer, config, billing_subject_key)
+            step_reported_transition_rejected(conn, client, reader, make_declarer, config, billing_subject_key)
     except DemoAssertionError as exc:
         print(f"\nFAILED: {exc}", file=sys.stderr)
         return 1
