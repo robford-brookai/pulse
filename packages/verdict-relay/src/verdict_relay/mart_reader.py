@@ -1,10 +1,9 @@
 """Verdict mart reader — the relay's input boundary (design decisions 2 and 3).
 
-Three contracts live here:
+Built on the kit's inbound read contract (`pulse_core.connector`): `RowSource`, `CursorStore`,
+the fixture source, and the durable cursor through `LedgerCursorStore`. What stays here is this
+relay's own business:
 
-- **`RowSource`** abstracts where mart rows come from. Every test drives it with
-  `FixtureRowSource`; the Snowflake adapter is a thin, config-driven implementation added when the
-  warehouse side lands. The reader never knows which one it holds.
 - **The row contract** is pinned: one row per (subject, verdict_type, run), the eight columns in
   `CONTRACT_COLUMNS`, timestamps ISO-8601 and timezone-aware. A row that violates it fails the run
   with `MartContractError` naming the row, before any row of its page is yielded — drift in the
@@ -26,10 +25,23 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol, cast
+from typing import cast
 
-import httpx
-from pulse_core.cursor import cursor_path, validate_cursor
+from pulse_core.connector import DEFAULT_PAGE_SIZE, CursorStore, LedgerCursorStore, RowSource
+from pulse_core.connector import FixtureRowSource as _KitFixtureRowSource
+from pulse_core.cursor import validate_cursor
+
+__all__ = [
+    "CONTRACT_COLUMNS",
+    "DEFAULT_PAGE_SIZE",
+    "CursorStore",
+    "FixtureRowSource",
+    "LedgerCursorStore",
+    "MartContractError",
+    "MartReader",
+    "MartRow",
+    "RowSource",
+]
 
 #: The pinned mart row contract (design Context; `docs/contracts/consumes.md` once 5.2 lands).
 CONTRACT_COLUMNS: tuple[str, ...] = (
@@ -45,8 +57,6 @@ CONTRACT_COLUMNS: tuple[str, ...] = (
 
 #: Columns that must parse as timezone-aware ISO-8601 timestamps.
 _TIMESTAMP_COLUMNS = ("as_of", "computed_at")
-
-DEFAULT_PAGE_SIZE = 500
 
 #: Cursor keys — one JSON document carries both resume points (design decision 3).
 _CURSOR_PAGE_KEY = "computed_at"
@@ -80,117 +90,12 @@ class MartRow:
     computed_at: datetime
 
 
-class RowSource(Protocol):
-    """Where mart rows come from — fixture-backed in every test, Snowflake in production.
-
-    `fetch` returns raw rows with `computed_at` strictly after `after` (all rows when `after` is
-    `None`), ascending by `computed_at`, at most `limit` rows — except that a page never splits a
-    `computed_at` tie: rows sharing the last included `computed_at` are all included, so paging on
-    a strict `>` boundary can never skip a tied row. An empty page means the source is exhausted.
-    """
-
-    def fetch(self, *, after: str | None, limit: int) -> Sequence[Mapping[str, object]]: ...
-
-
-class CursorStore(Protocol):
-    """Where the reader's durable cursor lives.
-
-    `load` returns the persisted cursor, or `None` for a writer that has never checkpointed one
-    (a first run, not an error). `save` replaces it whole.
-    """
-
-    def load(self) -> Mapping[str, object] | None: ...
-
-    def save(self, cursor: Mapping[str, object]) -> None: ...
-
-
-def _parse_computed_at(row: Mapping[str, object]) -> datetime | None:
-    value = row.get("computed_at")
-    if not isinstance(value, str):
-        return None
-    try:
-        parsed = datetime.fromisoformat(value)
-    except ValueError:
-        return None
-    return parsed if parsed.tzinfo is not None else None
-
-
-class FixtureRowSource:
-    """A `RowSource` over recorded rows — the test-side implementation (design decision 2).
-
-    Rows whose `computed_at` does not parse are always included in the next page rather than
-    filtered: hiding them would hide exactly the contract violation the reader must fail on.
-    """
+class FixtureRowSource(_KitFixtureRowSource):
+    """The kit's fixture source pinned to this reader's cursor column, `computed_at` — the
+    test-side implementation (design decision 2)."""
 
     def __init__(self, rows: Sequence[Mapping[str, object]]) -> None:
-        self._rows = list(rows)
-
-    def fetch(self, *, after: str | None, limit: int) -> Sequence[Mapping[str, object]]:
-        after_instant = datetime.fromisoformat(after) if after is not None else None
-        eligible: list[tuple[datetime | None, Mapping[str, object]]] = []
-        for row in self._rows:
-            instant = _parse_computed_at(row)
-            if instant is None:
-                eligible.append((None, row))
-            elif after_instant is None or instant > after_instant:
-                eligible.append((instant, row))
-        eligible.sort(key=lambda pair: (pair[0] is not None, pair[0] or datetime.min))
-
-        page: list[Mapping[str, object]] = []
-        for instant, row in eligible:
-            if len(page) >= limit and instant != eligible[len(page) - 1][0]:
-                break
-            page.append(row)
-        return page
-
-
-class LedgerCursorStore:
-    """The production `CursorStore`: the ledger's `GET/PUT /writers/{writer_id}/cursor`.
-
-    `transport` is the seam tests use (`httpx.MockTransport`) to fake the boundary without a live
-    network; production passes none. Auth per D15: the token arrives from configuration (value from
-    the environment), and the ledger scopes the cursor to this credential's own writer id.
-    """
-
-    def __init__(
-        self,
-        base_url: str,
-        *,
-        writer_id: str,
-        token: str,
-        transport: httpx.BaseTransport | None = None,
-        timeout: float = 10.0,
-    ) -> None:
-        self._path = cursor_path(writer_id)
-        self._http = httpx.Client(
-            base_url=base_url,
-            transport=transport,
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=timeout,
-        )
-
-    def __enter__(self) -> LedgerCursorStore:
-        return self
-
-    def __exit__(self, *exc_info: object) -> None:
-        self.close()
-
-    def close(self) -> None:
-        self._http.close()
-
-    def load(self) -> Mapping[str, object] | None:
-        response = self._http.get(self._path)
-        if response.status_code == 404:
-            return None
-        response.raise_for_status()
-        body = cast("Mapping[str, object]", response.json())
-        cursor = body.get("cursor")
-        return validate_cursor(cursor) if cursor is not None else None
-
-    def save(self, cursor: Mapping[str, object]) -> None:
-        canonical = validate_cursor(cursor)
-        response = self._http.put(self._path, json=canonical)
-        response.raise_for_status()
+        super().__init__(rows, cursor_column="computed_at")
 
 
 def _name_row(index: int, row: Mapping[str, object]) -> str:
