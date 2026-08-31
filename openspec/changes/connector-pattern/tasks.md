@@ -29,7 +29,7 @@ per WORKFLOW v2.2.0 `live_execution` — never a worktree.
       Opus: this is a business-logic ownership call surfaced to a human — the task's output is
       a decision record, and a wrong registration misattributes every future verdict.
 
-- [ ] 1.2 Rule-port mapping document: for each dbt model and test under
+- [ ] 1.2 [DNA-1271] Rule-port mapping document: for each dbt model and test under
       `data-platform/management/models/billing/verdict/` and `tests/billing/`, name its pulse
       counterpart (module, function, unit test) in `packages/billing/docs/rule-port-map.md`.
       Any rule needing warehouse-only facts is flagged `stays-mart-side` with the missing fact
@@ -42,7 +42,7 @@ per WORKFLOW v2.2.0 `live_execution` — never a worktree.
 
 ## 2. Wave 1 — the connector kit, extracted
 
-- [ ] 2.1 Extract the inbound read contract into `pulse_core.connector`: `RowSource` protocol,
+- [x] 2.1 [DNA-1272] Extract the inbound read contract into `pulse_core.connector`: `RowSource` protocol,
       per-row validation (error naming position and column, never a value), durable cursor via
       `pulse_core.cursor` scoped to a writer id. Refactor `consent_ingress.row_source` and
       `verdict_relay.mart_reader` onto it, deleting their private copies.
@@ -51,7 +51,7 @@ per WORKFLOW v2.2.0 `live_execution` — never a worktree.
       durable cursor"); `task check` green.
       `[model: sonnet | deps: — | lane: repo_change | wave: 1]`
 
-- [ ] 2.2 Extract the declare pipeline into `pulse_core.connector`: D16 key derivation,
+- [ ] 2.2 [DNA-1273] Extract the declare pipeline into `pulse_core.connector`: D16 key derivation,
       response classification, retry-transient-only, counted receipt. Refactor
       `verdict_relay.declarer`/`run` onto it, preserving the seven-count receipt line
       byte-identically.
@@ -59,14 +59,14 @@ per WORKFLOW v2.2.0 `live_execution` — never a worktree.
       (spec: "A rerun declares nothing twice"); `task check` green.
       `[model: sonnet | deps: 2.1 | lane: repo_change | wave: 1]`
 
-- [ ] 2.3 Extract the consume loop into `pulse_core.connector`: rule+queue convention,
+- [ ] 2.3 [DNA-1274] Extract the consume loop into `pulse_core.connector`: rule+queue convention,
       event-id dedupe, delete-after-success, monotonic watermark. Refactor twenty-projection's
       consumer onto it.
       Tests: projection suite passes unchanged; kit unit test for (spec: "A redelivered event
       applies once"); `task check` green.
       `[model: sonnet | deps: 2.1 | lane: repo_change | wave: 1]`
 
-- [ ] 2.4 Credential-posture gate: a scaffold-style test asserting every package under the
+- [ ] 2.4 [DNA-1275] Credential-posture gate: a scaffold-style test asserting every package under the
       connector convention holds exactly one writer credential name, no ledger DSN, and no
       credential value reachable by any log call (spec: "One connector, one credential, no
       ledger internals"). Revise `openspec/specs/connectors/pulse-standard-connector-spec.md`
@@ -83,21 +83,21 @@ per WORKFLOW v2.2.0 `live_execution` — never a worktree.
 
 ## 3. Wave 2 — the billing engine
 
-- [ ] 3.1 `packages/billing` scaffold on the kit: package layout, `billing_engine` Postgres
+- [ ] 3.1 [DNA-1276] `packages/billing` scaffold on the kit: package layout, `billing_engine` Postgres
       schema migration (`subject_facts`, `evaluations` per design.md decision 5) under its own
       role/credential, and the shadow-ledger gate — a test pinning that no state-of-record
       read targets this schema.
       Tests: migration up/down clean; shadow-ledger gate red on a planted read, green on tree.
       `[model: sonnet | deps: 2.4 | lane: repo_change | wave: 2]`
 
-- [ ] 3.2 Fact folding: the engine's consume loop (kit) subscribes to `patient-state` and
+- [ ] 3.2 [DNA-1277] Fact folding: the engine's consume loop (kit) subscribes to `patient-state` and
       consent events, folds per-subject fact snapshots into `subject_facts` idempotently
       (event-id high-water per subject).
       Tests: redelivery folds once; out-of-order events fold by effective time; fixture-driven,
       `--disable-socket`.
       `[model: sonnet | deps: 3.1 | lane: repo_change | wave: 2]`
 
-- [ ] 3.3 Rule port per the 1.2 map: one pure module per verdict type with
+- [ ] 3.3 [DNA-1278] Rule port per the 1.2 map: one pure module per verdict type with
       `RULE_VERSION = "pulse-<type>-v1"`, every dbt test mapped to a named unit test
       (spec: "Rules are ported with lineage, not re-imagined"). `stays-mart-side` rules
       excluded and documented.
@@ -107,7 +107,7 @@ per WORKFLOW v2.2.0 `live_execution` — never a worktree.
       Opus: the port is the correctness core of the whole change — a mistranslated predicate
       writes wrong billing state continuously.
 
-- [ ] 3.4 Evaluation → declare: on fact-snapshot change, evaluate affected verdict types and
+- [ ] 3.4 [DNA-1279] Evaluation → declare: on fact-snapshot change, evaluate affected verdict types and
       declare verdict + paired transition through the kit pipeline under the `billing-engine`
       credential; record in `evaluations`; receipts extend with `evaluated=N`
       (specs: "Evaluation is event-driven, never batch-gated", "The engine declares
@@ -117,7 +117,7 @@ per WORKFLOW v2.2.0 `live_execution` — never a worktree.
       payload/log/receipt (tripwire test).
       `[model: sonnet | deps: 3.2, 3.3 | lane: repo_change | wave: 2]`
 
-- [ ] 3.5 Engine deploy artifacts: Duplo service JSON + queue/DLQ/rule provisioning script +
+- [ ] 3.5 [DNA-1280] Engine deploy artifacts: Duplo service JSON + queue/DLQ/rule provisioning script +
       runbook `docs/runbooks/billing-engine.md` (start/stop, receipt reading, rebuild-from-bus
       procedure). Deploy artifacts never reachable from `task check`.
       Tests: reachability gate (deploy targets out of `check`, existing pattern);
@@ -126,7 +126,7 @@ per WORKFLOW v2.2.0 `live_execution` — never a worktree.
 
 ## 4. Wave 3 — reconciliation window
 
-- [ ] 4.1 `verdict-reconcile` schedules entry: per-(subject, verdict_type) comparison of
+- [ ] 4.1 [DNA-1281] `verdict-reconcile` schedules entry: per-(subject, verdict_type) comparison of
       `evaluations` vs mart rows over matching fact windows; diff report with counts and
       subject keys only; empty-or-explained state machine for entries
       (specs: verdict-reconciliation, all three).
@@ -151,7 +151,7 @@ per WORKFLOW v2.2.0 `live_execution` — never a worktree.
       verdicts continue; rollback rehearsed (re-enable poll from config).
       `[model: sonnet | deps: 4.2 | lane: destructive_ops | wave: 4]`
 
-- [ ] 5.2 Docs close-out via `HANDOFF.md`: ADR for the write-path supersession,
+- [ ] 5.2 [DNA-1282] Docs close-out via `HANDOFF.md`: ADR for the write-path supersession,
       `consumes.md` mart row demoted, `publishes.md` billing-engine producer row,
       fonzie dependency-spec gap 1 note updated.
       Tests: `mkdocs build -s`; contract-doc gates; `task check` green.
