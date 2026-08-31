@@ -33,6 +33,9 @@ from pulse_core.connector.rows import (
 )
 
 __all__ = [
+    "DEFAULT_BASE_DELAY_SECONDS",
+    "DEFAULT_MAX_ATTEMPTS",
+    "DEFAULT_MAX_DELAY_SECONDS",
     "DEFAULT_PAGE_SIZE",
     "ConsumeReport",
     "ConsumerHandler",
@@ -52,5 +55,6 @@ __all__ = [
     "parse_instant",
     "required_string",
     "required_timestamp",
+    "submit_with_retry",
     "validate_page",
 ]
