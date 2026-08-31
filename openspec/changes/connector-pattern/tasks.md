@@ -42,7 +42,7 @@ per WORKFLOW v2.2.0 `live_execution` — never a worktree.
 
 ## 2. Wave 1 — the connector kit, extracted
 
-- [ ] 2.1 [DNA-1272] Extract the inbound read contract into `pulse_core.connector`: `RowSource` protocol,
+- [x] 2.1 [DNA-1272] Extract the inbound read contract into `pulse_core.connector`: `RowSource` protocol,
       per-row validation (error naming position and column, never a value), durable cursor via
       `pulse_core.cursor` scoped to a writer id. Refactor `consent_ingress.row_source` and
       `verdict_relay.mart_reader` onto it, deleting their private copies.
