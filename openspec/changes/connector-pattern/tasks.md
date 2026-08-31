@@ -139,7 +139,7 @@ per WORKFLOW v2.2.0 `live_execution` — never a worktree.
       sweep receipt on the issue. Window runs one full billing month.
       Tests (runbook assertions): engine declares on a live consent event without a scheduled
       run; sweep receipt posts; both writers' receipts attributable.
-      `[model: sonnet | deps: 3.5, 4.1 | lane: live_execution | wave: 3]`
+      `[model: sonnet | deps: 3.5, 4.1 | lane: operational_discovery | wave: 3]`
 
 ## 5. Wave 4 — cutover (gated on the 4.2 window closing empty-or-explained)
 
@@ -149,7 +149,7 @@ per WORKFLOW v2.2.0 `live_execution` — never a worktree.
       "After retirement, the write path has no warehouse dependency").
       Tests (runbook assertions): no Snowflake credential on the write path; engine-only
       verdicts continue; rollback rehearsed (re-enable poll from config).
-      `[model: sonnet | deps: 4.2 | lane: live_execution | wave: 4]`
+      `[model: sonnet | deps: 4.2 | lane: destructive_ops | wave: 4]`
 
 - [ ] 5.2 Docs close-out via `HANDOFF.md`: ADR for the write-path supersession,
       `consumes.md` mart row demoted, `publishes.md` billing-engine producer row,
