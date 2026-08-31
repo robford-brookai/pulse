@@ -1,6 +1,6 @@
 """The consumer loop: the projection's queue onto the apply core (task 2.3).
 
-`pulse_core.client.consume` owns the queue mechanics — event-id dedupe, delete-after-success,
+`pulse_core.connector.consume` owns the queue mechanics — event-id dedupe, delete-after-success,
 malformed-body drop, error backoff — and this module wires it to `handle_event`: a handler
 that filters to board-relevant event subjects (a non-board subject is a logged skip, so its
 message deletes and never blocks the queue) and otherwise applies with the task-2.2 posture
@@ -29,7 +29,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from pulse_core.client import ConsumerHandler, consume
+from pulse_core.connector import ConsumerHandler, consume
 
 from twenty_projection.apply import V1_BOARD, BoardTarget, ProjectionRestClient
 from twenty_projection.handling import ProjectionMetrics, handle_event
