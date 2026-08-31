@@ -120,7 +120,7 @@ services:
     image: python:3.13-slim
     command: >
       bash -c "
-        pip install --quiet /pulse-core /ocean-broker /pulse-ledger &&
+        pip install --quiet /pulse-core /ocean-broker /twenty-projection /pulse-ledger &&
         python -m pulse_ledger.relay_worker
       "
     environment:
@@ -131,6 +131,9 @@ services:
     volumes:
       - ../../pulse-core:/pulse-core:ro
       - ../../pulse-ledger:/pulse-ledger:ro
+      # pulse-ledger depends on the workspace twenty-projection (the heal-back leg), which pip
+      # can only satisfy from a mounted path — it is not on PyPI.
+      - ../../twenty-projection:/twenty-projection:ro
       - ../libs/ocean-broker:/ocean-broker:ro
     depends_on:
       ledger-migrate:
