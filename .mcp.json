@@ -5,6 +5,12 @@
       "args": [
         "mcp"
       ]
+    },
+    "twenty": {
+      "url": "https://twenty-dev.cloud.brook.ai/mcp",
+      "headers": {
+        "Authorization": "Bearer ${TWENTY_MCP_TOKEN}"
+      }
     }
   }
 }
