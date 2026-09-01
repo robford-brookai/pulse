@@ -51,7 +51,7 @@ per WORKFLOW v2.2.0 `live_execution` — never a worktree.
       durable cursor"); `task check` green.
       `[model: sonnet | deps: — | lane: repo_change | wave: 1]`
 
-- [ ] 2.2 [DNA-1273] Extract the declare pipeline into `pulse_core.connector`: D16 key derivation,
+- [x] 2.2 [DNA-1273] Extract the declare pipeline into `pulse_core.connector`: D16 key derivation,
       response classification, retry-transient-only, counted receipt. Refactor
       `verdict_relay.declarer`/`run` onto it, preserving the seven-count receipt line
       byte-identically.
@@ -59,7 +59,7 @@ per WORKFLOW v2.2.0 `live_execution` — never a worktree.
       (spec: "A rerun declares nothing twice"); `task check` green.
       `[model: sonnet | deps: 2.1 | lane: repo_change | wave: 1]`
 
-- [ ] 2.3 [DNA-1274] Extract the consume loop into `pulse_core.connector`: rule+queue convention,
+- [x] 2.3 [DNA-1274] Extract the consume loop into `pulse_core.connector`: rule+queue convention,
       event-id dedupe, delete-after-success, monotonic watermark. Refactor twenty-projection's
       consumer onto it.
       Tests: projection suite passes unchanged; kit unit test for (spec: "A redelivered event
