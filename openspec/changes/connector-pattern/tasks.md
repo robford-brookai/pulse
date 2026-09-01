@@ -20,7 +20,7 @@ per WORKFLOW v2.2.0 `live_execution` — never a worktree.
 
 ## 1. Wave 0 — decisions and mapping
 
-- [ ] 1.1 Resolve cpt-om ownership (design.md decision 8): confirm with Rob whether the dbt
+- [x] 1.1 Resolve cpt-om ownership (design.md decision 8): confirm with Rob whether the dbt
       verdict models encode the cpt-om revenue model's qualification logic. Amend
       `docs/contracts/producer-registry.md` accordingly (engine row added; cpt-om row updated
       or confirmed) and record the answer in `HANDOFF.md` for the doc-updater.
