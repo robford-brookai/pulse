@@ -28,6 +28,7 @@ from datetime import datetime
 from typing import cast
 
 import httpx
+from pulse_core.connector import is_watermark_stale
 from pulse_core.twenty_model import encode_option_value
 
 logger = logging.getLogger(__name__)
@@ -255,14 +256,16 @@ def apply_event(
     record_ref = f"{board.object_name}:{record_id}"
 
     watermark = _watermark_of(record, board)
-    if watermark is not None and event.seq <= watermark:
+    if is_watermark_stale(event.seq, watermark):
+        # is_watermark_stale is only true for a non-None watermark.
+        stale_watermark = cast("int", watermark)
         logger.info(
             "projection no-op: event %s for subject %s program %s seq %s is at or below watermark %s on %s",
             event.event_id,
             event.subject_key,
             event.program,
             event.seq,
-            watermark,
+            stale_watermark,
             record_ref,
         )
         return SkippedStale(
@@ -270,7 +273,7 @@ def apply_event(
             subject_key=event.subject_key,
             program=event.program,
             seq=event.seq,
-            watermark=watermark,
+            watermark=stale_watermark,
         )
 
     client.patch_record(

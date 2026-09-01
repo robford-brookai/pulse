@@ -11,9 +11,11 @@ distinctly (design decision 4):
 - **replayed** → an idempotent hit: counted, never re-declared, watermark advances the same way.
 - **rejected** → counted, logged with the ledger's reason and catalog version, never retried.
 - **transient** → retried with jittered exponential backoff up to `DECLARE_MAX_ATTEMPTS`, after
-  which `TransientExhaustedError` fails the run naming the row. Retry policy lives *here*, keyed
-  off classification only — the client is constructed with `max_attempts=1`
-  (`service_client`), so nothing retries twice.
+  which the run fails naming the row. The retry loop itself — attempt budget, backoff, and the
+  three-count settle it retries toward — is the kit's `pulse_core.connector.declare`
+  (connector-kit spec, task 2.2); retry policy lives above the client either way, keyed off
+  classification only — the client is constructed with `max_attempts=1` (`service_client`), so
+  nothing retries twice.
 
 Two structural rules the declarer owns:
 
@@ -52,8 +54,8 @@ from __future__ import annotations
 import logging
 import random
 import time
-from collections.abc import Callable, Mapping
-from dataclasses import dataclass, replace
+from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from os import environ
@@ -61,6 +63,8 @@ from os import environ
 import httpx
 import pydantic
 from pulse_core.client import CommandResponse, PulseCoreClient, ResponseClassification
+from pulse_core.connector.declare import DeclareCounts, Jitter, Sleeper, submit_with_retry
+from pulse_core.connector.declare import TransientExhaustedError as _KitTransientExhaustedError
 from pulse_core.generated import DeclareTransitionCommand, DeclareVerdictCommand
 
 logger = logging.getLogger("verdict_relay.declarer")
@@ -71,12 +75,6 @@ DECLARE_MAX_ATTEMPTS = 5
 
 DEFAULT_BASE_DELAY_SECONDS = 0.5
 DEFAULT_MAX_DELAY_SECONDS = 30.0
-
-Sleeper = Callable[[float], None]
-
-#: Returns a jitter factor in [0, 1]; the backoff delay is scaled by it. Injectable so tests pin
-#: the schedule.
-Jitter = Callable[[], float]
 
 
 class RowDisposition(str, Enum):
@@ -90,7 +88,13 @@ class RowDisposition(str, Enum):
 
 @dataclass(frozen=True)
 class DeclarerCounts:
-    """Running tally of dispositions; `failed` is the run's to count, since a failure raises."""
+    """Running tally of dispositions; `failed` is the run's to count, since a failure raises.
+
+    `declared`/`replayed`/`rejected` are the kit's own `DeclareCounts` three-count core (committed
+    renamed to declared, this relay's own term); `skipped_stale`, `transitioned`, and
+    `transition_rejected` are dispositions this relay adds on top — the kit's receipt is not the
+    whole of this one (connector-kit spec: a connector's own receipt may carry more).
+    """
 
     declared: int = 0
     replayed: int = 0
@@ -98,6 +102,24 @@ class DeclarerCounts:
     rejected: int = 0
     transitioned: int = 0
     transition_rejected: int = 0
+
+    @classmethod
+    def from_base(
+        cls,
+        base: DeclareCounts,
+        *,
+        skipped_stale: int,
+        transitioned: int,
+        transition_rejected: int,
+    ) -> DeclarerCounts:
+        return cls(
+            declared=base.committed,
+            replayed=base.replayed,
+            rejected=base.rejected,
+            skipped_stale=skipped_stale,
+            transitioned=transitioned,
+            transition_rejected=transition_rejected,
+        )
 
 
 class DeclarerError(RuntimeError):
@@ -113,7 +135,13 @@ class RowValidationError(DeclarerError):
 
 
 class TransientExhaustedError(DeclarerError):
-    """Every attempt classified transient; the run fails naming the row."""
+    """Every attempt classified transient; the run fails naming the row.
+
+    Wraps the kit's own `pulse_core.connector.declare.TransientExhaustedError` (raised by
+    `submit_with_retry`) rather than replacing it: this subclass exists so the exception stays a
+    `DeclarerError` — the base `run.py` catches — while carrying the same row-named message the
+    relay always raised.
+    """
 
     def __init__(self, row_ref: str, attempts: int, detail: str) -> None:
         self.row_ref = row_ref
@@ -207,11 +235,19 @@ class Declarer:
         self._max_delay = max_delay_seconds
         self._sleep = sleep
         self._jitter = jitter
-        self._counts = DeclarerCounts()
+        self._base_counts = DeclareCounts()
+        self._skipped_stale = 0
+        self._transitioned = 0
+        self._transition_rejected = 0
 
     @property
     def counts(self) -> DeclarerCounts:
-        return self._counts
+        return DeclarerCounts.from_base(
+            self._base_counts,
+            skipped_stale=self._skipped_stale,
+            transitioned=self._transitioned,
+            transition_rejected=self._transition_rejected,
+        )
 
     @property
     def watermarks(self) -> dict[str, str]:
@@ -230,7 +266,7 @@ class Declarer:
 
         watermark = self._watermarks.get(command.subject_key)
         if watermark is not None and as_of < datetime.fromisoformat(watermark):
-            self._counts = replace(self._counts, skipped_stale=self._counts.skipped_stale + 1)
+            self._skipped_stale += 1
             logger.info("skipped stale row %s behind watermark %s", row_ref, watermark)
             return RowDisposition.SKIPPED_STALE
 
@@ -274,21 +310,22 @@ class Declarer:
         row_ref: str,
     ) -> CommandResponse:
         # A pydantic KeyError above guarantees rule_version/as_of exist; `effective_at=as_of`
-        # doubles as the D16 logical time, so the same row always derives the same key.
-        response: CommandResponse | None = None
-        for attempt in range(1, self._max_attempts + 1):
-            response = self._client.submit_command(command, effective_at=as_of)
-            if response.classification is not ResponseClassification.TRANSIENT:
-                return response
-            if attempt < self._max_attempts:
-                self._sleep(self._backoff_delay(attempt))
-        assert response is not None  # noqa: S101 — max_attempts >= 1 guarantees one submission
-        detail = response.rejection.message if response.rejection else "transient"
-        raise TransientExhaustedError(row_ref, self._max_attempts, detail)
-
-    def _backoff_delay(self, attempt: int) -> float:
-        ceiling = min(self._base_delay * (2 ** (attempt - 1)), self._max_delay)
-        return ceiling * self._jitter()
+        # doubles as the D16 logical time, so the same row always derives the same key. The
+        # attempt loop and backoff are the kit's (`pulse_core.connector.declare`); its exception
+        # is translated to this module's own `TransientExhaustedError` so `run.py`'s
+        # `except DeclarerError` still catches it.
+        try:
+            return submit_with_retry(
+                lambda: self._client.submit_command(command, effective_at=as_of),
+                ref=row_ref,
+                max_attempts=self._max_attempts,
+                base_delay_seconds=self._base_delay,
+                max_delay_seconds=self._max_delay,
+                sleep=self._sleep,
+                jitter=self._jitter,
+            )
+        except _KitTransientExhaustedError as exc:
+            raise TransientExhaustedError(row_ref, exc.attempts, exc.detail) from exc
 
     def _settle(
         self,
@@ -306,15 +343,14 @@ class Declarer:
                 rejection.reason if rejection else None,
                 rejection.catalog_version if rejection else None,
             )
-            self._counts = replace(self._counts, rejected=self._counts.rejected + 1)
+            self._base_counts = self._base_counts.record(response.classification)
             return RowDisposition.REJECTED
 
         self._advance_watermark(command.subject_key, as_of)
+        self._base_counts = self._base_counts.record(response.classification)
         if response.classification is ResponseClassification.REPLAYED:
-            self._counts = replace(self._counts, replayed=self._counts.replayed + 1)
             logger.info("row %s replayed: idempotent hit, not a second declaration", row_ref)
             return RowDisposition.REPLAYED
-        self._counts = replace(self._counts, declared=self._counts.declared + 1)
         logger.info("row %s declared (event_id=%s)", row_ref, response.event_id)
         return RowDisposition.DECLARED
 
@@ -353,9 +389,9 @@ class Declarer:
                 rejection.reason if rejection else None,
                 rejection.catalog_version if rejection else None,
             )
-            self._counts = replace(self._counts, transition_rejected=self._counts.transition_rejected + 1)
+            self._transition_rejected += 1
             return
-        self._counts = replace(self._counts, transitioned=self._counts.transitioned + 1)
+        self._transitioned += 1
         logger.info(
             "row %s paired transition %s (event_id=%s)",
             row_ref,

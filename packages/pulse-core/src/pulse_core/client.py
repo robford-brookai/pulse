@@ -14,7 +14,9 @@ Two conventions this module owns, so a writer never touches raw HTTP:
   ocean consumers use (`packages/ocean/services/agent-worker/src/consumer.py`): a message is
   deleted only once `handler` has returned without raising, so a failure is left to the queue's
   own visibility-timeout redelivery. `event_id` dedupe means a redelivered message — the ordinary
-  cost of at-least-once delivery — is deleted without running `handler` a second time.
+  cost of at-least-once delivery — is deleted without running `handler` a second time. This
+  primitive now lives in `pulse_core.connector.consume` (task 2.3, connector-kit spec) and is
+  re-exported here unchanged so this module's existing importers are unaffected.
 
 The server side of this contract is wired (DNA-801): `pulse_ledger.api` accepts an
 `idempotency_key` body field at the HTTP boundary, threads it to the idempotent commit path, and
@@ -25,19 +27,43 @@ trustworthy end to end.
 from __future__ import annotations
 
 import dataclasses
-import json
 import time
 import uuid
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Protocol
 
 import httpx
 
+from pulse_core.connector.consume import (
+    ConsumeReport,
+    ConsumerHandler,
+    Deduper,
+    InMemoryDeduper,
+    Sleeper,
+    consume,
+    consume_once,
+)
 from pulse_core.generated import Command
 from pulse_core.idempotency import derive_idempotency_key
+
+__all__ = [
+    "COMMANDS_PATH",
+    "CommandResponse",
+    "ConsumeReport",
+    "ConsumerHandler",
+    "Deduper",
+    "InMemoryDeduper",
+    "PulseCoreClient",
+    "Rejection",
+    "ResponseClassification",
+    "Sleeper",
+    "UnexpectedResponseError",
+    "classify_response",
+    "consume",
+    "consume_once",
+]
 
 COMMANDS_PATH = "/commands"
 
@@ -213,10 +239,8 @@ def _command_body(
     return body
 
 
-Sleeper = Callable[[float], None]
-
-
 def _default_sleep(seconds: float) -> None:
+
     time.sleep(seconds)
 
 
@@ -322,153 +346,3 @@ class PulseCoreClient:
             if result.classification is not ResponseClassification.TRANSIENT or attempt >= self._max_attempts:
                 return dataclasses.replace(result, attempts=attempt)
             self._sleep(_backoff_delay(attempt, base=self._base_delay, maximum=self._max_delay))
-
-
-# --- consume(handler): SQS receive / process / delete, event_id dedupe (design decision 6) ---
-
-ConsumerHandler = Callable[[Mapping[str, object]], None]
-
-
-class Deduper(Protocol):
-    """Tracks which `event_id`s this consumer has already run `handler` for."""
-
-    def seen(self, event_id: str) -> bool: ...
-
-    def mark(self, event_id: str) -> None: ...
-
-
-class InMemoryDeduper:
-    """The default `Deduper`: good for one process's lifetime, gone on restart.
-
-    A restart re-runs `handler` for whatever was in flight, which is exactly the at-least-once
-    contract `handler` must already tolerate — this dedupe is an optimization against ordinary
-    redelivery within one run, not a durability guarantee across runs.
-    """
-
-    def __init__(self) -> None:
-        self._seen: set[str] = set()
-
-    def seen(self, event_id: str) -> bool:
-        return event_id in self._seen
-
-    def mark(self, event_id: str) -> None:
-        self._seen.add(event_id)
-
-
-@dataclass(frozen=True)
-class ConsumeReport:
-    """What one `consume_once` pass did, for logging and tests."""
-
-    processed: int = 0
-    deduped: int = 0
-    failed: int = 0
-
-
-def _envelope_from_body(body: object) -> dict[str, object] | None:
-    """Extract the event envelope from a parsed SQS message body.
-
-    An EventBridge rule delivers the envelope whole inside `detail`; a body with no `detail` key
-    is accepted as a bare envelope so local tooling can send straight to the queue — the same
-    convention `agent-worker`'s consumer uses.
-    """
-    if not isinstance(body, dict):
-        return None
-    detail = body.get("detail", body)
-    return detail if isinstance(detail, dict) else None
-
-
-def consume_once(
-    handler: ConsumerHandler,
-    *,
-    sqs_client: Any,
-    queue_url: str,
-    deduper: Deduper,
-    max_messages: int = 10,
-    wait_time_seconds: int = 20,
-) -> ConsumeReport:
-    """One receive/process/delete pass against one SQS queue.
-
-    A message is deleted only after `handler` returns without raising: a failure is left for the
-    queue's own visibility-timeout redelivery and its DLQ redrive policy, never swallowed here. A
-    message whose envelope's `event_id` this deduper has already seen is deleted *without* calling
-    `handler` again — the point of the dedupe — and a malformed message (unparseable body, no
-    envelope) is dropped rather than retried forever.
-    """
-    response = sqs_client.receive_message(
-        QueueUrl=queue_url,
-        MaxNumberOfMessages=max_messages,
-        WaitTimeSeconds=wait_time_seconds,
-    )
-    report = ConsumeReport()
-    for message in response.get("Messages", []):
-        receipt_handle = message.get("ReceiptHandle", "")
-        try:
-            body = json.loads(message["Body"])
-        except (json.JSONDecodeError, KeyError):
-            report = dataclasses.replace(report, failed=report.failed + 1)
-            continue
-        envelope = _envelope_from_body(body)
-        if envelope is None:
-            report = dataclasses.replace(report, failed=report.failed + 1)
-            continue
-
-        event_id = envelope.get("event_id")
-        event_id_str = str(event_id) if event_id is not None else None
-        if event_id_str is not None and deduper.seen(event_id_str):
-            sqs_client.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
-            report = dataclasses.replace(report, deduped=report.deduped + 1)
-            continue
-
-        try:
-            handler(envelope)
-        except Exception:
-            report = dataclasses.replace(report, failed=report.failed + 1)
-            continue
-
-        if event_id_str is not None:
-            deduper.mark(event_id_str)
-        sqs_client.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
-        report = dataclasses.replace(report, processed=report.processed + 1)
-    return report
-
-
-def consume(
-    handler: ConsumerHandler,
-    *,
-    queue_url: str,
-    sqs_client: Any = None,
-    deduper: Deduper | None = None,
-    max_messages: int = 10,
-    wait_time_seconds: int = 20,
-    error_backoff_seconds: float = 5.0,
-    sleep: Sleeper = _default_sleep,
-    iterations: int | None = None,
-) -> None:
-    """Run `consume_once` in a loop — forever, or `iterations` times for a bounded test run.
-
-    `sqs_client` defaults to a real `boto3` client, imported lazily so importing this module never
-    requires `boto3` to be installed; a test always supplies a fake one instead. A pass that raises
-    (a transport error `receive_message`/`delete_message` didn't swallow itself) is logged nowhere
-    here — the caller's own logging wraps `handler` — and backed off before the next attempt so a
-    persistent outage does not spin the loop.
-    """
-    if sqs_client is None:
-        import boto3
-
-        sqs_client = boto3.client("sqs")
-    active_deduper = deduper or InMemoryDeduper()
-
-    count = 0
-    while iterations is None or count < iterations:
-        try:
-            consume_once(
-                handler,
-                sqs_client=sqs_client,
-                queue_url=queue_url,
-                deduper=active_deduper,
-                max_messages=max_messages,
-                wait_time_seconds=wait_time_seconds,
-            )
-        except Exception:
-            sleep(error_backoff_seconds)
-        count += 1
