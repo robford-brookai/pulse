@@ -29,7 +29,7 @@ per WORKFLOW v2.2.0 `live_execution` — never a worktree.
       Opus: this is a business-logic ownership call surfaced to a human — the task's output is
       a decision record, and a wrong registration misattributes every future verdict.
 
-- [ ] 1.2 [DNA-1271] Rule-port mapping document: for each dbt model and test under
+- [x] 1.2 [DNA-1271] Rule-port mapping document: for each dbt model and test under
       `data-platform/management/models/billing/verdict/` and `tests/billing/`, name its pulse
       counterpart (module, function, unit test) in `packages/billing/docs/rule-port-map.md`.
       Any rule needing warehouse-only facts is flagged `stays-mart-side` with the missing fact
@@ -66,7 +66,7 @@ per WORKFLOW v2.2.0 `live_execution` — never a worktree.
       applies once"); `task check` green.
       `[model: sonnet | deps: 2.1 | lane: repo_change | wave: 1]`
 
-- [ ] 2.4 [DNA-1275] Credential-posture gate: a scaffold-style test asserting every package under the
+- [x] 2.4 [DNA-1275] Credential-posture gate: a scaffold-style test asserting every package under the
       connector convention holds exactly one writer credential name, no ledger DSN, and no
       credential value reachable by any log call (spec: "One connector, one credential, no
       ledger internals"). Revise `openspec/specs/connectors/pulse-standard-connector-spec.md`
