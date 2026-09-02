@@ -73,6 +73,18 @@ runbook under `docs/runbooks/`, nonzero exit on any failed assertion, out of `ta
    written from their script docstrings. Alternative (separate docs change) rejected: the
    table is wrong today and the fix is a page.
 
+9. **The consent writer id is `customer-io` (Rob, 2026-09-02).** The first `task
+   stage:e2e:live` found no customer.io writer key in the dev secret and showed none could work:
+   `pulse_ledger.auth._writer_id_from_suffix` lowercases `PULSE_LEDGER_WRITER_TOKEN_<SUFFIX>` and
+   maps `_` to `-`, so the `customer.io` actor the ingress and the `customerio-consent-ingress`
+   spec named was unspellable — stage 2 could never authenticate live. The ingress moves to
+   `customer-io`, matching the convention every other writer follows (`verdict-relay`,
+   `twenty`, `schedules-month-open`), registered as `PULSE_LEDGER_WRITER_TOKEN_CUSTOMER_IO`.
+   Alternative (teach the ledger a dot spelling, e.g. `__`) rejected: one more mapping rule for
+   every future writer to know, to preserve a spelling nothing depends on. Task 2.5 carries the
+   code; this change's delta spec carries the requirement; the dev credential is minted at 3.3
+   (issue #342).
+
 ## Risks / Trade-offs
 
 - [demo1 and demo3 stage functions are tangled with their `main`] → extract-and-call in the
