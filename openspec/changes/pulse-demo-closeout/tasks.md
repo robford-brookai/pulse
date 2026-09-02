@@ -39,7 +39,7 @@ date per design.md: internal engineering, within two weeks of 2026-09-01.
       docs-consistency gate (cat8) and `mkdocs build -s` green; `task check` green.
       `[model: sonnet | deps: — | lane: repo_change | wave: 0]`
 
-- [ ] 1.3 Per-subject history read: confirm the command API exposes committed events for one
+- [x] 1.3 Per-subject history read: confirm the command API exposes committed events for one
       subject in ledger sequence under the projection's credential (design.md decision 5). If
       it does, document the route in `HANDOFF.md` and stop. If not, add it read-only to
       `pulse-ledger`'s API and a `PulseCoreClient` method, additive.
