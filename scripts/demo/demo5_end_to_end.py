@@ -4,14 +4,14 @@
 Per `openspec/changes/pulse-demo-closeout/specs/end-to-end-demo/spec.md`: six stages, in order,
 each asserting its outcome against the ledger before the next stage begins, stopping at the first
 failed assertion. This module is the harness — the `Stage` protocol, `DemoContext`, the offline
-context builder, and the receipt printer — plus stages 1-4, composed from the demos and packages
-that already own each door rather than reimplemented here (design.md decision 1: "compose, do not
-rewrite"). Stage 5 (every window agrees) and stage 6 (the rebuild drill) land in later tasks
-(2.2, 3.1) and are appended to `STAGES` there.
+and live context builders, and the receipt printer — plus the six stages, composed from the demos
+and packages that already own each door rather than reimplemented here (design.md decision 1:
+"compose, do not rewrite").
 
 Per the roadmap's demo convention, this script needs the local LocalStack + Postgres compose stack
-(`packages/ocean/infra/docker-compose.yml`) and stays out of `task check` — only
-`tests/test_demo5_end_to_end.py`'s smoke-parse and harness-unit tests run there.
+(`packages/ocean/infra/docker-compose.yml`) offline, or dev credentials with `--live`, and stays
+out of `task check` either way — only `tests/test_demo5_end_to_end.py`'s smoke-parse and
+harness-unit tests run there.
 
 **Where each stage's door comes from** (design.md decision 1 and 2 — one `DemoContext`, transport
 swapped by how it is built, stage code never branches on mode):
@@ -29,14 +29,28 @@ swapped by how it is built, stage code never branches on mode):
 4. **A verdict declared from the mart read** — `verdict_relay.run.run_relay` over a
    `FixtureRowSource` holding `fixtures/verdict_mart_row.json`, the same declarer wiring
    `demo4_billing_declare_back.py` drives against a live mart.
+5. **Every window agrees with the ledger** (task 2.2) — board, warehouse-landed events, and an
+   independent fold of the journal, each reduced to `(subject_type, subject_key, state, as_of)`
+   and compared to the ledger's own `current_state` row.
+6. **The rebuild drill** (task 3.1) — `twenty_projection.rebuild`'s operator command (task 2.3),
+   run as this walk's own last stage: capture the enrollment scope's board row, delete the
+   columns the projection owns, rebuild, and assert the repainted row equals the captured one.
 
 **The in-process board route** (offline context builder): `pulse_ledger.api.create_app` built
 against the compose stack's own `ledger-postgres`, served over `starlette.testclient.TestClient`'s
 synchronous ASGI transport rather than a live process — no port, no live Twenty, same route code
 the deployed service runs.
 
+**The live context builder** (task 3.1, `--live`): the dev ledger over `httpx` (the same pair
+`demo3_live_kanban_drag.py` reads, `PULSE_LEDGER_API_URL` / `PULSE_LEDGER_TWENTY_WEBHOOK_SECRET`)
+and its Postgres (`DATABASE_URL`), dev Twenty over `httpx` (`pulse_core.twenty_deploy`'s
+`PULSE_TWENTY_DEV_URL` / `PULSE_TWENTY_DEV_TOKEN`), and `STG_EVENTS.EVENTS` read-only as the
+warehouse window (`DEMO5_SNOWFLAKE_*`) — every credential name is pinned in this module and every
+value comes from the environment only, never a flag, never code (`resolve_live_config`).
+
 Usage:
     scripts/demo/demo5_end_to_end.py [--skip-compose-up] [--database-url URL]
+    scripts/demo/demo5_end_to_end.py --live
     scripts/demo/demo5_end_to_end.py --help
 """
 
@@ -44,7 +58,9 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib
 import json
+import os
 import secrets
 import sys
 import time
@@ -72,17 +88,26 @@ if str(DEMO_DIR) not in sys.path:
 import demo1_ledger_core as demo1  # noqa: E402
 import demo2_identity_matcher as demo2  # noqa: E402
 import demo3_live_kanban_drag as demo3  # noqa: E402
-from consent_ingress.declarer import CUSTOMERIO_WRITER_ID, build_run_receipt, declare_consent_rows  # noqa: E402
+from consent_ingress.cli import CUSTOMERIO_TOKEN_ENV_VAR  # noqa: E402
+from consent_ingress.declarer import (  # noqa: E402
+    CUSTOMERIO_WRITER_ID,
+    build_run_receipt,
+    declare_consent_rows,
+    ledger_subject_key,
+)
 from consent_ingress.row_source import ConsentRowReader  # noqa: E402
 from consent_ingress.row_source import FixtureRowSource as ConsentFixtureRowSource  # noqa: E402
 from identity.matcher import Ambiguous, Match  # noqa: E402
 from pulse_core.client import PulseCoreClient  # noqa: E402
 from pulse_core.generated import OpenBillingEpisodeCommand, RecordCommunicationConsentCommand  # noqa: E402
+from pulse_core.replay import REPLAY_TOKEN_ENV_VAR  # noqa: E402
+from pulse_core.twenty_deploy import DeployError, Target, resolve_target  # noqa: E402
 from pulse_ledger.api import TWENTY_WEBHOOK_PATH, create_app  # noqa: E402
 from pulse_ledger.api_server import (  # noqa: E402
     build_committer,
     build_cursor_reader,
     build_cursor_writer,
+    build_history_reader,
     build_state_reader,
 )
 from pulse_ledger.auth import (  # noqa: E402
@@ -96,18 +121,33 @@ from pulse_ledger.fold import FoldedEvent, fold_state, state_borne_by  # noqa: E
 from pulse_ledger.reads import state_of_record, subject_history  # noqa: E402
 from pulse_ledger.validation import INITIAL_STATES  # noqa: E402
 from twenty_projection.apply import V1_BOARD, ProjectionRestClient, apply_event  # noqa: E402
+from twenty_projection.rebuild import (  # noqa: E402
+    PROGRAM_COLUMN,
+    SUBJECT_COLUMN,
+    parse_scope,
+)
+from twenty_projection.rebuild import PROJECTION_WRITER_ID as REBUILD_WRITER_ID  # noqa: E402
+from twenty_projection.rebuild import rebuild as run_projection_rebuild  # noqa: E402
 from verdict_relay.config import SUBJECT_TYPE_BY_VERDICT, TRANSITION_BY_OUTCOME  # noqa: E402
 from verdict_relay.declarer import Declarer  # noqa: E402
 from verdict_relay.mart_reader import FixtureRowSource as MartFixtureRowSource  # noqa: E402
 from verdict_relay.mart_reader import MartReader  # noqa: E402
+from verdict_relay.production import PULSE_CORE_TOKEN_ENV_VAR as VERDICT_RELAY_TOKEN_ENV_VAR  # noqa: E402
 from verdict_relay.production import WRITER_ID as VERDICT_RELAY_WRITER_ID  # noqa: E402
 from verdict_relay.run import run_relay  # noqa: E402
 
-#: Writer ids this walk needs credentials for. Not every stage's real production writer id is
-#: registered — only the ones this demo's stages actually authenticate as.
-WRITER_IDS = (CUSTOMERIO_WRITER_ID, VERDICT_RELAY_WRITER_ID)
+#: Writer ids this walk needs credentials for: the three producing stages' own writer identity
+#: plus the rebuild drill's replay identity (task 3.1) — the kit's read-only facility
+#: (`pulse_core.replay`), reused here under its own name rather than a fourth invented one.
+WRITER_IDS = (CUSTOMERIO_WRITER_ID, VERDICT_RELAY_WRITER_ID, REBUILD_WRITER_ID)
 
 BILLING_EPISODE_SUBJECT_TYPE = "billing_episode"
+
+#: The read surface stage 5 and stage 6 compare board rows against: a mapping keyed by
+#: `(subject_type, subject_key)` to that subject's landed envelopes — the LocalStack queue
+#: offline, `STG_EVENTS.EVENTS` read-only live (design decision 6). Stage code calls this and
+#: never branches on which it got (design decision 2).
+WarehouseReader = Callable[[frozenset[tuple[str, str]]], Mapping[tuple[str, str], list[Mapping[str, Any]]]]
 
 
 class DemoAssertionError(AssertionError):
@@ -228,8 +268,10 @@ class DemoContext:
     writer_tokens: Mapping[str, str]
     fixtures: Mapping[str, Any]
     patient_key: str
+    warehouse_reader: WarehouseReader
     board_transport: httpx.BaseTransport | None = None
     board_base_url: str = "http://demo5-board.local"
+    board_token: str = "demo5-board-window"  # noqa: S105 — a fixture placeholder offline, a real token live
     board_store: _BoardDouble | None = None
     aws_endpoint_url: str = demo1.DEFAULT_AWS_ENDPOINT_URL
     event_bus_name: str = demo1.DEFAULT_EVENT_BUS_NAME
@@ -247,6 +289,12 @@ class DemoContext:
 
     def webhook_client(self) -> httpx.Client:
         return httpx.Client(transport=self.api_transport, base_url=self.api_base_url)
+
+    def board_client(self) -> ProjectionRestClient:
+        """The one board client every stage that touches Twenty's REST surface uses — offline the
+        in-process double, live the real dev instance (design decision 2: transport and token both
+        live on the context, never a per-stage branch)."""
+        return ProjectionRestClient(self.board_base_url, token=self.board_token, transport=self.board_transport)
 
     def close(self) -> None:
         for closer in reversed(self._closers):
@@ -296,6 +344,7 @@ def build_offline_context(
         cursor_reader=build_cursor_reader(pool),
         cursor_writer=build_cursor_writer(pool),
         state_reader=build_state_reader(pool),
+        history_reader=build_history_reader(pool),
     )
     # `TestClient` wraps the ASGI app in a synchronous transport (`httpx.ASGITransport` alone
     # answers only `handle_async_request`, unusable from a plain `httpx.Client`) — the same
@@ -322,6 +371,14 @@ def build_offline_context(
         {"canonicalPatientId": patient_key, "programCode": "demo5"},
     )
 
+    sqs = demo1._sqs_client(demo1.DEFAULT_AWS_ENDPOINT_URL)
+    queue_url = sqs.get_queue_url(QueueName=f"{demo1.DEFAULT_EVENT_BUS_NAME}-{demo1.DEFAULT_CONSUMER}")["QueueUrl"]
+
+    def offline_warehouse_reader(
+        subjects: frozenset[tuple[str, str]],
+    ) -> Mapping[tuple[str, str], list[Mapping[str, Any]]]:
+        return _drain_landed_events(sqs, queue_url, subjects, timeout=30.0)
+
     ctx = DemoContext(
         live=False,
         database_url=database_url,
@@ -332,11 +389,243 @@ def build_offline_context(
         writer_tokens=writer_tokens,
         fixtures=fixtures,
         patient_key=patient_key,
+        warehouse_reader=offline_warehouse_reader,
         board_transport=board_store.transport(),
         board_store=board_store,
     )
     ctx._closers.append(pool.close)
     ctx._closers.append(lambda: test_client.__exit__(None, None, None))
+    return ctx
+
+
+# --- Live mode: config and context builder (task 3.1) -------------------------------------------
+
+#: The dev ledger — the same pair `demo3_live_kanban_drag.py` reads for its own webhook delivery
+#: and command traffic, reused rather than named again (task 3.1: "httpx board client as demo3
+#: uses").
+LEDGER_URL_ENV = demo3.LEDGER_URL_ENV
+#: The ledger database this walk's non-HTTP reads still need (stage 4's `state_of_record`, stage
+#: 5's fold and `current_state` windows) — the one credential every deployed `pulse_ledger`
+#: process is configured by (`packages/pulse-ledger/src/pulse_ledger/api_server.py`).
+DATABASE_URL_ENV = "DATABASE_URL"
+#: The one Twenty target this demo drives live — staging/prod would be a promotion decision made
+#: elsewhere, never a flag on a demo script (`demo3`'s own `--target` restriction).
+TWENTY_TARGET = "dev"
+
+#: This demo's own read-only Snowflake facility for the warehouse window (design decision 6): a
+#: different table and a different purpose than verdict-relay's mart credential, so it holds its
+#: own name rather than borrowing that one.
+STG_EVENTS_ACCOUNT_ENV = "DEMO5_SNOWFLAKE_ACCOUNT"
+STG_EVENTS_USER_ENV = "DEMO5_SNOWFLAKE_USER"
+STG_EVENTS_PASSWORD_ENV = "DEMO5_SNOWFLAKE_PASSWORD"  # noqa: S105
+STG_EVENTS_PRIVATE_KEY_PATH_ENV = "DEMO5_SNOWFLAKE_PRIVATE_KEY_PATH"
+STG_EVENTS_WAREHOUSE_ENV = "DEMO5_SNOWFLAKE_WAREHOUSE"
+
+#: The published contract's own coordinates (docs/contracts/publishes.md `snowflake-stg-events`)
+#: — fixed by the view's own definition, never configuration.
+STG_EVENTS_DATABASE = "STREAMLINE"
+STG_EVENTS_SCHEMA = "STG_EVENTS"
+STG_EVENTS_TABLE = "EVENTS"
+
+#: The columns `_fold_envelopes` needs off one envelope — a subset of the contract's own column
+#: list, the same shape `subject_history` returns offline.
+STG_EVENTS_COLUMNS: tuple[str, ...] = (
+    "event_id",
+    "subject_type",
+    "subject_key",
+    "effective_at",
+    "recorded_at",
+    "reverses_event_id",
+    "payload",
+)
+
+
+class LiveStartupError(RuntimeError):
+    """`--live`'s environment is incomplete — names every absent variable, never a value."""
+
+    def __init__(self, missing: tuple[str, ...]) -> None:
+        self.missing = missing
+        super().__init__(f"--live is not configured — set: {', '.join(missing)}")
+
+
+@dataclass(frozen=True)
+class LiveConfig:
+    """Every credential a live run holds, resolved from the environment once, by name only
+    (task 3.1: "credential names in config and values from the environment only")."""
+
+    database_url: str
+    ledger_url: str
+    webhook_secret: str
+    twenty_target: Target
+    customerio_token: str
+    verdict_relay_token: str
+    projection_replay_token: str
+    snowflake_account: str
+    snowflake_user: str
+    snowflake_warehouse: str
+    snowflake_password: str | None
+    snowflake_private_key_path: str | None
+
+
+def resolve_live_config(env: Mapping[str, str]) -> LiveConfig:
+    """Read every variable `--live` needs, failing once, naming every absent one before any
+    connection is attempted (`verdict_relay.production.resolve_production_config`'s posture)."""
+    required = (
+        DATABASE_URL_ENV,
+        LEDGER_URL_ENV,
+        TWENTY_WEBHOOK_SECRET_ENV,
+        CUSTOMERIO_TOKEN_ENV_VAR,
+        VERDICT_RELAY_TOKEN_ENV_VAR,
+        REPLAY_TOKEN_ENV_VAR,
+        STG_EVENTS_ACCOUNT_ENV,
+        STG_EVENTS_USER_ENV,
+        STG_EVENTS_WAREHOUSE_ENV,
+    )
+    missing = [name for name in required if not env.get(name)]
+
+    password = env.get(STG_EVENTS_PASSWORD_ENV) or None
+    key_path = env.get(STG_EVENTS_PRIVATE_KEY_PATH_ENV) or None
+    if password is None and key_path is None:
+        missing.append(f"{STG_EVENTS_PASSWORD_ENV} or {STG_EVENTS_PRIVATE_KEY_PATH_ENV}")
+
+    try:
+        twenty_target = resolve_target(TWENTY_TARGET, env)
+    except DeployError as error:
+        missing.append(str(error))
+
+    if missing:
+        raise LiveStartupError(tuple(missing))
+
+    return LiveConfig(
+        database_url=env[DATABASE_URL_ENV],
+        ledger_url=env[LEDGER_URL_ENV],
+        webhook_secret=env[TWENTY_WEBHOOK_SECRET_ENV],
+        twenty_target=twenty_target,
+        customerio_token=env[CUSTOMERIO_TOKEN_ENV_VAR],
+        verdict_relay_token=env[VERDICT_RELAY_TOKEN_ENV_VAR],
+        projection_replay_token=env[REPLAY_TOKEN_ENV_VAR],
+        snowflake_account=env[STG_EVENTS_ACCOUNT_ENV],
+        snowflake_user=env[STG_EVENTS_USER_ENV],
+        snowflake_warehouse=env[STG_EVENTS_WAREHOUSE_ENV],
+        snowflake_password=password,
+        snowflake_private_key_path=key_path,
+    )
+
+
+def _snowflake_connect_stg_events(config: LiveConfig) -> Any:
+    """The only place `snowflake.connector` is ever imported for this reader (mirrors
+    `verdict_relay.production._snowflake_connect`'s own lazy-import posture) — so building a
+    `resolve_live_config` result, or even this reader against a fake `connect`, never requires the
+    driver installed."""
+    connector = importlib.import_module("snowflake.connector")
+    shared: dict[str, Any] = {
+        "account": config.snowflake_account,
+        "user": config.snowflake_user,
+        "warehouse": config.snowflake_warehouse,
+        "database": STG_EVENTS_DATABASE,
+        "schema": STG_EVENTS_SCHEMA,
+    }
+    if config.snowflake_private_key_path is not None:
+        serialization = importlib.import_module("cryptography.hazmat.primitives.serialization")
+        key_data = Path(config.snowflake_private_key_path).read_bytes()
+        private_key = serialization.load_pem_private_key(key_data, password=None)
+        return connector.connect(
+            **shared,
+            authenticator="SNOWFLAKE_JWT",
+            private_key=private_key.private_bytes(
+                encoding=serialization.Encoding.DER,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption(),
+            ),
+        )
+    return connector.connect(**shared, password=config.snowflake_password)
+
+
+def _fetch_stg_events(
+    subjects: frozenset[tuple[str, str]],
+    *,
+    connect: Callable[[], Any],
+) -> dict[tuple[str, str], list[dict[str, Any]]]:
+    """One read of `STG_EVENTS.EVENTS`, filtered to the wanted `(subject_type, subject_key)`
+    pairs — the live warehouse window design decision 6 names: read-only, no queue to drain."""
+    collected: dict[tuple[str, str], list[dict[str, Any]]] = {key: [] for key in subjects}
+    keys = sorted({subject_key for _, subject_key in subjects})
+    if not keys:
+        return collected
+
+    connection = connect()
+    try:
+        columns = ", ".join(STG_EVENTS_COLUMNS)
+        placeholders = ", ".join(["%s"] * len(keys))
+        cursor = connection.cursor()
+        try:
+            cursor.execute(
+                f"SELECT {columns} FROM {STG_EVENTS_TABLE} WHERE subject_key IN ({placeholders})",  # noqa: S608
+                keys,
+            )
+            for row in cursor.fetchall():
+                event = dict(zip(STG_EVENTS_COLUMNS, row, strict=True))
+                key = (event["subject_type"], event["subject_key"])
+                if key in collected:
+                    collected[key].append(event)
+        finally:
+            cursor.close()
+    finally:
+        connection.close()
+    return collected
+
+
+def _default_live_pool(database_url: str) -> ConnectionPool:
+    return ConnectionPool(database_url, min_size=1, max_size=5)
+
+
+def build_live_context(
+    config: LiveConfig, *, pool_factory: Callable[[str], ConnectionPool] = _default_live_pool
+) -> DemoContext:
+    """Live context builder (task 3.1): the dev ledger over HTTP and its Postgres, dev Twenty over
+    `httpx` (demo3's own pattern), and `STG_EVENTS.EVENTS` read-only as the warehouse window — the
+    same fixtures and the same assertions as offline; only the transports differ (design decision
+    2, spec "Two modes, one assertion set").
+
+    `pool_factory` is the one seam a test uses to hold no live Postgres — production passes none
+    and gets a real `ConnectionPool` that `.wait()`s for a connection before this returns.
+    """
+    pool = pool_factory(config.database_url)
+    pool.wait()
+
+    fixtures = {
+        "referral_variants": json.loads((FIXTURES_DIR / "referral_variants.json").read_text())["variants"],
+        "consent_export_row": json.loads((FIXTURES_DIR / "consent_export_row.json").read_text()),
+        "verdict_mart_row": json.loads((FIXTURES_DIR / "verdict_mart_row.json").read_text()),
+    }
+    patient_key = fixtures["consent_export_row"]["subject_key"]
+
+    def live_warehouse_reader(
+        subjects: frozenset[tuple[str, str]],
+    ) -> Mapping[tuple[str, str], list[Mapping[str, Any]]]:
+        return _fetch_stg_events(subjects, connect=lambda: _snowflake_connect_stg_events(config))
+
+    ctx = DemoContext(
+        live=True,
+        database_url=config.database_url,
+        pool=pool,
+        api_transport=None,
+        api_base_url=config.ledger_url,
+        webhook_secret=config.webhook_secret,
+        writer_tokens={
+            CUSTOMERIO_WRITER_ID: config.customerio_token,
+            VERDICT_RELAY_WRITER_ID: config.verdict_relay_token,
+            REBUILD_WRITER_ID: config.projection_replay_token,
+        },
+        fixtures=fixtures,
+        patient_key=patient_key,
+        warehouse_reader=live_warehouse_reader,
+        board_transport=None,
+        board_base_url=config.twenty_target.url,
+        board_token=config.twenty_target.token,
+        board_store=None,
+    )
+    ctx._closers.append(pool.close)
     return ctx
 
 
@@ -441,9 +730,16 @@ class ConsentIngressStage:
         row = ctx.fixtures["consent_export_row"]
         client = ctx.api_client(CUSTOMERIO_WRITER_ID)
         try:
+            # The ledger row this sweep actually declares against is keyed
+            # `f"{subject_key}:{channel}"` (`declarer.ledger_subject_key`, the
+            # consent-reconciliation grain), not the bare patient key — genesis alignment must
+            # target the same composite key or the sweep's own declare finds no prior 'unset'
+            # to build on and fails the catalog's genesis check.
             response = client.submit_command(
                 RecordCommunicationConsentCommand(
-                    subject_key=row["subject_key"], channel=row["channel"], to_state="unset"
+                    subject_key=ledger_subject_key(row["subject_key"], row["channel"]),
+                    channel=row["channel"],
+                    to_state="unset",
                 ),
                 effective_at=datetime.fromisoformat(row["event_time"]),
             )
@@ -656,7 +952,9 @@ def _touched_subjects(ctx: DemoContext) -> tuple[tuple[str, str], ...]:
     consent_row = ctx.fixtures["consent_export_row"]
     verdict_row = ctx.fixtures["verdict_mart_row"]
     return (
-        ("communication_consent", consent_row["subject_key"]),
+        # The row this stage's sweep actually declares against is keyed on the
+        # consent-reconciliation grain (`declarer.ledger_subject_key`), not the bare patient key.
+        ("communication_consent", ledger_subject_key(consent_row["subject_key"], consent_row["channel"])),
         ("enrollment", ctx.patient_key),
         ("billing_episode", verdict_row["subject_id"]),
     )
@@ -769,37 +1067,35 @@ def _drain_landed_events(
 def _board_state(
     events: Iterable[Mapping[str, Any]],
     *,
-    transport: httpx.BaseTransport,
-    base_url: str,
-    store: _BoardDouble,
+    client: ProjectionRestClient,
     subject_key: str,
 ) -> WindowTuple | None:
     """Replay one enrollment subject's committed events through the real `twenty_projection.apply`
-    core onto the offline board double, then read back what it wrote — the board window is the
-    live projection's own write path exercised in-process, not a stand-in for it (design.md
-    decision 2: "which board client... swapped by how `DemoContext` is built, stage code never
-    checks the mode" — `apply_event` is exactly that stage code).
+    core onto the board (offline double or live dev Twenty, whichever `client` speaks to), then
+    read back what it wrote through the same client — the board window is the live projection's
+    own write and read path exercised directly, not a stand-in for it (design.md decision 2:
+    "which board client... swapped by how `DemoContext` is built, stage code never checks the
+    mode" — `apply_event` and this read-back are exactly that stage code).
 
     Reversal events carry no `to_state` and `apply_event` only understands state-bearing envelopes
     (`_parse_envelope` requires `payload.to_state`), so they are skipped here the same way
     `pulse_ledger.fold` drops them from state — a correction changes which prior event survives,
     not which events get applied.
     """
-    client = ProjectionRestClient(base_url, token="demo5-board-window", transport=transport)  # noqa: S106
-    try:
-        for envelope in events:
-            if envelope.get("reverses_event_id"):
-                continue
-            apply_event(envelope, client=client, board=V1_BOARD)
-    finally:
-        client.close()
+    for envelope in events:
+        if envelope.get("reverses_event_id"):
+            continue
+        apply_event(envelope, client=client, board=V1_BOARD)
 
-    record = store.records.get(f"demo5-board-{subject_key}")
-    if record is None or V1_BOARD.status_field not in record:
+    records = client.find_records(V1_BOARD.plural, {SUBJECT_COLUMN: subject_key})
+    if len(records) != 1:
+        return None
+    record = records[0]
+    if record.get(V1_BOARD.status_field) is None:
         return None
     # `encode_option_value` is `str.upper` for the enrollment vocabulary (no dots in its states —
     # `pulse_core.twenty_model.encode_option_value`'s own docstring), so `str.lower` inverts it.
-    state = record[V1_BOARD.status_field].lower()
+    state = str(record[V1_BOARD.status_field]).lower()
     as_of = datetime.fromisoformat(record[V1_BOARD.as_of_field])
     return _reduce("enrollment", subject_key, state, as_of)
 
@@ -821,12 +1117,10 @@ class WindowAgreementStage:
 
     def run(self, ctx: DemoContext) -> StageReceipt:
         subjects = _touched_subjects(ctx)
-        sqs = demo1._sqs_client(ctx.aws_endpoint_url)
-        queue_url = sqs.get_queue_url(QueueName=f"{ctx.event_bus_name}-{ctx.consumer}")["QueueUrl"]
-        landed = _drain_landed_events(sqs, queue_url, frozenset(subjects), timeout=30.0)
+        landed = ctx.warehouse_reader(frozenset(subjects))
 
         assertions = 0
-        with ctx.pool.connection() as conn:
+        with ctx.pool.connection() as conn, ctx.board_client() as board:
             for subject_type, subject_key in subjects:
                 ledger = _ledger_window(conn, subject_type, subject_key)
                 _check(
@@ -853,13 +1147,7 @@ class WindowAgreementStage:
 
                 if subject_type == "enrollment":
                     events = subject_history(conn, subject_type, subject_key)
-                    board_tuple = _board_state(
-                        events,
-                        transport=ctx.board_transport,
-                        base_url=ctx.board_base_url,
-                        store=ctx.board_store,
-                        subject_key=subject_key,
-                    )
+                    board_tuple = _board_state(events, client=board, subject_key=subject_key)
                     _check_window_agrees(
                         stage=self.name,
                         subject_key=subject_key,
@@ -872,13 +1160,97 @@ class WindowAgreementStage:
         return StageReceipt(self.name, assertion_count=assertions, subject_keys=tuple(key for _, key in subjects))
 
 
-#: Stages 1-5 (tasks 2.1, 2.2). Stage 6 (task 3.1) is appended once that task lands.
+# --- Stage 6: the rebuild drill -----------------------------------------------------------------
+
+
+class RebuildDrillStage:
+    """Stage 6 (spec: "Destroy then rebuild is row-identical", task 3.1): the operator drill
+    (`twenty_projection.rebuild`, task 2.3) run as this walk's own last stage — capture the
+    enrollment scope's board row, delete the columns the projection owns (never the row —
+    `rebuild.py`'s own "destroyed" definition), rerun the rebuild over the same scope, and assert
+    the repainted row equals the row captured before the drill, field for field.
+
+    Runs only against `enrollment`, the one v1 board (`V1_BOARD`) — the same restriction stage 5
+    already states for its own board window; `communication_consent` and `billing_episode` render
+    on no board to rebuild.
+    """
+
+    name = "rebuild_drill"
+
+    def setup(self, ctx: DemoContext) -> None:
+        del ctx
+
+    def run(self, ctx: DemoContext) -> StageReceipt:
+        assertions = 0
+        with ctx.board_client() as board:
+            captured = board.find_records(V1_BOARD.plural, {SUBJECT_COLUMN: ctx.patient_key})
+            _check(
+                len(captured) == 1,
+                f"[{self.name}] expected exactly one board row for subject {ctx.patient_key!r} "
+                f"before the drill, found {len(captured)}",
+            )
+            assertions += 1
+            before = dict(captured[0])
+            record_id = before.get("id")
+            _check(isinstance(record_id, str) and bool(record_id), f"[{self.name}] captured board row carried no id")
+            assertions += 1
+
+            # "Destroyed" means the columns the projection owns — the subject's anchor row stays
+            # (rebuild.py's module docstring); a full row delete would be a different subject.
+            board.patch_record(
+                V1_BOARD.plural,
+                record_id,
+                {V1_BOARD.status_field: None, V1_BOARD.as_of_field: None, V1_BOARD.watermark_field: None},
+            )
+
+            history = ctx.api_client(REBUILD_WRITER_ID)
+            try:
+                scope = parse_scope(f"{V1_BOARD.subject_type}:{ctx.patient_key}")
+                receipt = run_projection_rebuild(scope, history=history, client=board, operator="demo5-end-to-end")
+            finally:
+                history.close()
+
+            _check(
+                receipt.rows_written == 1,
+                f"[{self.name}] expected the drill to repaint one row for subject {ctx.patient_key!r}, "
+                f"wrote {receipt.rows_written}",
+            )
+            assertions += 1
+            _check(receipt.orphans == 0, f"[{self.name}] rebuild reported an orphan for a scope that had a row")
+            assertions += 1
+
+            after = board.find_records(V1_BOARD.plural, {SUBJECT_COLUMN: ctx.patient_key})
+            _check(
+                len(after) == 1,
+                f"[{self.name}] expected exactly one board row for subject {ctx.patient_key!r} "
+                f"after the drill, found {len(after)}",
+            )
+            assertions += 1
+            repainted = after[0]
+            for field_name in (
+                SUBJECT_COLUMN,
+                PROGRAM_COLUMN,
+                V1_BOARD.status_field,
+                V1_BOARD.as_of_field,
+                V1_BOARD.watermark_field,
+            ):
+                _check(
+                    repainted.get(field_name) == before.get(field_name),
+                    f"[{self.name}] repainted row disagrees with the captured row at field {field_name!r}",
+                )
+                assertions += 1
+
+        return StageReceipt(self.name, assertion_count=assertions, subject_keys=(ctx.patient_key,))
+
+
+#: Stages 1-6 (tasks 2.1, 2.2, 3.1).
 STAGES: tuple[Stage, ...] = (
     IdentityResolutionStage(),
     ConsentIngressStage(),
     BoardDragStage(),
     VerdictDeclareStage(),
     WindowAgreementStage(),
+    RebuildDrillStage(),
 )
 
 
@@ -907,7 +1279,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--live",
         action="store_true",
         help="run against the development ledger/board/warehouse instead of the offline stack "
-        "(live context builder lands in task 3.1; passing this flag today is a named refusal)",
+        "(task 3.1's live context builder; every credential resolves from the environment only, "
+        "see docs/runbooks/demo5-end-to-end.md)",
     )
     return parser
 
@@ -917,14 +1290,18 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     print("=== Demo 5: end to end ===")
     if args.live:
-        print("FAILED: --live is not yet implemented (task 3.1's live context builder)", file=sys.stderr)
-        return 1
-
-    ctx = build_offline_context(
-        compose_file=args.compose_file,
-        database_url=args.database_url,
-        skip_compose_up=args.skip_compose_up,
-    )
+        try:
+            config = resolve_live_config(os.environ)
+        except LiveStartupError as error:
+            print(f"FAILED: {error}", file=sys.stderr)
+            return 1
+        ctx = build_live_context(config)
+    else:
+        ctx = build_offline_context(
+            compose_file=args.compose_file,
+            database_url=args.database_url,
+            skip_compose_up=args.skip_compose_up,
+        )
     try:
         receipts = run_walk(STAGES, ctx)
     except StageFailure as exc:

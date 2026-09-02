@@ -1,10 +1,10 @@
 # Handoff Summary: billing-connector
 
-Collected 3 handoff(s).
+Collected 1 handoff(s).
 
 ## Files
 
-- [bc-task-002.md](handoffs/billing-connector/bc-task-002.md)
+- [bc-task-003.md](handoffs/billing-connector/bc-task-003.md)
 
 ## Doc-Updater Instructions
 

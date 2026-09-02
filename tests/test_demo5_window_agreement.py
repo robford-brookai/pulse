@@ -171,10 +171,19 @@ def test_drain_landed_events_stops_after_two_idle_polls_without_the_full_timeout
 # --- _board_state and _BoardDouble: the board window, against the real apply.py core -----------
 
 
+def _board_client(store: Any) -> Any:
+    """`_board_state` (task 3.1) reads and writes through a `ProjectionRestClient`, not the
+    double's own record store directly — the same client offline and live share."""
+    return demo5.ProjectionRestClient(
+        "http://demo5-board.local",
+        token="demo5-board-window",  # noqa: S106 — a fixture placeholder, not a credential
+        transport=store.transport(),
+    )
+
+
 def test_board_double_seed_then_apply_then_read_back() -> None:
     store = demo5._BoardDouble()
     store.seed("demo5-board-patient-1", {"canonicalPatientId": "patient-1", "programCode": "demo5"})
-    transport = store.transport()
 
     events = [
         _envelope(
@@ -195,13 +204,8 @@ def test_board_double_seed_then_apply_then_read_back() -> None:
         ),
     ]
 
-    tup = demo5._board_state(
-        events,
-        transport=transport,
-        base_url="http://demo5-board.local",
-        store=store,
-        subject_key="patient-1",
-    )
+    with _board_client(store) as client:
+        tup = demo5._board_state(events, client=client, subject_key="patient-1")
 
     assert tup == ("enrollment", "patient-1", "active", "2026-08-02T00:00:00+00:00")
 
@@ -209,7 +213,6 @@ def test_board_double_seed_then_apply_then_read_back() -> None:
 def test_board_state_skips_reversal_events() -> None:
     store = demo5._BoardDouble()
     store.seed("demo5-board-patient-1", {"canonicalPatientId": "patient-1", "programCode": "demo5"})
-    transport = store.transport()
 
     genesis_id = str(uuid.uuid4())
     events = [
@@ -236,9 +239,8 @@ def test_board_state_skips_reversal_events() -> None:
         ),
     ]
 
-    tup = demo5._board_state(
-        events, transport=transport, base_url="http://demo5-board.local", store=store, subject_key="patient-1"
-    )
+    with _board_client(store) as client:
+        tup = demo5._board_state(events, client=client, subject_key="patient-1")
     assert tup is not None
     assert tup[2] == "pending_start"
 
@@ -246,9 +248,8 @@ def test_board_state_skips_reversal_events() -> None:
 def test_board_state_returns_none_when_the_record_was_never_written() -> None:
     store = demo5._BoardDouble()
     store.seed("demo5-board-patient-1", {"canonicalPatientId": "patient-1", "programCode": "demo5"})
-    tup = demo5._board_state(
-        [], transport=store.transport(), base_url="http://demo5-board.local", store=store, subject_key="patient-1"
-    )
+    with _board_client(store) as client:
+        tup = demo5._board_state([], client=client, subject_key="patient-1")
     assert tup is None
 
 
@@ -260,8 +261,11 @@ def test_parse_filter_round_trips_find_records_grammar() -> None:
     assert demo5._parse_filter("") == {}
 
 
-# --- The stage is wired last, after the producing stages ---------------------------------------
+# --- The stage is wired after the producing stages, before the rebuild drill (task 3.1) --------
 
 
-def test_window_agreement_stage_is_last() -> None:
-    assert demo5.STAGES[-1].name == "window_agreement"
+def test_window_agreement_stage_runs_after_every_producing_stage_and_before_the_rebuild_drill() -> None:
+    names = [stage.name for stage in demo5.STAGES]
+    assert names.index("window_agreement") == names.index("rebuild_drill") - 1
+    for producing in ("identity_resolution", "consent_ingress", "board_drag", "verdict_declare"):
+        assert names.index(producing) < names.index("window_agreement")
