@@ -42,6 +42,6 @@ one implementation.
 
 #### Scenario: A verdict names its implementation
 
-- **GIVEN** verdicts declared by the mart relay and by the engine during the parallel window
+- **GIVEN** verdicts declared by the mart relay and, once `billing-connector` ships, by the engine
 - **WHEN** any verdict event is inspected
 - **THEN** its `rule_version` identifies which implementation produced it, unambiguously
