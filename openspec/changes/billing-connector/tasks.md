@@ -72,7 +72,7 @@ never a worktree.
 
 ## 2. Wave 1 — behavior, one module per PR
 
-- [ ] 2.1 Evaluation: fill `evaluate.py`. Load the subject's fact snapshot, derive
+- [x] 2.1 Evaluation: fill `evaluate.py`. Load the subject's fact snapshot, derive
       `facts_stale` from `updated_at` against `stale_after` (design.md decision 5), run each
       registered rule module, write an `evaluations` row per verdict type with `rule_version`
       and the facts hash (spec: "Staleness comes from the connector's own watermark", "The
