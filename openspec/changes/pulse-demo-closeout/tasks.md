@@ -68,7 +68,7 @@ date per design.md: internal engineering, within two weeks of 2026-09-01.
       right message; a PHI tripwire asserts no payload value reaches the receipt or log.
       `[model: sonnet | deps: 2.1 | lane: repo_change | wave: 1]`
 
-- [ ] 2.3 Projection rebuild: `twenty_projection.rebuild` with CLI entry
+- [x] 2.3 Projection rebuild: `twenty_projection.rebuild` with CLI entry
       `rebuild --scope <subject_type>[:<key>]`, reading the subject's committed events via 1.3,
       folding through the existing apply handlers in sequence, diffing against current rows,
       writing only differences, printing a counted receipt (scope, read, written, differences).
