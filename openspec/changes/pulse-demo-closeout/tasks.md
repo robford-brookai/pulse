@@ -21,7 +21,7 @@ date per design.md: internal engineering, within two weeks of 2026-09-01.
 
 ## 1. Wave 0 — fixtures and drift
 
-- [ ] 1.1 Demo cohort fixtures: a `synthea-seed` overlay under `scripts/demo/fixtures/` pinning
+- [x] 1.1 Demo cohort fixtures: a `synthea-seed` overlay under `scripts/demo/fixtures/` pinning
       one patient with three referral variants (mint, exact match, quarantine), one consent
       export landing row keyed to that patient, and one verdict mart row for the patient's
       episode. Generated once, committed with seed and checksum in a `MANIFEST.md`.
@@ -29,7 +29,7 @@ date per design.md: internal engineering, within two weeks of 2026-09-01.
       three fixture files agree on the patient's identifiers; `task check` green.
       `[model: sonnet | deps: — | lane: repo_change | wave: 0]`
 
-- [ ] 1.2 Demo drift: rewrite the roadmap's Demo breakpoints table
+- [x] 1.2 Demo drift: rewrite the roadmap's Demo breakpoints table
       (`design/delivery/pulse-program-roadmap.md`) to match shipped scripts (3 live kanban drag,
       4 billing declare-back, 5 end-to-end carrying the rebuild drill; `odg-read-redirect` to a
       Phase 4 row); write `docs/runbooks/demo3-live-kanban-drag.md` and
