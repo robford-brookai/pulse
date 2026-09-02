@@ -51,7 +51,7 @@ date per design.md: internal engineering, within two weeks of 2026-09-01.
 
 ## 2. Wave 1 — the walk, offline
 
-- [ ] 2.1 Stage harness: `scripts/demo/demo5_end_to_end.py` with the `Stage` protocol,
+- [x] 2.1 Stage harness: `scripts/demo/demo5_end_to_end.py` with the `Stage` protocol,
       `DemoContext`, offline context builder (compose stack up, fixture landing tables loaded,
       in-process board route), receipt printer, nonzero exit on first failure. Stages 1–4 wired
       by extracting stage functions from demos 1–4 where they exist only inside `main`, with
@@ -68,7 +68,7 @@ date per design.md: internal engineering, within two weeks of 2026-09-01.
       right message; a PHI tripwire asserts no payload value reaches the receipt or log.
       `[model: sonnet | deps: 2.1 | lane: repo_change | wave: 1]`
 
-- [ ] 2.3 Projection rebuild: `twenty_projection.rebuild` with CLI entry
+- [x] 2.3 Projection rebuild: `twenty_projection.rebuild` with CLI entry
       `rebuild --scope <subject_type>[:<key>]`, reading the subject's committed events via 1.3,
       folding through the existing apply handlers in sequence, diffing against current rows,
       writing only differences, printing a counted receipt (scope, read, written, differences).
@@ -79,7 +79,7 @@ date per design.md: internal engineering, within two weeks of 2026-09-01.
       Opus: the rebuild is the proof that projections are windows — a fold that disagrees with
       live apply on ordering would pass the demo and lie.
 
-- [ ] 2.4 Ledger migration admitting `communication_consent`: a new Alembic migration in
+- [x] 2.4 Ledger migration admitting `communication_consent`: a new Alembic migration in
       `packages/pulse-ledger/infra/postgres/versions/` extending `SUBJECT_TYPES` so the
       `ck_events_subject_type`, `ck_current_state_subject_type`, and `ck_review_queue_subject_type`
       check constraints admit `communication_consent` (the catalog seed's subject type, distinct

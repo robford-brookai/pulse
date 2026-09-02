@@ -305,20 +305,35 @@ def test_arbitrary_genesis_still_refuses_a_state_the_catalog_does_not_contain(
     assert _rows(ledger_db, "events") == []
 
 
-def test_communication_consent_validates_but_cannot_yet_be_committed(ledger_db: psycopg.Connection) -> None:
-    """A live mismatch between three artifacts, pinned here so it is visible rather than latent.
-
-    The catalog seed carries `communication_consent` (`ownership: recorded`); the subject-type
-    checks (0001, widened to admit `coverage` by 0004) do not. So legality validation passes and
-    the insert is refused by the store. Whichever task first records communication consent needs
-    either a schema revision or a spec correction, and this test turns red when that lands. See
-    HANDOFF.md.
+def test_a_catalog_legal_communication_consent_transition_commits(ledger_db: psycopg.Connection) -> None:
+    """The gap once pinned here (see `0005_admit_communication_consent_subject.py`), closed for
+    `communication_consent`: the catalog seed carries the subject (`ownership: recorded`) and the
+    subject-type checks admit it as of migration 0005, so validation and commit agree — event,
+    `current_state` fold, and outbox row land in one transaction, exactly as `record_communication_
+    consent` (consent-ingress, the consent sweep) needs.
     """
-    with pytest.raises(psycopg.errors.CheckViolation):
-        commit_declaration(
-            ledger_db,
-            _declare(subject_type="communication_consent", subject_key="cc-1", to_state="unset"),
-        )
+    minted = commit_declaration(
+        ledger_db,
+        _declare(subject_type="communication_consent", subject_key="cc-1", to_state="unset"),
+    )
+    opted_in = commit_declaration(
+        ledger_db,
+        _declare(
+            subject_type="communication_consent",
+            subject_key="cc-1",
+            to_state="opted_in",
+            effective_at=T0 + timedelta(days=1),
+        ),
+    )
+
+    assert minted.rule_version == CATALOG_VERSION
+    assert opted_in.state is not None
+    assert opted_in.state.state == "opted_in"
+    state = ledger_db.execute(
+        "SELECT state, last_event_id FROM ledger.current_state"
+        " WHERE subject_type = 'communication_consent' AND subject_key = 'cc-1'"
+    ).fetchone()
+    assert state == ("opted_in", opted_in.event_id)
 
 
 def test_a_catalog_legal_coverage_transition_commits(ledger_db: psycopg.Connection) -> None:

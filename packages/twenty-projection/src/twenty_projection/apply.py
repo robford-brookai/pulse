@@ -7,6 +7,11 @@ ledger sequence against the record's `projectionSeq` watermark, and write the *f
 state (encoded status, as-of from the event's effective time, watermark) in one PATCH, so any
 out-of-band drift converges on the subject's next event.
 
+`projected_fields` is the one place the projection decides what a record looks like after an
+event. `apply_event` writes it incrementally; `twenty_projection.rebuild` folds it over a
+subject's committed history (task 2.3). Neither owns a second copy, so a rebuild cannot agree
+with the live write path by coincidence.
+
 Scope boundary (task 2.1): unresolvable subjects and failed writes raise typed errors here and
 nothing more — parking, retries, and the counted metrics land in task 2.2. What is already
 binding is the payload posture: no error message or log line built here ever carries an event
@@ -37,9 +42,13 @@ REST_ROOT = "/rest"
 
 DEFAULT_TIMEOUT_SECONDS = 10.0
 
+#: Records per page when listing a whole object. The board is one row per patient-program, so a
+#: rebuild of a live scope is a handful of pages, not a scan.
+DEFAULT_LIST_PAGE_SIZE = 200
+
 #: Characters Twenty's filter grammar reserves; a value carrying one is refused rather than
 #: escaped, because the grammar has no quoting and a comma silently becomes a second predicate.
-_FILTER_RESERVED = frozenset(",:[]()")
+FILTER_RESERVED = frozenset(",:[]()")
 
 
 class ProjectionApplyError(Exception):
@@ -211,16 +220,52 @@ class ProjectionRestClient:
             raise SubjectLookupError(status_code=None) from error
         if not response.is_success:
             raise SubjectLookupError(status_code=response.status_code)
-        try:
-            body: object = response.json()
-        except ValueError as error:
-            raise SubjectLookupError(status_code=response.status_code, detail="unparseable listing body") from error
-        data: object = cast("Mapping[str, object]", body).get("data") if isinstance(body, Mapping) else None
-        records: object = cast("Mapping[str, object]", data).get(plural) if isinstance(data, Mapping) else None
-        if not isinstance(records, list):
-            raise SubjectLookupError(status_code=response.status_code, detail=f"listing carried no {plural} collection")
-        listed = cast("list[object]", records)
-        return tuple(cast("Mapping[str, object]", record) for record in listed if isinstance(record, Mapping))
+        return _records_of(response, plural)[0]
+
+    def list_records(
+        self,
+        plural: str,
+        *,
+        filters: Mapping[str, str] | None = None,
+        page_size: int = DEFAULT_LIST_PAGE_SIZE,
+    ) -> tuple[Mapping[str, object], ...]:
+        """Every record of one object, optionally filtered, paged to exhaustion.
+
+        `find_records` answers "which record is this subject's" and caps at two on purpose. This
+        answers "which rows does this scope hold", which a rebuild needs before it has read a
+        single event: the board rows *are* the enumeration of projected subjects, because the
+        projection never creates a record, only repaints the columns it owns.
+
+        Paging is the pinned core convention (`pulse_core.twenty_deploy`, live-verified):
+        `starting_after` with `pageInfo.hasNextPage` / `endCursor`. A page claiming a successor it
+        gives no cursor for raises rather than loops.
+        """
+        records: list[Mapping[str, object]] = []
+        cursor: str | None = None
+        while True:
+            params: dict[str, str | int] = {"limit": page_size}
+            if filters:
+                params["filter"] = ",".join(f"{field}[eq]:{value}" for field, value in sorted(filters.items()))
+            if cursor is not None:
+                params["starting_after"] = cursor
+            try:
+                response = self._http.get(f"{REST_ROOT}/{plural}", params=params)
+            except httpx.TransportError as error:
+                raise SubjectLookupError(status_code=None) from error
+            if not response.is_success:
+                raise SubjectLookupError(status_code=response.status_code)
+            page, body = _records_of(response, plural)
+            records.extend(page)
+            page_info = body.get("pageInfo")
+            if not isinstance(page_info, Mapping) or not cast("Mapping[str, object]", page_info).get("hasNextPage"):
+                return tuple(records)
+            end_cursor = cast("Mapping[str, object]", page_info).get("endCursor")
+            if not isinstance(end_cursor, str) or not end_cursor:
+                raise SubjectLookupError(
+                    status_code=response.status_code,
+                    detail=f"{plural} listing claims a next page with no endCursor",
+                )
+            cursor = end_cursor
 
     def patch_record(self, plural: str, record_id: str, fields: Mapping[str, object]) -> None:
         """One PATCH, success or a typed error — the failure body is dropped unread."""
@@ -247,7 +292,7 @@ def apply_event(
     `SubjectResolutionError` when no unique record matches, and `SubjectLookupError` /
     `ProjectionWriteError` when the transport fails — typed only, handling is task 2.2.
     """
-    event = _parse_envelope(envelope, board)
+    event = parse_envelope(envelope, board)
     record = _resolve_record(event, board, client)
 
     record_id = record.get("id")
@@ -276,20 +321,32 @@ def apply_event(
             watermark=stale_watermark,
         )
 
-    client.patch_record(
-        board.plural,
-        record_id,
-        {
-            board.status_field: encode_option_value(event.to_state),
-            board.as_of_field: event.effective_at,
-            board.watermark_field: event.seq,
-        },
-    )
+    client.patch_record(board.plural, record_id, projected_fields(event, board))
     return Applied(record_ref=record_ref, subject_key=event.subject_key, program=event.program, seq=event.seq)
 
 
+def projected_fields(event: EnrollmentEvent, board: BoardTarget = V1_BOARD) -> dict[str, object]:
+    """The *whole* board state one event implies: encoded status, its as-of, and the watermark.
+
+    The single place the projection decides what a record looks like after an event, so the
+    incremental write path (`apply_event`) and the rebuild's fold (`twenty_projection.rebuild`)
+    cannot disagree about it. A fold that built these fields itself would be a second
+    implementation of the projection, and the rebuild would prove nothing about the first.
+
+    Full state, not a delta (design decision 3): every field the projection owns is written on
+    every apply, which is what makes out-of-band drift converge on the subject's next event —
+    and what makes the last event in a subject's ledger sequence, per program, the whole answer
+    a rebuild has to reproduce.
+    """
+    return {
+        board.status_field: encode_option_value(event.to_state),
+        board.as_of_field: event.effective_at,
+        board.watermark_field: event.seq,
+    }
+
+
 @dataclass(frozen=True)
-class _EnrollmentEvent:
+class EnrollmentEvent:
     """The envelope fields the apply core actually consumes, validated once at the boundary."""
 
     event_id: str
@@ -300,7 +357,7 @@ class _EnrollmentEvent:
     effective_at: str
 
 
-def _parse_envelope(envelope: Mapping[str, object], board: BoardTarget) -> _EnrollmentEvent:
+def parse_envelope(envelope: Mapping[str, object], board: BoardTarget) -> EnrollmentEvent:
     subject_type = envelope.get("subject_type")
     if subject_type != board.subject_type:
         raise MalformedEventError("subject_type")
@@ -333,12 +390,12 @@ def _parse_envelope(envelope: Mapping[str, object], board: BoardTarget) -> _Enro
 
     # The filter grammar has no quoting: an identifier carrying a reserved character cannot be
     # expressed as a predicate, so it is refused here — before any request — never escaped.
-    if _FILTER_RESERVED & set(subject_key):
+    if FILTER_RESERVED & set(subject_key):
         raise MalformedEventError("subject_key")
-    if _FILTER_RESERVED & set(program):
+    if FILTER_RESERVED & set(program):
         raise MalformedEventError("payload.program")
 
-    return _EnrollmentEvent(
+    return EnrollmentEvent(
         event_id=event_id,
         subject_key=subject_key,
         program=program,
@@ -355,7 +412,7 @@ def _required_str(envelope: Mapping[str, object], field: str) -> str:
     return value
 
 
-def _resolve_record(event: _EnrollmentEvent, board: BoardTarget, client: ProjectionRestClient) -> Mapping[str, object]:
+def _resolve_record(event: EnrollmentEvent, board: BoardTarget, client: ProjectionRestClient) -> Mapping[str, object]:
     """The one board record for this subject, via the denormalized key columns — never guessed."""
     records = client.find_records(
         board.plural,
@@ -376,3 +433,28 @@ def _watermark_of(record: Mapping[str, object], board: BoardTarget) -> int | Non
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise SubjectLookupError(status_code=None, detail=f"{board.watermark_field} is not numeric")
     return int(value)
+
+
+def _records_of(response: httpx.Response, plural: str) -> tuple[tuple[Mapping[str, object], ...], Mapping[str, object]]:
+    """The records under `data.<plural>` and the body they came in, or a typed lookup error.
+
+    Both listing verbs read the same envelope, so they read it in one place; the body is returned
+    alongside because paging lives in `pageInfo` next to the records, not inside them. Nothing
+    here quotes a value into an error — a shape complaint names the collection, never its content.
+    """
+    try:
+        body: object = response.json()
+    except ValueError as error:
+        raise SubjectLookupError(status_code=response.status_code, detail="unparseable listing body") from error
+    if not isinstance(body, Mapping):
+        raise SubjectLookupError(status_code=response.status_code, detail="listing body is not a JSON object")
+    envelope = cast("Mapping[str, object]", body)
+    data: object = envelope.get("data")
+    records: object = cast("Mapping[str, object]", data).get(plural) if isinstance(data, Mapping) else None
+    if not isinstance(records, list):
+        raise SubjectLookupError(status_code=response.status_code, detail=f"listing carried no {plural} collection")
+    listed = cast("list[object]", records)
+    return (
+        tuple(cast("Mapping[str, object]", record) for record in listed if isinstance(record, Mapping)),
+        envelope,
+    )
