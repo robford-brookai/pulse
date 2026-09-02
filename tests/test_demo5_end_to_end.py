@@ -18,6 +18,7 @@ import importlib.util
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -69,6 +70,7 @@ def test_stages_are_wired_in_spec_order() -> None:
         "board_drag",
         "verdict_declare",
         "window_agreement",
+        "rebuild_drill",
     ]
 
 
@@ -145,3 +147,195 @@ def test_print_receipt_does_not_raise_on_an_empty_or_populated_list(capsys: pyte
     captured = capsys.readouterr()
     assert "Demo 5 receipt" in captured.out
     assert "a_stage" in captured.out
+
+
+# --- Live config: resolve_live_config, no I/O -------------------------------------------------
+
+_LIVE_ENV: dict[str, str] = {
+    demo5.DATABASE_URL_ENV: "postgresql://ledger:changeme@localhost:5434/ledger",
+    demo5.LEDGER_URL_ENV: "https://ledger.dev.example",
+    demo5.TWENTY_WEBHOOK_SECRET_ENV: "a-webhook-secret",
+    "PULSE_TWENTY_DEV_URL": "https://twenty.dev.example",
+    "PULSE_TWENTY_DEV_TOKEN": "a-twenty-token",
+    demo5.CUSTOMERIO_TOKEN_ENV_VAR: "a-customerio-token",
+    demo5.VERDICT_RELAY_TOKEN_ENV_VAR: "a-verdict-relay-token",
+    demo5.REPLAY_TOKEN_ENV_VAR: "a-replay-token",
+    demo5.STG_EVENTS_ACCOUNT_ENV: "an-account",
+    demo5.STG_EVENTS_USER_ENV: "a-user",
+    demo5.STG_EVENTS_PASSWORD_ENV: "a-password",
+    demo5.STG_EVENTS_WAREHOUSE_ENV: "a-warehouse",
+}
+
+
+def test_resolve_live_config_reads_every_credential_by_name() -> None:
+    config = demo5.resolve_live_config(_LIVE_ENV)
+    assert config.database_url == _LIVE_ENV[demo5.DATABASE_URL_ENV]
+    assert config.ledger_url == _LIVE_ENV[demo5.LEDGER_URL_ENV]
+    assert config.webhook_secret == _LIVE_ENV[demo5.TWENTY_WEBHOOK_SECRET_ENV]
+    assert config.twenty_target.url == _LIVE_ENV["PULSE_TWENTY_DEV_URL"]
+    assert config.twenty_target.token == _LIVE_ENV["PULSE_TWENTY_DEV_TOKEN"]
+    assert config.customerio_token == _LIVE_ENV[demo5.CUSTOMERIO_TOKEN_ENV_VAR]
+    assert config.verdict_relay_token == _LIVE_ENV[demo5.VERDICT_RELAY_TOKEN_ENV_VAR]
+    assert config.projection_replay_token == _LIVE_ENV[demo5.REPLAY_TOKEN_ENV_VAR]
+    assert config.snowflake_account == _LIVE_ENV[demo5.STG_EVENTS_ACCOUNT_ENV]
+    assert config.snowflake_password == _LIVE_ENV[demo5.STG_EVENTS_PASSWORD_ENV]
+    assert config.snowflake_private_key_path is None
+
+
+def test_resolve_live_config_accepts_a_private_key_path_in_lieu_of_a_password() -> None:
+    env = {k: v for k, v in _LIVE_ENV.items() if k != demo5.STG_EVENTS_PASSWORD_ENV}
+    env[demo5.STG_EVENTS_PRIVATE_KEY_PATH_ENV] = "/path/to/key.pem"
+    config = demo5.resolve_live_config(env)
+    assert config.snowflake_password is None
+    assert config.snowflake_private_key_path == "/path/to/key.pem"
+
+
+@pytest.mark.parametrize("missing", sorted(_LIVE_ENV))
+def test_resolve_live_config_refuses_on_the_first_missing_variable(missing: str) -> None:
+    env = {k: v for k, v in _LIVE_ENV.items() if k != missing}
+    if missing == demo5.STG_EVENTS_PASSWORD_ENV:
+        # The password/private-key pair is either/or — dropping the password alone is not a
+        # refusal (the private-key path is still set), covered by its own test above.
+        return
+    with pytest.raises(demo5.LiveStartupError) as excinfo:
+        demo5.resolve_live_config(env)
+    # A `PULSE_TWENTY_DEV_*` variable is named through `resolve_target`'s own `DeployError`
+    # message rather than bare, so match on containment for those two.
+    assert any(missing in item for item in excinfo.value.missing)
+
+
+def test_resolve_live_config_refuses_when_neither_snowflake_credential_is_set() -> None:
+    env = {k: v for k, v in _LIVE_ENV.items() if k != demo5.STG_EVENTS_PASSWORD_ENV}
+    with pytest.raises(demo5.LiveStartupError) as excinfo:
+        demo5.resolve_live_config(env)
+    assert any("SNOWFLAKE" in name for name in excinfo.value.missing)
+
+
+def test_resolve_live_config_refuses_an_unknown_twenty_target(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(demo5, "TWENTY_TARGET", "not-a-real-target")
+    with pytest.raises(demo5.LiveStartupError):
+        demo5.resolve_live_config(_LIVE_ENV)
+
+
+# --- Live warehouse window: _fetch_stg_events over a fake Snowflake connection ------------------
+
+
+class _FakeSnowflakeCursor:
+    def __init__(self, rows: list[tuple[Any, ...]]) -> None:
+        self._rows = rows
+        self.executed: tuple[str, list[Any]] | None = None
+
+    def execute(self, query: str, params: list[Any]) -> None:
+        self.executed = (query, params)
+
+    def fetchall(self) -> list[tuple[Any, ...]]:
+        return self._rows
+
+    def close(self) -> None:
+        pass
+
+
+class _FakeSnowflakeConnection:
+    def __init__(self, rows: list[tuple[Any, ...]]) -> None:
+        self._cursor = _FakeSnowflakeCursor(rows)
+        self.closed = False
+
+    def cursor(self) -> _FakeSnowflakeCursor:
+        return self._cursor
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def _stg_events_row(
+    *, event_id: str = "evt-1", subject_type: str = "enrollment", subject_key: str = "pt-0001"
+) -> tuple[Any, ...]:
+    return (
+        event_id,
+        subject_type,
+        subject_key,
+        "2026-08-27T00:00:00+00:00",
+        "2026-08-27T00:00:01+00:00",
+        None,
+        {"to_state": "active"},
+    )
+
+
+def test_fetch_stg_events_groups_rows_by_subject_and_closes_the_connection() -> None:
+    connection = _FakeSnowflakeConnection([_stg_events_row()])
+    result = demo5._fetch_stg_events(
+        frozenset({("enrollment", "pt-0001"), ("billing_episode", "ep-0001")}),
+        connect=lambda: connection,
+    )
+    assert result[("enrollment", "pt-0001")][0]["event_id"] == "evt-1"
+    assert result[("billing_episode", "ep-0001")] == []
+    assert connection.closed is True
+
+
+def test_fetch_stg_events_drops_a_row_for_an_unwanted_subject() -> None:
+    connection = _FakeSnowflakeConnection([_stg_events_row(subject_key="not-in-scope")])
+    result = demo5._fetch_stg_events(frozenset({("enrollment", "pt-0001")}), connect=lambda: connection)
+    assert result[("enrollment", "pt-0001")] == []
+
+
+def test_fetch_stg_events_never_connects_for_an_empty_subject_set() -> None:
+    def _fail_to_connect() -> Any:
+        pytest.fail("connect() should never be called for an empty subject set")
+
+    result = demo5._fetch_stg_events(frozenset(), connect=_fail_to_connect)
+    assert result == {}
+
+
+# --- Live context builder: build_live_context, no live Postgres or network ---------------------
+
+
+class _FakePool:
+    """Stands in for `psycopg_pool.ConnectionPool` — `build_live_context` only calls `.wait()` and
+    registers `.close()` before this test ever runs a stage against it."""
+
+    def __init__(self, database_url: str) -> None:
+        self.database_url = database_url
+        self.waited = False
+        self.closed = False
+
+    def wait(self) -> None:
+        self.waited = True
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def test_build_live_context_wires_credentials_and_never_touches_a_live_stack() -> None:
+    config = demo5.resolve_live_config(_LIVE_ENV)
+    ctx = demo5.build_live_context(config, pool_factory=_FakePool)
+    try:
+        assert ctx.live is True
+        assert ctx.api_transport is None
+        assert ctx.api_base_url == config.ledger_url
+        assert ctx.webhook_secret == config.webhook_secret
+        assert ctx.writer_tokens[demo5.CUSTOMERIO_WRITER_ID] == config.customerio_token
+        assert ctx.writer_tokens[demo5.VERDICT_RELAY_WRITER_ID] == config.verdict_relay_token
+        assert ctx.writer_tokens[demo5.REBUILD_WRITER_ID] == config.projection_replay_token
+        assert ctx.board_transport is None
+        assert ctx.board_base_url == config.twenty_target.url
+        assert ctx.board_token == config.twenty_target.token
+        assert ctx.board_store is None
+        assert ctx.patient_key == ctx.fixtures["consent_export_row"]["subject_key"]
+        assert ctx.pool.waited is True
+    finally:
+        ctx.close()
+    assert ctx.pool.closed is True
+
+
+def test_build_live_context_warehouse_reader_reads_stg_events_through_the_fake_connect(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = demo5.resolve_live_config(_LIVE_ENV)
+    connection = _FakeSnowflakeConnection([_stg_events_row()])
+    monkeypatch.setattr(demo5, "_snowflake_connect_stg_events", lambda _config: connection)
+    ctx = demo5.build_live_context(config, pool_factory=_FakePool)
+    try:
+        result = ctx.warehouse_reader(frozenset({("enrollment", "pt-0001")}))
+        assert result[("enrollment", "pt-0001")][0]["event_id"] == "evt-1"
+    finally:
+        ctx.close()
