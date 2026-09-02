@@ -118,6 +118,15 @@ the same shell. It is the attended-run entry point (`scripts/demo/stage_e2e_live
      `programCode = demo5`.
 5. `exec task demo:e2e:live`.
 
+**Known gap (2026-09-02):** the dev secret carries no `PULSE_LEDGER_WRITER_TOKEN_CUSTOMER*` key,
+so step 3 stops and lists the keys it found. Provisioning it is not only a mint-and-restart
+(`docs/process/env-vars-retreival.md` §3): the API derives a writer id from the key suffix by
+lowercasing and turning `_` into `-` (`pulse_ledger.auth._writer_id_from_suffix`), so no key can
+yield the `customer.io` actor the `customerio-consent-ingress` spec names. Either the ledger
+learns to spell a dot, or the ingress and its spec move to `customer-io`. That decision is
+recorded where it lands; until then stage 2 cannot authenticate live, and the run stops here by
+design rather than declaring under the wrong actor.
+
 Nothing is ever printed but variable names, key names, and `set` / `MISSING`. Skip step 4 with
 `task stage:e2e:live -- --no-preflight` once the preconditions have been verified for the day.
 

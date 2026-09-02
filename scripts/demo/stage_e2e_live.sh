@@ -50,11 +50,12 @@ fi
 
 # 3. the two names the scratch file lacks, from the Duplo secret (values never echoed)
 pick_secret_key() {
-  # $1 = secret JSON on stdin, $2 = explicit key or empty, $3 = key prefix to match
-  python3 - "$2" "$3" <<'PY'
-import json, sys
+  # $1 = explicit key or empty, $2 = key prefix to match; the secret JSON arrives in the
+  # STAGE_SECRET_JSON environment of this one child process (stdin carries the program).
+  python3 - "$1" "$2" <<'PY'
+import json, os, sys
 explicit, prefix = sys.argv[1], sys.argv[2]
-doc = json.load(sys.stdin)
+doc = json.loads(os.environ.get("STAGE_SECRET_JSON") or "{}")
 data = doc.get("SecretData") if isinstance(doc, dict) else None
 if data is None and isinstance(doc, list) and doc:
     data = doc[0].get("SecretData")
@@ -77,14 +78,14 @@ if [[ -z "${CONSENT_INGRESS_CUSTOMERIO_TOKEN:-}" || -z "${PULSE_CORE_REPLAY_TOKE
   SECRET_JSON="$(duploctl secret find "$DUPLO_SECRET" --host "$DUPLO_HOST" --tenant "$DUPLO_TENANT" --token "$DUPLO_TOKEN" --output json)"
   unset DUPLO_TOKEN
   if [[ -z "${CONSENT_INGRESS_CUSTOMERIO_TOKEN:-}" ]]; then
-    CONSENT_INGRESS_CUSTOMERIO_TOKEN="$(printf '%s' "$SECRET_JSON" | pick_secret_key "" "${STAGE_E2E_CONSENT_KEY:-}" "PULSE_LEDGER_WRITER_TOKEN_CUSTOMER")"
+    CONSENT_INGRESS_CUSTOMERIO_TOKEN="$(STAGE_SECRET_JSON="$SECRET_JSON" pick_secret_key "${STAGE_E2E_CONSENT_KEY:-}" "PULSE_LEDGER_WRITER_TOKEN_CUSTOMER")"
     export CONSENT_INGRESS_CUSTOMERIO_TOKEN
     echo "stage: CONSENT_INGRESS_CUSTOMERIO_TOKEN set from the secret"
   fi
   if [[ -z "${PULSE_CORE_REPLAY_TOKEN:-}" ]]; then
     # The history route accepts any writer credential (pulse_ledger.api SUBJECT_HISTORY_PATH);
     # the projection replays under the credential it already writes with.
-    PULSE_CORE_REPLAY_TOKEN="$(printf '%s' "$SECRET_JSON" | pick_secret_key "" "${STAGE_E2E_REPLAY_KEY:-}" "PULSE_LEDGER_WRITER_TOKEN_TWENTY")"
+    PULSE_CORE_REPLAY_TOKEN="$(STAGE_SECRET_JSON="$SECRET_JSON" pick_secret_key "${STAGE_E2E_REPLAY_KEY:-}" "PULSE_LEDGER_WRITER_TOKEN_TWENTY")"
     export PULSE_CORE_REPLAY_TOKEN
     echo "stage: PULSE_CORE_REPLAY_TOKEN set from the secret"
   fi
