@@ -1,12 +1,10 @@
 # Handoff Summary: connector-pattern
 
-Collected 3 handoff(s).
+Collected 1 handoff(s).
 
 ## Files
 
-- [task-002.md](handoffs/connector-pattern/task-002.md)
-- [task-005.md](handoffs/connector-pattern/task-005.md)
-- [task-006.md](handoffs/connector-pattern/task-006.md)
+- [task-008.md](handoffs/connector-pattern/task-008.md)
 
 ## Doc-Updater Instructions
 
