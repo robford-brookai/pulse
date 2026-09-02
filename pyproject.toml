@@ -69,6 +69,7 @@ members = [
     "packages/consent-ingress",
     "packages/synthea-seed",
     "packages/twenty-projection",
+    "packages/billing",
     "packages/ocean",
     "packages/ocean/libs/ocean-events",
     "packages/ocean/libs/ocean-broker",
@@ -85,6 +86,7 @@ identity = { workspace = true }
 consent-ingress = { workspace = true }
 synthea-seed = { workspace = true }
 twenty-projection = { workspace = true }
+billing = { workspace = true }
 ocean-events = { workspace = true }
 ocean-broker = { workspace = true }
 ocean-connector-mcp = { workspace = true }
@@ -203,6 +205,7 @@ ignore = [
 "packages/consent-ingress/tests/**" = ["S101"]
 "packages/synthea-seed/tests/**" = ["S101"]
 "packages/twenty-projection/tests/**" = ["S101"]
+"packages/billing/tests/**" = ["S101"]
 
 "packages/ocean/tests/**" = ["S101", "S105", "B017"]
 "packages/ocean/**/tests/**" = ["S101", "S105", "B017"]

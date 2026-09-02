@@ -12,6 +12,7 @@ resolution-markers = [
 [manifest]
 members = [
     "archaeology",
+    "billing",
     "consent-ingress",
     "identity",
     "ocean",
@@ -375,6 +376,28 @@ sdist = { url = "https://files.pythonhosted.org/packages/c7/94/1009e248bbfbab113
 wheels = [
     { url = "https://files.pythonhosted.org/packages/71/cc/18245721fa7747065ab478316c7fea7c74777d07f37ae60db2e84f8172e8/beartype-0.22.9-py3-none-any.whl", hash = "sha256:d16c9bbc61ea14637596c5f6fbff2ee99cbe3573e46a716401734ef50c3060c2", size = 1333658, upload-time = "2025-12-13T06:50:28.266Z" },
 ]
+
+[[package]]
+name = "billing"
+version = "0.1.0"
+source = { editable = "packages/billing" }
+dependencies = [
+    { name = "alembic" },
+    { name = "psycopg", extra = ["binary", "pool"] },
+    { name = "pulse-core" },
+    { name = "sqlalchemy" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "alembic", specifier = ">=1.13" },
+    { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.2" },
+    { name = "pulse-core", editable = "packages/pulse-core" },
+    { name = "sqlalchemy", specifier = ">=2.0" },
+]
+
+[package.metadata.requires-dev]
+dev = []
 
 [[package]]
 name = "boto3"
