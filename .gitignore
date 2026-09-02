@@ -142,6 +142,9 @@ celerybeat.pid
 # Environments
 .env
 .envrc
+# Local credential-export scratch files — plaintext secrets, never committed (any name/path).
+*-env-vars.sh
+verdict-env-vars.sh
 .venv
 env/
 venv/
