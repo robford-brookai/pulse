@@ -79,7 +79,7 @@ date per design.md: internal engineering, within two weeks of 2026-09-01.
       Opus: the rebuild is the proof that projections are windows — a fold that disagrees with
       live apply on ordering would pass the demo and lie.
 
-- [ ] 2.4 Ledger migration admitting `communication_consent`: a new Alembic migration in
+- [x] 2.4 Ledger migration admitting `communication_consent`: a new Alembic migration in
       `packages/pulse-ledger/infra/postgres/versions/` extending `SUBJECT_TYPES` so the
       `ck_events_subject_type`, `ck_current_state_subject_type`, and `ck_review_queue_subject_type`
       check constraints admit `communication_consent` (the catalog seed's subject type, distinct
