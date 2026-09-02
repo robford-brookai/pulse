@@ -416,6 +416,30 @@ tasks:
     cmds:
       - docker push pulse-ledger:{{.TAG}}
 
+  billing-connector:image:
+    desc: Build the billing-connector service image and tag it TAG (needs Docker)
+    # Build context is the repo root — pulse-core and billing are workspace siblings that
+    # packages/billing-connector/Dockerfile installs from sibling paths, not from PyPI. The image
+    # runs `python -m billing_connector.service` (task 2.3's consume loop).
+    # Never reached from `check`: it needs a Docker daemon and, on an arm64 dev machine, an
+    # emulated amd64 build — neither belongs on every runner
+    # (tests/test_billing_connector_deploy_targets.py pins this the same way
+    # tests/test_ledger_deploy_targets.py pins ledger:image).
+    requires:
+      vars: [TAG]
+    cmds:
+      - docker buildx build --platform linux/amd64 -f packages/billing-connector/Dockerfile -t billing-connector:{{.TAG}} .
+
+  billing-connector:deploy:
+    desc: Roll the billing-connector deployment to TAG on TARGET (needs that target's credential)
+    # Dumb by design, same posture as ledger:deploy: push the image billing-connector:image
+    # already built, then re-point TARGET's deployment at TAG. No generation logic lives here.
+    # Never reached from `check`: it needs registry and cluster credentials.
+    requires:
+      vars: [TAG, TARGET]
+    cmds:
+      - docker push billing-connector:{{.TAG}}
+
   projection:consume:
     desc: Run the Twenty board projection consumer against TARGET's queue (dev|staging|prod; needs that target's credential)
     # Credentialed and long-running: resolves the queue and Twenty REST credential from the

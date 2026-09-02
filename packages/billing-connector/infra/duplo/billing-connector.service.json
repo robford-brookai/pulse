@@ -1,0 +1,43 @@
+{
+  "Name": "pulse-billing-connector",
+  "AgentPlatform": 7,
+  "Replicas": 1,
+  "DockerImage": "__BILLING_CONNECTOR_IMAGE__",
+  "OtherDockerConfig": {
+    "EnvFrom": [
+      {
+        "secretRef": {
+          "name": "pulse-billing-connector-secret"
+        }
+      }
+    ],
+    "Env": [
+      {
+        "name": "BILLING_CONNECTOR_QUEUE_URL",
+        "value": "https://sqs.us-east-1.amazonaws.com/173008660334/duploservices-dev01-brook-pulse-billing-connector"
+      },
+      {
+        "name": "BILLING_CONNECTOR_LEDGER_BASE_URL",
+        "value": "http://pulse-ledger-api.duploservices-dev01-brook.svc.cluster.local:8000"
+      },
+      {
+        "name": "AWS_REGION",
+        "value": "us-east-1"
+      },
+      {
+        "name": "AWS_DEFAULT_REGION",
+        "value": "us-east-1"
+      }
+    ],
+    "resources": {
+      "requests": {
+        "cpu": "50m",
+        "memory": "500Mi"
+      },
+      "limits": {
+        "cpu": "500m",
+        "memory": "500Mi"
+      }
+    }
+  }
+}
