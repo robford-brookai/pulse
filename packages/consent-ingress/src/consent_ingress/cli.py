@@ -18,7 +18,7 @@ does — the same posture `verdict_relay.run` documents for its own production w
   `schedules.cli`'s consent-sweep dry-run ("with no client to reject a declaration against, a dry
   run has nothing else that can fail").
 - **The real run** pages the landing, declares each page's valid rows through a real
-  `PulseCoreClient` authenticated with this ingress's own `customer.io` D15 credential, commits the
+  `PulseCoreClient` authenticated with this ingress's own `customer-io` D15 credential, commits the
   cursor after each page, and prints the run receipt (task 3.3). Exit status is nonzero on any
   failed declaration — a response that classifies `rejected`, or a `transient` response that
   exhausted the client's own retry budget (already folded into `RunReceipt.rejected` by
@@ -68,7 +68,7 @@ from consent_ingress.row_source import (
 #: pinned here, per the monorepo's existing convention (`schedules.cli`, `relay_worker.py`).
 PULSE_CORE_BASE_URL_ENV_VAR = "PULSE_CORE_BASE_URL"
 #: This ingress's own D15 command-attribution credential (`CUSTOMERIO_WRITER_ID`) — authenticates
-#: `POST /commands` so the ledger resolves every declared command's actor to `customer.io`.
+#: `POST /commands` so the ledger resolves every declared command's actor to `customer-io`.
 CUSTOMERIO_TOKEN_ENV_VAR = "CONSENT_INGRESS_CUSTOMERIO_TOKEN"  # noqa: S105 — an env var name, not a secret
 #: This ingress's own writer-scoped credential (`CURSOR_WRITER_ID`) — authenticates the durable
 #: cursor's `GET/PUT /writers/consent-ingress/cursor`, distinct from the command-attribution

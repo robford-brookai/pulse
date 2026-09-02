@@ -2,7 +2,7 @@
 receipt (tasks 3.1-3.3).
 
 Covers seven spec scenarios: "A landed row becomes a command", "A declared command is
-customer.io-attributed and traceable", "Ingress and sweep address the same row identically", "A
+customer-io-attributed and traceable", "Ingress and sweep address the same row identically", "A
 cursor resume replays its last page", "A full re-run over the same landing replays", "A malformed
 row among valid ones", and "A run receipt is safe to attach to logs".
 
@@ -209,15 +209,15 @@ def test_no_rows_declares_nothing():
     assert api.bodies == []
 
 
-# --- Requirement: Every declaration attributes to actor `customer.io` ---
+# --- Requirement: Every declaration attributes to actor `customer-io` ---
 
 
 def test_a_declared_command_is_customerio_attributed_and_traceable():
-    """spec: "A declared command is customer.io-attributed and traceable" — submitted under this
-    ingress's own `customer.io` credential, payload referencing the source row's message id.
+    """spec: "A declared command is customer-io-attributed and traceable" — submitted under this
+    ingress's own `customer-io` credential, payload referencing the source row's message id.
 
     Attribution is authentication (ADR-0003): no actor field travels in the body, so the actor
-    assertion is that the client authenticates with the `customer.io` credential — observable here
+    assertion is that the client authenticates with the `customer-io` credential — observable here
     through the D16 idempotency key, which is always `{writer_id}:{digest}`.
     """
     rows = _fixture_rows()

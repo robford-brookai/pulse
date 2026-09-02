@@ -76,7 +76,7 @@ connection is attempted and refuses naming every variable still unset:
 | `PULSE_LEDGER_API_URL` | The dev ledger's command API and Twenty webhook route — the same variable `demo3_live_kanban_drag.py` reads for the same server. |
 | `PULSE_LEDGER_TWENTY_WEBHOOK_SECRET` | Signs stage 3's webhook deliveries — demo3's own secret. |
 | `PULSE_TWENTY_DEV_URL` / `PULSE_TWENTY_DEV_TOKEN` | Dev Twenty, resolved by `pulse_core.twenty_deploy.resolve_target("dev")` — the same pair every credentialed Twenty target uses. |
-| `CONSENT_INGRESS_CUSTOMERIO_TOKEN` | Stage 2's command-attribution credential (`customer.io`), the same variable `consent_ingress.cli` reads. |
+| `CONSENT_INGRESS_CUSTOMERIO_TOKEN` | Stage 2's command-attribution credential (`customer-io`), the same variable `consent_ingress.cli` reads. |
 | `VERDICT_RELAY_TOKEN` | Stage 4's command-attribution credential (`verdict-relay`), the same variable `verdict_relay.production` reads. |
 | `PULSE_CORE_REPLAY_TOKEN` | Stage 6's replay credential — the kit's read-only facility (`pulse_core.replay`), the same one `twenty_projection.rebuild` uses in production. |
 | `DEMO5_SNOWFLAKE_ACCOUNT` / `DEMO5_SNOWFLAKE_USER` / `DEMO5_SNOWFLAKE_WAREHOUSE` | This demo's own read-only reader for `STREAMLINE.STG_EVENTS.EVENTS` (stage 5's live warehouse window) — a different table and a different purpose than verdict-relay's mart credential. |
@@ -118,14 +118,15 @@ the same shell. It is the attended-run entry point (`scripts/demo/stage_e2e_live
      `programCode = demo5`.
 5. `exec task demo:e2e:live`.
 
-**Known gap (2026-09-02):** the dev secret carries no `PULSE_LEDGER_WRITER_TOKEN_CUSTOMER*` key,
-so step 3 stops and lists the keys it found. Provisioning it is not only a mint-and-restart
-(`docs/process/env-vars-retreival.md` §3): the API derives a writer id from the key suffix by
-lowercasing and turning `_` into `-` (`pulse_ledger.auth._writer_id_from_suffix`), so no key can
-yield the `customer.io` actor the `customerio-consent-ingress` spec names. Either the ledger
-learns to spell a dot, or the ingress and its spec move to `customer-io`. That decision is
-recorded where it lands; until then stage 2 cannot authenticate live, and the run stops here by
-design rather than declaring under the wrong actor.
+**Known gap (2026-09-02), resolved:** the dev secret carried no `PULSE_LEDGER_WRITER_TOKEN_CUSTOMER*`
+key, so step 3 would stop and list the keys it found. The root cause: the API derives a writer id
+from the key suffix by lowercasing and turning `_` into `-`
+(`pulse_ledger.auth._writer_id_from_suffix`), so no key could ever yield an actor spelled with a
+dot. Resolved per `pulse-demo-closeout` design.md decision 9: the ingress and its spec now name the
+actor `customer-io`, registered as `PULSE_LEDGER_WRITER_TOKEN_CUSTOMER_IO`. Provisioning that
+credential in the dev secret is still a live step (`docs/process/env-vars-retreival.md` §3), not
+only a mint-and-restart — until it exists, step 3 stops and lists the keys it found, and the run
+stops here by design rather than declaring under the wrong actor.
 
 Nothing is ever printed but variable names, key names, and `set` / `MISSING`. Skip step 4 with
 `task stage:e2e:live -- --no-preflight` once the preconditions have been verified for the day.
