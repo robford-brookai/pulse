@@ -10,6 +10,7 @@ database per test, migrated up before use. Covers the same two spec scenarios as
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import psycopg
@@ -128,6 +129,31 @@ def test_a_later_event_merges_onto_the_existing_row(database_url: str, db: psyco
     facts, _ = _stored_row(db, "ep-1")
     assert facts["to_state"] == "revoked"
     assert facts["program"] == "ccm"
+
+
+def test_load_snapshot_returns_none_for_an_unknown_subject(database_url: str, db: psycopg.Connection) -> None:
+    _upgrade(database_url)
+    store = PostgresFactStore(db)
+
+    assert store.load_snapshot("billing_episode", "no-such-subject") is None
+
+
+def test_load_snapshot_carries_the_updated_at_watermark(database_url: str, db: psycopg.Connection) -> None:
+    """`billing_connector.evaluate.evaluate_subject` (task 2.1) derives `facts_stale` from this
+    watermark against `Config.stale_after` (design.md decision 5) — the unlocked read path this
+    method adds is where that watermark first becomes visible outside the store."""
+    _upgrade(database_url)
+    store = PostgresFactStore(db)
+    store.apply_event(
+        envelope(event_id=uuid.uuid4(), effective_at="2026-09-01T10:00:00+00:00", payload={"achieved": True})
+    )
+
+    snapshot = store.load_snapshot("billing_episode", "ep-1")
+
+    assert snapshot is not None
+    assert snapshot.facts["achieved"] is True
+    assert snapshot.updated_at is not None
+    assert (datetime.now(timezone.utc) - snapshot.updated_at) < timedelta(seconds=30)
 
 
 def test_distinct_subjects_get_distinct_rows(database_url: str, db: psycopg.Connection) -> None:

@@ -23,9 +23,14 @@ from psycopg.types.json import Jsonb
 from billing.facts import SubjectFactsSnapshot, fold_event
 
 _SELECT_FOR_UPDATE_SQL = """
-    SELECT facts, last_event_id FROM billing_engine.subject_facts
+    SELECT facts, last_event_id, updated_at FROM billing_engine.subject_facts
      WHERE subject_type = %(subject_type)s AND subject_key = %(subject_key)s
      FOR UPDATE
+"""
+
+_SELECT_SQL = """
+    SELECT facts, last_event_id, updated_at FROM billing_engine.subject_facts
+     WHERE subject_type = %(subject_type)s AND subject_key = %(subject_key)s
 """
 
 _UPSERT_SQL = """
@@ -47,6 +52,29 @@ class PostgresFactStore:
 
     def __init__(self, conn: psycopg.Connection) -> None:
         self._conn = conn
+
+    def load_snapshot(self, subject_type: str, subject_key: str) -> SubjectFactsSnapshot | None:
+        """Read one subject's current fact snapshot, unlocked — the read path
+        `billing_connector.evaluate.evaluate_subject` (task 2.1) uses to derive `facts_stale`
+        from `updated_at` and to hand the rule registry a fact snapshot. No `FOR UPDATE`: this is
+        an evaluate-time read, not a fold, so it never needs `apply_event`'s transactional
+        guarantee against a concurrent fold for the same subject.
+        """
+        cursor = self._conn.execute(
+            _SELECT_SQL,
+            {"subject_type": subject_type, "subject_key": subject_key},
+        )
+        row = cursor.fetchone()
+        if row is None:
+            return None
+        facts, last_event_id, updated_at = row
+        return SubjectFactsSnapshot(
+            subject_type=subject_type,
+            subject_key=subject_key,
+            facts=facts,
+            last_event_id=str(last_event_id),
+            updated_at=updated_at,
+        )
 
     def apply_event(self, envelope: Mapping[str, object]) -> bool:
         """Fold one event; `True` if the row changed, `False` if the fold found nothing new.
@@ -85,10 +113,11 @@ class PostgresFactStore:
         row = cursor.fetchone()
         if row is None:
             return None
-        facts, last_event_id = row
+        facts, last_event_id, updated_at = row
         return SubjectFactsSnapshot(
             subject_type=subject_type,
             subject_key=subject_key,
             facts=facts,
             last_event_id=str(last_event_id),
+            updated_at=updated_at,
         )

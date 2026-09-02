@@ -195,6 +195,32 @@ class TestEvaluateEpisode:
         assert verdict.reason == "period_open"
 
 
+class TestEvaluateFromFacts:
+    """The registry calling convention `billing_connector.evaluate.evaluate_subject` (task 2.1)
+    uses — adapts a flat `subject_facts.facts` snapshot into `evaluate_episode`'s input."""
+
+    def test_adapts_a_flat_facts_snapshot_into_one_period(self) -> None:
+        verdict = rules.evaluate_from_facts(
+            {"period_end": "2026-08-31", "achieved": True, "consent_start": "2026-07-01"},
+            as_of=date(2026, 9, 1),
+        )
+        assert verdict.outcome == "positive"
+
+    def test_no_consent_start_is_no_consent_on_record(self) -> None:
+        verdict = rules.evaluate_from_facts(
+            {"period_end": "2026-08-31", "achieved": True},
+            as_of=date(2026, 9, 1),
+        )
+        assert verdict.outcome == "negative"  # the gate clears an achievement with no consent on record
+
+    def test_a_facts_row_with_no_period_end_yet_has_nothing_to_gate(self) -> None:
+        """An episode subject whose only folded facts are non-eligibility ones (no `period_end`
+        yet) has no periods to evaluate — same as `evaluate_episode`'s own no-periods case."""
+        verdict = rules.evaluate_from_facts({"to_state": "open"}, as_of=date(2026, 9, 1))
+        assert verdict.outcome == "indeterminate"
+        assert verdict.reason == "period_open"
+
+
 class TestPurity:
     def test_no_monetary_field_is_accepted_or_returned(self) -> None:
         """Amount-free billing boundary: the rule surface has no place to put money.
