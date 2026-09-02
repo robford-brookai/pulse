@@ -18,6 +18,7 @@ nav:
       - Demo 2 (partial) — s13+s14: runbooks/demo2-partial-s13-s14.md
       - Demo 3 — live kanban drag: runbooks/demo3-live-kanban-drag.md
       - Demo 4 — billing declare-back: runbooks/demo4-billing-declare-back.md
+      - Demo 5 — end to end: runbooks/demo5-end-to-end.md
       - Catalog-release: runbooks/catalog-release.md
       - Twenty-webhook: runbooks/twenty-webhook.md
       - Pulse-command-api-deploy: runbooks/pulse-command-api-deploy.md

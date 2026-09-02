@@ -1,5 +1,5 @@
-"""The demo Taskfile area (design decision 7, pulse-demo-closeout): `demo:1` … `demo:4` are
-defined and none is reachable from `check`.
+"""The demo Taskfile area (design decision 7, pulse-demo-closeout): `demo:1` … `demo:4`,
+`demo:e2e`, and `demo:e2e:live` (task 3.1) are defined and none is reachable from `check`.
 
 Same reachability-walk pattern `test_twenty_app_scaffold.py`'s
 `test_credentialed_twenty_targets_stay_out_of_check` uses: `check` must stay runnable with only
@@ -15,7 +15,7 @@ import yaml
 
 ROOT = Path(__file__).parents[1]
 
-_DEMO_TARGETS = ("demo:1", "demo:2", "demo:3", "demo:4")
+_DEMO_TARGETS = ("demo:1", "demo:2", "demo:3", "demo:4", "demo:e2e", "demo:e2e:live")
 
 
 def _taskfile() -> dict:

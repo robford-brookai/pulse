@@ -199,8 +199,10 @@ tasks:
   # The roadmap's demo breakpoints (design/delivery/pulse-program-roadmap.md #Demo breakpoints),
   # one target per demo. None is reached from `check`: 1 needs Docker/LocalStack, 2 includes a
   # script the roadmap convention keeps out of `check` on principle even though it is fully
-  # offline, and 3-4 are live-only against dev credentials — same posture as twenty:deploy and
-  # relay:run. tests/test_demo_taskfile_targets.py (the reachability gate, same pattern as
+  # offline, 3-4 are live-only against dev credentials — same posture as twenty:deploy and
+  # relay:run — and 5 (the one-patient walk, pulse-demo-closeout) needs Docker/LocalStack offline
+  # (`demo:e2e`) or dev ledger/Twenty/Snowflake credentials live (`demo:e2e:live`).
+  # tests/test_demo_taskfile_targets.py (the reachability gate, same pattern as
   # test_credentialed_twenty_targets_stay_out_of_check) pins every demo:* target out of `check`;
   # each script's own smoke-parse test under tests/ keeps it importable under `check` regardless.
 
@@ -224,6 +226,16 @@ tasks:
     desc: "Demo 4 — Phase 4 breakpoint: live declare-back against the dev mart and ledger (needs dev credentials)"
     cmds:
       - uv run python scripts/demo/demo4_billing_declare_back.py --target dev
+
+  demo:e2e:
+    desc: "Demo 5 — one patient, six stages, offline (needs Docker/LocalStack; docs/runbooks/demo5-end-to-end.md)"
+    cmds:
+      - uv run python scripts/demo/demo5_end_to_end.py
+
+  demo:e2e:live:
+    desc: "Demo 5 — the same six stages against dev (needs dev ledger/Twenty/Snowflake credentials; docs/runbooks/demo5-end-to-end.md)"
+    cmds:
+      - uv run python scripts/demo/demo5_end_to_end.py --live
 
   # --- 6. Gate ---
 
