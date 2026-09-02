@@ -19,8 +19,10 @@ connection string"); reads go through the bus, writes through the command API.
 `verdict_types` is deliberately not a field: the registered set is `billing.rules.registry`'s
 fact, not a configuration value or an environment variable (spec: "The connector evaluates the
 registered verdict types" — the set the registry lists, not a number pinned here). `registry.py`
-lands in task 1.3; until then `Config.verdict_types()` raises `RegistryUnavailableError` naming
-that gap explicitly rather than returning a silent empty set.
+landed in task 1.3; `Config.verdict_types()` still imports it by dynamic name rather than a static
+`from billing.rules import registry`, so `RegistryUnavailableError` stays a real (if now
+defensive-only) failure mode — an install missing the `billing` package's registry module,
+rather than the ordinary case.
 """
 
 from __future__ import annotations
@@ -84,17 +86,17 @@ class MissingConfigVariableError(RuntimeError):
 
 
 class RegistryUnavailableError(RuntimeError):
-    """`billing.rules.registry` does not exist yet — it lands in billing-connector task 1.3.
+    """`billing.rules.registry` (billing-connector task 1.3) could not be imported.
 
-    Raised by `Config.verdict_types()` so the scaffold's gap is explicit rather than silently
-    returning an empty set (this task's own scope is config only: `stub-then-fill`, design.md
-    decision 2).
+    Raised by `Config.verdict_types()` so a broken install fails naming the gap explicitly rather
+    than returning a silent empty set — defensive only in the ordinary case, since the registry
+    module ships with the `billing` package this connector already depends on.
     """
 
     def __init__(self) -> None:
         super().__init__(
-            "billing.rules.registry is not available yet — it lands in billing-connector task "
-            "1.3; Config.verdict_types() has nothing to read from until then"
+            "billing.rules.registry is not importable; Config.verdict_types() has nothing to "
+            "read from until the billing package's registry module is available"
         )
 
 
@@ -118,8 +120,8 @@ class Config:
         rather than cached at construction — the registry, not this config object, is the source
         of truth for the registered set.
 
-        Raises `RegistryUnavailableError` until task 1.3 lands the registry module. Imported by
-        dynamic name (`importlib`, not `from billing.rules import registry`) so this module
+        Raises `RegistryUnavailableError` if `billing.rules.registry` cannot be imported. Imported
+        by dynamic name (`importlib`, not `from billing.rules import registry`) so this module
         typechecks under pyright strict before the registry exists — `getattr` on the loaded
         module, not a static attribute access pyright would need the module to resolve.
         """
