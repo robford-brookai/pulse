@@ -4,7 +4,6 @@ Collected 2 handoff(s).
 
 ## Files
 
-- [bc-task-003.md](handoffs/pulse-demo-closeout/bc-task-003.md)
 - [task-005.md](handoffs/pulse-demo-closeout/task-005.md)
 
 ## Doc-Updater Instructions
