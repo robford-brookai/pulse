@@ -237,6 +237,13 @@ tasks:
     cmds:
       - uv run python scripts/demo/demo5_end_to_end.py --live
 
+  stage:e2e:live:
+    desc: "Demo 5 live, staged: source the scratch env, derive DEMO5_SNOWFLAKE_*, fetch the two Duplo tokens, preflight (image, schema head, seeded card), then demo:e2e:live"
+    # One bash process, because go-task runs each cmd in its own shell and the exports must
+    # reach the demo. `task stage:e2e:live -- --no-preflight` skips the preflight.
+    cmds:
+      - bash scripts/demo/stage_e2e_live.sh {{.CLI_ARGS}}
+
   # --- 6. Gate ---
 
   twenty:validate:

@@ -91,6 +91,36 @@ patient (`canonicalPatientId` = the consent export fixture's `subject_key`, `pro
 `"demo5"`) — the same "already-seeded card" precondition `demo3_live_kanban_drag.py` states for
 its own drag.
 
+## Staging the live run
+
+`task stage:e2e:live` does the environment work above for you and then runs `demo:e2e:live` in
+the same shell. It is the attended-run entry point (`scripts/demo/stage_e2e_live.sh`):
+
+1. Sources `scripts/verdict-env-vars.sh`, the gitignored scratch exporter from the billing-state
+   4.1 run (`docs/process/env-vars-retreival.md`), which already carries `DATABASE_URL`,
+   `PULSE_LEDGER_API_URL`, `PULSE_LEDGER_TWENTY_WEBHOOK_SECRET`, `PULSE_TWENTY_DEV_*`, and
+   `VERDICT_RELAY_*`.
+2. Derives `DEMO5_SNOWFLAKE_ACCOUNT`, `_USER`, `_WAREHOUSE`, and `_PRIVATE_KEY_PATH` from the
+   relay's `VERDICT_RELAY_SNOWFLAKE_*` unless you set them yourself — same read-only reader.
+3. Fetches the two names the scratch file lacks from the Duplo secret `pulse-ledger-api-secret`
+   (tenant `dev01-brook`, one interactive `duplo-jit` login): `CONSENT_INGRESS_CUSTOMERIO_TOKEN`
+   from the key starting `PULSE_LEDGER_WRITER_TOKEN_CUSTOMER`, and `PULSE_CORE_REPLAY_TOKEN` from
+   the key starting `PULSE_LEDGER_WRITER_TOKEN_TWENTY` — the history route accepts any writer
+   credential, so the projection replays under the one it writes with. If the prefix matches zero
+   or several keys the script stops and lists the available key names; pin one with
+   `STAGE_E2E_CONSENT_KEY` / `STAGE_E2E_REPLAY_KEY`.
+4. Runs `scripts/demo/demo5_preflight.py`, the three preconditions this page states, and stops
+   on any failure, naming all of them:
+   - **api-image** — the dev API serves the per-subject history route (PR #331). A 404 means the
+     pod predates it: redeploy the current image.
+   - **ledger-schema** — `alembic_version` is `0005` (PR #336, `communication_consent` admitted).
+   - **seeded-card** — dev Twenty has a `patientPrograms` record for the fixture patient with
+     `programCode = demo5`.
+5. `exec task demo:e2e:live`.
+
+Nothing is ever printed but variable names, key names, and `set` / `MISSING`. Skip step 4 with
+`task stage:e2e:live -- --no-preflight` once the preconditions have been verified for the day.
+
 ## Reading the output
 
 Every stage prints its own name before running and `ok: <n> assertion(s), subjects=[...]` after —
