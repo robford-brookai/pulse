@@ -11,6 +11,12 @@ drift into a re-imagining (spec: "Rules are ported with lineage, not re-imagined
    rule that grows a module here, or a ported rule that loses one, is a lineage break either way.
 4. The module's verdict type is registered vocabulary (`verdict_relay.config`), so the engine
    declares a type the command API accepts.
+5. `billing.rules.registry` (billing-connector task 1.3) names exactly this gate's portable
+   set — a registry entry with no ported module, or a ported module with no registry entry, is
+   the connector-side half of the same lineage break.
+
+`registry.py` is a sibling of the rule modules, not one itself — `_rule_modules()` excludes it by
+name, the same way it already excludes anything private.
 
 Offline, no network, no credentials — reads the committed doc and imports the rule modules.
 """
@@ -33,6 +39,10 @@ MAP_PATH = BILLING_ROOT / "docs" / "rule-port-map.md"
 RULES_DIR = BILLING_ROOT / "src" / "billing" / "rules"
 #: Bare filenames in the map resolve here — the package's own unit-test tree.
 DEFAULT_TEST_DIR = BILLING_ROOT / "tests"
+
+#: Modules under `billing/rules/` that are not themselves a ported rule — excluded from
+#: `_rule_modules()` the same way a private (`_`-prefixed) module already is.
+NON_RULE_MODULES = frozenset({"registry"})
 
 #: The verdict types the map marks portable within the pinned dbt scope. The map is explicit
 #: that `coverage_eligibility` and `benefits_verification` have no dbt source in this scope at
@@ -63,7 +73,7 @@ def _rule_modules() -> list[tuple[str, ModuleType]]:
     return [
         (info.name, importlib.import_module(f"billing.rules.{info.name}"))
         for info in pkgutil.iter_modules([str(RULES_DIR)])
-        if not info.name.startswith("_")
+        if not info.name.startswith("_") and info.name not in NON_RULE_MODULES
     ]
 
 
@@ -151,6 +161,15 @@ def test_deferred_counterparts_are_still_genuinely_absent() -> None:
 def test_deferred_counterparts_name_their_owning_task() -> None:
     for ref, reason in DEFERRED_COUNTERPARTS.items():
         assert re.search(r"task \d+\.\d+", reason), f"{ref}'s deferral does not name the task that lands it"
+
+
+def test_registry_names_exactly_this_gates_portable_set() -> None:
+    """billing-connector task 1.3: `billing.rules.registry.VERDICT_TYPES` must name exactly the
+    types this gate already pins — a registry drifting ahead of or behind the port is the
+    connector-side half of a lineage break."""
+    from billing.rules.registry import VERDICT_TYPES
+
+    assert set(VERDICT_TYPES) == PORTED_VERDICT_TYPES
 
 
 def test_stays_mart_side_rules_are_excluded_and_documented() -> None:
