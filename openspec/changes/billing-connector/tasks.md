@@ -116,7 +116,7 @@ never a worktree.
       pattern asserted without the emulator; `mkdocs build -s` green.
       `[model: sonnet | deps: 2.3 | lane: repo_change | wave: 2]`
 
-- [ ] 3.2 Contracts: `docs/contracts/publishes.md` billing-connector producer row on
+- [x] 3.2 Contracts: `docs/contracts/publishes.md` billing-connector producer row on
       `patient-state`; `consumes.md` cross-repo ask for the dbt spike files to land (seed gate
       3); CLAUDE.md `<id>` convention amended to "the change named in the command" (design.md
       decision 9). Via `HANDOFF.md` where a spec is touched.

@@ -4,7 +4,7 @@ Collected 1 handoff(s).
 
 ## Files
 
-- [bc-task-008.md](handoffs/billing-connector/bc-task-008.md)
+- [bc-task-009.md](handoffs/billing-connector/bc-task-009.md)
 
 ## Doc-Updater Instructions
 
