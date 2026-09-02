@@ -34,6 +34,12 @@ connector specification draft (`openspec/specs/connectors/pulse-standard-connect
 - The amount-free billing boundary (`docs/contracts/billing-boundary.md`) applies at the
   `packages/billing` seam: qualification verdicts cross, monetary values never do.
 
+**Scope cut, 2026-09-01 (design.md decision 9).** This change delivers the kit and the
+engine's scaffold, fact fold, and rule port. The engine's evaluation-to-declare wiring, its
+deploy, the verdict reconciliation window, and the mart demotion described above move to the
+`billing-connector` change. Until that change ships, the relay's mart read remains the verdict
+write path unchanged, and nothing in this change is BREAKING.
+
 Out of scope, deliberately: Customer.io outbound, Billy/PAP/ExDash connectors, POCAR — each
 is a later change that consumes the kit this change ships. The cpt-om producer-registry row
 (registered future direct-declarer of `billing_eligibility`) must be reconciled with the
