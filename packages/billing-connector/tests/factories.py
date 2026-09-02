@@ -67,18 +67,23 @@ def make_facts(
     facts: Mapping[str, object] | None = None,
     last_event_id: str = DEFAULT_EVENT_ID,
     folded_as_of: datetime | None = None,
+    updated_at: datetime | None = None,
 ) -> SubjectFactsSnapshot:
-    """A fresh `subject_facts` snapshot: `folded_as_of` defaults to now, so evaluating this row
+    """A fresh `subject_facts` snapshot: `updated_at` (the store's write watermark
+    `evaluate_subject` derives `facts_stale` from) defaults to now, so evaluating this row
     against any reasonable `stale_after` reports `facts_stale=False` (spec: "A fresh watermark
-    evaluates the rule").
+    evaluates the rule"). `folded_as_of` (the business effective time of the last folded event,
+    a separate concern — `billing.facts` module docstring) also defaults to now unless given.
     """
-    as_of = folded_as_of or datetime.now(timezone.utc)
-    merged: dict[str, object] = {**dict(facts or {}), _FOLDED_AS_OF_KEY: as_of.isoformat()}
+    business_as_of = folded_as_of or datetime.now(timezone.utc)
+    write_watermark = updated_at or datetime.now(timezone.utc)
+    merged: dict[str, object] = {**dict(facts or {}), _FOLDED_AS_OF_KEY: business_as_of.isoformat()}
     return SubjectFactsSnapshot(
         subject_type=subject_type,
         subject_key=subject_key,
         facts=merged,
         last_event_id=last_event_id,
+        updated_at=write_watermark,
     )
 
 
@@ -94,12 +99,14 @@ def make_stale_facts(
     `facts_stale=True` against any threshold shorter than that (spec: "Staleness comes from the
     connector's own watermark", "A stale watermark yields awaiting_source").
     """
+    stale_watermark = datetime.now(timezone.utc) - stale_by
     return make_facts(
         subject_type=subject_type,
         subject_key=subject_key,
         facts=facts,
         last_event_id=last_event_id,
-        folded_as_of=datetime.now(timezone.utc) - stale_by,
+        folded_as_of=stale_watermark,
+        updated_at=stale_watermark,
     )
 
 

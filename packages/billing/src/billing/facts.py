@@ -39,12 +39,23 @@ _FOLDED_AS_OF_KEY = "__folded_as_of__"
 
 @dataclass(frozen=True)
 class SubjectFactsSnapshot:
-    """One `billing_engine.subject_facts` row, as the fold reads and writes it."""
+    """One `billing_engine.subject_facts` row, as the fold reads and writes it.
+
+    `updated_at` is the store's own write watermark (`billing.store` upserts it with `now()` on
+    every applied fold) — additive as of billing-connector task 2.1, `None` for a snapshot
+    `fold_event` produces in memory and has not yet been persisted, and always set on a row a
+    store read returns. This is distinct from `folded_as_of`: that is the *business* effective
+    time of the last event folded, carried inside `facts` itself; `updated_at` is *wall-clock*
+    write time, the input `billing_connector.evaluate.evaluate_subject` derives `facts_stale`
+    from against `Config.stale_after` (design.md decision 5: "Staleness comes from the
+    connector's own watermark" — this field is that watermark).
+    """
 
     subject_type: str
     subject_key: str
     facts: Mapping[str, object]
     last_event_id: str
+    updated_at: datetime | None = None
 
     @property
     def folded_as_of(self) -> str | None:

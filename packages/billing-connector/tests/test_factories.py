@@ -27,6 +27,14 @@ class TestMakeFacts:
         as_of = datetime.fromisoformat(snapshot.folded_as_of)
         assert (datetime.now(timezone.utc) - as_of) < timedelta(seconds=5)
 
+    def test_updated_at_also_defaults_to_a_fresh_watermark(self) -> None:
+        """`updated_at` is the store watermark `evaluate_subject` derives `facts_stale` from
+        (spec: "Staleness comes from the connector's own watermark") — distinct from
+        `folded_as_of`'s business time."""
+        snapshot = make_facts()
+        assert snapshot.updated_at is not None
+        assert (datetime.now(timezone.utc) - snapshot.updated_at) < timedelta(seconds=5)
+
 
 class TestMakeStaleFacts:
     def test_the_watermark_is_older_than_the_requested_margin(self) -> None:
@@ -34,6 +42,11 @@ class TestMakeStaleFacts:
         assert snapshot.folded_as_of is not None
         as_of = datetime.fromisoformat(snapshot.folded_as_of)
         assert (datetime.now(timezone.utc) - as_of) >= timedelta(days=1)
+
+    def test_updated_at_is_also_older_than_the_requested_margin(self) -> None:
+        snapshot = make_stale_facts(stale_by=timedelta(days=1))
+        assert snapshot.updated_at is not None
+        assert (datetime.now(timezone.utc) - snapshot.updated_at) >= timedelta(days=1)
 
 
 class TestMakeEvent:

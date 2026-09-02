@@ -23,6 +23,7 @@ Everything else is pure: same inputs, same verdict, no I/O, no clock, no money.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
 
@@ -124,3 +125,33 @@ def evaluate_episode(*, periods: tuple[PeriodFacts, ...], as_of: date, facts_sta
         as_of=as_of,
         facts_stale=facts_stale,
     )
+
+
+def evaluate_from_facts(facts: Mapping[str, object], *, as_of: date, facts_stale: bool = False) -> Verdict:
+    """The registry calling convention: adapt one subject's flat `subject_facts.facts` snapshot
+    into `evaluate_episode`'s input, for `billing_connector.evaluate.evaluate_subject` (task 2.1)
+    to call generically through `billing.rules.registry.VERDICT_TYPES` without importing this
+    module by name (design.md decision 1). Every registered module exposes this same signature —
+    `evaluate_subject` never reads a module's own internal shape (`PeriodFacts`, `evaluate_episode`)
+    directly.
+
+    `billing.facts.fold_event` flat-merges each event's payload onto the snapshot rather than
+    keeping periods as a list, so a subject row today can only ever describe the one period its
+    fields currently name — `period_end`, `achieved`, `consent_start` — never several at once.
+    That single period is exactly what `evaluate_episode` (built for the dbt model's multi-period
+    rollup) still composes correctly with a one-element tuple; the day a fact source can carry
+    more than one open period, this composes them the same way. A facts row with no `period_end`
+    yet (an episode subject with only non-eligibility facts folded so far) has nothing to gate:
+    treated as no periods, same as `evaluate_episode`'s own no-periods case.
+    """
+    period_end_raw = facts.get("period_end")
+    if period_end_raw is None:
+        return evaluate_episode(periods=(), as_of=as_of, facts_stale=facts_stale)
+
+    consent_start_raw = facts.get("consent_start")
+    period = PeriodFacts(
+        period_end=date.fromisoformat(str(period_end_raw)),
+        achieved=bool(facts.get("achieved", False)),
+        consent_start=date.fromisoformat(str(consent_start_raw)) if consent_start_raw is not None else None,
+    )
+    return evaluate_episode(periods=(period,), as_of=as_of, facts_stale=facts_stale)
