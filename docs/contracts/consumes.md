@@ -45,6 +45,19 @@ belong in the verdict payload and `lineage_ref`, never in a new column and never
 vocabulary. Rows whose verdict types the mart does not yet produce simply never arrive; the relay
 declares what it reads.
 
+### Cross-repo ask: dbt spike files for the billing-connector fixture mart (seed gate 3, asked 2026-09-02)
+
+`openspec/changes/billing-connector/tasks.md` task 4.1 (`verdict-reconcile`) builds its fixture
+mart from the dbt spike files that model the reconciliation window's comparison — as of this
+entry they are **still uncommitted**, sitting on a `data-platform` spike branch, not on
+`data-platform`'s main. This is a request for `brookai/data-platform` to land that branch, not a
+record that it already has: task 4.1 stays blocked until seed gate 3 clears, and this repo's
+fixtures are the only pinned shape until then, the same posture as the verdict mart entry below.
+
+| Dependency | Kind | Source | Breakage risk |
+|---|---|---|---|
+| dbt spike files (seed gate 3) | dbt models, uncommitted spike branch | `brookai/data-platform`, spike branch (asked to land 2026-09-02; no committed path to cite yet) | task 4.1's fixture mart cannot be built until the branch lands on `data-platform` main; the window's per-subject sweep is blocked on the same commit |
+
 ### Customer.io consent export (`customerio-consent-ingress`, DNA-891)
 
 `packages/consent-ingress` reads the Customer.io consent export landed in Snowflake, database

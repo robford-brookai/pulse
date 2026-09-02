@@ -155,6 +155,29 @@ in a pinned summary line (`declared`, `replayed`, `skipped_stale`, `rejected`, `
 subject at its derived initial state (`unverified`) and applies the paired transition in the same
 run: no registration step, no manual minting.
 
+### Billing connector producer (`billing-connector`)
+
+The in-pulse connector (`packages/billing-connector`) is a second declared producer on
+`billing_episode`/`coverage` subjects, alongside the warehouse verdict relay documented above —
+event-driven off its own queue, allowlisted to `billing_episode`/`coverage`/`consent`/`enrollment`
+subject events (design.md decision 7), and never reading the warehouse to decide a verdict. It
+declares the same registered pairing contract (verdict then paired `declare_transition`) under its
+own writer credential, so the two producers are attributed separately and arbitrate through
+pairing idempotency and per-subject `as_of` monotonicity — never a parallel write path. Dev deploy
+only for now (task 3.1); deploy and operations: [`docs/runbooks/billing-connector.md`
+](../runbooks/billing-connector.md).
+
+| Surface | Kind | Stability | Notes |
+|---|---|---|---|
+| Declared verdict + paired transition events (via command API) | EventBridge events (published), same `patient-state` domain as the "Coverage and billing state" row above — no new domain | beta | producer credential name `BILLING_CONNECTOR_TOKEN`, held in config only, never a value, and no ledger database connection string; registered verdict types are read live from `billing.rules.registry`, and the connector refuses to start on a registry/rule-module mismatch; no monetary value ever appears in a payload, state, log line, or receipt |
+| Connector receipt | operator-visible counted line, `billing_connector.receipts.Receipt` | beta | extends the kit's `committed`/`replayed`/`rejected` with `evaluated`/`deferred` — `deferred` is every `consent`/`enrollment` event folded into facts with no catalog fact yet linking it to an episode subject (design.md decision 4) |
+
+Reconciliation and cutover: during the parallel-run window both this connector and the mart relay
+above declare against the same subjects; a per-subject sweep must close empty-or-explained before
+the relay's mart read is retired
+(`openspec/changes/billing-connector/specs/verdict-reconciliation/spec.md`). Until that cutover,
+this row and "Coverage and billing state" above both stand.
+
 ### Offered to PX survey engine (discovery stage, `survey-engine-ingress` planned)
 
 PX (survey engine, owner Max Pengilly) is in discovery; pulse's planned adapter is

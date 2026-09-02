@@ -561,3 +561,44 @@ def test_billing_state_runbook_exists_and_covers_operations() -> None:
     nav = yaml.safe_load((ROOT / "mkdocs.yml").read_text())
     nav_text = json.dumps(nav.get("nav", []))
     assert "runbooks/billing-state.md" in nav_text, "mkdocs.yml nav must include the billing-state runbook"
+
+
+def test_publishes_md_registers_billing_connector_producer_row() -> None:
+    """billing-connector 3.2: the in-pulse connector is a second declared producer on
+    `billing_episode`/`coverage` subjects, alongside the warehouse verdict relay's row above —
+    a `patient-state` consumer now sees events attributed to `BILLING_CONNECTOR_TOKEN` as well as
+    the relay's credential, so the producer row is a published fact, not implementation detail."""
+    publishes = (ROOT / "docs/contracts/publishes.md").read_text()
+    assert "billing-connector" in publishes, "publishes.md must register the billing-connector producer"
+    assert "BILLING_CONNECTOR_TOKEN" in publishes, "publishes.md must name the connector's writer credential"
+    assert "patient-state" in publishes, "publishes.md must place the connector's events on the patient-state domain"
+    assert "declare_transition" in publishes, "publishes.md must name the paired command the connector declares"
+    assert "runbooks/billing-connector.md" in publishes, "publishes.md must link the billing-connector runbook"
+    assert "no monetary value" in publishes.lower() or "monetary value" in publishes.lower(), (
+        "publishes.md must restate the amount-free rule on the connector's producer row"
+    )
+
+
+def test_consumes_md_states_the_dbt_spike_cross_repo_ask_as_a_dated_request() -> None:
+    """billing-connector 3.2 (design.md decision 8): seed gate 3's dbt spike files still live
+    uncommitted on a data-platform spike branch — consumes.md must record the ask as a dated
+    request pending landing, never phrase it as though the files have already landed."""
+    consumes = (ROOT / "docs/contracts/consumes.md").read_text()
+    lowered = consumes.lower()
+    assert "seed gate 3" in lowered, "consumes.md must name seed gate 3"
+    assert "dbt spike" in lowered, "consumes.md must name the dbt spike files"
+    assert "data-platform" in lowered, "consumes.md must name the producing repo, data-platform"
+    assert "2026-09-02" in consumes, "consumes.md must date the cross-repo ask"
+    assert "uncommitted" in lowered, "consumes.md must state the files are still uncommitted, not landed"
+
+
+def test_claude_md_id_convention_names_the_command_not_the_sole_directory() -> None:
+    """billing-connector 3.2 (design.md decision 9): with two changes in flight, `<id>` can no
+    longer be inferred as the sole non-archive directory in `openspec/changes/` — CLAUDE.md's
+    coordinator standing orders must name it as the change given explicitly in the command."""
+    assert "sole non-archive directory" not in CLAUDE, (
+        "CLAUDE.md must no longer claim <id> is inferred as the sole non-archive directory"
+    )
+    assert "the change named in the command" in CLAUDE, (
+        "CLAUDE.md must define <id> as the change named in the command (design.md decision 9)"
+    )
