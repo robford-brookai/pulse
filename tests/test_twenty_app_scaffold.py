@@ -238,6 +238,7 @@ def test_credentialed_twenty_targets_stay_out_of_check():
         "catalog:release",
         "synthea:regen",
         "projection:consume",
+        "projection:rebuild",
         "relay:run",
     ):
         assert target not in reached, (

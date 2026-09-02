@@ -53,7 +53,8 @@ UPDATE/DELETE on `events` and the API is the single writer.
 | `POST /commands:batch` | REST API | beta | backfill mode, same validation; `backfill_genesis`/`reconstruction_gap` accepted only from the backfill actor |
 | `PUT/GET /writers/{writer_id}/cursor` | REST API | beta | durable writer cursors, opaque JSON; a credential may touch only its own `writer_id`; path template in `pulse_core.cursor` |
 | `pulse_core` (client SDK) | workspace package | beta | `PulseCoreClient.submit_command` classifies `committed \| replayed \| rejected \| transient`, retries transient only; `consume(handler)` is the SQS consumer convention (`event_id` dedupe, delete-after-success); D16 key derivation in `pulse_core.idempotency` |
-| `pulse_ledger.reads` / `.identity` / `.review` | library read surface | beta | in-process reads over the ledger Postgres: `enumerate_state` (co-committed `ledger.current_state`, catalog-validated states), `lookup_identifier`/`find_candidates` (identity, digests only — never demographics), `list_review_queue`/`resolve_review` (`ledger.review_queue` quarantine). No HTTP read routes shipped in S1.1 |
+| `GET /subjects/{subject_type}/{subject_key}/events` | REST API | beta | one subject's committed events in ledger sequence, as the same envelopes the relay publishes; keyset-paged on `seq`, unknown subject = empty history, unknown subject type = the catalog's 422; the replay surface a projection repaints from without holding a ledger database credential (path template in `pulse_core.history`, client `PulseCoreClient.subject_history`) |
+| `pulse_ledger.reads` / `.identity` / `.review` | library read surface | beta | in-process reads over the ledger Postgres: `enumerate_state` (co-committed `ledger.current_state`, catalog-validated states), `lookup_identifier`/`find_candidates` (identity, digests only — never demographics), `list_review_queue`/`resolve_review` (`ledger.review_queue` quarantine). The per-subject history route above is the only HTTP read route; everything else here is in-process |
 
 Replay classification is end-to-end (DNA-801): `POST /commands` and `POST /commands:batch` accept
 an optional `idempotency_key` body field, thread it to `commit_idempotent`, and every commit
@@ -110,13 +111,22 @@ the transition. Runbook: [`docs/runbooks/twenty-webhook.md`](../runbooks/twenty-
 
 The D8 return path: committed ledger events for board subjects render onto the Twenty board
 through `packages/twenty-projection`, so the board is a view of the ledger, never a parallel
-store. Operations (running the consumer, watermark semantics, orphan triage, rollback):
-[`docs/runbooks/twenty-projection.md`](../runbooks/twenty-projection.md).
+store. Operations (running the consumer, watermark semantics, orphan triage, rebuilding a scope,
+rollback): [`docs/runbooks/twenty-projection.md`](../runbooks/twenty-projection.md).
 
 | Surface | Kind | Stability | Notes |
 |---|---|---|---|
 | Projection queue | EventBridge rule + SQS queue (consumed) | beta | the projection is a registered consumer of the `ocean` bus per the rule-and-queue convention above: committed `enrollment` events, consumed via `pulse_core.consume` (event-id dedupe, delete-after-success); the consumer's whole env surface is `PULSE_TWENTY_<TARGET>_URL/_TOKEN` + `SQS_QUEUE_URL` — no ledger DSN, no writer token, so it renders state and can never mint or mutate ledger events |
 | `patientProgram.lifecycleStatus` + `lifecycleStatusAsOf` + `projectionSeq` | Twenty board columns (written) | beta | the projection is the owning writer: each applied event writes the full board state (encoded status, as-of from the event's effective time, watermark) in one PATCH, monotonic per record on `projectionSeq` (the last applied ledger sequence; null = never projected); an out-of-band edit is drift that converges on the subject's next event — nothing else may write these columns |
+
+The projection is rebuildable, and that is a published property of it, not a test-only trick:
+`task projection:rebuild TARGET=<t> SCOPE=<subject_type>[:<key>] OPERATOR=<who>` repaints the
+scope's projected columns from the subject's committed events alone — read through the
+per-subject history route above, folded through the same apply handler the consumer uses, diffed
+against the current rows, and written only where they differ, ending in a counted receipt. It
+never creates or deletes a board record and never touches a row outside its scope, so a subject
+with no row is a counted orphan rather than a mint. It consumes two credentials and no database:
+the projection's own Twenty token, and the kit's replay credential (`pulse_core.replay`).
 
 The webhook route's heal-back write (a `rejected` drag restores the card to the state of
 record) rides the same projection writer but carries the status field alone — a heal has no
