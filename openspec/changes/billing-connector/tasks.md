@@ -23,7 +23,7 @@ never a worktree.
 
 ## 1. Wave 0 — scaffold, four PRs
 
-- [ ] 1.1 Package scaffold: `packages/billing-connector/` with `pyproject.toml` (deps
+- [x] 1.1 Package scaffold: `packages/billing-connector/` with `pyproject.toml` (deps
       `pulse-core`, `billing`, workspace sources; dev group `pytest-socket`, `pyright`),
       `src/billing_connector/__init__.py` (version, one-paragraph module docstring naming the
       spec), `py.typed`; register in the workspace `pyproject.toml` members and in
@@ -34,7 +34,7 @@ never a worktree.
       `[model: sonnet | deps: — | lane: repo_change | wave: 0 | serial: workspace roots and
       Taskfile.yml — coordinator releases alone across both in-flight changes]`
 
-- [ ] 1.2 Configuration: `config.py` with `Config` (frozen dataclass): `credential_name`
+- [x] 1.2 Configuration: `config.py` with `Config` (frozen dataclass): `credential_name`
       (`BILLING_CONNECTOR_TOKEN`), `queue_url`, `ledger_base_url`, `stale_after` (duration,
       default from the dbt model's recency window, dbt source named in the docstring),
       `verdict_types` (read from the registry at startup, not from env); `Config.from_env()`

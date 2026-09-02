@@ -13,6 +13,7 @@ resolution-markers = [
 members = [
     "archaeology",
     "billing",
+    "billing-connector",
     "consent-ingress",
     "identity",
     "ocean",
@@ -403,6 +404,33 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest-socket", specifier = ">=0.7.0" }]
+
+[[package]]
+name = "billing-connector"
+version = "0.1.0"
+source = { editable = "packages/billing-connector" }
+dependencies = [
+    { name = "billing" },
+    { name = "pulse-core" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pyright" },
+    { name = "pytest-socket" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "billing", editable = "packages/billing" },
+    { name = "pulse-core", editable = "packages/pulse-core" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pyright", specifier = ">=1.1.390" },
+    { name = "pytest-socket", specifier = ">=0.7.0" },
+]
 
 [[package]]
 name = "boto3"
