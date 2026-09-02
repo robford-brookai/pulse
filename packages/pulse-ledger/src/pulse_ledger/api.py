@@ -54,10 +54,15 @@ from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Query, Request, Response
 from fastapi.responses import JSONResponse
 from pulse_core.cursor import CURSOR_PATH_TEMPLATE, InvalidCursorError, validate_cursor
 from pulse_core.generated import BACKFILL_ONLY_COMMAND_TYPES
+from pulse_core.history import (
+    DEFAULT_HISTORY_PAGE_SIZE,
+    MAX_HISTORY_PAGE_SIZE,
+    SUBJECT_HISTORY_PATH_TEMPLATE,
+)
 
 from pulse_ledger.auth import (
     BACKFILL_ACTOR_ID,
@@ -92,6 +97,7 @@ COMMANDS_PATH = "/commands"
 COMMANDS_BATCH_PATH = "/commands:batch"
 TWENTY_WEBHOOK_PATH = "/webhooks/twenty"
 WRITER_CURSOR_PATH = CURSOR_PATH_TEMPLATE
+SUBJECT_HISTORY_PATH = SUBJECT_HISTORY_PATH_TEMPLATE
 
 #: Injected by the service entrypoint; a fake in tests. Anything that turns one declaration and
 #: its idempotency key (`None` when the body carried none) into one commit result, including
@@ -104,6 +110,12 @@ Committer = Callable[[Declaration, "str | None"], CommitResult]
 #: yet", not an error.
 CursorReader = Callable[[str], "WriterCursor | None"]
 CursorWriter = Callable[[str, Mapping[str, object]], WriterCursor]
+
+#: Injected the same way: one subject's committed events in ledger sequence, as published
+#: envelopes — `pulse_ledger.reads.subject_history` on a pooled connection in the running service.
+#: The signature is the read's whole vocabulary, which is the point: a subject, a page, and nothing
+#: a caller could widen into a query over the journal.
+HistoryReader = Callable[..., Sequence[Mapping[str, object]]]
 
 
 class CursorStoreNotConfiguredError(RuntimeError):
@@ -123,6 +135,23 @@ def _unconfigured_cursor_reader(writer_id: str) -> WriterCursor | None:
 
 def _unconfigured_cursor_writer(writer_id: str, cursor: Mapping[str, object]) -> WriterCursor:
     raise CursorStoreNotConfiguredError()
+
+
+class HistoryStoreNotConfiguredError(RuntimeError):
+    """The app was built without a per-subject history reader wired in.
+
+    Only raised if the history route is actually hit, for the same reason the cursor store's twin
+    is: an app built for command-path tests needs no database to exist.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("no per-subject history reader is configured for this app")
+
+
+def _unconfigured_history_reader(
+    subject_type: str, subject_key: str, *, after_seq: int | None, limit: int | None
+) -> Sequence[Mapping[str, object]]:
+    raise HistoryStoreNotConfiguredError()
 
 
 _DECLARATION_FIELDS = frozenset(f.name for f in dataclasses.fields(Declaration))
@@ -723,6 +752,45 @@ def _install_cursor_routes(
         return _cursor_response(stored)
 
 
+def _install_history_route(app: FastAPI, credentials: CredentialRegistry, read_history: HistoryReader) -> None:
+    """The ledger's replay surface: one subject's committed events, in ledger sequence.
+
+    Read-only and read-narrow (pulse-demo-closeout design decision 5). The route takes a subject
+    and a page and returns the envelopes the relay publishes — no filter over the journal, no
+    cross-subject read, no state derivation. That narrowness is the whole authorization argument:
+    a projection rebuilding its rows needs its own subjects' events and nothing else, so this asks
+    the caller to name the subject rather than to be trusted with a query.
+
+    Authentication is the same bearer credential every other route takes, and it is the ledger's
+    entire authorization model — there is no read scope to hold, by design: decision 5 has the
+    projection replaying under the credential it already writes with, so a separate read grant
+    would be a second thing to configure and a second thing to get wrong. What a credential buys
+    here is strictly less than what it already buys at `/commands`.
+
+    An unknown subject is an empty history, not a 404: "this subject has no committed events" is
+    an answer, and the alternative leaks whether a subject key exists to anyone who can ask.
+    """
+
+    @app.get(SUBJECT_HISTORY_PATH)
+    async def get_subject_history(
+        subject_type: str,
+        subject_key: str,
+        request: Request,
+        after_seq: int | None = Query(default=None, ge=0),
+        limit: int = Query(default=DEFAULT_HISTORY_PAGE_SIZE, ge=1),
+    ) -> dict[str, object]:
+        credentials.resolve(bearer_token(request.headers.get("Authorization")))
+        events = list(
+            read_history(subject_type, subject_key, after_seq=after_seq, limit=min(limit, MAX_HISTORY_PAGE_SIZE))
+        )
+        return {
+            "subject_type": subject_type,
+            "subject_key": subject_key,
+            "count": len(events),
+            "events": events,
+        }
+
+
 def create_app(
     *,
     committer: Committer,
@@ -735,6 +803,7 @@ def create_app(
     cursor_reader: CursorReader | None = None,
     cursor_writer: CursorWriter | None = None,
     state_reader: StateReader | None = None,
+    history_reader: HistoryReader | None = None,
 ) -> FastAPI:
     """Build the command API.
 
@@ -776,6 +845,7 @@ def create_app(
     heal_card = _unconfigured_heal_writer if heal_writer is None else heal_writer
     read_cursor = _unconfigured_cursor_reader if cursor_reader is None else cursor_reader
     write_cursor = _unconfigured_cursor_writer if cursor_writer is None else cursor_writer
+    read_history = _unconfigured_history_reader if history_reader is None else history_reader
 
     app = FastAPI(title="PULSE ledger command API", version="0.1.0")
     _install_error_handlers(app)
@@ -792,6 +862,7 @@ def create_app(
         return _commit_response(committer(declaration, idempotency_key))
 
     _install_cursor_routes(app, credentials, read_cursor, write_cursor)
+    _install_history_route(app, credentials, read_history)
 
     @app.post(COMMANDS_BATCH_PATH, status_code=201)
     async def submit_command_batch(request: Request) -> list[dict[str, object]]:

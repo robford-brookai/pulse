@@ -22,7 +22,9 @@ from dataclasses import dataclass
 from datetime import datetime
 
 import psycopg
+from psycopg.rows import dict_row
 
+from pulse_ledger.envelope import EVENT_COLUMNS, event_envelope
 from pulse_ledger.validation import validate_state_membership, validate_subject_type
 
 
@@ -32,6 +34,20 @@ class NegativeLimitError(ValueError):
     def __init__(self, limit: int) -> None:
         self.limit = limit
         super().__init__(f"limit must not be negative, got {limit}")
+
+
+class UnrelayedEventError(RuntimeError):
+    """A committed event with no outbox row, so the history has no sequence number for it.
+
+    Structurally impossible through the write path — `commit.py` inserts the outbox row inside the
+    same transaction as the event — which is exactly why it is raised rather than skipped. A reader
+    that quietly dropped the event would hand a projection a torn history and rebuild it to a state
+    the ledger never held. Names the event id and nothing else: no payload, no evidence.
+    """
+
+    def __init__(self, event_id: uuid.UUID) -> None:
+        self.event_id = event_id
+        super().__init__(f"committed event {event_id} has no outbox row, so its ledger sequence is unknown")
 
 
 @dataclass(frozen=True)
@@ -151,3 +167,74 @@ def count_by_state(conn: psycopg.Connection, subject_type: str) -> dict[str, int
     for state, count in cursor.fetchall():
         counts[state] = count
     return counts
+
+
+#: One subject's committed history, joined to the outbox row that carries the event's per-subject
+#: sequence. `LEFT JOIN` rather than an inner join on purpose: an event whose outbox row is missing
+#: must surface as `UnrelayedEventError`, not vanish from a history someone is about to replay.
+_SELECT_HISTORY = f"""
+    SELECT e.event_id, e.subject_type, e.subject_key, o.seq,
+           {EVENT_COLUMNS}
+      FROM ledger.events e
+      LEFT JOIN ledger.outbox o USING (event_id)
+     WHERE e.subject_type = %(subject_type)s AND e.subject_key = %(subject_key)s
+"""  # noqa: S608 — the only interpolation is `EVENT_COLUMNS`, a module constant
+
+
+def subject_history(
+    conn: psycopg.Connection,
+    subject_type: str,
+    subject_key: str,
+    *,
+    after_seq: int | None = None,
+    limit: int | None = None,
+) -> list[dict[str, object]]:
+    """Every committed event for one subject, in ledger sequence, as published envelopes.
+
+    The replay source behind the projection rebuild (pulse-demo-closeout design decision 5). Its
+    scope is exactly one subject's committed events and nothing more: no state row, no other
+    subject, no derivation, no fold.
+
+    **Ledger sequence is the outbox `seq`** — the per-subject counter `commit.py` assigns inside
+    the commit transaction (D17) and the relay publishes in. It is the order a live consumer saw
+    these events in and the order its watermark guard is stated over, so replaying in it is what
+    makes a rebuild agree with incremental apply. It is *not* the fold's bitemporal order: a
+    backdated event arrives late and replays late, exactly as it did live. A caller that wants the
+    state rather than the sequence folds the result through `pulse_ledger.fold`, which owns that
+    ordering rule and is the only place it is stated.
+
+    Two further guarantees:
+
+    - **The shape is the relay's envelope** (`envelope.event_envelope`), `seq` included, so a
+      consumer written against the bus reads a replayed event without a second code path.
+    - **Reversals and reversed events are present.** The fold drops them (`fold.surviving_events`);
+      history does not, or a correction would be invisible to anything replaying it.
+
+    `after_seq` with `limit` pages the history. The order is total and immutable — `seq` is unique
+    per subject and never reused — so a page boundary can neither repeat nor skip an event, even
+    while the subject is still being written to.
+
+    Raises `IllegalTransitionError` for a subject type the catalog does not know (an empty result
+    would read as "this subject has no history"), `NegativeLimitError` for a negative page size,
+    and `UnrelayedEventError` for a committed event with no outbox row.
+    """
+    validate_subject_type(subject_type)
+    query = _SELECT_HISTORY
+    params: dict[str, object] = {"subject_type": subject_type, "subject_key": subject_key}
+    if after_seq is not None:
+        query += " AND o.seq > %(after_seq)s"
+        params["after_seq"] = after_seq
+    query += " ORDER BY o.seq"
+    if limit is not None:
+        if limit < 0:
+            raise NegativeLimitError(limit)
+        query += " LIMIT %(limit)s"
+        params["limit"] = limit
+
+    cursor = conn.cursor(row_factory=dict_row)
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    for row in rows:
+        if row["seq"] is None:
+            raise UnrelayedEventError(row["event_id"])
+    return [event_envelope(row) for row in rows]

@@ -2,7 +2,7 @@
 
 Parses the committed `stg_events_events.sql` and asserts its shape: the dedupe rule, the
 work order's pinned minimum columns, no `_topic` filter, and — the emitter-comparison test —
-that every field `pulse_ledger.relay._envelope` actually puts on the wire has a matching
+that every field `pulse_ledger.envelope.event_envelope` actually puts on the wire has a matching
 column, so the view can never silently drift behind what the relay emits.
 """
 
@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from pulse_ledger.relay import _envelope
+from pulse_ledger.envelope import event_envelope
 
 _SQL_PATH = Path(__file__).resolve().parents[2] / "infra" / "snowflake" / "stg_events_events.sql"
 
@@ -32,8 +32,8 @@ _MINIMUM_COLUMNS = frozenset({
 })
 
 #: `EventBridgePublisher.publish` (ocean_broker.publisher) adds this field to every envelope it
-#: is given a routing key for, after `_envelope` builds it — the relay always passes one
-#: (`PendingRow.routing_key`), so it always lands on the bus alongside `_envelope`'s own fields.
+#: is given a routing key for, after `event_envelope` builds it — the relay always passes one
+#: (`PendingRow.routing_key`), so it always lands on the bus alongside `event_envelope`'s own fields.
 _PUBLISHER_ADDED_FIELDS = frozenset({"key"})
 
 
@@ -107,7 +107,7 @@ def test_no_topic_filter() -> None:
 
 def test_every_emitted_field_has_a_matching_column() -> None:
     """The columns match the emitter (scenario in specs/snowflake-stg-events/spec.md)."""
-    envelope = _envelope(_fake_outbox_row())
+    envelope = event_envelope(_fake_outbox_row())
     emitted_fields = set(envelope.keys()) | _PUBLISHER_ADDED_FIELDS
     columns = set(_select_columns(_sql_text()))
     missing = emitted_fields - columns
