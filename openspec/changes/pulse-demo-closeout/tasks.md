@@ -51,7 +51,7 @@ date per design.md: internal engineering, within two weeks of 2026-09-01.
 
 ## 2. Wave 1 — the walk, offline
 
-- [ ] 2.1 Stage harness: `scripts/demo/demo5_end_to_end.py` with the `Stage` protocol,
+- [x] 2.1 Stage harness: `scripts/demo/demo5_end_to_end.py` with the `Stage` protocol,
       `DemoContext`, offline context builder (compose stack up, fixture landing tables loaded,
       in-process board route), receipt printer, nonzero exit on first failure. Stages 1–4 wired
       by extracting stage functions from demos 1–4 where they exist only inside `main`, with
