@@ -92,6 +92,19 @@ date per design.md: internal engineering, within two weeks of 2026-09-01.
       release cannot reopen this gap; `task check` green.
       `[model: sonnet | deps: — | lane: repo_change | wave: 1]`
 
+- [ ] 2.5 Consent writer id `customer-io`: the command API derives writer ids from
+      `PULSE_LEDGER_WRITER_TOKEN_<SUFFIX>` by lowercasing and mapping `_` to `-`, so the
+      `customer.io` actor the ingress and its spec name is unspellable and no dev credential could
+      ever exist for stage 2 (surfaced by the first `task stage:e2e:live`, issue #342). Rename the
+      ingress writer id to `customer-io` (`consent_ingress.declarer.CUSTOMERIO_WRITER_ID` and every
+      docstring, `row_source.py`, `cli.py`, `docs/contracts/producer-registry.md`, ADR-0005 note,
+      `tests/test_producer_registry.py`); the delta spec in this change already carries the MODIFIED
+      requirement. Demo 5's stage 2 asserts the new actor.
+      Tests: consent-ingress suite passes with the new id; a test asserts the id round-trips through
+      `pulse_ledger.auth`'s suffix mapping (`CUSTOMER_IO` → `customer-io`); producer-registry gate
+      green; `task check` green.
+      `[model: sonnet | deps: — | lane: repo_change | wave: 1]`
+
 ## 3. Wave 2 — the drill, live mode, and the record
 
 - [x] 3.1 Stage 6 and the runbook: wire the rebuild drill as the final stage (capture rows,
@@ -117,4 +130,4 @@ date per design.md: internal engineering, within two weeks of 2026-09-01.
       PHI) posted on the issue and committed under `handoffs/pulse-demo-closeout/`.
       Tests (runbook assertions): all six stages pass live; the rebuild drill's receipt shows
       zero differences; the board shows the rebuilt card within the 60 s freshness budget.
-      `[model: sonnet | deps: 3.1 | lane: operational_discovery | wave: 2]`
+      `[model: sonnet | deps: 3.1, 2.5 | lane: operational_discovery | wave: 2]`

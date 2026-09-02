@@ -51,7 +51,9 @@ or external-audience polish; `odg-read-redirect` (the roadmap's Demo 4 slot stay
   test-only trick (ADR §4.6 authoritative rebuild, `design/delivery/pulse-program-roadmap.md`).
 
 ### Modified Capabilities
-<!-- No existing requirement changes. Demos assert shipped behavior; they do not alter it. -->
+- `customerio-consent-ingress`: the ingress's writer id becomes `customer-io` (was
+  `customer.io`), because the command API's credential registry cannot spell a dot — found by
+  the first staged live run (design.md decision 9, task 2.5).
 
 ## Impact
 
