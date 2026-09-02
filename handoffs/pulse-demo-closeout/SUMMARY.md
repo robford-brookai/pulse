@@ -1,11 +1,10 @@
 # Handoff Summary: pulse-demo-closeout
 
-Collected 2 handoff(s).
+Collected 1 handoff(s).
 
 ## Files
 
-- [task-001.md](handoffs/pulse-demo-closeout/task-001.md)
-- [task-002.md](handoffs/pulse-demo-closeout/task-002.md)
+- [task-003.md](handoffs/pulse-demo-closeout/task-003.md)
 
 ## Doc-Updater Instructions
 
