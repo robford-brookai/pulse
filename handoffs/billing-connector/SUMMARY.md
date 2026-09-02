@@ -4,6 +4,7 @@ Collected 1 handoff(s).
 
 ## Files
 
+- bc-task-004.md — 1.4 test harness (PR #341); receipt reconstructed from worker_done
 
 ## Doc-Updater Instructions
 
