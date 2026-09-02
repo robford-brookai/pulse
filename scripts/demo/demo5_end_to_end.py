@@ -49,13 +49,14 @@ import secrets
 import sys
 import time
 import uuid
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 
 import httpx
+import psycopg
 from psycopg_pool import ConnectionPool
 from starlette.testclient import TestClient
 
@@ -91,8 +92,10 @@ from pulse_ledger.auth import (  # noqa: E402
     TwentyWebhookConfig,
     Writer,
 )
-from pulse_ledger.reads import state_of_record  # noqa: E402
+from pulse_ledger.fold import FoldedEvent, fold_state, state_borne_by  # noqa: E402
+from pulse_ledger.reads import state_of_record, subject_history  # noqa: E402
 from pulse_ledger.validation import INITIAL_STATES  # noqa: E402
+from twenty_projection.apply import V1_BOARD, ProjectionRestClient, apply_event  # noqa: E402
 from verdict_relay.config import SUBJECT_TYPE_BY_VERDICT, TRANSITION_BY_OUTCOME  # noqa: E402
 from verdict_relay.declarer import Declarer  # noqa: E402
 from verdict_relay.mart_reader import FixtureRowSource as MartFixtureRowSource  # noqa: E402
@@ -166,6 +169,51 @@ class _InMemoryCursorStore:
         self._cursor = cursor
 
 
+class _BoardDouble:
+    """An in-memory Twenty board double (task 2.2): the offline "board client" decision 2 names —
+    understands exactly the two verbs `twenty_projection.apply.ProjectionRestClient` issues, a
+    filtered listing and a record PATCH, against the same REST shape the live board answers. No
+    live Twenty needed offline (stage 3's own docstring), yet stage 5 still exercises the real
+    `apply_event` core against a real record store, not a stub of it.
+    """
+
+    def __init__(self) -> None:
+        self.records: dict[str, dict[str, Any]] = {}
+
+    def seed(self, record_id: str, fields: Mapping[str, Any]) -> None:
+        self.records[record_id] = {"id": record_id, **fields}
+
+    def transport(self) -> httpx.MockTransport:
+        return httpx.MockTransport(self._handle)
+
+    def _handle(self, request: httpx.Request) -> httpx.Response:
+        parts = request.url.path.strip("/").split("/")  # ["rest", plural] or ["rest", plural, id]
+        plural = parts[1]
+        if request.method == "GET":
+            filters = _parse_filter(request.url.params.get("filter", ""))
+            matches = [
+                record for record in self.records.values() if all(record.get(k) == v for k, v in filters.items())
+            ]
+            return httpx.Response(200, json={"data": {plural: matches}})
+        if request.method == "PATCH":
+            record_id = parts[2]
+            record = self.records.setdefault(record_id, {"id": record_id})
+            record.update(json.loads(request.content))
+            return httpx.Response(200, json={"data": {}})
+        return httpx.Response(405)  # pragma: no cover — apply.py issues only GET and PATCH
+
+
+def _parse_filter(raw: str) -> dict[str, str]:
+    """`field[eq]:value,field2[eq]:value2` (the filter grammar `apply.py`'s docstring pins) back
+    into a plain equality mapping — the inverse of `find_records`'s own comma-join."""
+    terms: dict[str, str] = {}
+    for term in raw.split(",") if raw else ():
+        field_name, _, value = term.partition("[eq]:")
+        if field_name:
+            terms[field_name] = value
+    return terms
+
+
 @dataclass
 class DemoContext:
     """The shared context every stage runs against (design.md decision 2): stack handles and the
@@ -180,6 +228,12 @@ class DemoContext:
     writer_tokens: Mapping[str, str]
     fixtures: Mapping[str, Any]
     patient_key: str
+    board_transport: httpx.BaseTransport | None = None
+    board_base_url: str = "http://demo5-board.local"
+    board_store: _BoardDouble | None = None
+    aws_endpoint_url: str = demo1.DEFAULT_AWS_ENDPOINT_URL
+    event_bus_name: str = demo1.DEFAULT_EVENT_BUS_NAME
+    consumer: str = demo1.DEFAULT_CONSUMER
     _closers: list[Callable[[], None]] = field(default_factory=list, repr=False)
 
     def api_client(self, writer_id: str, **kwargs: Any) -> PulseCoreClient:
@@ -257,6 +311,17 @@ def build_offline_context(
     }
     patient_key = fixtures["consent_export_row"]["subject_key"]
 
+    # Stage 5's board window (task 2.2): a record already exists for the patient's enrollment
+    # before any drag, canonical/program columns populated and status blank — exactly what a live
+    # Twenty board would already hold. `BoardDragStage` commits under `ctx.patient_key` (the
+    # `canonicalPatientId` the enrollment mapping's `canonical_key_path` resolves on), so the
+    # record id only needs to be unique and stable, not itself meaningful.
+    board_store = _BoardDouble()
+    board_store.seed(
+        f"demo5-board-{patient_key}",
+        {"canonicalPatientId": patient_key, "programCode": "demo5"},
+    )
+
     ctx = DemoContext(
         live=False,
         database_url=database_url,
@@ -267,6 +332,8 @@ def build_offline_context(
         writer_tokens=writer_tokens,
         fixtures=fixtures,
         patient_key=patient_key,
+        board_transport=board_store.transport(),
+        board_store=board_store,
     )
     ctx._closers.append(pool.close)
     ctx._closers.append(lambda: test_client.__exit__(None, None, None))
@@ -571,12 +638,247 @@ class VerdictDeclareStage:
         return StageReceipt(self.name, assertion_count=4, subject_keys=(subject_key,))
 
 
-#: Stages 1-4 (task 2.1). Stage 5 (task 2.2) and stage 6 (task 3.1) are appended once those tasks land.
+# --- Stage 5: every window agrees with the ledger --------------------------------------------------
+
+#: The subjects the producing stages (2-4) commit to the ledger. Identity resolution (stage 1) is a
+#: pure decision over the fixture, never a ledger write (`demo2.resolve` commits nothing), so it
+#: contributes no subject here. `enrollment`'s subject key is `ctx.patient_key`, not the board
+#: record id `BoardDragStage` mints — `V1_BOARD_MAPPINGS`' `canonical_key_path` resolves the
+#: webhook's committed events on `canonicalPatientId`, which is `patient_key` (`mapping.py`).
+_WINDOW_SUBJECTS: tuple[tuple[str, str], ...] = (
+    ("communication_consent", None),
+    ("enrollment", None),
+    ("billing_episode", None),
+)
+
+
+def _touched_subjects(ctx: DemoContext) -> tuple[tuple[str, str], ...]:
+    consent_row = ctx.fixtures["consent_export_row"]
+    verdict_row = ctx.fixtures["verdict_mart_row"]
+    return (
+        ("communication_consent", consent_row["subject_key"]),
+        ("enrollment", ctx.patient_key),
+        ("billing_episode", verdict_row["subject_id"]),
+    )
+
+
+WindowTuple = tuple[str, str, str, str]
+
+
+def _reduce(subject_type: str, subject_key: str, state: str, as_of: datetime) -> WindowTuple:
+    """The shape every window compares on (design.md decision 6): `(subject_type, subject_key,
+    state, as_of)`, `as_of` normalized to UTC ISO-8601 so a window built from a differently
+    zoned timestamp still compares equal to one that means the same instant."""
+    return (subject_type, subject_key, state, as_of.astimezone(UTC).isoformat())
+
+
+def _check_window_agrees(
+    *, stage: str, subject_key: str, window: str, ledger: WindowTuple, observed: WindowTuple | None
+) -> None:
+    """Compare one window's reduced tuple to the ledger's, failing on the first disagreeing field.
+
+    Names the stage, the subject key, and the field — never a value (spec: "A failure message
+    names position, not content"). `observed=None` (the window found no state at all) is itself a
+    disagreement on every field, reported as `state`, the field a missing window most concretely
+    lacks.
+    """
+    if observed is None:
+        _check(False, f"[{stage}] window {window!r} for subject {subject_key!r}: no state at field 'state'")
+        return
+    for field_name, ledger_value, observed_value in zip(
+        ("subject_type", "subject_key", "state", "as_of"), ledger, observed, strict=True
+    ):
+        _check(
+            ledger_value == observed_value,
+            f"[{stage}] window {window!r} disagrees with the ledger for subject {subject_key!r} at field "
+            f"{field_name!r}",
+        )
+
+
+def _fold_envelopes(subject_type: str, subject_key: str, envelopes: Iterable[Mapping[str, Any]]) -> WindowTuple | None:
+    """The independent-fold and warehouse windows share this: both start from a list of published
+    envelopes (one from `subject_history`, one drained off the LocalStack queue) and both owe their
+    state to the one ordering rule `pulse_ledger.fold` states once (design.md decision 6)."""
+    folded_events = [
+        FoldedEvent(
+            event_id=uuid.UUID(envelope["event_id"]),
+            to_state=state_borne_by(envelope["payload"]) or "",
+            effective_at=datetime.fromisoformat(envelope["effective_at"]),
+            recorded_at=datetime.fromisoformat(envelope["recorded_at"]),
+            reverses_event_id=(uuid.UUID(envelope["reverses_event_id"]) if envelope.get("reverses_event_id") else None),
+        )
+        for envelope in envelopes
+        if state_borne_by(envelope["payload"]) is not None or envelope.get("reverses_event_id")
+    ]
+    folded = fold_state(folded_events)
+    if folded is None:
+        return None
+    return _reduce(subject_type, subject_key, folded.state, folded.effective_at)
+
+
+def _ledger_window(conn: psycopg.Connection, subject_type: str, subject_key: str) -> WindowTuple | None:
+    """The comparison target: the co-committed `current_state` row itself, not a re-derivation."""
+    row = conn.execute(
+        "SELECT state, effective_at FROM ledger.current_state WHERE subject_type = %s AND subject_key = %s",
+        (subject_type, subject_key),
+    ).fetchone()
+    if row is None:
+        return None
+    state, effective_at = row
+    return _reduce(subject_type, subject_key, state, effective_at)
+
+
+def _fold_window(conn: psycopg.Connection, subject_type: str, subject_key: str) -> WindowTuple | None:
+    """The independent fold: raw committed events, refolded through `pulse_ledger.fold` rather
+    than trusted from `current_state` (design.md decision 6, `subject_history`'s own read route,
+    task 1.3)."""
+    return _fold_envelopes(subject_type, subject_key, subject_history(conn, subject_type, subject_key))
+
+
+def _drain_landed_events(
+    sqs: Any, queue_url: str, wanted: frozenset[tuple[str, str]], *, timeout: float
+) -> dict[tuple[str, str], list[dict[str, Any]]]:
+    """Drain committed envelopes for `wanted` (subject_type, subject_key) pairs off the LocalStack
+    queue `ledger-relay` publishes onto (design.md decision 6: "the LocalStack-landed events"),
+    the same queue `demo1_ledger_core.py._wait_for_event` observes a single event on.
+
+    Polls until `timeout` seconds pass or two consecutive long-polls come back empty, whichever is
+    first — the relay is typically fast, so an idle queue after a full round trip means every event
+    this walk committed has already landed. Never deletes a message (`demo1`'s own convention):
+    this stage only inspects the queue, it does not consume it.
+    """
+    collected: dict[tuple[str, str], list[dict[str, Any]]] = {key: [] for key in wanted}
+    deadline = time.monotonic() + timeout
+    idle_polls = 0
+    while time.monotonic() < deadline and idle_polls < 2:
+        response = sqs.receive_message(QueueUrl=queue_url, WaitTimeSeconds=5, MaxNumberOfMessages=10)
+        messages = response.get("Messages", [])
+        if not messages:
+            idle_polls += 1
+            continue
+        idle_polls = 0
+        for message in messages:
+            body = json.loads(message["Body"])
+            detail = body.get("detail", body)
+            key = (detail.get("subject_type"), detail.get("subject_key"))
+            if key in collected:
+                collected[key].append(detail)
+    return collected
+
+
+def _board_state(
+    events: Iterable[Mapping[str, Any]],
+    *,
+    transport: httpx.BaseTransport,
+    base_url: str,
+    store: _BoardDouble,
+    subject_key: str,
+) -> WindowTuple | None:
+    """Replay one enrollment subject's committed events through the real `twenty_projection.apply`
+    core onto the offline board double, then read back what it wrote — the board window is the
+    live projection's own write path exercised in-process, not a stand-in for it (design.md
+    decision 2: "which board client... swapped by how `DemoContext` is built, stage code never
+    checks the mode" — `apply_event` is exactly that stage code).
+
+    Reversal events carry no `to_state` and `apply_event` only understands state-bearing envelopes
+    (`_parse_envelope` requires `payload.to_state`), so they are skipped here the same way
+    `pulse_ledger.fold` drops them from state — a correction changes which prior event survives,
+    not which events get applied.
+    """
+    client = ProjectionRestClient(base_url, token="demo5-board-window", transport=transport)  # noqa: S106
+    try:
+        for envelope in events:
+            if envelope.get("reverses_event_id"):
+                continue
+            apply_event(envelope, client=client, board=V1_BOARD)
+    finally:
+        client.close()
+
+    record = store.records.get(f"demo5-board-{subject_key}")
+    if record is None or V1_BOARD.status_field not in record:
+        return None
+    # `encode_option_value` is `str.upper` for the enrollment vocabulary (no dots in its states —
+    # `pulse_core.twenty_model.encode_option_value`'s own docstring), so `str.lower` inverts it.
+    state = record[V1_BOARD.status_field].lower()
+    as_of = datetime.fromisoformat(record[V1_BOARD.as_of_field])
+    return _reduce("enrollment", subject_key, state, as_of)
+
+
+class WindowAgreementStage:
+    """Stage 5 (spec: "Board, warehouse copy, and fold agree"): after the producing stages, every
+    read surface a live consumer would use is reduced to `(subject_type, subject_key, state,
+    as_of)` and compared to the ledger's own `current_state` row, failing on the first
+    disagreement. The board window applies only to `enrollment` — the one v1 board
+    (`V1_BOARD_MAPPINGS`) — `communication_consent` and `billing_episode` render on no board today,
+    so only their fold and warehouse windows are checked; a subject type the catalog defines but
+    Twenty does not render is not this stage's spec defect to invent a board for (design.md
+    non-goals: "no new ledger behavior")."""
+
+    name = "window_agreement"
+
+    def setup(self, ctx: DemoContext) -> None:
+        del ctx
+
+    def run(self, ctx: DemoContext) -> StageReceipt:
+        subjects = _touched_subjects(ctx)
+        sqs = demo1._sqs_client(ctx.aws_endpoint_url)
+        queue_url = sqs.get_queue_url(QueueName=f"{ctx.event_bus_name}-{ctx.consumer}")["QueueUrl"]
+        landed = _drain_landed_events(sqs, queue_url, frozenset(subjects), timeout=30.0)
+
+        assertions = 0
+        with ctx.pool.connection() as conn:
+            for subject_type, subject_key in subjects:
+                ledger = _ledger_window(conn, subject_type, subject_key)
+                _check(
+                    ledger is not None,
+                    f"[{self.name}] ledger current_state: no row at field 'state' for subject {subject_key!r}",
+                )
+                assertions += 1
+
+                fold_tuple = _fold_window(conn, subject_type, subject_key)
+                _check_window_agrees(
+                    stage=self.name, subject_key=subject_key, window="fold", ledger=ledger, observed=fold_tuple
+                )
+                assertions += 1
+
+                warehouse_tuple = _fold_envelopes(subject_type, subject_key, landed[(subject_type, subject_key)])
+                _check_window_agrees(
+                    stage=self.name,
+                    subject_key=subject_key,
+                    window="warehouse",
+                    ledger=ledger,
+                    observed=warehouse_tuple,
+                )
+                assertions += 1
+
+                if subject_type == "enrollment":
+                    events = subject_history(conn, subject_type, subject_key)
+                    board_tuple = _board_state(
+                        events,
+                        transport=ctx.board_transport,
+                        base_url=ctx.board_base_url,
+                        store=ctx.board_store,
+                        subject_key=subject_key,
+                    )
+                    _check_window_agrees(
+                        stage=self.name,
+                        subject_key=subject_key,
+                        window="board",
+                        ledger=ledger,
+                        observed=board_tuple,
+                    )
+                    assertions += 1
+
+        return StageReceipt(self.name, assertion_count=assertions, subject_keys=tuple(key for _, key in subjects))
+
+
+#: Stages 1-5 (tasks 2.1, 2.2). Stage 6 (task 3.1) is appended once that task lands.
 STAGES: tuple[Stage, ...] = (
     IdentityResolutionStage(),
     ConsentIngressStage(),
     BoardDragStage(),
     VerdictDeclareStage(),
+    WindowAgreementStage(),
 )
 
 

@@ -7,8 +7,9 @@ the store. Three constraints, one vocabulary — `events`, `current_state`, and 
 widen together, because a table left behind would re-open that gap for whichever write path
 touches it.
 
-`communication_consent` (catalog-present, `ownership: recorded`) stays outside the record —
-`test_communication_consent_validates_but_cannot_yet_be_committed` still pins that mismatch.
+`communication_consent` (catalog-present, `ownership: recorded`) stays outside the record as of
+this migration — `0005_admit_communication_consent_subject.py` closes that gap; until then,
+`test_migration_0004.py` pins the mismatch at exactly this revision.
 
 Postgres has no ALTER for a check constraint, so each is dropped and recreated under its
 existing name. The downgrade restores the six-grain vocabulary of 0001 and fails, correctly,

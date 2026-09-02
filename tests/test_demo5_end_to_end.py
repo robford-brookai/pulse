@@ -63,7 +63,13 @@ def test_help_exits_cleanly_with_no_network_or_stack() -> None:
 
 def test_stages_are_wired_in_spec_order() -> None:
     names = [stage.name for stage in demo5.STAGES]
-    assert names == ["identity_resolution", "consent_ingress", "board_drag", "verdict_declare"]
+    assert names == [
+        "identity_resolution",
+        "consent_ingress",
+        "board_drag",
+        "verdict_declare",
+        "window_agreement",
+    ]
 
 
 # --- Harness unit tests: run_walk over fake stages -------------------------------------------------
