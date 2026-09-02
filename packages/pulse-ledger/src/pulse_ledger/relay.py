@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -45,6 +45,8 @@ from typing import Any, Protocol
 
 import psycopg
 from psycopg.rows import dict_row
+
+from pulse_ledger.envelope import EVENT_COLUMNS, event_envelope
 
 log = logging.getLogger(__name__)
 
@@ -122,53 +124,19 @@ def _now() -> datetime:
     return datetime.now(tz=timezone.utc)
 
 
-#: Every envelope field, sourced from the event row. `effective_at` is the ledger's canonical name
-#: for business time and `occurred_at` is emitted beside it with the same value — the same alias the
-#: write path accepts (commit.py, decision 5), so a consumer written against either name reads the
-#: one fact. `seq` and the subject pair travel with the envelope because per-subject ordering is
-#: only checkable by a consumer that can see the sequence it is meant to hold.
-_SELECT_PENDING_SQL = """
+#: The relay's claim query. Every envelope field is sourced from the event row through
+#: `envelope.EVENT_COLUMNS`, so the shape published to the bus and the shape `reads.subject_history`
+#: returns cannot drift apart.
+_SELECT_PENDING_SQL = f"""
     SELECT o.event_id, o.subject_type, o.subject_key, o.seq, o.attempts, o.created_at,
            o.next_attempt_at,
-           e.event_type, e.effective_at, e.recorded_at, e.producer, e.schema_version,
-           e.rule_version, e.correlation_id, e.causation_id, e.actor_type, e.actor_id,
-           e.actor_authority, e.evidence, e.evidence_class, e.epoch, e.reverses_event_id,
-           e.payload
+           {EVENT_COLUMNS}
       FROM ledger.outbox o
       JOIN ledger.events e USING (event_id)
      WHERE o.published_at IS NULL AND o.dead_lettered_at IS NULL
      ORDER BY o.subject_type, o.subject_key, o.seq
      LIMIT %(batch_size)s
-"""
-
-
-def _envelope(row: Mapping[str, Any]) -> dict[str, Any]:
-    """The published envelope for one outbox row."""
-    return {
-        "event_id": str(row["event_id"]),
-        "event_type": row["event_type"],
-        "subject_type": row["subject_type"],
-        "subject_key": row["subject_key"],
-        "seq": row["seq"],
-        "effective_at": row["effective_at"].isoformat(),
-        "occurred_at": row["effective_at"].isoformat(),
-        "recorded_at": row["recorded_at"].isoformat(),
-        "producer": row["producer"],
-        "schema_version": row["schema_version"],
-        "rule_version": row["rule_version"],
-        "correlation_id": str(row["correlation_id"]) if row["correlation_id"] else None,
-        "causation_id": str(row["causation_id"]) if row["causation_id"] else None,
-        "reverses_event_id": str(row["reverses_event_id"]) if row["reverses_event_id"] else None,
-        "actor": {
-            "type": row["actor_type"],
-            "id": row["actor_id"],
-            "authority": row["actor_authority"],
-        },
-        "evidence": row["evidence"],
-        "evidence_class": row["evidence_class"],
-        "epoch": row["epoch"],
-        "payload": row["payload"],
-    }
+"""  # noqa: S608 — the only interpolation is `EVENT_COLUMNS`, a module constant
 
 
 def pending_rows(conn: psycopg.Connection, *, batch_size: int = DEFAULT_BATCH_SIZE) -> list[PendingRow]:
@@ -186,7 +154,7 @@ def pending_rows(conn: psycopg.Connection, *, batch_size: int = DEFAULT_BATCH_SI
                 attempts=values["attempts"],
                 created_at=values["created_at"],
                 next_attempt_at=values["next_attempt_at"],
-                envelope=_envelope(values),
+                envelope=event_envelope(values),
             )
         )
     return rows

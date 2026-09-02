@@ -10,6 +10,12 @@ Two conventions this module owns, so a writer never touches raw HTTP:
   a writer must not treat "the bus hiccuped" the same as "the catalog forbids this" or loop
   forever. The idempotency key is derived client-side (`pulse_core.idempotency`, D16) from this
   writer's own id plus the command's content, never left to the caller to construct by hand.
+- **`subject_history`** reads one subject's committed events back from
+  `GET /subjects/{subject_type}/{subject_key}/events` in ledger sequence, paging to exhaustion. It
+  is the replay source a projection rebuilds from (pulse-demo-closeout design decision 5): the
+  rebuild holds no ledger database credential, only the writer token it already declares with. A
+  refused or unreadable answer raises — a rebuild that mistook a refusal for "this subject has no
+  events" would repaint the subject's rows to nothing.
 - **`consume(handler)`** wraps SQS receive → `handler` → delete, the same shape the converted
   ocean consumers use (`packages/ocean/services/agent-worker/src/consumer.py`): a message is
   deleted only once `handler` has returned without raising, so a failure is left to the queue's
@@ -46,6 +52,10 @@ from pulse_core.connector.consume import (
     consume_once,
 )
 from pulse_core.generated import Command
+from pulse_core.history import (
+    DEFAULT_HISTORY_PAGE_SIZE,
+    subject_history_path,
+)
 from pulse_core.idempotency import derive_idempotency_key
 
 __all__ = [
@@ -59,6 +69,7 @@ __all__ = [
     "Rejection",
     "ResponseClassification",
     "Sleeper",
+    "SubjectHistoryRefusedError",
     "UnexpectedResponseError",
     "classify_response",
     "consume",
@@ -74,6 +85,80 @@ _REJECTED_STATUS = frozenset({401, 403, 422})
 #: A writer request answered with any of these failed for a reason unrelated to the command's own
 #: legality — the bus, the database, a load balancer's 429 — and is worth retrying unchanged.
 _TRANSIENT_STATUS = frozenset({408, 429, 500, 502, 503, 504})
+
+
+class SubjectHistoryRefusedError(RuntimeError):
+    """A history read that did not come back as a readable history.
+
+    One base for every way the read can fail to produce events — refused, transient past the retry
+    budget, or answered with a body that is not a history — because every one of them has the same
+    consequence for a caller: it does not know this subject's events and must not proceed as though
+    the subject has none.
+
+    Carries the status code and a reason naming the shape at fault. Never the response body, never
+    the request's credential: a failed read is exactly when code reaches for the payload it was
+    denied, and once C1 clears an event payload is patient data.
+    """
+
+    def __init__(self, reason: str, *, status_code: int | None = None) -> None:
+        self.status_code = status_code
+        self.reason = reason
+        where = "no response" if status_code is None else f"HTTP {status_code}"
+        super().__init__(f"subject history read failed ({where}): {reason}")
+
+
+class HistoryRejectedError(SubjectHistoryRefusedError):
+    """The ledger answered, and the answer was no — an auth refusal or an unknown subject type."""
+
+    def __init__(self, status_code: int) -> None:
+        super().__init__("the ledger refused the read", status_code=status_code)
+
+
+class HistoryUnavailableError(SubjectHistoryRefusedError):
+    """Still failing after the retry budget: a transport error or a transient status."""
+
+    def __init__(self, attempts: int, *, status_code: int | None = None, cause: str | None = None) -> None:
+        self.attempts = attempts
+        detail = f"still unavailable after {attempts} attempts"
+        super().__init__(detail if cause is None else f"{detail} ({cause})", status_code=status_code)
+
+
+class MalformedHistoryError(SubjectHistoryRefusedError):
+    """A 200 whose body is not a history. Names the shape at fault, never the content.
+
+    One subclass per way the shape can be wrong, so a raise site passes a status code and nothing
+    else — the message belongs to the exception, and no call site can quote a body into it.
+    """
+
+    shape = "the body is not the shape a history read returns"
+
+    def __init__(self, *, status_code: int | None = None) -> None:
+        super().__init__(f"the response is not a history: {self.shape}", status_code=status_code)
+
+
+class HistoryBodyNotJsonError(MalformedHistoryError):
+    shape = "the body is not JSON"
+
+
+class HistoryBodyNotObjectError(MalformedHistoryError):
+    shape = "the body is not a JSON object"
+
+
+class HistoryEventsShapeError(MalformedHistoryError):
+    shape = "'events' is not a list of objects"
+
+
+class HistoryPageCursorError(SubjectHistoryRefusedError):
+    """A full page whose last event carries no integer `seq`, so the next page has no cursor.
+
+    Raised rather than paged again from the same cursor, which would loop forever, and rather than
+    returned short, which would hand a rebuild a truncated history that folds cleanly to the wrong
+    state.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("a full page's last event carries no integer 'seq'")
+
 
 DEFAULT_MAX_ATTEMPTS = 4
 DEFAULT_BASE_DELAY_SECONDS = 0.5
@@ -346,3 +431,80 @@ class PulseCoreClient:
             if result.classification is not ResponseClassification.TRANSIENT or attempt >= self._max_attempts:
                 return dataclasses.replace(result, attempts=attempt)
             self._sleep(_backoff_delay(attempt, base=self._base_delay, maximum=self._max_delay))
+
+    def subject_history(
+        self,
+        subject_type: str,
+        subject_key: str,
+        *,
+        page_size: int = DEFAULT_HISTORY_PAGE_SIZE,
+    ) -> list[dict[str, object]]:
+        """Every committed event for one subject, in ledger sequence, paged to exhaustion.
+
+        Ledger sequence is the per-subject `seq` the relay publishes in, so the list this returns
+        is the order a live consumer saw these events in — which is what makes a rebuild from it
+        agree with incremental apply rather than merely resemble it.
+
+        Paging is a keyset walk on `seq`: each request asks for events after the last one received,
+        so a subject still being written to can neither skip nor repeat an event across a page
+        boundary. A page shorter than `page_size` ends the walk.
+
+        Raises `SubjectHistoryRefusedError` for anything that is not a readable history — a
+        refusal, a transient failure past the retry budget, or a malformed body. Never an empty
+        list: "no events" and "I could not read the events" are different answers, and a rebuild
+        that confuses them repaints a subject's rows to nothing.
+        """
+        events: list[dict[str, object]] = []
+        after_seq: int | None = None
+        while True:
+            params: dict[str, int] = {"limit": page_size}
+            if after_seq is not None:
+                params["after_seq"] = after_seq
+            page = self._get_history_page(subject_history_path(subject_type, subject_key), params)
+            events.extend(page)
+            if len(page) < page_size:
+                return events
+            last_seq = page[-1].get("seq")
+            if not isinstance(last_seq, int):
+                raise HistoryPageCursorError()
+            after_seq = last_seq
+
+    def _get_history_page(self, path: str, params: Mapping[str, int]) -> list[dict[str, object]]:
+        """One page, retrying only a transient answer — the same policy `submit_command` applies."""
+        attempt = 0
+        while True:
+            attempt += 1
+            try:
+                response = self._http.get(path, params=dict(params))
+            except httpx.TransportError as exc:
+                if attempt >= self._max_attempts:
+                    raise HistoryUnavailableError(attempt, cause=type(exc).__name__) from exc
+                self._sleep(_backoff_delay(attempt, base=self._base_delay, maximum=self._max_delay))
+                continue
+            if response.status_code in _TRANSIENT_STATUS:
+                if attempt >= self._max_attempts:
+                    raise HistoryUnavailableError(attempt, status_code=response.status_code)
+                self._sleep(_backoff_delay(attempt, base=self._base_delay, maximum=self._max_delay))
+                continue
+            if response.status_code != 200:
+                raise HistoryRejectedError(response.status_code)
+            return _history_events(response)
+
+
+def _history_events(response: httpx.Response) -> list[dict[str, object]]:
+    """The `events` list out of a history response, or a refusal naming the shape at fault.
+
+    Every check here names a shape and never a value: the body is a list of event envelopes, and an
+    envelope's payload is the one thing in this module that will carry PHI once C1 clears.
+    """
+    status = response.status_code
+    try:
+        body: object = response.json()
+    except ValueError as exc:
+        raise HistoryBodyNotJsonError(status_code=status) from exc
+    if not isinstance(body, Mapping):
+        raise HistoryBodyNotObjectError(status_code=status)
+    events = body.get("events")
+    if not isinstance(events, list) or not all(isinstance(event, Mapping) for event in events):
+        raise HistoryEventsShapeError(status_code=status)
+    return [dict(event) for event in events]
