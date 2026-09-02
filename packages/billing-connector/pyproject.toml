@@ -26,6 +26,11 @@ dev = [
     # This package typechecks under pyright strict (see [tool.pyright] below), same posture as
     # verdict-relay, schedules, identity, consent-ingress, and twenty-projection.
     "pyright>=1.1.390",
+    # `tests/factories.py`'s `FakeCommandTransport` fakes `PulseCoreClient` at the
+    # `httpx.MockTransport` boundary (verdict-relay's `ScriptedApi` pattern) — declared directly
+    # rather than relying on `pulse-core`'s transitive pin, so the workspace resolves one httpx
+    # (consent-ingress and verdict-relay's precedent).
+    "httpx>=0.28.1",
 ]
 
 [build-system]

@@ -1,0 +1,26 @@
+{
+  "case": "fresh_watermark_evaluates_rule",
+  "scenario": "A fresh watermark evaluates the rule",
+  "description": "A subject whose last folded event is within the threshold: the rule module's outcome decides the verdict.",
+  "facts": {
+    "subject_type": "billing_episode",
+    "subject_key": "episode-1004",
+    "facts": {
+      "period_end": "2026-08-31",
+      "achieved": true,
+      "consent_start": "2026-07-01"
+    },
+    "last_event_id": "event-1"
+  },
+  "event": null,
+  "expected": {
+    "evaluated": 1,
+    "deferred": 0,
+    "committed": 1,
+    "replayed": 0,
+    "rejected": 0,
+    "outcome": "positive",
+    "reason": null,
+    "transition_declared": true
+  }
+}

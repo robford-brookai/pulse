@@ -1,0 +1,28 @@
+{
+  "case": "amount_bearing_inputs_leave_no_trace",
+  "scenario": "Amount-bearing inputs leave no trace",
+  "description": "A rule evaluation whose inputs include amount-bearing source data: when its verdict is declared and logged, the command payload, the receipt, and every log line carry qualification facts only.",
+  "facts": {
+    "subject_type": "billing_episode",
+    "subject_key": "episode-1007",
+    "facts": {
+      "period_end": "2026-08-31",
+      "achieved": true,
+      "consent_start": "2026-07-01",
+      "billed_amount_cents": 12345
+    },
+    "last_event_id": "event-1"
+  },
+  "event": null,
+  "expected": {
+    "evaluated": 1,
+    "deferred": 0,
+    "committed": 1,
+    "replayed": 0,
+    "rejected": 0,
+    "forbidden_fields": ["billed_amount_cents"],
+    "payload_leaks_forbidden_fields": false,
+    "receipt_leaks_forbidden_fields": false,
+    "log_leaks_forbidden_fields": false
+  }
+}

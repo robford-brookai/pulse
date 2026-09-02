@@ -1,0 +1,24 @@
+{
+  "case": "reevaluating_unchanged_facts_declares_nothing_new",
+  "scenario": "Re-evaluating unchanged facts declares nothing new",
+  "description": "A subject the connector already evaluated, with no new facts: when evaluation runs again for that subject, submissions classify as replayed, no new event exists, and the receipt counts the replay.",
+  "facts": {
+    "subject_type": "billing_episode",
+    "subject_key": "episode-1005",
+    "facts": {
+      "period_end": "2026-08-31",
+      "achieved": true,
+      "consent_start": "2026-07-01"
+    },
+    "last_event_id": "event-1"
+  },
+  "event": null,
+  "expected": {
+    "evaluated": 1,
+    "deferred": 0,
+    "committed": 0,
+    "replayed": 1,
+    "rejected": 0,
+    "same_facts_hash": true
+  }
+}

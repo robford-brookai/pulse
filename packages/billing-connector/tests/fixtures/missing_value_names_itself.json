@@ -1,0 +1,21 @@
+{
+  "case": "missing_value_names_itself",
+  "scenario": "A missing value names itself",
+  "description": "The connector starts without one required environment variable: it exits nonzero naming that variable and nothing else.",
+  "facts": null,
+  "event": null,
+  "env": {
+    "BILLING_CONNECTOR_QUEUE_URL": "https://queue.example/billing-connector",
+    "BILLING_CONNECTOR_LEDGER_BASE_URL": "https://ledger.example"
+  },
+  "missing_variable": "BILLING_CONNECTOR_TOKEN",
+  "expected": {
+    "evaluated": 0,
+    "deferred": 0,
+    "committed": 0,
+    "replayed": 0,
+    "rejected": 0,
+    "startup_exit_nonzero": true,
+    "error_names_exactly_one_variable": true
+  }
+}

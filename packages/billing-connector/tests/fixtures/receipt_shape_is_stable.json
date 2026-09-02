@@ -1,0 +1,22 @@
+{
+  "case": "receipt_shape_is_stable",
+  "scenario": "The receipt shape is stable",
+  "description": "A batch completes: the receipt line matches the golden shape byte for byte apart from the counts.",
+  "facts": null,
+  "event": null,
+  "receipt": {
+    "committed": 3,
+    "replayed": 1,
+    "rejected": 0,
+    "evaluated": 4,
+    "deferred": 2
+  },
+  "expected": {
+    "evaluated": 4,
+    "deferred": 2,
+    "committed": 3,
+    "replayed": 1,
+    "rejected": 0,
+    "line": "service=billing-connector committed=3 replayed=1 rejected=0 evaluated=4 deferred=2"
+  }
+}
