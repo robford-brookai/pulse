@@ -79,6 +79,19 @@ date per design.md: internal engineering, within two weeks of 2026-09-01.
       Opus: the rebuild is the proof that projections are windows — a fold that disagrees with
       live apply on ordering would pass the demo and lie.
 
+- [ ] 2.4 Ledger migration admitting `communication_consent`: a new Alembic migration in
+      `packages/pulse-ledger/infra/postgres/versions/` extending `SUBJECT_TYPES` so the
+      `ck_events_subject_type`, `ck_current_state_subject_type`, and `ck_review_queue_subject_type`
+      check constraints admit `communication_consent` (the catalog seed's subject type, distinct
+      from the older `consent`), following `0004_admit_coverage_subject.py`. Surfaced by 2.1's
+      live run: `record_communication_consent` fails on `ck_events_subject_type` against a real
+      migrated Postgres before catalog validation runs (`handoffs/pulse-demo-closeout/task-004.md`).
+      Tests: migration up/down clean; a test commits a `record_communication_consent` command
+      against a migrated Postgres and reads it back; a gate asserts every subject type in
+      `pulse_core.generated.TRANSITIONS` is admitted by the constraints so the next catalog
+      release cannot reopen this gap; `task check` green.
+      `[model: sonnet | deps: — | lane: repo_change | wave: 1]`
+
 ## 3. Wave 2 — the drill, live mode, and the record
 
 - [ ] 3.1 Stage 6 and the runbook: wire the rebuild drill as the final stage (capture rows,
@@ -89,7 +102,7 @@ date per design.md: internal engineering, within two weeks of 2026-09-01.
       Tests: offline demo5 exits 0 through stage 6 in a CI-shaped local run, receipt committed
       under `handoffs/pulse-demo-closeout/`; live context builder unit-tested with a fake
       transport; reachability gate holds; `task check` green.
-      `[model: sonnet | deps: 2.2, 2.3 | lane: repo_change | wave: 2]`
+      `[model: sonnet | deps: 2.2, 2.3, 2.4 | lane: repo_change | wave: 2]`
 
 - [ ] 3.2 Presentation refresh: `.planning/reports/2026-08-30-pulse-presentation.md` §3 becomes
       the one-patient story (six stages, one paragraph each, the four earlier demos referenced
