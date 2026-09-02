@@ -104,7 +104,7 @@ date per design.md: internal engineering, within two weeks of 2026-09-01.
       transport; reachability gate holds; `task check` green.
       `[model: sonnet | deps: 2.2, 2.3, 2.4 | lane: repo_change | wave: 2]`
 
-- [ ] 3.2 Presentation refresh: `.planning/reports/2026-08-30-pulse-presentation.md` §3 becomes
+- [x] 3.2 Presentation refresh: `.planning/reports/2026-08-30-pulse-presentation.md` §3 becomes
       the one-patient story (six stages, one paragraph each, the four earlier demos referenced
       as the doors it passes through); §5 updated for the connector-pattern archive and the
       billing-connector seed. Plain language, internal engineering audience.
