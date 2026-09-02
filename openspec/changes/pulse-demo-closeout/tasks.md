@@ -61,7 +61,7 @@ date per design.md: internal engineering, within two weeks of 2026-09-01.
       harness with two fake stages and asserts stop-on-first-failure and the receipt shape.
       `[model: sonnet | deps: 1.1 | lane: repo_change | wave: 1]`
 
-- [ ] 2.2 Stage 5, the windows agree: the shape reducer `(subject_type, subject_key, state,
+- [x] 2.2 Stage 5, the windows agree: the shape reducer `(subject_type, subject_key, state,
       as_of)` over board rows, landed events, and an independent fold; comparison fails on any
       disagreement and names stage, subject key, and field, never a value.
       Tests: reducer unit tests on each window type; a planted disagreement fails with the
