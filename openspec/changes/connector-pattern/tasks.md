@@ -83,7 +83,7 @@ per WORKFLOW v2.2.0 `live_execution` — never a worktree.
 
 ## 3. Wave 2 — the billing engine
 
-- [ ] 3.1 [DNA-1276] `packages/billing` scaffold on the kit: package layout, `billing_engine` Postgres
+- [x] 3.1 [DNA-1276] `packages/billing` scaffold on the kit: package layout, `billing_engine` Postgres
       schema migration (`subject_facts`, `evaluations` per design.md decision 5) under its own
       role/credential, and the shadow-ledger gate — a test pinning that no state-of-record
       read targets this schema.
