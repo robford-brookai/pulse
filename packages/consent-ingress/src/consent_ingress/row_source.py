@@ -14,7 +14,7 @@ ingress's own business:
 - **The durable cursor** makes a run resumable: the reader pages on the row's event timestamp and
   persists its page position through the ledger's writer-state facility
   (`pulse_core.cursor.cursor_path`), scoped to this ingress's own writer id
-  (`CURSOR_WRITER_ID`) — distinct from the `customer.io` D15 credential the declarer (task 3.1)
+  (`CURSOR_WRITER_ID`) — distinct from the `customer-io` D15 credential the declarer (task 3.1)
   authenticates command submission with. A crash between a page's declarations and its `commit()`
   re-reads at most that one page, which D16 idempotency (task 3.2) classifies as a replay
   downstream — correctness never depends on the cursor being fresh.
@@ -77,7 +77,7 @@ _STRING_COLUMNS = tuple(column for column in CONTRACT_COLUMNS if column not in _
 _CURSOR_PAGE_KEY = "event_time"
 
 #: This ingress's own writer id (design Context) — scopes its durable cursor to itself, never the
-#: `customer.io` D15 credential name the declarer (task 3.1) authenticates command submission
+#: `customer-io` D15 credential name the declarer (task 3.1) authenticates command submission
 #: with.
 CURSOR_WRITER_ID = "consent-ingress"
 

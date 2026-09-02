@@ -54,6 +54,19 @@ pull is a possible follow-on with its own decision).
 
 ---
 
+## Note (2026-09-02, `pulse-demo-closeout` design.md decision 9)
+
+This ADR's Decision section names the actor `customer.io`. That spelling is unspellable as a
+writer id: the command API derives every writer id from `PULSE_LEDGER_WRITER_TOKEN_<SUFFIX>` by
+lowercasing the suffix and mapping `_` to `-` (`pulse_ledger.auth._writer_id_from_suffix`), and no
+suffix can ever produce a dot — no dev credential could exist for this ingress, surfaced by the
+first `task stage:e2e:live` (issue #342). The ingress, its spec, and the producer registry now
+name the actor `customer-io`, registered as `PULSE_LEDGER_WRITER_TOKEN_CUSTOMER_IO`. This is a
+spelling correction to match the credential system's real constraints, not a reversal of the
+Decision above — Customer.io consent data is still on the governed path, still D9-attributed.
+
+---
+
 **The log is append-only.** A decision that no longer holds gets a new ADR and a status flip on
 the old one — never an edit. The point is the history, not the current state; the current state
 is the code.

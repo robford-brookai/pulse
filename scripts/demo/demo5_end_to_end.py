@@ -303,8 +303,9 @@ class DemoContext:
 
 def _make_registry(tokens: Mapping[str, str]) -> CredentialRegistry:
     """Build a `CredentialRegistry` directly from writer id -> token, bypassing the env-var suffix
-    convention (`_writer_id_from_suffix` lowercases and maps `_` to `-`, which cannot round-trip a
-    writer id like `customer.io`)."""
+    convention (`_writer_id_from_suffix` lowercases and maps `_` to `-`): offline mode has no
+    environment to read the credentials from in the first place, so it constructs the registry
+    from the in-process `writer_tokens` mapping instead."""
     writers = {writer_id: Writer(writer_id=writer_id) for writer_id in tokens}
     digests = {hashlib.sha256(token.encode()).hexdigest(): writer_id for writer_id, token in tokens.items()}
     return CredentialRegistry(writers, digests)

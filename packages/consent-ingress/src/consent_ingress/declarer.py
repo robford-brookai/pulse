@@ -16,11 +16,14 @@ here, and each is a contract this module shares with something outside it:
   by `tests/test_consent_grain_parity.py` at the repo root, which calls both compositions on the
   same inputs and fails if they ever part ways.
 
-- **Attribution is authentication (ADR-0003).** Every command's actor becomes `customer.io` because
+- **Attribution is authentication (ADR-0003).** Every command's actor becomes `customer-io` because
   `client` authenticates with this ingress's own D15 credential, whose name `CUSTOMERIO_WRITER_ID`
   pins — never because this module writes an actor field, which it does not, anywhere. The
   credential's token value lives in the environment and reaches `PulseCoreClient` at the CLI
-  boundary (task 4.1); only the name belongs in source.
+  boundary (task 4.1); only the name belongs in source. The writer id is spelled `customer-io`,
+  not `customer.io`: the command API derives writer ids from `PULSE_LEDGER_WRITER_TOKEN_<SUFFIX>`
+  by lowercasing and mapping `_` to `-` (`pulse_ledger.auth._writer_id_from_suffix`), and no
+  suffix can produce a dot (`pulse-demo-closeout` design.md decision 9).
 
 - **Provenance.** Each payload carries `landing_row_reference(row)` — the source row's Customer.io
   message id — so a recorded consent state traces back to the message that produced it. A message id
@@ -53,10 +56,10 @@ logger = logging.getLogger(__name__)
 
 #: D15: this ingress's own service credential name. A per-writer bearer credential resolves to
 #: `writer_id` = actor server-side (ADR-0003), so authenticating `client` with the credential named
-#: `customer.io` is what makes every declared command's actor `customer.io`. Distinct from
+#: `customer-io` is what makes every declared command's actor `customer-io`. Distinct from
 #: `row_source.CURSOR_WRITER_ID`, which scopes the durable cursor, not command attribution. The
 #: token value comes from the environment; only the name is pinned here.
-CUSTOMERIO_WRITER_ID = "customer.io"
+CUSTOMERIO_WRITER_ID = "customer-io"
 
 #: Namespace for the provenance reference each payload carries, so a bare message id can never be
 #: mistaken for another authority's row reference (the sweep's is `{file_id}:row:{n}`).
@@ -84,7 +87,7 @@ def landing_row_reference(row: ConsentRow) -> str:
 
 
 def build_record_communication_consent_command(row: ConsentRow) -> RecordCommunicationConsentCommand:
-    """One landing row's `record_communication_consent` command, customer.io-attributed.
+    """One landing row's `record_communication_consent` command, customer-io-attributed.
 
     `to_state` is the row's own recorded state, validated against the pinned row contract upstream
     (`row_source`) and against the catalog's `communication_consent` transitions server-side — this
@@ -116,7 +119,7 @@ def declare_consent_rows(rows: Sequence[ConsentRow], client: PulseCoreClient) ->
     """Declare exactly one `record_communication_consent` command per validated landing row.
 
     `client` must authenticate with this ingress's own D15 credential (`CUSTOMERIO_WRITER_ID`) so the
-    ledger resolves each command's actor to `customer.io` — attribution is authentication (ADR-0003),
+    ledger resolves each command's actor to `customer-io` — attribution is authentication (ADR-0003),
     never a payload field this function could set instead. Declarations happen in `rows`' own order,
     the reader's read order (ascending event time).
 
