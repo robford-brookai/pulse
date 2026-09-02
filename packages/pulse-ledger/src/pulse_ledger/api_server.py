@@ -47,7 +47,7 @@ from __future__ import annotations
 
 import logging
 import os
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Mapping, Sequence
 from contextlib import asynccontextmanager
 
 import httpx
@@ -56,11 +56,20 @@ from psycopg_pool import ConnectionPool
 from pulse_core.twenty_model import encode_option_value
 from twenty_projection.apply import V1_BOARD, ProjectionRestClient
 
-from pulse_ledger.api import CommentPoster, Committer, CursorReader, CursorWriter, HealWriter, StateReader, create_app
+from pulse_ledger.api import (
+    CommentPoster,
+    Committer,
+    CursorReader,
+    CursorWriter,
+    HealWriter,
+    HistoryReader,
+    StateReader,
+    create_app,
+)
 from pulse_ledger.commit import CommitResult, Declaration, commit_declaration
 from pulse_ledger.cursor import WriterCursor, get_cursor, put_cursor
 from pulse_ledger.idempotency import commit_idempotent
-from pulse_ledger.reads import state_of_record
+from pulse_ledger.reads import state_of_record, subject_history
 from pulse_ledger.twenty.client import TWENTY_API_TOKEN_ENV, TwentyCommentClient
 
 logger = logging.getLogger(__name__)
@@ -138,6 +147,23 @@ def build_state_reader(pool: ConnectionPool) -> StateReader:
             return state_of_record(conn, subject_type, subject_key)
 
     return read_state
+
+
+def build_history_reader(pool: ConnectionPool) -> HistoryReader:
+    """The replay route's read, on a pooled connection per call.
+
+    What makes the projection rebuild possible without a ledger database credential (design
+    decision 5): the projection reads its subjects' committed events over HTTP, under the writer
+    credential it already holds, and this is the only thing on the other side of that route.
+    """
+
+    def read_history(
+        subject_type: str, subject_key: str, *, after_seq: int | None, limit: int | None
+    ) -> Sequence[Mapping[str, object]]:
+        with pool.connection() as conn:
+            return subject_history(conn, subject_type, subject_key, after_seq=after_seq, limit=limit)
+
+    return read_history
 
 
 def build_comment_poster(environ: Mapping[str, str]) -> CommentPoster | None:
@@ -268,6 +294,7 @@ def create_app_from_env(environ: Mapping[str, str] | None = None) -> FastAPI:
         comment_poster=build_comment_poster(env),
         heal_writer=build_heal_writer(env),
         state_reader=build_state_reader(pool),
+        history_reader=build_history_reader(pool),
         environ=env,
     )
     _close_pool_on_shutdown(app, pool)

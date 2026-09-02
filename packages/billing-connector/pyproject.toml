@@ -1,0 +1,43 @@
+[project]
+name = "billing-connector"
+version = "0.1.0"
+description = "PULSE billing connector — declares attributed, versioned billing verdicts on the ledger's single write path"
+requires-python = ">=3.10,<4.0"
+dependencies = [
+    # Command submission, D16 idempotency, the credential-posture gate, and the consume loop
+    # this connector rides (task 1.2 onward).
+    "pulse-core",
+    # The engine's fact store and rules registry (billing.rules.registry) this connector reads
+    # and declares against. No import of pulse_core.connector lands until task 1.2, so the
+    # credential-posture gate does not discover this package yet.
+    "billing",
+]
+
+[tool.uv.sources]
+pulse-core = { workspace = true }
+billing = { workspace = true }
+
+[dependency-groups]
+dev = [
+    # Enforces the no-live-network posture, same plugin billing, verdict-relay, schedules,
+    # identity, and consent-ingress already use. The socket-blocking conftest.py lands in
+    # task 1.4; the dependency is declared here so 1.1's own test can assert its presence.
+    "pytest-socket>=0.7.0",
+    # This package typechecks under pyright strict (see [tool.pyright] below), same posture as
+    # verdict-relay, schedules, identity, consent-ingress, and twenty-projection.
+    "pyright>=1.1.390",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/billing_connector"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.pyright]
+include = ["src", "tests"]
+typeCheckingMode = "strict"
