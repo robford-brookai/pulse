@@ -34,7 +34,7 @@ never a worktree.
       `[model: sonnet | deps: — | lane: repo_change | wave: 0 | serial: workspace roots and
       Taskfile.yml — coordinator releases alone across both in-flight changes]`
 
-- [ ] 1.2 Configuration: `config.py` with `Config` (frozen dataclass): `credential_name`
+- [x] 1.2 Configuration: `config.py` with `Config` (frozen dataclass): `credential_name`
       (`BILLING_CONNECTOR_TOKEN`), `queue_url`, `ledger_base_url`, `stale_after` (duration,
       default from the dbt model's recency window, dbt source named in the docstring),
       `verdict_types` (read from the registry at startup, not from env); `Config.from_env()`
