@@ -2,7 +2,8 @@
 
 Operator actions for the ledger-fed Twenty board projection
 (`openspec/changes/twenty-projection/`, `packages/twenty-projection`): running the consumer,
-what the watermark means, triaging parked orphans, and rollback. The projection is the D8
+what the watermark means, triaging parked orphans, rebuilding a scope from the journal, and
+rollback. The projection is the D8
 return path — every committed ledger event for a board subject upserts its Twenty record, so
 the board is a view of the ledger, never a parallel store. Contract entry:
 [`docs/contracts/publishes.md`](../contracts/publishes.md) §Twenty board projection.
@@ -78,6 +79,52 @@ the record exists, the subject's next event writes the full current state. Triag
    winner. Deduplicate the records; the message redelivers and applies once the match is
    unique.
 
+## Rebuilding a scope from the journal
+
+```bash
+task projection:rebuild TARGET=dev SCOPE=enrollment:<canonical-id> OPERATOR=<who>
+task projection:rebuild TARGET=dev SCOPE=enrollment OPERATOR=<who>       # every subject on the board
+```
+
+The authoritative rebuild: it repaints the board's projected columns for one scope from the
+ledger's committed events and nothing else. `SCOPE` is `<subject_type>[:<key>]` — the subject
+type the board renders (`enrollment`), optionally narrowed to one canonical subject key.
+
+What one run does, per subject in the scope:
+
+1. Reads the subject's committed events from the ledger's replay route in ledger sequence
+   (`GET /subjects/{subject_type}/{subject_key}/events`) — over HTTP, under a bearer credential,
+   never from the ledger's database.
+2. Folds them through the same handler the consumer applies, per program (per program is per
+   board row), under the same watermark guard.
+3. Diffs the folded state against the row that is there now, column by column.
+4. Writes only differences, as the same full-state PATCH the live path makes.
+
+It adds two variables to the consumer's surface, and the same by-name startup failure (exit 2):
+
+| Variable | Purpose |
+| --- | --- |
+| `PULSE_CORE_BASE_URL` | The command API's base URL — where the replay route is read. |
+| `PULSE_CORE_REPLAY_TOKEN` | Bearer credential for that read. Owned by `pulse_core.replay`. |
+
+**Safe to re-run.** A projection already matching the journal is a zero-write,
+zero-difference run, so re-running is how you *verify* a rebuild as well as perform one.
+
+**It never deletes a row.** The projection resolves a record through `canonicalPatientId` /
+`programCode` and repaints `lifecycleStatus`, its as-of, and `projectionSeq`. It has no
+authority to create a board record, so it must not destroy one: a subject with no row is a
+counted orphan (see Orphan triage), not a created record. Rows outside the named scope are
+never listed into the fold and never written.
+
+The run ends in a receipt on stdout — scope, operator, subjects, rows read, events read, rows
+written, differences, orphans, then one line per subject-program naming the columns that
+differed. Column **names** only, never values on either side: paste it into a ticket freely.
+
+Reach for it when the board and the ledger disagree and the next event will not fix it — a row
+edited out of band while the consumer was down, a projected column cleared by a model change, a
+restored Twenty snapshot older than the ledger. The drill is: capture the rows, run the rebuild,
+re-run it and confirm zero differences.
+
 ## Rollback
 
 Stop the consumer. That is the whole procedure: the projection writes only board state, so
@@ -88,3 +135,6 @@ harmless and full-state writes make the latest event sufficient.
 
 There is no migration to unwind. The watermark field (`projectionSeq`) is additive model
 surface and stays inert while the consumer is down.
+
+A rebuild needs no rollback of its own: it writes only what the journal already says, so the
+way to undo one is to run it again once the journal is right.

@@ -414,6 +414,21 @@ tasks:
     cmds:
       - uv run python -m twenty_projection.consumer --target {{.TARGET}}
 
+  projection:rebuild:
+    desc: Repaint the Twenty board projection for SCOPE from the ledger's committed events (dev|staging|prod; needs that target's credentials)
+    # The operator drill, not a demo trick (pulse-demo-closeout design decision 4): reads the
+    # scope's committed events through the ledger's replay route, folds them through the same
+    # apply handler the consumer uses, writes only differences, and prints a counted receipt
+    # attributable to OPERATOR. Safe to re-run: a projection already matching the journal is a
+    # zero-write, zero-difference run.
+    # Credentialed on both sides — the projection's Twenty token and the kit's replay credential —
+    # so it is never reached from `check`, same posture as projection:consume.
+    # SCOPE is `<subject_type>[:<key>]`, e.g. `enrollment` or `enrollment:<canonical-id>`.
+    requires:
+      vars: [TARGET, SCOPE, OPERATOR]
+    cmds:
+      - uv run python -m twenty_projection.rebuild --target {{.TARGET}} --scope {{.SCOPE}} --operator {{.OPERATOR}}
+
   relay:run:
     desc: Run one verdict-relay poll against TARGET's mart and ledger (dev|staging|prod; needs that target's credentials)
     # The operator-facing invocation of the relay's production wiring (billing-state task 3.2,

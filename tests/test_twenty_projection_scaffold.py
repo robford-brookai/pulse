@@ -92,3 +92,16 @@ def test_projection_consume_is_defined_and_requires_target():
     assert "TARGET" in (spec.get("requires") or {}).get("vars", []), (
         "projection:consume does not require TARGET — it would run credential-less against nothing"
     )
+
+
+def test_projection_rebuild_is_defined_and_requires_its_scope_and_operator():
+    """pulse-demo-closeout 2.3: the rebuild is an operator command, so it names what it repaints
+    and who ran it. A rebuild with no OPERATOR would print an unattributable receipt, which the
+    `projection-rebuild` spec does not accept as a receipt."""
+    tasks = _taskfile()["tasks"]
+    assert "projection:rebuild" in tasks, "Taskfile.yml does not define projection:rebuild"
+    spec = tasks["projection:rebuild"]
+    assert spec.get("desc"), "projection:rebuild has no desc — it would not appear in the grouped listing"
+    required = (spec.get("requires") or {}).get("vars", [])
+    for var in ("TARGET", "SCOPE", "OPERATOR"):
+        assert var in required, f"projection:rebuild does not require {var}"
