@@ -1,0 +1,11 @@
+{
+  "description": "One verdict mart row (docs/contracts/consumes.md verdict mart contract; packages/verdict-relay's registered `billing_eligibility` -> `billing_episode` type) for demo5's patient's episode, relayed by verdict-relay the same way the real mart is read. Keyed to brook-fx-demo5-episode-0001 (see MANIFEST.md).",
+  "subject_id": "brook-fx-demo5-episode-0001",
+  "verdict_type": "billing_eligibility",
+  "outcome": "positive",
+  "reason": null,
+  "rule_version": "rules-v1",
+  "as_of": "2026-08-01T00:00:00+00:00",
+  "lineage_ref": "synthea-seed-fixture:demo5-episode-0001",
+  "computed_at": "2026-08-01T02:00:00+00:00"
+}

@@ -1,0 +1,8 @@
+{
+  "description": "One Customer.io consent export landing row (docs/contracts/consumes.md CONTRACT_COLUMNS, packages/consent-ingress/src/consent_ingress/row_source.py) for demo5's patient, swept by consent-ingress the same way the real landing table is. Keyed to brook-fx-demo5-episode-0001 (see MANIFEST.md).",
+  "subject_key": "brook-fx-demo5-episode-0001",
+  "channel": "email",
+  "to_state": "opted_in",
+  "message_id": "msg-demo5-0001",
+  "event_time": "2026-08-01T00:00:00+00:00"
+}

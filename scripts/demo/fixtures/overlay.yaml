@@ -1,0 +1,32 @@
+# Demo 5's one-patient fixture (pulse-demo-closeout design.md decision 3): the engineered
+# state for the patient every stage of `demo5_end_to_end.py` carries through the walk.
+# Sibling files in this directory carry the identity, consent, and verdict raw fixtures the
+# earlier stages ingest through their real producer surfaces; all four agree on
+# `brook-fx-demo5-episode-0001` (see MANIFEST.md). Synthetic patient; no PHI.
+format: synthea-seed/overlay@1
+fixture: demo5_end_to_end_episode
+design_ref: "openspec/changes/pulse-demo-closeout/design.md decision 3 (fixtures are overlays on the pinned cohort, committed)"
+description: >
+  The one patient the end-to-end demo walks through every seam: an open billing episode
+  qualified by the fixture verdict mart row, the verdict itself, and the consent the fixture
+  export row lands — the same rule_version and evidence reference the sibling fixture files
+  use, so a reader can follow one key across all of them.
+patients:
+  - patient_id: brook-fx-demo5-episode-0001
+    state:
+      billing_episodes:
+        - program: care_management
+          exclusivity_group: care_mgmt
+          month: 2026-08-01
+          status: open
+          qualification_verdict: qualified
+      verdicts:
+        - name: billing_eligibility_check
+          outcome: positive
+          rule_version: rules-v1
+          as_of: 2026-08-01
+      consents:
+        - scope: care_program_participation
+          status: granted
+          recorded_in: customerio
+          evidence_ref: msg-demo5-0001
