@@ -92,7 +92,7 @@ date per design.md: internal engineering, within two weeks of 2026-09-01.
       release cannot reopen this gap; `task check` green.
       `[model: sonnet | deps: — | lane: repo_change | wave: 1]`
 
-- [ ] 2.5 Consent writer id `customer-io`: the command API derives writer ids from
+- [x] 2.5 Consent writer id `customer-io`: the command API derives writer ids from
       `PULSE_LEDGER_WRITER_TOKEN_<SUFFIX>` by lowercasing and mapping `_` to `-`, so the
       `customer.io` actor the ingress and its spec name is unspellable and no dev credential could
       ever exist for stage 2 (surfaced by the first `task stage:e2e:live`, issue #342). Rename the
