@@ -1,0 +1,25 @@
+{
+  "case": "rejected_transition_keeps_evidence",
+  "scenario": "A rejected transition keeps its evidence",
+  "description": "A verdict whose paired transition is no longer legal for the subject: when the pair is declared, the verdict commits, the transition is counted as rejected with the catalog's reason, and state is unchanged.",
+  "facts": {
+    "subject_type": "billing_episode",
+    "subject_key": "episode-1006",
+    "facts": {
+      "period_end": "2026-08-31",
+      "achieved": true,
+      "consent_start": "2026-07-01"
+    },
+    "last_event_id": "event-1"
+  },
+  "event": null,
+  "expected": {
+    "evaluated": 1,
+    "deferred": 0,
+    "committed": 1,
+    "replayed": 0,
+    "rejected": 1,
+    "verdict_committed": true,
+    "state_unchanged": true
+  }
+}

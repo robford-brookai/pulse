@@ -1,0 +1,31 @@
+{
+  "case": "fact_arrives_verdict_follows",
+  "scenario": "A fact arrives, a verdict follows",
+  "description": "An open billing episode whose eligibility facts change in a way that flips the verdict: the connector evaluates that episode and declares its verdict the moment the event commits, without waiting for a scheduled run.",
+  "facts": {
+    "subject_type": "billing_episode",
+    "subject_key": "episode-1001",
+    "facts": {
+      "period_end": "2026-08-31",
+      "achieved": true,
+      "consent_start": "2026-07-01"
+    },
+    "last_event_id": "event-1"
+  },
+  "event": {
+    "event_id": "event-2",
+    "subject_type": "billing_episode",
+    "subject_key": "episode-1001",
+    "effective_at": "2026-08-31T00:00:00+00:00",
+    "payload": {
+      "achieved": true
+    }
+  },
+  "expected": {
+    "evaluated": 1,
+    "deferred": 0,
+    "committed": 1,
+    "replayed": 0,
+    "rejected": 0
+  }
+}

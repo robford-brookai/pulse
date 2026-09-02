@@ -416,6 +416,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "httpx" },
     { name = "pyright" },
     { name = "pytest-socket" },
 ]
@@ -428,6 +429,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "pyright", specifier = ">=1.1.390" },
     { name = "pytest-socket", specifier = ">=0.7.0" },
 ]

@@ -1,0 +1,27 @@
+{
+  "case": "stale_watermark_awaiting_source",
+  "scenario": "A stale watermark yields awaiting_source",
+  "description": "A subject whose last folded event is older than the configured threshold: the outcome is indeterminate with reason awaiting_source, and evidence declares with no transition.",
+  "facts": {
+    "subject_type": "billing_episode",
+    "subject_key": "episode-1003",
+    "facts": {
+      "period_end": "2026-08-31",
+      "achieved": true,
+      "consent_start": "2026-07-01"
+    },
+    "last_event_id": "event-1",
+    "stale_by_seconds": 172800
+  },
+  "event": null,
+  "expected": {
+    "evaluated": 1,
+    "deferred": 0,
+    "committed": 1,
+    "replayed": 0,
+    "rejected": 0,
+    "outcome": "indeterminate",
+    "reason": "awaiting_source",
+    "transition_declared": false
+  }
+}

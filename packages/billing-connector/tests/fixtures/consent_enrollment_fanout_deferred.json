@@ -1,0 +1,22 @@
+{
+  "case": "consent_enrollment_fanout_deferred",
+  "scenario": "Consent and enrollment fan-out wait for their fact",
+  "description": "A consent or enrollment event for a patient with open billing episodes, with no catalog fact linking that subject to the episode subjects it affects: the connector records the event in the subject's facts, evaluates nothing, and counts it as deferred in the receipt.",
+  "facts": null,
+  "event": {
+    "event_id": "event-1",
+    "subject_type": "patient",
+    "subject_key": "patient-2001",
+    "effective_at": "2026-08-01T00:00:00+00:00",
+    "payload": {
+      "consent_start": "2026-08-01"
+    }
+  },
+  "expected": {
+    "evaluated": 0,
+    "deferred": 1,
+    "committed": 0,
+    "replayed": 0,
+    "rejected": 0
+  }
+}

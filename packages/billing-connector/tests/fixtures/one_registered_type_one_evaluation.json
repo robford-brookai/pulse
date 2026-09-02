@@ -1,0 +1,32 @@
+{
+  "case": "one_registered_type_one_evaluation",
+  "scenario": "One registered type, one evaluation",
+  "description": "The rules package registers one verdict type and a subject's facts change: the connector evaluates that type only and the receipt names it.",
+  "facts": {
+    "subject_type": "billing_episode",
+    "subject_key": "episode-1002",
+    "facts": {
+      "period_end": "2026-08-31",
+      "achieved": true,
+      "consent_start": "2026-07-01"
+    },
+    "last_event_id": "event-1"
+  },
+  "event": {
+    "event_id": "event-2",
+    "subject_type": "billing_episode",
+    "subject_key": "episode-1002",
+    "effective_at": "2026-08-31T00:00:00+00:00",
+    "payload": {
+      "achieved": true
+    }
+  },
+  "expected": {
+    "evaluated": 1,
+    "deferred": 0,
+    "committed": 1,
+    "replayed": 0,
+    "rejected": 0,
+    "verdict_types": ["billing_eligibility"]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "case": "registry_mismatch_halts_startup",
+  "scenario": "A registry mismatch halts startup",
+  "description": "The registry and the rule modules disagree: the connector exits nonzero before consuming, naming the mismatch.",
+  "facts": null,
+  "event": null,
+  "expected": {
+    "evaluated": 0,
+    "deferred": 0,
+    "committed": 0,
+    "replayed": 0,
+    "rejected": 0,
+    "startup_exit_nonzero": true,
+    "error_names_mismatch": true
+  }
+}
