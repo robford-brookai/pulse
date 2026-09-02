@@ -108,7 +108,7 @@ never a worktree.
 
 ## 3. Wave 2 — dev deploy
 
-- [ ] 3.1 [DNA-1280] Deploy artifacts: Duplo service JSON, queue/DLQ/rule provisioning script
+- [x] 3.1 [DNA-1280] Deploy artifacts: Duplo service JSON, queue/DLQ/rule provisioning script
       with the narrow filter (design.md decision 7), runbook `docs/runbooks/billing-connector.md`
       (start/stop, receipt reading, rebuild-from-bus procedure). Deploy artifacts never
       reachable from `task check`.
