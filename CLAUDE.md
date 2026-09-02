@@ -103,8 +103,10 @@ Constraints these gates enforce, which are easy to break by accident:
 The human's role in the change cycle is review-and-merge, nothing else. Every gate is tool-run;
 the human's only check surface is ordinary PR review. Tasks tagged destructive or prod-touching
 never enter a worktree — they are tracked as GitHub issues and run attended after their runbook
-PR merges (WORKFLOW.md `live_execution`). `<id>` is the active change — the sole non-archive directory in
-`openspec/changes/`; resolve it once and fill it into every command.
+PR merges (WORKFLOW.md `live_execution`). `<id>` is the change named in the command — tooling
+takes `CHANGE=` explicitly and resolves state per change (design.md decision 9, `billing-connector`:
+two changes can be in flight at once, so `<id>` is never inferred from `openspec/changes/`'s
+directory listing). Resolve it once per command and fill it into every subsequent one.
 
 - **After each PR merge you observe or perform** (the merge commit is `<sha>` on main):
   `task checkoff CHANGE=<id> COMMIT=1 COMMIT_SHA=<sha>` — then `task check` and push, per
