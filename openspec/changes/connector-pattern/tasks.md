@@ -12,9 +12,14 @@ logs, receipts, or golden files. Specs are owned by the doc-updater: write propo
 changes to `HANDOFF.md`, never edit `openspec/specs/`.
 
 **Entry conditions.** No other change is in flight. Wave 0 task 1.1 resolves the cpt-om
-ownership question with Rob before wave 2 dispatches. Wave 3 is calendar-bound (one full
-billing month) and wave 4 runs as live execution — GitHub issue + runbook PR + attended run
-per WORKFLOW v2.2.0 `live_execution` — never a worktree.
+ownership question with Rob before wave 2 dispatches. Task 2.5 runs as live execution — GitHub
+issue + runbook PR + attended run per WORKFLOW v2.2.0 `live_execution` — never a worktree.
+
+**Scope cut, 2026-09-01 (design.md decision 9).** This change ends at the connector kit and the
+billing engine's scaffold, fact fold, and rule port. Evaluation-to-declare, deploy, the
+reconciliation window, and cutover (formerly 3.4, 3.5, 4.1, 4.2, 5.1, 5.2) move to the
+`billing-connector` change, whose entry gates are the findings recorded in
+`handoffs/connector-pattern/task-010.md`.
 
 ---
 
@@ -81,7 +86,7 @@ per WORKFLOW v2.2.0 `live_execution` — never a worktree.
       `handoffs/connector-pattern/`.
       `[model: haiku | deps: 2.1, 2.2, 2.3, 2.4 | lane: operational_discovery | wave: 1]`
 
-## 3. Wave 2 — the billing engine
+## 3. Wave 2 — the billing engine (scaffold, fact fold, rule port)
 
 - [x] 3.1 [DNA-1276] `packages/billing` scaffold on the kit: package layout, `billing_engine` Postgres
       schema migration (`subject_facts`, `evaluations` per design.md decision 5) under its own
@@ -106,53 +111,3 @@ per WORKFLOW v2.2.0 `live_execution` — never a worktree.
       `[model: opus | deps: 1.2, 3.1 | lane: repo_change | wave: 2]`
       Opus: the port is the correctness core of the whole change — a mistranslated predicate
       writes wrong billing state continuously.
-
-- [ ] 3.4 [DNA-1279] Evaluation → declare: on fact-snapshot change, evaluate affected verdict types and
-      declare verdict + paired transition through the kit pipeline under the `billing-engine`
-      credential; record in `evaluations`; receipts extend with `evaluated=N`
-      (specs: "Evaluation is event-driven, never batch-gated", "The engine declares
-      attributed, versioned verdict pairs", "No monetary value crosses the seam").
-      Tests: consent-arrival fixture triggers exactly the affected episode's evaluation;
-      unchanged facts replay; amount-bearing fixture never leaks a monetary value into
-      payload/log/receipt (tripwire test).
-      `[model: sonnet | deps: 3.2, 3.3 | lane: repo_change | wave: 2]`
-
-- [ ] 3.5 [DNA-1280] Engine deploy artifacts: Duplo service JSON + queue/DLQ/rule provisioning script +
-      runbook `docs/runbooks/billing-engine.md` (start/stop, receipt reading, rebuild-from-bus
-      procedure). Deploy artifacts never reachable from `task check`.
-      Tests: reachability gate (deploy targets out of `check`, existing pattern);
-      `mkdocs build -s` green.
-      `[model: sonnet | deps: 3.4 | lane: repo_change | wave: 2]`
-
-## 4. Wave 3 — reconciliation window
-
-- [ ] 4.1 [DNA-1281] `verdict-reconcile` schedules entry: per-(subject, verdict_type) comparison of
-      `evaluations` vs mart rows over matching fact windows; diff report with counts and
-      subject keys only; empty-or-explained state machine for entries
-      (specs: verdict-reconciliation, all three).
-      Tests: fixture mart + fixture evaluations produce the golden diff shapes — agree,
-      timing-artifact, genuine divergence; PHI tripwire on report output.
-      `[model: sonnet | deps: 3.4 | lane: repo_change | wave: 3]`
-
-- [ ] 4.2 Open the window (live execution): GitHub tracking issue + runbook PR; attended
-      start of the engine service on dev01-brook; both writers live; sweep scheduled; first
-      sweep receipt on the issue. Window runs one full billing month.
-      Tests (runbook assertions): engine declares on a live consent event without a scheduled
-      run; sweep receipt posts; both writers' receipts attributable.
-      `[model: sonnet | deps: 3.5, 4.1 | lane: operational_discovery | wave: 3]`
-
-## 5. Wave 4 — cutover (gated on the 4.2 window closing empty-or-explained)
-
-- [ ] 5.1 Cutover runbook PR + attended run: stop the relay poll, retire its Snowflake
-      credential, closing sweep report committed as the receipt
-      (specs: verdict-mart-read "The mart read retires behind the reconciliation gate",
-      "After retirement, the write path has no warehouse dependency").
-      Tests (runbook assertions): no Snowflake credential on the write path; engine-only
-      verdicts continue; rollback rehearsed (re-enable poll from config).
-      `[model: sonnet | deps: 4.2 | lane: destructive_ops | wave: 4]`
-
-- [ ] 5.2 [DNA-1282] Docs close-out via `HANDOFF.md`: ADR for the write-path supersession,
-      `consumes.md` mart row demoted, `publishes.md` billing-engine producer row,
-      fonzie dependency-spec gap 1 note updated.
-      Tests: `mkdocs build -s`; contract-doc gates; `task check` green.
-      `[model: sonnet | deps: 5.1 | lane: repo_change | wave: 4]`

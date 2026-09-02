@@ -1,47 +1,37 @@
 ## Purpose
 
-Billing and coverage rule evaluation inside pulse, event-driven: verdicts are computed when
-the facts they depend on arrive, not when a batch job happens to run — so billing state is
-continuous by construction and the warehouse mart stops being a write-path dependency.
+The in-pulse home for billing and coverage rule evaluation: a service on the connector kit that
+folds per-subject facts from the ledger's committed events into its own store and holds the rule
+logic ported from the dbt verdict models. This change delivers the engine's foundation — its
+store, its fact fold, and its ported rules with lineage. Wiring evaluation to a declare, and
+retiring the warehouse mart behind a reconciliation window, belong to the `billing-connector`
+change (design.md decision 9; seeded in `design/delivery/billing-connector-seed.md`).
 
 ## ADDED Requirements
 
-### Requirement: Evaluation is event-driven, never batch-gated
+### Requirement: The engine store is a rebuildable fact cache, never a state of record
 
-The billing engine SHALL subscribe to the ledger's committed events and evaluate the affected
-subject's eligibility and coverage rules when a relevant fact arrives (a billing episode
-opens, coverage state changes, consent state changes). Declare-back latency SHALL be bounded
-by event delivery plus evaluation time — never by any batch schedule. The engine SHALL NOT
-read the warehouse to decide a verdict.
+The engine SHALL keep its own store — a `billing_engine` schema under its own role and
+credential, separate from the ledger's — holding per-subject fact snapshots and evaluation
+receipts only. Every row SHALL be reconstructible by replaying the bus, so the store may be
+dropped and rebuilt without loss. The fold SHALL apply each committed event to a subject at most
+once, using a per-subject event high-water mark, and SHALL order competing facts by effective
+time rather than arrival order. No state-of-record read SHALL target this schema: the engine's
+store answers what the engine folded, never what the ledger holds.
 
-#### Scenario: A fact arrives, a verdict follows
+#### Scenario: A redelivered event folds once
 
-- **GIVEN** an open billing episode whose eligibility rules are satisfied except for consent
-- **WHEN** the consent event for that patient commits and reaches the engine
-- **THEN** the engine evaluates that episode and declares its verdict without waiting for any
-  scheduled run
+- **GIVEN** a committed event already folded into a subject's fact snapshot
+- **WHEN** the queue delivers that same event again
+- **THEN** the snapshot is unchanged and the subject's high-water mark does not move — the
+  redelivery is a dedupe hit, not a second fold
 
-### Requirement: The engine declares attributed, versioned verdict pairs
+#### Scenario: No state-of-record read targets the engine schema
 
-Every engine verdict SHALL be declared through the command API under the engine's own writer
-credential, carrying the `rule_version` of the rule set that produced it, and SHALL follow
-the registered pairing contract: verdict then paired transition, idempotency key derived from
-the evaluation (D16) so the pair is replay-safe as a unit, `indeterminate` declaring evidence
-with no transition. Monetary values SHALL never appear in a verdict payload, a state, a log,
-or a receipt — the amount-free billing boundary applies at the engine's seam.
-
-#### Scenario: Re-evaluating unchanged facts declares nothing new
-
-- **GIVEN** a subject the engine already evaluated, with no new facts
-- **WHEN** evaluation runs again for that subject
-- **THEN** submissions classify as replayed and no new event exists
-
-#### Scenario: No monetary value crosses the seam
-
-- **GIVEN** a rule evaluation whose inputs include amount-bearing source data
-- **WHEN** its verdict is declared and logged
-- **THEN** the command payload, the receipt, and every log line carry qualification facts
-  only — no monetary value appears anywhere downstream of the engine seam
+- **GIVEN** any package outside `packages/billing` in the tree
+- **WHEN** its sources are scanned for the ledger's canonical state-of-record reader
+- **THEN** no module both calls that reader and references the `billing_engine` schema — the
+  shadow-ledger shape is absent, and the gate fails against a planted violation
 
 ### Requirement: Rules are ported with lineage, not re-imagined
 
@@ -52,6 +42,6 @@ one implementation.
 
 #### Scenario: A verdict names its implementation
 
-- **GIVEN** verdicts declared by the mart relay and by the engine during the parallel window
+- **GIVEN** verdicts declared by the mart relay and, once `billing-connector` ships, by the engine
 - **WHEN** any verdict event is inspected
 - **THEN** its `rule_version` identifies which implementation produced it, unambiguously

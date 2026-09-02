@@ -72,6 +72,20 @@ rules live today as dbt SQL in `data-platform/management/models/billing/verdict/
    otherwise cpt-om keeps its direct-declare row and the engine registers as a separate
    producer. Task 1.1 forces this decision before wave 2 starts (it changes
    `producer-registry.md`, not the specs or the task graph).
+9. **Scope cut at the kit/connector seam (Rob, 2026-09-01).** This change ends after the
+   engine's scaffold (3.1), fact fold (3.2), and rule port (3.3). Evaluation-to-declare,
+   deploy artifacts, the reconciliation window, and cutover — formerly tasks 3.4, 3.5, 4.1,
+   4.2, 5.1, 5.2 — move to a `billing-connector` change hosted in this repo with
+   `packages/billing`. Reason: everything from 3.4 onward writes billing state and depends on
+   billing-domain answers, and task 3.3 surfaced three of them — only `billing_eligibility`
+   has a dbt source in the pinned scope (decision 4 named three modules), staleness must come
+   from the consume-loop watermark because the engine has no warehouse read, and the pinned
+   dbt spike files are uncommitted on a data-platform branch. Those three are the new change's
+   entry gates (`handoffs/connector-pattern/task-010.md`). Delta specs split accordingly:
+   `connector-kit` and the scaffold/fold/port scenarios of `billing-engine` archive here;
+   the evaluation and declare scenarios, `verdict-mart-read`, and `verdict-reconciliation`
+   move whole. Alternative (finish 3.4 here against one module) rejected: it would fix the
+   verdict-type set by accident of scope rather than by decision.
 
 ## Risks / Trade-offs
 
@@ -93,11 +107,12 @@ rules live today as dbt SQL in `data-platform/management/models/billing/verdict/
 
 ## Migration Plan
 
-Wave 1 (kit): extract + refactor donors, demos green. Wave 2 (engine): port rules with
-mapping doc, stand up service + queue on dev, engine declares under its own credential —
-mart relay untouched. Wave 3 (window): one full billing month parallel, sweep runs on
-schedule, diffs triaged as they appear. Wave 4 (cutover, gated): relay poll stops, Snowflake
-credential retired, ADR + contracts updated. Rollback per proposal.md §Rollback.
+Wave 1 (kit): extract + refactor donors, demos green. Wave 2 (engine, this change): scaffold,
+fact fold, rule port with mapping doc — the engine declares nothing yet and the mart relay is
+untouched. Then, in `billing-connector` (decision 9): evaluation-to-declare and dev deploy
+under the engine's own credential, the one-month parallel window with the scheduled sweep,
+and the gated cutover — relay poll stops, Snowflake credential retired, ADR + contracts
+updated. Rollback per proposal.md §Rollback.
 
 ## Open Questions
 
