@@ -50,51 +50,56 @@ Two properties run through all five parts and are worth calling out to any audie
 2. **Attribution** — every entry names the system or person who declared it, taken from
  verified credentials, never from what the sender typed. You always know who said so.
 
-## 3.0 The features, proven by the demos
+## 3.0 The features, proven by the demo
 
-Each demo is a script anyone can run. It performs real actions and stops with a failure if
-any promise is broken. All four pass as of 2026-08-30.
+One script, `demo5_end_to_end.py`, walks a single synthetic patient through every seam Pulse
+owns, in order, and stops the moment any door's promise stops holding. It runs in about five
+minutes on a laptop (`task demo:e2e`) or, unchanged, against the real development environment
+in an attended session (`task demo:e2e:live`). Demos 1 through 4 (below, §3.1) proved each door
+works in isolation; this is the same patient walking through all of them, in the order any real
+patient actually would.
 
-### 3.1 Demo 1 — the record keeps honest books
+1. **A referral arrives, and identity resolves it.** Three referral variants land in a fixed
+order: the first mints a brand-new patient, the second matches an existing one by an exact
+identifier, and the third — ambiguous — is quarantined for a human instead of guessed at. This
+is Demo 2's identity leg, now the walk's front door.
+2. **Consent lands, attributed.** A Customer.io consent export row lands in the warehouse.
+Pulse sweeps it and records the patient's consent state with Customer.io itself as the source —
+sweeping the same row twice changes nothing the second time.
+3. **The care team drags a card, and the board is a door with a lock.** A correctly signed drag
+commits one ledger entry. An illegal drag is refused with the rulebook's own reason and one
+explanatory note on the card. A drag carrying a tampered signature is turned away before any
+rule even runs. This is Demo 3's kanban leg, live.
+4. **A verdict becomes billing and coverage state.** A billing verdict for the patient's episode
+arrives from the analytics pipeline's mart. Pulse's relay files it and the state change it
+justifies — the coverage subject is created on first sight, and an immediate re-run changes
+nothing. This is Demo 4, live.
+5. **Every view agrees with the ledger.** The care-team board, the warehouse's copy of the
+journal, and an independent re-reading of the raw journal are each checked against the ledger's
+own current answer for everything this patient touched. No disagreement survives to this point
+in the walk.
+6. **The rebuild drill.** The board's rows for this patient are deleted outright, then
+repainted from nothing but the journal. The repainted rows match the deleted ones exactly — the
+proof that a projection really is just a view, disposable and rebuildable, never a second copy
+of the truth.
 
-Runs the whole system on a laptop. It proves four things: a legal state change is accepted
-and announced on the bus; an illegal one is refused with the exact rule that forbids it (and
-the rulebook version); submitting the same change twice returns the original receipt with no
-duplicate; and an independent re-reading of the whole journal lands on exactly the same
-current answer the ledger keeps. **Translation: the books balance, and cheating is refused
-with a reason.**
+A clean run ends with a receipt naming every stage, how many things it checked, and which
+subjects it touched — never a real name, a payload value, or anything that could be mistaken
+for protected health information. A broken door stops the walk right there and says which check
+failed, so nothing later runs on top of a false premise.
 
-### 3.2 Demo 2 — the doors check identity and credentials
+### 3.1 The four doors, one at a time
 
-Two offline legs. The identity leg shows how a new referral is matched to an existing
-patient: an exact identifier match wins, an unknown patient is created, and any ambiguity —
-two plausible candidates, or two identifiers pointing at different people — is quarantined
-for a human instead of guessed at. The kanban leg shows the board's webhook door: a properly
-signed card move commits, an illegal move is refused and the mover gets a comment on the card
-explaining why, and a tampered signature is turned away entirely. **Translation: nobody gets
-merged by a guess, and nothing enters the ledger without checked credentials.**
+The walk above is the story a real patient lives. Each door was proven on its own first, and
+those standalone demos still run and still matter — they are the fastest way to show one
+capability without setting up the whole walk.
 
-### 3.3 Demo 3 — the care-team board is a window, not a copy
-
-Runs against the real development environment: a real Twenty board (the care team's kanban
-tool) and the real ledger, live. Nine assertions, including: the board's columns are exactly
-the rulebook's states; dragging a card through a legal move becomes a ledger entry; dragging
-it through an illegal move is rejected, the card snaps back, and one explanatory note appears;
-and replays produce no second entry. **Translation: the board the care team touches is a live
-window onto the ledger — moving a card is declaring a fact, and the rulebook applies to
-humans too.**
-
-### 3.4 Demo 4 — billing and coverage become continuously known
-
-Also live. Brook's analytics pipeline computes verdicts — "this billing episode is eligible,"
-"this patient's insurance is active." Pulse's relay reads each verdict and, for registered
-verdict types, files both the evidence and its consequence: the verdict entry plus the state
-change it justifies. A verdict for a patient-and-payer pair Pulse has never seen creates the
-coverage subject on the spot. An immediate re-run changes nothing. A verdict whose
-consequence is no longer legal (the episode already moved on) keeps the evidence and skips
-the state change, counted and explained. **Translation: "is this billable, is this covered"
-stops being a question each team answers by spreadsheet — it is a state Pulse continuously
-knows.**
+| Demo | What it proves alone | Runs against |
+| --- | --- | --- |
+| 1 — The record keeps honest books | a legal state change is accepted and announced; an illegal one is refused with the rule; a duplicate submission returns the original receipt with no second entry; an independent re-reading of the whole journal lands on the same current answer | a laptop, no live systems |
+| 2 — The doors check identity and credentials | exact-match, mint, and quarantine identity decisions; a signed board move commits, an illegal one is refused with a comment on the card, a tampered signature is turned away entirely | offline fixtures |
+| 3 — The board is a window, not a copy | dragging a card through a legal move becomes a ledger entry live, against the real board; an illegal move is rejected, snaps back, and gets an explanatory note; replays produce no second entry | live development environment |
+| 4 — Billing and coverage become continuously known | a verdict from the analytics pipeline files as evidence plus its consequence; a patient-and-payer pair Pulse has never seen mints a coverage subject on the spot; re-runs change nothing | live development environment |
 
 ## 4.0 What Pulse depends on, and what depends on Pulse
 
@@ -122,16 +127,29 @@ and no team integrates by copying another team's code or reading another team's 
 - **Phases 0–2 complete** — the event transport, the ledger core, and all four sanctioned
 fact sources (board drags, consent, identity, verdicts) shipped and archived; version 2.0
 released 2026-08-08.
-- **Phase 3 nearly complete** — the Twenty board projection, the warehouse feed, and the
-billing/coverage pairing all shipped and proven live. The remaining Phase 3 work is
-chosen, not invented: the rebuild drill (destroy a view, rebuild it from the journal,
-prove it identical), retiring the legacy backend's direct patient-state writes so the
-ledger's projection is the only writer, and building the Customer.io projection (syncing
-patient segments and attributes out of the ledger, so messaging targets current truth).
+- **Phase 3 complete** — the Twenty board projection, the warehouse feed, the billing/coverage
+pairing, and the rebuild drill (destroy a view, rebuild it from the journal, prove it
+identical — the one-patient walk's closing stage) all shipped and proven, offline and live.
+Two items remain chosen, not invented: retiring the legacy backend's direct patient-state
+writes so the ledger's projection is the only writer, and building the Customer.io projection
+(syncing patient segments and attributes out of the ledger, so messaging targets current
+truth).
+- **The connector kit shipped and archived** (`connector-pattern`, 2026-09-02). Any system
+that wants to write billing-adjacent state now builds on one shared package instead of forking
+the pattern — the kit itself, plus the billing engine's scaffold, its fact-folding, and its
+ported eligibility rules, are on `main`. The work was cut at a clean seam: everything
+downstream of "which verdict types exist," which turned out to be a billing question and not
+a ledger one, moved to a seeded follow-on change.
+- **The Billing Connector is seeded, not yet started.** It inherits the six tasks that write
+billing state, deploy the engine, and retire the verdict relay's direct Snowflake read, plus
+three entry gates the connector-pattern work surfaced: a committed dbt source for each rule
+module the billing engine evaluates, the pinned spike files landing durably on a
+`data-platform` branch, and the review-queue filter breadth decided. Its proposal is drafted;
+it has not been dispatched.
 - **Then**: Phase 4 retires the warehouse's inferred-state models in favor of ledger reads,
 and the genesis-and-cutover ladder migrates real patient history in, with rehearsals and
 receipts at every step.
 
-**Next step for this audience:** if you want to see it rather than read about it, any
-engineer can run Demo 1 on a laptop in about two minutes — and Demo 3 will move a real card
-on the development board in front of you.
+**Next step for this audience:** if you want to see it rather than read about it, any engineer
+can run the one-patient walk in about five minutes (`task demo:e2e`) — or watch it live
+against the development board in an attended session.
