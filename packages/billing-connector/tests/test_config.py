@@ -113,21 +113,38 @@ class TestNoCredentialValueIsEverHeld:
             assert not secret_shaped.search(field_name), f"{field_name} looks like it might hold a secret value"
 
 
-class TestVerdictTypesDefersToTheRegistry:
-    """`verdict_types()` is not populated by `from_env()` — task 1.3 owns `billing.rules.registry`;
-    until it lands, the gap is explicit rather than a silent empty set."""
+class TestVerdictTypesReadsTheRegistry:
+    """`verdict_types()` is not populated by `from_env()` — it reads `billing.rules.registry`
+    (task 1.3) fresh on every call, not a value cached at construction."""
 
-    def test_verdict_types_raises_naming_task_1_3_while_the_registry_is_absent(self) -> None:
+    def test_verdict_types_returns_the_registered_set(self) -> None:
+        from billing.rules.registry import VERDICT_TYPES
+
         config = Config.from_env(COMPLETE_ENV)
 
-        with pytest.raises(RegistryUnavailableError) as exc_info:
+        assert config.verdict_types() == frozenset(VERDICT_TYPES)
+
+    def test_verdict_types_raises_when_the_registry_is_not_importable(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Defensive path: `RegistryUnavailableError` still fires if the registry module can't be
+        imported — a broken install, not the ordinary case now that task 1.3 ships it."""
+
+        def _raise(_name: str) -> None:
+            raise ImportError(_name)
+
+        monkeypatch.setattr("billing_connector.config.importlib.import_module", _raise)
+        config = Config.from_env(COMPLETE_ENV)
+
+        with pytest.raises(RegistryUnavailableError):
             config.verdict_types()
 
-        assert "1.3" in str(exc_info.value)
-
-    def test_from_env_never_imports_the_registry(self) -> None:
+    def test_from_env_never_imports_the_registry(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Constructing a `Config` must not require `billing.rules.registry` to exist — only
         calling `verdict_types()` does."""
-        # If from_env() touched the registry this would already have raised above; asserting a
-        # plain construction succeeds is the whole test.
+
+        def _fail_if_called(name: str) -> None:
+            msg = f"from_env() must not import {name}"
+            raise AssertionError(msg)
+
+        monkeypatch.setattr("billing_connector.config.importlib.import_module", _fail_if_called)
+
         assert Config.from_env(COMPLETE_ENV) is not None

@@ -46,7 +46,7 @@ never a worktree.
       discovered; `task check` green.
       `[model: sonnet | deps: 1.1 | lane: repo_change | wave: 0]`
 
-- [ ] 1.3 Code-tree stubs: `evaluate.py` (`Evaluation` dataclass, `evaluate_subject(store,
+- [x] 1.3 Code-tree stubs: `evaluate.py` (`Evaluation` dataclass, `evaluate_subject(store,
       registry, config, subject) -> list[Evaluation]`), `declare.py` (`DeclareResult`,
       `declare_pair(client, evaluation) -> DeclareResult`, `idempotency_key(evaluation)`),
       `service.py` (`main(argv) -> int`, `run_batch(...)`), `receipts.py` (`Receipt` extending
