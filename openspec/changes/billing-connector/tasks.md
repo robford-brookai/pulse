@@ -92,7 +92,7 @@ never a worktree.
       payload, log, or receipt (tripwire); credential never logged.
       `[model: sonnet | deps: 2.1 | lane: repo_change | wave: 1]`
 
-- [ ] 2.3 Service and triggers: fill `service.py`. Kit consume loop on the connector queue;
+- [x] 2.3 Service and triggers: fill `service.py`. Kit consume loop on the connector queue;
       episode and coverage subject events trigger evaluate → declare; consent and enrollment
       events fold and count `deferred` (design.md decision 4); receipt line per batch with
       `evaluated=N deferred=N` (spec: "Evaluation is event-driven, never batch-gated", "Every
