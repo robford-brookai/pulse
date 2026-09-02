@@ -90,14 +90,14 @@ per WORKFLOW v2.2.0 `live_execution` — never a worktree.
       Tests: migration up/down clean; shadow-ledger gate red on a planted read, green on tree.
       `[model: sonnet | deps: 2.4 | lane: repo_change | wave: 2]`
 
-- [ ] 3.2 [DNA-1277] Fact folding: the engine's consume loop (kit) subscribes to `patient-state` and
+- [x] 3.2 [DNA-1277] Fact folding: the engine's consume loop (kit) subscribes to `patient-state` and
       consent events, folds per-subject fact snapshots into `subject_facts` idempotently
       (event-id high-water per subject).
       Tests: redelivery folds once; out-of-order events fold by effective time; fixture-driven,
       `--disable-socket`.
       `[model: sonnet | deps: 3.1 | lane: repo_change | wave: 2]`
 
-- [ ] 3.3 [DNA-1278] Rule port per the 1.2 map: one pure module per verdict type with
+- [x] 3.3 [DNA-1278] Rule port per the 1.2 map: one pure module per verdict type with
       `RULE_VERSION = "pulse-<type>-v1"`, every dbt test mapped to a named unit test
       (spec: "Rules are ported with lineage, not re-imagined"). `stays-mart-side` rules
       excluded and documented.
