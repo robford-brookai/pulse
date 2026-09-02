@@ -96,10 +96,17 @@ class Evaluation:
     as_of: datetime
 
 
-def _validate_registry(registry: dict[str, ModuleType]) -> None:
+def validate_registry(registry: dict[str, ModuleType]) -> None:
     """Refuse a registry entry with no usable rule module behind it (spec: "A registry mismatch
     halts startup"): a missing required attribute, or a module whose own `VERDICT_TYPE` disagrees
     with the key it is registered under.
+
+    Public since task 2.3: `service.main` runs this once at startup, before the first consume
+    call, so a mismatched registry halts the process rather than failing on the first delivered
+    event (spec scenario: "the connector exits nonzero before consuming, naming the mismatch").
+    `evaluate_subject` still calls it per evaluation — the check is cheap, and the two call sites
+    guard different things: startup refuses to run at all, per-evaluation refuses to evaluate
+    against a registry that changed under a running process.
     """
     for verdict_type, module in registry.items():
         missing = [attr for attr in _REQUIRED_MODULE_ATTRS if not hasattr(module, attr)]
@@ -151,7 +158,7 @@ def evaluate_subject(
     rule module runs only once this function has already decided the facts are trustworthy
     enough to ask.
     """
-    _validate_registry(registry)
+    validate_registry(registry)
 
     applicable = {
         verdict_type: module for verdict_type, module in registry.items() if subject.subject_type == module.SUBJECT_TYPE

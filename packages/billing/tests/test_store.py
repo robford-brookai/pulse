@@ -180,3 +180,78 @@ def test_distinct_subjects_get_distinct_rows(database_url: str, db: psycopg.Conn
     cur = db.execute("SELECT count(*) FROM billing_engine.subject_facts")
     (count,) = cur.fetchone()  # type: ignore[misc]
     assert count == 2
+
+
+def _recorded_evaluations(db: psycopg.Connection, subject_key: str) -> list[tuple[object, ...]]:
+    cur = db.execute(
+        "SELECT verdict_type, rule_version, outcome, declared_event_id"
+        "  FROM billing_engine.evaluations WHERE subject_key = %s ORDER BY outcome",
+        (subject_key,),
+    )
+    return list(cur.fetchall())
+
+
+def test_record_evaluation_appends_the_declared_event_id(database_url: str, db: psycopg.Connection) -> None:
+    """billing-connector spec: "Each evaluation SHALL be recorded in the engine's `evaluations`
+    store with the declared event id" — the connector's service calls this once the ledger has
+    answered a declared verdict (`billing_connector.service.run_batch`)."""
+    _upgrade(database_url)
+    store = PostgresFactStore(db)
+    declared_event_id = uuid.uuid4()
+
+    written = store.record_evaluation(
+        subject_type="billing_episode",
+        subject_key="ep-1",
+        verdict_type="billing_eligibility",
+        rule_version="pulse-billing-eligibility-v1",
+        outcome="positive",
+        as_of=datetime(2026, 9, 2, tzinfo=timezone.utc),
+        declared_event_id=str(declared_event_id),
+    )
+
+    assert written is True
+    assert _recorded_evaluations(db, "ep-1") == [
+        ("billing_eligibility", "pulse-billing-eligibility-v1", "positive", declared_event_id)
+    ]
+
+
+def test_record_evaluation_is_idempotent_on_the_declared_event_id(database_url: str, db: psycopg.Connection) -> None:
+    """A replayed submission answers with the event id the original commit produced, so
+    re-declaring an unchanged evaluation writes nothing new (spec: "Re-evaluating unchanged facts
+    declares nothing new")."""
+    _upgrade(database_url)
+    store = PostgresFactStore(db)
+    declared_event_id = str(uuid.uuid4())
+
+    def record() -> bool:
+        return store.record_evaluation(
+            subject_type="billing_episode",
+            subject_key="ep-2",
+            verdict_type="billing_eligibility",
+            rule_version="pulse-billing-eligibility-v1",
+            outcome="positive",
+            as_of=datetime(2026, 9, 2, tzinfo=timezone.utc),
+            declared_event_id=declared_event_id,
+        )
+
+    assert record() is True
+    assert record() is False
+    assert len(_recorded_evaluations(db, "ep-2")) == 1
+
+
+def test_record_evaluation_keeps_every_distinct_declaration(database_url: str, db: psycopg.Connection) -> None:
+    _upgrade(database_url)
+    store = PostgresFactStore(db)
+
+    for outcome in ("indeterminate", "positive"):
+        store.record_evaluation(
+            subject_type="billing_episode",
+            subject_key="ep-3",
+            verdict_type="billing_eligibility",
+            rule_version="pulse-billing-eligibility-v1",
+            outcome=outcome,
+            as_of=datetime(2026, 9, 2, tzinfo=timezone.utc),
+            declared_event_id=str(uuid.uuid4()),
+        )
+
+    assert [row[2] for row in _recorded_evaluations(db, "ep-3")] == ["indeterminate", "positive"]
