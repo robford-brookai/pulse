@@ -94,7 +94,7 @@ date per design.md: internal engineering, within two weeks of 2026-09-01.
 
 ## 3. Wave 2 — the drill, live mode, and the record
 
-- [ ] 3.1 Stage 6 and the runbook: wire the rebuild drill as the final stage (capture rows,
+- [x] 3.1 Stage 6 and the runbook: wire the rebuild drill as the final stage (capture rows,
       delete scope, run 2.3, assert identical); write `docs/runbooks/demo5-end-to-end.md`; add
       `task demo:e2e` and `task demo:e2e:live`; live context builder (dev ledger URL, `httpx`
       board client as demo3 uses, read-only `STG_EVENTS.EVENTS` reader as the warehouse window)

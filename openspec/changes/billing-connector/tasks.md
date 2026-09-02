@@ -60,7 +60,7 @@ never a worktree.
       gate's portable set; `format_line` golden; `task check` green.
       `[model: sonnet | deps: 1.2 | lane: repo_change | wave: 0]`
 
-- [ ] 1.4 Test harness: `tests/conftest.py` blocking sockets for every run that collects the
+- [x] 1.4 Test harness: `tests/conftest.py` blocking sockets for every run that collects the
       package (verdict-relay's pattern); `tests/fixtures/` corpus skeleton with one fixture per
       spec scenario as named JSON stubs (fact snapshot in, expected evaluation and receipt
       counts out) and a corpus test that every scenario in the delta spec has a fixture file;
