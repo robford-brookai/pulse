@@ -171,7 +171,7 @@ Gate: Phase 2 exit; Twenty dev instance from `environment-matrix`.
 | `snowflake-projection` | STG_EVENTS ledger contract (flat projection proven in S1.1 task 5.1) atop the existing `OCEAN_RAW.EVENTS` landing | Phase 2 exit |
 | `survey-engine-ingress` | PX survey responses become attributed commands/facts on the ledger's single write path — actor is the survey engine's service identity, message-level provenance, same shape as `customerio-consent-ingress`; born compliant with the `producer-ingress-policy` CI gate | Phase 2 exit + PX schema validation |
 | `reconciliation-sweeps` | per-family referee sweeps generalizing S1.3's consent sweep; corrections actor `reconciliation`; optional legacy-inference drift sentinel (legacy-harvest #4) | `snowflake-projection` |
-| `projection-rebuild-drill` | ADR §4.6 authoritative rebuild as a drill; **carries Demo 3** | `twenty-projection` |
+| `projection-rebuild-drill` | ADR §4.6 authoritative rebuild as a drill; folded into `pulse-demo-closeout` as Demo 5's stage 6, closing the roadmap's original Demo 3 promise | `twenty-projection` |
 | `m1-retire-patient-state` | ADR §6.2: `patients` rows only from ledger projection; three read surfaces cut over; `enrollment_status` read-only; `alerts.py` bootstrap insert deleted | `twenty-projection` |
 
 Why `survey-engine-ingress` sits here and not mid-Phase 2: it is an ingress producer, so it
@@ -196,7 +196,7 @@ Gate: Phase 3 exit.
 | Change | Delivers | Gate |
 |---|---|---|
 | `dbt-derived-state-retirement` | derived-state models become verdict runners (declared per I3 via verdict-relay) or are deleted; CI dbt-manifest scan enforces | Phase 3 exit + `s12-verdict-relay` |
-| `odg-read-redirect` | remaining PRM current-state reads → projections; funnel marts (`fct_status_transitions`, `fct_patient_status_daily`) on ledger + verdict chain; **carries Demo 4** | `dbt-derived-state-retirement` |
+| `odg-read-redirect` | remaining PRM current-state reads → projections; funnel marts (`fct_status_transitions`, `fct_patient_status_daily`) on ledger + verdict chain | `dbt-derived-state-retirement` |
 
 **Done means (ADR §6):** "No warehouse model answers 'what is this patient's status' by
 inference. Funnel counts read the ledger + verdict chain."
@@ -341,12 +341,18 @@ Demos run against LocalStack / fixtures / Synthea only — never PHI, never live
 scripts are not tests: they need LocalStack up, so they stay out of `task check` (a smoke-parse
 test may cover them).
 
+Script under `scripts/demo/`, runbook under `docs/runbooks/`, a `task demo:N` target, out of `task
+check` (a smoke-parse test keeps each importable). Demos 1–4 close the phase-closing change named
+in their **Closes** column; Demo 5 is its own change, run against a fixed synthetic patient rather
+than closing one phase.
+
 | Demo | Closes | Shows |
 |---|---|---|
-| 1 | Phase 1 (`pulse-ledger-core`, task 5.3) | LocalStack: legal command commits and lands on the queue; illegal rejects with catalog reason + version; replay returns the original event id; independent fold equals `current_state` (wraps the 5.1 harness) |
-| 2 | Phase 2 (`producer-ingress-policy`) | HMAC-signed synthetic drag → commit; invalid drag → rejection receipt; consent fixture recorded actor `customer.io`; verdict declared from fixture mart with skip-stale proof; producer-policy gate red on a planted state-bearing emit, green after removal |
-| 3 | Phase 3 (`projection-rebuild-drill`) | rebuild drill: seed Synthea events → project → destroy → rebuild from ledger → row-identical; live heal-back inside the 60 s freshness budget; M1 receipt |
-| 4 | Phase 4 (`odg-read-redirect`) | funnel stock + flow counts from ledger + verdict chain; diff against the retired dbt models' frozen outputs; CI proof zero inference models remain |
+| 1 | Phase 1 (`pulse-ledger-core`, task 5.3) | LocalStack: legal command commits and lands on the queue; illegal rejects with catalog reason + version; replay returns the original event id; independent fold equals `current_state` (wraps the 5.1 harness) — `scripts/demo/demo1_ledger_core.py`, `task demo:1` |
+| 2 | Phase 2 (`producer-ingress-policy`) | HMAC-signed synthetic drag → commit; invalid drag → rejection receipt; consent fixture recorded actor `customer.io`; verdict declared from fixture mart with skip-stale proof; producer-policy gate red on a planted state-bearing emit, green after removal — `scripts/demo/demo2_identity_matcher.py` + `demo2_kanban_drag.py`, `task demo:2` |
+| 3 | Phase 3 (`twenty-projection`, task 7.1) | live kanban round trip against real dev Twenty: UID and board shape verified on the live workspace; a legal drag commits through Twenty's own REST write; a replay probe proves `effective_at` is the record's own stamp and a redelivered idempotency key earns no second event; an illegal drag returns exactly one rejection note and no state change — `scripts/demo/demo3_live_kanban_drag.py`, `task demo:3` |
+| 4 | Phase 4 (`billing-state`, task 4.1) | live declare-back against dev: a positive `billing_eligibility` verdict qualifies a fresh episode; a positive `coverage_eligibility` verdict mints and transitions an unseen coverage subject on first sight; an immediate rerun changes nothing; a verdict against a `reported` episode counts a rejected transition, not the verdict — `scripts/demo/demo4_billing_declare_back.py`, `task demo:4` |
+| 5 | `pulse-demo-closeout` | one deterministic synthetic patient through every seam in order: referral → identity resolution, consent export → attributed consent state, a signed kanban drag → commit (and an illegal one → rejection), a fixture verdict → declared state; every read window (board, warehouse landing, independent fold) agreeing with the ledger; then the rebuild drill — destroy the Twenty projection and rebuild it from the journal alone, row-identical — closing the roadmap's original Demo 3 promise (`projection-rebuild-drill`, ADR §4.6) — `scripts/demo/demo5_end_to_end.py`, `task demo:e2e` (`demo:e2e:live` for the dev-mode receipt) |
 | Genesis rehearsal | `genesis-seed-run` | full genesis on a frozen Synthea snapshot; re-run byte-identical (checksum diff empty); amended-rule re-run yields a diff report; quarantine populated by `synthea-seed`'s engineered contradictions |
 | Cutover go/no-go | each P-phase runbook | receipt pack per exit: P0 10-day drift streak per family; P1 referral-native count over one billing month; P2 flip receipts + rollback drill; P3 POCAR-write monitor at zero for 30 days |
 

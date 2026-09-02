@@ -6,8 +6,8 @@ version: "3"
 #
 # Two lifecycles share this file, because a generated repo inherits it verbatim:
 #   - area 1 runs in the TEMPLATE only, and is where a project begins;
-#   - areas 2-9 run in whichever repo you are sitting in;
-#   - area 10 runs in a GENERATED repo, periodically, to pull template fixes back down.
+#   - areas 2-10 run in whichever repo you are sitting in;
+#   - area 11 runs in a GENERATED repo, periodically, to pull template fixes back down.
 
 vars:
   APP: pkg_pulse
@@ -194,7 +194,37 @@ tasks:
       - npm run typecheck --workspace=@pulse/twenty-app
       - npm run test --workspace=@pulse/twenty-app
 
-  # --- 5. Gate ---
+  # --- 5. Demo ---
+  # The roadmap's demo breakpoints (design/delivery/pulse-program-roadmap.md #Demo breakpoints),
+  # one target per demo. None is reached from `check`: 1 needs Docker/LocalStack, 2 includes a
+  # script the roadmap convention keeps out of `check` on principle even though it is fully
+  # offline, and 3-4 are live-only against dev credentials — same posture as twenty:deploy and
+  # relay:run. tests/test_demo_taskfile_targets.py (the reachability gate, same pattern as
+  # test_credentialed_twenty_targets_stay_out_of_check) pins every demo:* target out of `check`;
+  # each script's own smoke-parse test under tests/ keeps it importable under `check` regardless.
+
+  demo:1:
+    desc: "Demo 1 — Phase 1 breakpoint: LocalStack ledger commit/replay/fold round trip"
+    cmds:
+      - uv run python scripts/demo/demo1_ledger_core.py
+
+  demo:2:
+    desc: "Demo 2 — Phase 2 breakpoint: identity resolution, then the signed kanban drag ingress"
+    cmds:
+      - uv run python scripts/demo/demo2_identity_matcher.py
+      - uv run python scripts/demo/demo2_kanban_drag.py
+
+  demo:3:
+    desc: "Demo 3 — Phase 3 breakpoint: the live kanban round trip against dev Twenty (needs dev credentials)"
+    cmds:
+      - uv run python scripts/demo/demo3_live_kanban_drag.py --target dev
+
+  demo:4:
+    desc: "Demo 4 — Phase 4 breakpoint: live declare-back against the dev mart and ledger (needs dev credentials)"
+    cmds:
+      - uv run python scripts/demo/demo4_billing_declare_back.py --target dev
+
+  # --- 6. Gate ---
 
   twenty:validate:
     desc: Validate the committed Twenty artifact — schema, staleness, UID map, options, TS parity
@@ -435,7 +465,7 @@ tasks:
       - task: lore:drift
       - task: spec:validate
 
-  # --- 6. Docs ---
+  # --- 7. Docs ---
 
   docs:
     desc: Serve MkDocs locally
@@ -456,7 +486,7 @@ tasks:
       - uv lock --check
       - '! grep -Eq ''name = "(properdocs|zensical)"'' uv.lock'
 
-  # --- 7. Spec lifecycle (OpenSpec) ---
+  # --- 8. Spec lifecycle (OpenSpec) ---
   # Alphabetical, per the listing convention. Workflow order is init, validate, status, archive.
 
   spec:archive:
@@ -480,7 +510,7 @@ tasks:
     cmds:
       - openspec validate {{.CHANGE}}
 
-  # --- 8. Drift and memory (OpenLore) ---
+  # --- 9. Drift and memory (OpenLore) ---
 
   lore:analyze:
     desc: Build call graph and structural digest
@@ -497,7 +527,7 @@ tasks:
     cmds:
       - openlore mcp
 
-  # --- 9. Work distribution (thin glue) ---
+  # --- 10. Work distribution (thin glue) ---
   # Alphabetical, per the listing convention. The pipeline runs dispatch, collect, sync-docs.
 
   checkoff:
@@ -552,7 +582,7 @@ tasks:
       - echo "Review handoffs/ for plan-relevant updates"
       - 'echo "Apply via: edit openspec/changes/{{.CHANGE}}/specs/ then openspec validate {{.CHANGE}}"'
 
-  # --- 10. Template updates (generated repos) ---
+  # --- 11. Template updates (generated repos) ---
 
   template:diff:
     desc: Show ADE template changes since this repo was generated
