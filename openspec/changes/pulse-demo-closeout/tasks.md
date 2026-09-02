@@ -94,7 +94,7 @@ date per design.md: internal engineering, within two weeks of 2026-09-01.
 
 ## 3. Wave 2 — the drill, live mode, and the record
 
-- [ ] 3.1 Stage 6 and the runbook: wire the rebuild drill as the final stage (capture rows,
+- [x] 3.1 Stage 6 and the runbook: wire the rebuild drill as the final stage (capture rows,
       delete scope, run 2.3, assert identical); write `docs/runbooks/demo5-end-to-end.md`; add
       `task demo:e2e` and `task demo:e2e:live`; live context builder (dev ledger URL, `httpx`
       board client as demo3 uses, read-only `STG_EVENTS.EVENTS` reader as the warehouse window)
@@ -104,7 +104,7 @@ date per design.md: internal engineering, within two weeks of 2026-09-01.
       transport; reachability gate holds; `task check` green.
       `[model: sonnet | deps: 2.2, 2.3, 2.4 | lane: repo_change | wave: 2]`
 
-- [ ] 3.2 Presentation refresh: `.planning/reports/2026-08-30-pulse-presentation.md` §3 becomes
+- [x] 3.2 Presentation refresh: `.planning/reports/2026-08-30-pulse-presentation.md` §3 becomes
       the one-patient story (six stages, one paragraph each, the four earlier demos referenced
       as the doors it passes through); §5 updated for the connector-pattern archive and the
       billing-connector seed. Plain language, internal engineering audience.
