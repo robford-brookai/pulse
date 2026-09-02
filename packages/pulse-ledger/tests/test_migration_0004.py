@@ -106,9 +106,9 @@ def test_the_original_six_grains_are_unaffected(database_url: str, db: psycopg.C
 
 
 def test_communication_consent_is_still_outside_the_record(database_url: str, db: psycopg.Connection) -> None:
-    """0004 admits `coverage` only; the recorded-ownership subject stays pinned out (see
-    `test_communication_consent_validates_but_cannot_yet_be_committed`)."""
-    _upgrade(database_url)
+    """0004 admits `coverage` only; the recorded-ownership subject is admitted only from 0005
+    onward (see `test_migration_0005.py`), so this pins the record at exactly revision 0004."""
+    _upgrade(database_url, "0004")
     with pytest.raises(psycopg.errors.CheckViolation):
         _insert_event(db, "communication_consent", "cc-1")
 
@@ -128,8 +128,11 @@ def test_downgrade_restores_the_six_grain_constraints(database_url: str, db: psy
 
 def test_all_three_constraints_carry_the_same_vocabulary(database_url: str, db: psycopg.Connection) -> None:
     """The spec widens the record as one act — a table left behind would re-open the
-    validates-but-cannot-commit gap for whichever write path touches it."""
-    _upgrade(database_url)
+    validates-but-cannot-commit gap for whichever write path touches it.
+
+    Pinned at exactly revision 0004: from 0005 onward the vocabulary also carries
+    `communication_consent` (see `test_migration_0005.py`)."""
+    _upgrade(database_url, "0004")
     definitions = _constraint_definitions(db)
     assert set(definitions) == set(CHECKED_CONSTRAINTS.values())
     for name, definition in definitions.items():
