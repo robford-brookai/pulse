@@ -82,7 +82,7 @@ never a worktree.
       value in any evaluation row (tripwire).
       `[model: sonnet | deps: 1.4 | lane: repo_change | wave: 1]`
 
-- [ ] 2.2 Declaration: fill `declare.py`. D16 key from `(subject_key, verdict_type,
+- [x] 2.2 Declaration: fill `declare.py`. D16 key from `(subject_key, verdict_type,
       rule_version, facts_hash)`; verdict then paired transition through the kit's declare
       pipeline under the connector credential; `indeterminate` declares evidence only; record
       the declared event id on the `evaluations` row (spec: "The connector declares
