@@ -15,7 +15,7 @@ import yaml
 
 ROOT = Path(__file__).parents[1]
 
-_DEMO_TARGETS = ("demo:1", "demo:2", "demo:3", "demo:4", "demo:e2e", "demo:e2e:live")
+_DEMO_TARGETS = ("demo:1", "demo:2", "demo:3", "demo:4", "demo:e2e", "demo:e2e:live", "stage:e2e:live")
 
 
 def _taskfile() -> dict:
