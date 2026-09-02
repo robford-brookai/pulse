@@ -32,7 +32,7 @@ Two invariants govern everything below:
 
 ## 4.0 Connector anatomy
 
-Five stages, each independently testable. Only the tap and the mapper are PAP-specific; the rest is shared library code in the PULSE monorepo (`packages/connector-core`, proposed).
+Five stages, each independently testable. Only the tap and the mapper are PAP-specific; the rest is shared library code in the PULSE monorepo (`pulse_core.connector`).
 
 | \# | Stage | Responsibility | PAP instance |
 | :---- | :---- | :---- | :---- |
