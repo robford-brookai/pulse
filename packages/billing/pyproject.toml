@@ -9,8 +9,7 @@ dependencies = [
     # The engine's own store (design.md decision 5) is a throwaway-per-test Postgres cluster in
     # the migration suite, same driver pulse-ledger pins for its `ledger` schema.
     "psycopg[binary,pool]>=3.2",
-    # The consume/declare loop (task 3.2+) rides pulse_core.connector; the migration-only scope
-    # of this task does not import it yet, but the package is built on the kit from the start.
+    # The consume loop (task 3.2) rides pulse_core.connector's read/consume primitives.
     "pulse-core",
 ]
 
@@ -18,7 +17,12 @@ dependencies = [
 pulse-core = { workspace = true }
 
 [dependency-groups]
-dev = []
+dev = [
+    # Enforces the no-live-network posture for the fact-fold tests, which block sockets
+    # per-module rather than trusting the `--disable-socket` flag — same plugin twenty-projection,
+    # verdict-relay, schedules, and consent-ingress already use.
+    "pytest-socket>=0.7.0",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -29,3 +33,6 @@ packages = ["src/billing"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# --allow-unix-socket: harmless under `--disable-socket` (AF_UNIX can't reach the network) and
+# required for it — the migration suite's throwaway Postgres cluster is unix-socket only.
+addopts = "--allow-unix-socket"

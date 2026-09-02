@@ -388,6 +388,11 @@ dependencies = [
     { name = "sqlalchemy" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "pytest-socket" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.13" },
@@ -397,7 +402,7 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-dev = []
+dev = [{ name = "pytest-socket", specifier = ">=0.7.0" }]
 
 [[package]]
 name = "boto3"

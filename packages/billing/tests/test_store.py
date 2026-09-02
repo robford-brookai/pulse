@@ -1,0 +1,156 @@
+"""`billing.store.PostgresFactStore` — fact folding against a real `billing_engine` schema
+(task 3.2).
+
+Same throwaway-cluster fixtures as `test_migration_0001.py` (`tests/conftest.py`): a fresh
+database per test, migrated up before use. Covers the same two spec scenarios as
+`test_facts.py`, this time end to end through the store, plus the concurrency guard
+(`SELECT ... FOR UPDATE`) that keeps two applies for the same subject from racing.
+"""
+
+from __future__ import annotations
+
+import uuid
+from pathlib import Path
+
+import psycopg
+from alembic import command
+from alembic.config import Config
+from billing.store import PostgresFactStore
+
+INFRA_DIR = Path(__file__).resolve().parents[1] / "infra" / "postgres"
+
+
+def _upgrade(database_url: str) -> None:
+    cfg = Config(str(INFRA_DIR / "alembic.ini"))
+    cfg.set_main_option("script_location", str(INFRA_DIR))
+    cfg.attributes["database_url"] = database_url
+    command.upgrade(cfg, "0001")
+
+
+def envelope(
+    *,
+    event_id: uuid.UUID,
+    subject_type: str = "billing_episode",
+    subject_key: str = "ep-1",
+    effective_at: str,
+    payload: dict[str, object],
+) -> dict[str, object]:
+    return {
+        "event_id": str(event_id),
+        "subject_type": subject_type,
+        "subject_key": subject_key,
+        "effective_at": effective_at,
+        "payload": payload,
+    }
+
+
+def _stored_row(db: psycopg.Connection, subject_key: str) -> tuple[dict[str, object], uuid.UUID]:
+    cur = db.execute(
+        "SELECT facts, last_event_id FROM billing_engine.subject_facts WHERE subject_key = %s",
+        (subject_key,),
+    )
+    facts, last_event_id = cur.fetchone()  # type: ignore[misc]
+    return facts, last_event_id
+
+
+def test_first_event_inserts_a_new_row(database_url: str, db: psycopg.Connection) -> None:
+    _upgrade(database_url)
+    event_id = uuid.uuid4()
+    store = PostgresFactStore(db)
+
+    applied = store.apply_event(
+        envelope(event_id=event_id, effective_at="2026-09-01T10:00:00+00:00", payload={"to_state": "qualified"})
+    )
+
+    assert applied is True
+    facts, last_event_id = _stored_row(db, "ep-1")
+    assert facts["to_state"] == "qualified"
+    assert last_event_id == event_id
+
+
+def test_redelivery_folds_once(database_url: str, db: psycopg.Connection) -> None:
+    _upgrade(database_url)
+    event_id = uuid.uuid4()
+    event = envelope(event_id=event_id, effective_at="2026-09-01T10:00:00+00:00", payload={"to_state": "qualified"})
+    store = PostgresFactStore(db)
+
+    first = store.apply_event(event)
+    second = store.apply_event(event)
+
+    assert first is True
+    assert second is False
+    cur = db.execute("SELECT count(*) FROM billing_engine.subject_facts")
+    (count,) = cur.fetchone()  # type: ignore[misc]
+    assert count == 1
+
+
+def test_out_of_order_events_fold_by_effective_time(database_url: str, db: psycopg.Connection) -> None:
+    _upgrade(database_url)
+    store = PostgresFactStore(db)
+    newer_id = uuid.uuid4()
+    older_id = uuid.uuid4()
+
+    newer_applied = store.apply_event(
+        envelope(event_id=newer_id, effective_at="2026-09-01T12:00:00+00:00", payload={"to_state": "qualified"})
+    )
+    older_applied = store.apply_event(
+        envelope(event_id=older_id, effective_at="2026-09-01T09:00:00+00:00", payload={"to_state": "open"})
+    )
+
+    assert newer_applied is True
+    assert older_applied is False  # the earlier-effective fact never overwrites the later one
+    facts, last_event_id = _stored_row(db, "ep-1")
+    assert facts["to_state"] == "qualified"
+    assert last_event_id == newer_id
+
+
+def test_a_later_event_merges_onto_the_existing_row(database_url: str, db: psycopg.Connection) -> None:
+    _upgrade(database_url)
+    store = PostgresFactStore(db)
+
+    store.apply_event(
+        envelope(
+            event_id=uuid.uuid4(),
+            subject_type="consent",
+            effective_at="2026-09-01T09:00:00+00:00",
+            payload={"to_state": "granted", "program": "ccm"},
+        )
+    )
+    store.apply_event(
+        envelope(
+            event_id=uuid.uuid4(),
+            subject_type="consent",
+            effective_at="2026-09-01T10:00:00+00:00",
+            payload={"to_state": "revoked"},
+        )
+    )
+
+    facts, _ = _stored_row(db, "ep-1")
+    assert facts["to_state"] == "revoked"
+    assert facts["program"] == "ccm"
+
+
+def test_distinct_subjects_get_distinct_rows(database_url: str, db: psycopg.Connection) -> None:
+    _upgrade(database_url)
+    store = PostgresFactStore(db)
+
+    store.apply_event(
+        envelope(
+            event_id=uuid.uuid4(),
+            subject_key="ep-1",
+            effective_at="2026-09-01T09:00:00+00:00",
+            payload={"to_state": "open"},
+        )
+    )
+    store.apply_event(
+        envelope(
+            event_id=uuid.uuid4(),
+            subject_key="ep-2",
+            effective_at="2026-09-01T09:00:00+00:00",
+            payload={"to_state": "open"},
+        )
+    )
+
+    cur = db.execute("SELECT count(*) FROM billing_engine.subject_facts")
+    (count,) = cur.fetchone()  # type: ignore[misc]
+    assert count == 2

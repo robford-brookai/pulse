@@ -21,8 +21,18 @@ from pathlib import Path
 import psycopg
 import pytest
 from psycopg import sql
+from pytest_socket import disable_socket
 
 INFRA_DIR = Path(__file__).resolve().parents[1] / "infra" / "postgres"
+
+
+def pytest_runtest_setup() -> None:
+    """No live network in any billing test, whether or not `--disable-socket` is passed —
+    same pattern as twenty-projection, verdict-relay, schedules, and consent-ingress. The
+    Postgres fixtures below connect over a unix socket only, which `--allow-unix-socket`
+    (`pyproject.toml`) leaves untouched."""
+    disable_socket()
+
 
 _SERVER_BINARIES = ("initdb", "pg_ctl", "postgres")
 
