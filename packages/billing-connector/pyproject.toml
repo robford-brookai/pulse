@@ -11,6 +11,11 @@ dependencies = [
     # and declares against. No import of pulse_core.connector lands until task 1.2, so the
     # credential-posture gate does not discover this package yet.
     "billing",
+    # The real SQS transport `service.py`'s `main()` hands to the kit's consume loop
+    # (`_sqs_client()`, task 2.3) — every other bus consumer in this workspace (ocean's
+    # control-plane, call-simulator, slack-bot) declares it the same way. Tests never import
+    # this: they inject a fake `sqs_client`, so `boto3` is a runtime-only, not a test, dependency.
+    "boto3>=1.34",
 ]
 
 [tool.uv.sources]
