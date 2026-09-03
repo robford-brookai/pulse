@@ -74,6 +74,25 @@ def test_stages_are_wired_in_spec_order() -> None:
     ]
 
 
+def test_from_stage_defaults_to_the_whole_walk() -> None:
+    args = demo5.build_arg_parser().parse_args([])
+    assert args.from_stage is None
+    assert demo5.stages_from(None) == demo5.STAGES
+
+
+def test_from_stage_keeps_the_suffix_in_spec_order() -> None:
+    args = demo5.build_arg_parser().parse_args(["--from-stage", "window_agreement"])
+    names = [stage.name for stage in demo5.stages_from(args.from_stage)]
+    assert names == ["window_agreement", "rebuild_drill"]
+
+
+def test_from_stage_rejects_an_unknown_stage_name() -> None:
+    with pytest.raises(SystemExit):
+        demo5.build_arg_parser().parse_args(["--from-stage", "nope"])
+    with pytest.raises(ValueError, match="unknown stage"):
+        demo5.stages_from("nope")
+
+
 # --- Harness unit tests: run_walk over fake stages -------------------------------------------------
 
 
@@ -270,6 +289,27 @@ def test_fetch_stg_events_groups_rows_by_subject_and_closes_the_connection() -> 
     assert result[("enrollment", "pt-0001")][0]["event_id"] == "evt-1"
     assert result[("billing_episode", "ep-0001")] == []
     assert connection.closed is True
+
+
+def test_fetch_stg_events_decodes_a_variant_payload_delivered_as_json_text() -> None:
+    # snowflake-connector hands a VARIANT column back as its JSON text; the fold needs a mapping.
+    row = (*_stg_events_row()[:-1], '{"to_state": "active", "channel": "email"}')
+    connection = _FakeSnowflakeConnection([row])
+    result = demo5._fetch_stg_events(frozenset({("enrollment", "pt-0001")}), connect=lambda: connection)
+    assert result[("enrollment", "pt-0001")][0]["payload"] == {"to_state": "active", "channel": "email"}
+
+
+def test_fetch_stg_events_renders_timestamp_tz_datetimes_as_iso_text() -> None:
+    # snowflake-connector hands TIMESTAMP_TZ back as tz-aware datetimes; the fold parses ISO text.
+    from datetime import UTC, datetime
+
+    row = list(_stg_events_row())
+    row[3], row[4] = datetime(2026, 8, 27, tzinfo=UTC), datetime(2026, 8, 27, 0, 0, 1, tzinfo=UTC)
+    connection = _FakeSnowflakeConnection([tuple(row)])
+    result = demo5._fetch_stg_events(frozenset({("enrollment", "pt-0001")}), connect=lambda: connection)
+    event = result[("enrollment", "pt-0001")][0]
+    assert event["effective_at"] == "2026-08-27T00:00:00+00:00"
+    assert datetime.fromisoformat(event["recorded_at"]) == row[4]
 
 
 def test_fetch_stg_events_drops_a_row_for_an_unwanted_subject() -> None:

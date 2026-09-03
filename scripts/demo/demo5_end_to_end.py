@@ -566,6 +566,15 @@ def _fetch_stg_events(
             )
             for row in cursor.fetchall():
                 event = dict(zip(STG_EVENTS_COLUMNS, row, strict=True))
+                # Normalise the live row to the shape the offline window hands the fold: the
+                # connector returns a VARIANT column as its JSON text (the fold reads
+                # `payload["to_state"]`) and TIMESTAMP_TZ columns as datetimes (the fold parses
+                # ISO-8601 text with `fromisoformat`).
+                if isinstance(event["payload"], str):
+                    event["payload"] = json.loads(event["payload"])
+                for column in ("effective_at", "recorded_at"):
+                    if isinstance(event[column], datetime):
+                        event[column] = event[column].isoformat()
                 key = (event["subject_type"], event["subject_key"])
                 if key in collected:
                     collected[key].append(event)
@@ -1283,13 +1292,40 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "(task 3.1's live context builder; every credential resolves from the environment only, "
         "see docs/runbooks/demo5-end-to-end.md)",
     )
+    parser.add_argument(
+        "--from-stage",
+        choices=[stage.name for stage in STAGES],
+        default=None,
+        metavar="STAGE",
+        help="start the walk at this stage, skipping the earlier ones. For a live ledger that "
+        "already holds the fixture subject's events: stage 2's consent declaration is idempotent "
+        "on the fixture row, so a second full walk replays instead of declaring. Stages 5 and 6 "
+        "read committed state by subject key and can run alone. The receipt names the stages "
+        "that ran; say which run covered the rest.",
+    )
     return parser
+
+
+def stages_from(name: str | None, stages: Sequence[Stage] = STAGES) -> tuple[Stage, ...]:
+    """The stages to run: all of them, or the suffix starting at `name` (spec order kept)."""
+    if name is None:
+        return tuple(stages)
+    names = [stage.name for stage in stages]
+    if name not in names:
+        message = f"unknown stage {name!r}; stages are {names}"
+        raise ValueError(message)
+    return tuple(stages[names.index(name) :])
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
 
+    stages = stages_from(args.from_stage)
     print("=== Demo 5: end to end ===")
+    if args.from_stage:
+        print(
+            f"starting at stage {args.from_stage!r}; skipping {[s.name for s in STAGES[: len(STAGES) - len(stages)]]}"
+        )
     if args.live:
         try:
             config = resolve_live_config(os.environ)
@@ -1304,7 +1340,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             skip_compose_up=args.skip_compose_up,
         )
     try:
-        receipts = run_walk(STAGES, ctx)
+        receipts = run_walk(stages, ctx)
     except StageFailure as exc:
         print(f"\nFAILED at stage {exc.stage_name!r}: {exc.message}", file=sys.stderr)
         return 1
