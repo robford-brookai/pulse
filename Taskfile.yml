@@ -345,6 +345,18 @@ tasks:
     cmds:
       - uv run python -m pulse_core.twenty_seed --target {{.TARGET}}
 
+  twenty:key:rotate:
+    desc: Rotate TARGET's Twenty API key in the env file, the pulse-ledger Duplo secret, and the running API (dev; needs Duplo and cluster credentials)
+    # Attended, credentialed, prompts for the new key without echo: the one key lives in three
+    # places (operator env file, two Duplo secret keys, the API pod's envFrom) and rotating one
+    # without the others leaves the demo tooling and the API disagreeing about which key is
+    # live — how the 2026-09-02 Demo 5 run found every dev Twenty call 403ing. Never reached from
+    # `check`, same posture as twenty:deploy and twenty:seed.
+    requires:
+      vars: [TARGET]
+    cmds:
+      - bash scripts/pulse-ledger/rotate_twenty_key.sh {{.TARGET}}
+
   twenty:app:build:
     desc: Build the Twenty app and its generated API client against TARGET (dev|staging|prod; needs that target's remote)
     # `twenty dev:build` generates the typed API client from the active remote, so even the

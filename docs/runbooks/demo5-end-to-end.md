@@ -113,7 +113,7 @@ the same shell. It is the attended-run entry point (`scripts/demo/stage_e2e_live
    on any failure, naming all of them:
    - **api-image** — the dev API serves the per-subject history route (PR #331). A 404 means the
      pod predates it: redeploy the current image.
-   - **ledger-schema** — `alembic_version` is `0005` (PR #336, `communication_consent` admitted).
+   - **ledger-schema** — `alembic_version_pulse_ledger` is `0005` (PR #336, `communication_consent` admitted).
    - **seeded-card** — dev Twenty has a `patientPrograms` record for the fixture patient with
      `programCode = demo5`.
 5. `exec task demo:e2e:live`.

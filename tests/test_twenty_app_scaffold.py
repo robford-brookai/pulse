@@ -69,6 +69,7 @@ _TWENTY_TARGETS = (
     "twenty:test",
     "twenty:deploy",
     "twenty:seed",
+    "twenty:key:rotate",
     "twenty:app:build",
     "twenty:app:publish",
 )

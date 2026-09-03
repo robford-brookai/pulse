@@ -102,7 +102,7 @@ def _postgres_head(database_url: str) -> str:
     import psycopg  # local import: the offline smoke test never touches a database
 
     with psycopg.connect(database_url, connect_timeout=10) as connection, connection.cursor() as cursor:
-        cursor.execute("SELECT version_num FROM alembic_version")
+        cursor.execute("SELECT version_num FROM alembic_version_pulse_ledger")
         row = cursor.fetchone()
     return "" if row is None else str(row[0])
 
