@@ -72,7 +72,7 @@ DATABASE_URL="postgresql://pulse_ledger_migrator:${PULSE_LEDGER_MIGRATOR_PASSWOR
   task ledger:migrate
 ```
 
-**Verify:** `SELECT version_num FROM alembic_version;` returns `0005`. The preflight in step 6
+**Verify:** `SELECT version_num FROM alembic_version_pulse_ledger;` returns `0005`. The preflight in step 6
 checks this too.
 
 ## 3. Mint the consent writer credential
@@ -138,7 +138,7 @@ prints `set` / `MISSING` per variable name, and runs the three preflight checks:
 | Check | Passes when | If it fails |
 |---|---|---|
 | `api-image` | history route answers anything but 404 | step 1 not rolled |
-| `ledger-schema` | `alembic_version` is `0005` | step 2 |
+| `ledger-schema` | `alembic_version_pulse_ledger` is `0005` | step 2 |
 | `seeded-card` | the demo5 record exists on dev Twenty | step 4 |
 
 Every failure is named in one run. Fix, rerun. It stops before any stage runs until all three
@@ -180,6 +180,10 @@ runs. The message names stage, subject key, and field, never a value.
 | stage 2 401 on every declare | key added but pod not restarted, or wrong key name | restart; the name must be exactly `PULSE_LEDGER_WRITER_TOKEN_CUSTOMER_IO` |
 | stage 3 cannot find the card | step 4 | seed the record |
 | stage 6 rebuild differences ≠ 0 | projection consumer on dev lagging | wait 60 s, rerun with `--no-preflight` |
+| `ledger-schema` `InsufficientPrivilege` | app role cannot read the migrator-owned version table | `GRANT SELECT ON public.alembic_version_pulse_ledger TO pulse_ledger_app` via the migrator DSN (done on dev 2026-09-02; durable home still to decide) |
+| stage 5 `window 'warehouse' ... no state at field 'state'` | nothing landing in `STG_EVENTS.EVENTS`: `pulse-warehouse-sync` consume loop died on Snowflake 390114 token expiry and the pod stayed Running | check SQS depth (`duploservices-dev01-brook-pulse-warehouse-sync`), `kubectl rollout restart deployment/pulse-warehouse-sync`, wait for the backlog to drain, rerun |
+| dev Twenty `403 This API Key is revoked` everywhere | one key in three homes, revoked in Twenty | `task twenty:key:rotate TARGET=dev` |
+| stage 4 / stage 5 Postgres connect timeout from the laptop | env file DSN names the private RDS host | relay pod + `STAGE_E2E_DATABASE_URL` with a `localhost:15432` DSN (step 2) |
 | `duploctl` JSON decode error | stale `stage_e2e_live.sh` | `git pull`; fixed in #350 |
 
 Rollback is not needed for the walk itself: it writes only synthetic subjects to the dev ledger

@@ -13,6 +13,8 @@
 # Never prints a secret value: only variable names, key names, and set/MISSING.
 # Flags: --no-preflight skips step 4. Env overrides: STAGE_E2E_CONSENT_KEY / STAGE_E2E_REPLAY_KEY
 # name the Duplo secret keys to read when the prefix match is wrong or ambiguous.
+# STAGE_E2E_DATABASE_URL replaces the scratch file's DATABASE_URL — the laptop reaches the private
+# RDS only through a relay (env-vars process doc §4), so the DSN it dials is a localhost one.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 
@@ -41,6 +43,11 @@ else
 fi
 
 # 2. derive the demo's own Snowflake reader from the relay's (same account, user, warehouse, key)
+if [[ -n "${STAGE_E2E_DATABASE_URL:-}" ]]; then
+  export DATABASE_URL="$STAGE_E2E_DATABASE_URL"
+  echo "stage: DATABASE_URL taken from STAGE_E2E_DATABASE_URL (relay DSN), not the scratch file"
+fi
+
 export DEMO5_SNOWFLAKE_ACCOUNT="${DEMO5_SNOWFLAKE_ACCOUNT:-${VERDICT_RELAY_SNOWFLAKE_ACCOUNT:-}}"
 export DEMO5_SNOWFLAKE_USER="${DEMO5_SNOWFLAKE_USER:-${VERDICT_RELAY_SNOWFLAKE_USER:-}}"
 export DEMO5_SNOWFLAKE_WAREHOUSE="${DEMO5_SNOWFLAKE_WAREHOUSE:-${VERDICT_RELAY_SNOWFLAKE_WAREHOUSE:-}}"
