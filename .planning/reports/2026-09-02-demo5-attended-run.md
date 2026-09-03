@@ -23,15 +23,36 @@ Everything below names credentials by variable or key name only. Never paste a v
 The pod on dev01-brook ran an image from 2026-08-16 at the billing-state run. Stage 6 needs the
 per-subject history route, stage 2 needs migration 0005 and the `customer-io` writer id.
 
+Docker Desktop must have "Use Rosetta for x86_64/amd64 emulation" on (Settings, General). Under
+plain QEMU the `uv` binary in the Dockerfile segfaults at step 5 with exit code 139.
+
+The image goes to the tenant's ECR, account 173008660334, repository `pulse-ledger`, through the
+`duplo-dev01` AWS profile (its `credential_process` is `duplo-jit`). `task ledger:deploy` is a stub
+that pushes the bare `pulse-ledger:$TAG` name to Docker Hub and fails with `insufficient_scope`;
+do not use it. Tag and push by hand:
+
 ```bash
 TAG=$(git rev-parse --short HEAD)
-task ledger:image TAG=$TAG        # arm64 laptop: emulated amd64 build, several minutes
-task ledger:deploy TAG=$TAG TARGET=dev   # pushes; needs registry login first
+ECR=173008660334.dkr.ecr.us-east-1.amazonaws.com
+task ledger:image TAG=$TAG
+aws ecr get-login-password --profile duplo-dev01 \
+  | docker login --username AWS --password-stdin "$ECR"
+docker tag pulse-ledger:$TAG "$ECR/pulse-ledger:$TAG"
+docker push "$ECR/pulse-ledger:$TAG"          # PASS: prints the digest
 ```
 
-Then re-point the `pulse-ledger-api` service at `pulse-ledger:$TAG` in the Duplo portal
-(tenant dev01-brook) and let it roll. `packages/pulse-ledger/infra/duplo/command-api.service.json`
-is the service definition; the image field is the only thing that changes.
+Then re-point the `pulse-ledger-api` service (tenant dev01-brook) at the pushed reference, the
+same way the 2026-08-28 roll to `f951d41` was done:
+
+```bash
+TOKEN="$(duplo-jit duplo --host https://duplo.cloud.brook.ai --interactive \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["DuploToken"])')"
+duploctl service update_image pulse-ledger-api "$ECR/pulse-ledger:$TAG" \
+  --host https://duplo.cloud.brook.ai --tenant dev01-brook --token "$TOKEN"
+```
+
+`packages/pulse-ledger/infra/duplo/command-api.service.json` is the service definition; the image
+field is the only thing that changes.
 
 **Verify:** the history route is served. Any status but 404 means the new image is up.
 
@@ -153,6 +174,8 @@ runs. The message names stage, subject key, and field, never a value.
 |---|---|---|
 | `stage: need exactly one key for prefix 'PULSE_LEDGER_WRITER_TOKEN_CUSTOMER'` | step 3 not done | mint and add the key |
 | `api-image` 404 | old pod | step 1, then restart |
+| `ledger:image` exit 139, `qemu: uncaught target signal 11` at step 5 | QEMU emulation, `uv` segfaults | enable Rosetta in Docker Desktop, rebuild |
+| `docker push` `insufficient_scope: authorization failed` to `docker.io/library` | `task ledger:deploy` pushes the bare name | ECR login, tag, push per step 1 |
 | stage 2 `CheckViolation ... ck_events_subject_type` | migration 0005 missing | step 2 |
 | stage 2 401 on every declare | key added but pod not restarted, or wrong key name | restart; the name must be exactly `PULSE_LEDGER_WRITER_TOKEN_CUSTOMER_IO` |
 | stage 3 cannot find the card | step 4 | seed the record |
