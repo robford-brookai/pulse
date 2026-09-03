@@ -131,6 +131,16 @@ stops here by design rather than declaring under the wrong actor.
 Nothing is ever printed but variable names, key names, and `set` / `MISSING`. Skip step 4 with
 `task stage:e2e:live -- --no-preflight` once the preconditions have been verified for the day.
 
+The laptop cannot dial the dev RDS host in the scratch file's `DATABASE_URL`; set
+`STAGE_E2E_DATABASE_URL` to the relay DSN (`docs/process/env-vars-retreival.md` §4) and the
+script uses it instead.
+
+A live ledger holds the fixture subject's events after one walk, and stage 2's consent
+declaration is idempotent on the fixture row, so a second full walk stops at stage 2 with
+`first sweep expected 1 declared row, got 0`. To finish a walk that stopped later, pass
+`--from-stage=<name>` through: `task stage:e2e:live -- --no-preflight --from-stage=window_agreement`
+runs stages 5 and 6 against the committed events. The receipt lists only the stages that ran.
+
 ## Reading the output
 
 Every stage prints its own name before running and `ok: <n> assertion(s), subjects=[...]` after —

@@ -251,6 +251,19 @@ Runbook assertions for 3.3, in the receipt or observable right after:
 A failed stage prints `FAILED at stage '<name>': <what went wrong>` and stops. Nothing later
 runs. The message names stage, subject key, and field, never a value.
 
+**A second full walk on the same day fails at stage 2** with `first sweep expected 1 declared
+row, got 0`: the consent declaration is idempotent on the fixture row, and the dev ledger already
+holds it from the first walk. The fixture subject is walked once per ledger. To finish a walk
+that stopped after stage 4 (as the 2026-09-02 run did, on the warehouse feed), run the remaining
+stages against the events already committed and say so in the receipt:
+
+```bash
+task stage:e2e:live -- --no-preflight --from-stage=window_agreement
+```
+
+`--from-stage` (PR #353) takes any stage name; stages 5 and 6 read committed state by subject
+key and need nothing from the earlier stages' in-process receipts.
+
 ## 7. Record the receipt
 
 1. Paste the receipt block (stage names, counts, subject keys, wait times) as a comment on #342.

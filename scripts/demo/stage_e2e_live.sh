@@ -11,7 +11,8 @@
 #   5. exec `task demo:e2e:live`
 #
 # Never prints a secret value: only variable names, key names, and set/MISSING.
-# Flags: --no-preflight skips step 4. Env overrides: STAGE_E2E_CONSENT_KEY / STAGE_E2E_REPLAY_KEY
+# Flags: --no-preflight skips step 4; --from-stage=NAME is passed through to the walk (stages 5
+# and 6 can run alone against events an earlier walk committed). Env overrides: STAGE_E2E_CONSENT_KEY / STAGE_E2E_REPLAY_KEY
 # name the Duplo secret keys to read when the prefix match is wrong or ambiguous.
 # STAGE_E2E_DATABASE_URL replaces the scratch file's DATABASE_URL — the laptop reaches the private
 # RDS only through a relay (env-vars process doc §4), so the DSN it dials is a localhost one.
@@ -23,11 +24,13 @@ DUPLO_TENANT="${DUPLO_TENANT:-dev01-brook}"
 DUPLO_SECRET="${DUPLO_SECRET:-pulse-ledger-api-secret}"
 SCRATCH="scripts/verdict-env-vars.sh"
 PREFLIGHT=1
+WALK_ARGS=()
 for arg in "$@"; do
   case "$arg" in
     --no-preflight) PREFLIGHT=0 ;;
     -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
-    *) echo "stage: unknown flag $arg" >&2; exit 2 ;;
+    --from-stage=*) WALK_ARGS+=("$arg") ;;
+    *) echo "stage: unknown flag $arg (walk flags go as --from-stage=NAME)" >&2; exit 2 ;;
   esac
 done
 
@@ -119,4 +122,5 @@ if [[ "$PREFLIGHT" -eq 1 ]]; then
 fi
 
 # 5. the walk, in this shell
-exec task demo:e2e:live
+# ${arr[@]+...}: an empty array under `set -u` is "unbound" on macOS /bin/bash 3.2
+exec task demo:e2e:live -- ${WALK_ARGS[@]+"${WALK_ARGS[@]}"}
