@@ -17,7 +17,7 @@ design.md decision 9). Every command's payload SHALL carry message-level provena
 to the source landing row (its message or event identifier) sufficient to trace a recorded
 consent state back to the Customer.io message that produced it.
 
-#### Scenario: A declared command is customer-io-attributed and traceable
+#### Scenario: A declared command is customer.io-attributed and traceable
 
 - **GIVEN** a consent row read from the landing
 - **WHEN** the ingress declares it
