@@ -125,7 +125,7 @@ date per design.md: internal engineering, within two weeks of 2026-09-01.
       `task demo:e2e` from the text alone — verified by the runbook cross-reference.
       `[model: sonnet | deps: 3.1 | lane: repo_change | wave: 2]`
 
-- [ ] 3.3 Attended live run (live execution): GitHub tracking issue; `task demo:e2e:live`
+- [x] 3.3 Attended live run (live execution): GitHub tracking issue; `task demo:e2e:live`
       against dev in an attended session; receipt (stage counts, subject keys, wait times, never
       PHI) posted on the issue and committed under `handoffs/pulse-demo-closeout/`.
       Tests (runbook assertions): all six stages pass live; the rebuild drill's receipt shows

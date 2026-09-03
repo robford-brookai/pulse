@@ -1,10 +1,11 @@
 # Handoff Summary: pulse-demo-closeout
 
-Collected 1 handoff(s).
+Collected 2 handoff(s).
 
 ## Files
 
 - [task-008-2-5.md](handoffs/pulse-demo-closeout/task-008-2-5.md)
+- [task-011-3-3.md](handoffs/pulse-demo-closeout/task-011-3-3.md) — 3.3 attended live run receipt (also on #342)
 
 ## Doc-Updater Instructions
 
