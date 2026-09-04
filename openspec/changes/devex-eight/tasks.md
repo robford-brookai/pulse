@@ -151,6 +151,7 @@ task 3.1 batches the upstream PR.
 
 - [ ] 3.1 Batched upstream PR to repo-ade, "DX fixes surfaced by pulse audit": 1.5, 1.6, 1.7,
       2.4 and the pin assertion; record the PR URL here.
+      Upstream PR: https://github.com/robford-brookai/repo-ade/pull/8 (opened 2026-09-04, CI green).
       Tests: `task template:diff` shows the fixes as no-ops once merged upstream.
       `[model: sonnet | deps: 1.5, 1.6, 1.7, 2.4 | lane: repo_change | wave: 3]`
 
