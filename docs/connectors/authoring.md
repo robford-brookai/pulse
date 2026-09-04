@@ -87,18 +87,17 @@ What each piece gives you:
 
 ## 3. How to scaffold
 
-There is no generator yet: copy the reference and strip it. A `connector:new` command that renders
-this tree and performs step 7's registrations for you is planned; until it exists, this is the
-procedure.
+One command renders the package from `templates/connector/` and performs every registration in
+step 7:
 
 ```bash
-cp -r packages/billing-connector packages/my-connector
-cd packages/my-connector
-git mv src/billing_connector src/my_connector
-rm -rf src/my_connector/{evaluate,declare}.py tests/fixtures tests/test_evaluate.py
+task connector:new NAME=my-connector
+task install          # resolve the workspace with the new member
+task check            # the rendered package ships one green test
 ```
 
-The tree you want:
+`scripts/connector_new.py` is what the target runs; `--print-registrations` shows the diff it
+will apply without writing anything. The tree it renders:
 
 ```text
 packages/my-connector/
@@ -220,11 +219,12 @@ connector convention", and from then on three gates apply to it —
 
 There is nothing to register for this. Import the kit and you are in scope, which is the point.
 
-## 7. How to register the package — all eight sites
+## 7. How to register the package — all nine sites
 
-A package that exists but is not registered silently is not linted, not typechecked, not tested,
-and not covered. Eight edits, two files. Do them together and grep for a sibling connector's name
-to confirm you have not missed one:
+`task connector:new` applies every edit in this section for you. Read it anyway: a package that
+exists but is not registered silently is not linted, not typechecked, not tested, and not covered,
+and you will recognise a missed site when reviewing someone else's connector. Nine edits, two
+files. Grep for a sibling connector's name to confirm none is missing:
 
 ```bash
 grep -rn "billing-connector\|billing_connector" pyproject.toml Taskfile.yml
