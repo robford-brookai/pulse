@@ -196,7 +196,6 @@ def test_test_all_runs_the_shell_gates():
 _USES = re.compile(r"^\s*-?\s*uses:\s*([^\s#]+)", re.M)
 
 
-@open_finding
 def test_action_pins_are_real_shas():
     bad = []
     for wf in WORKFLOWS:
