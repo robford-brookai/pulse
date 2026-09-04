@@ -23,14 +23,14 @@ task 3.1 batches the upstream PR.
 
 ## 0. Wave 0 — measure before moving (one PR, coordinator session)
 
-- [ ] 0.1 Apply the 12 QA corrections from `.planning/reports/2026-09-02-devex-audit-qa.md` to
+- [x] 0.1 Apply the 12 QA corrections from `.planning/reports/2026-09-02-devex-audit-qa.md` to
       the evidence and scorecard reports; add a corrections note to each; commit the three
       2026-09-02 reports.
       Tests: `grep -c "—"` on the evidence report is at most 1 (the CONTRIBUTING quote);
       the scorecard contains no `Champion`.
       `[model: opus | deps: — | lane: repo_change | wave: 0]`
 
-- [ ] 0.2 Inner tier: `tests/scaffold/cat10_devex.py` with one `xfail(strict=True)` test per
+- [x] 0.2 Inner tier: `tests/scaffold/cat10_devex.py` with one `xfail(strict=True)` test per
       open finding plus the measurement self-tests; `scripts/devex/check.py` printing
       `METRIC devex_open_findings=<n>`; `pyproject.toml` `python_files` widened to
       `cat[0-9]*_*.py`; Taskfile targets `devex:check` and `devex:audit`; ledger
@@ -40,7 +40,7 @@ task 3.1 batches the upstream PR.
       `[model: opus | deps: — | lane: repo_change | wave: 0 | serial: Taskfile.yml and
       pyproject.toml — coordinator releases alone across both in-flight changes]`
 
-- [ ] 0.3 Outer tier preserved: `docs/process/devex-audit/{README,rubric,task-a,task-b,task-c}.md`
+- [x] 0.3 Outer tier preserved: `docs/process/devex-audit/{README,rubric,task-a,task-b,task-c}.md`
       frozen by `CHECKSUMS`; `.claude/commands/devex-audit.md`; mkdocs nav entries.
       Tests: `test_audit_protocol_is_frozen` and `test_command_routes_to_runbook` pass;
       `uv run mkdocs build -s` clean.
