@@ -245,9 +245,9 @@ def main(argv: Sequence[str]) -> int:
     loop until told to stop.
 
     Spec: "Startup SHALL fail with the missing variable's name if any value is absent"
-    (`Config.from_env()` raises `MissingConfigVariableError` naming it — this function lets that
-    exception surface as a nonzero exit, never catching and re-wrapping it, so the name reaches
-    the operator unaltered); "A registry mismatch halts startup" (`validate_registry` runs once
+    (`Config.from_env()` raises `ConfigError` naming every missing or invalid variable at once —
+    this function lets that exception surface as a nonzero exit, never catching and re-wrapping
+    it, so the names reach the operator unaltered); "A registry mismatch halts startup" (`validate_registry` runs once
     here, before the first `consume_once` call, never per-event, and `RegistryMismatchError`
     surfaces the same way). Both checks run before any connection is opened, so a misconfigured
     deploy fails on its configuration rather than on a transport.
