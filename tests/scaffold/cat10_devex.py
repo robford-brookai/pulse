@@ -224,7 +224,6 @@ CHANGE_TARGETS = (
 )
 
 
-@open_finding
 def test_change_taking_targets_require_change():
     missing = [t for t in CHANGE_TARGETS if "CHANGE" not in TARGETS[t].get("requires", {}).get("vars", [])]
     assert missing == [], missing
