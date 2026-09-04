@@ -8,9 +8,11 @@ CONTEXT
 - Rubric: docs/process/devex-audit/rubric.md, applied as written including the internal-repo
   interpretation. 10 means the best-practice bar the rubric describes, adapted to an internal
   platform repo; it does not mean "no visible defects", which is a 7 to 8.
-- Blindness: do NOT read tests/scaffold/cat10_devex.py, scripts/devex/, .planning/devex/, or any
-  prior scorecard or QA report. You score this audit's evidence only. The boomerang comparison
-  is Task C's job.
+- Blindness: do NOT read any prior scorecard or QA report, nor the per-run check output
+  (.planning/devex/*-check.json). You score this audit's evidence only; the boomerang comparison
+  is Task C's job. For dimension 8 (DX measurement) you MAY open tests/scaffold/cat10_devex.py,
+  scripts/devex/, and .planning/devex/loop.jsonl to verify Task A's claims about the repo's own
+  measurement; do not read the prior audit's scores inside the ledger rows.
 - Writing: plain, no em-dashes, no emojis.
 
 INPUT
