@@ -66,7 +66,6 @@ def test_connector_scaffold_command_exists():
     assert (ROOT / "templates/connector").is_dir()
 
 
-@open_finding
 def test_connector_authoring_guide_exists_and_is_in_nav():
     guide = DOCS / "connectors/authoring.md"
     assert guide.is_file()
