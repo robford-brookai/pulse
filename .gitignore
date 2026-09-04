@@ -240,3 +240,6 @@ handoffs/**
 # HANDOFF.md (per-worktree, not committed; templates/HANDOFF.md stays tracked)
 /HANDOFF.md
 .orca
+
+# DevEx inner-tier run output; the ledger (loop.jsonl) is the record
+.planning/devex/*-check.json
