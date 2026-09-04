@@ -141,6 +141,13 @@ declaration is idempotent on the fixture row, so a second full walk stops at sta
 `--from-stage=<name>` through: `task stage:e2e:live -- --no-preflight --from-stage=window_agreement`
 runs stages 5 and 6 against the committed events. The receipt lists only the stages that ran.
 
+To run the whole walk again live, mint a fresh patient instead: `task stage:e2e:live --
+--run-id=<id>` (letters, digits, hyphens, up to 32). Every fixture occurrence of the patient key
+is suffixed `-<id>` at load time, the checksummed fixture files are untouched, the walk seeds the
+fresh patient's board card on dev Twenty itself, and the preflight's card check becomes a
+board-reachability check for that run. Each run id is walked once; pick a new one each time,
+for example the date and hour.
+
 ## Reading the output
 
 Every stage prints its own name before running and `ok: <n> assertion(s), subjects=[...]` after —

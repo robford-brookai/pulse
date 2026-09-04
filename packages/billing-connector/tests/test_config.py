@@ -16,7 +16,7 @@ from billing_connector.config import (
     STALE_AFTER_ENV_VAR,
     TOKEN_ENV_VAR,
     Config,
-    MissingConfigVariableError,
+    ConfigError,
     RegistryUnavailableError,
 )
 
@@ -56,25 +56,48 @@ class TestFromEnvRoundTrip:
         assert config.stale_after.total_seconds() == 3600
 
     @pytest.mark.parametrize("missing_var", _REQUIRED_ENV_VARS)
-    def test_each_missing_variable_names_itself(self, missing_var: str) -> None:
+    def test_one_missing_variable_names_itself(self, missing_var: str) -> None:
         env = {name: value for name, value in COMPLETE_ENV.items() if name != missing_var}
 
-        with pytest.raises(MissingConfigVariableError) as exc_info:
+        with pytest.raises(ConfigError) as exc_info:
             Config.from_env(env)
 
-        assert exc_info.value.name == missing_var
+        assert exc_info.value.problems == (missing_var,)
         assert missing_var in str(exc_info.value)
+
+    def test_all_missing_variables_are_named_in_one_error(self) -> None:
+        with pytest.raises(ConfigError) as exc_info:
+            Config.from_env({})
+
+        assert exc_info.value.problems == _REQUIRED_ENV_VARS
+        message = str(exc_info.value)
+        for name in _REQUIRED_ENV_VARS:
+            assert name in message
 
     def test_no_configured_value_reaches_the_missing_variable_error(self) -> None:
         env = {name: value for name, value in COMPLETE_ENV.items() if name != QUEUE_URL_ENV_VAR}
 
-        with pytest.raises(MissingConfigVariableError) as exc_info:
+        with pytest.raises(ConfigError) as exc_info:
             Config.from_env(env)
 
         message = str(exc_info.value)
         for name, value in COMPLETE_ENV.items():
             if name != QUEUE_URL_ENV_VAR:
                 assert value not in message
+
+    def test_invalid_stale_after_names_itself_alongside_an_unrelated_missing_variable(self) -> None:
+        env = {name: value for name, value in COMPLETE_ENV.items() if name != LEDGER_BASE_URL_ENV_VAR} | {
+            STALE_AFTER_ENV_VAR: "banana"
+        }
+
+        with pytest.raises(ConfigError) as exc_info:
+            Config.from_env(env)
+
+        assert exc_info.value.problems == (LEDGER_BASE_URL_ENV_VAR, STALE_AFTER_ENV_VAR)
+        message = str(exc_info.value)
+        assert LEDGER_BASE_URL_ENV_VAR in message
+        assert STALE_AFTER_ENV_VAR in message
+        assert "banana" in message
 
     def test_from_env_defaults_to_the_real_process_environment(self, monkeypatch: pytest.MonkeyPatch) -> None:
         for name, value in COMPLETE_ENV.items():
