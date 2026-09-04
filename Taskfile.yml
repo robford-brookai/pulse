@@ -177,6 +177,9 @@ tasks:
     desc: Run tests including the slow scaffold gates
     cmds:
       - uv run pytest {{.TESTS}} -m "slow or not slow" {{.COV_PATHS}} --cov-report=term-missing
+      - bash tests/scaffold/cat2_toolchain.sh
+      - bash tests/scaffold/cat4_command_contract.sh
+      - bash tests/scaffold/cat7_gates_hooks.sh
 
   test:integration:
     desc: Run Docker-backed integration tests (LocalStack via testcontainers), e.g. the ledger relay smoke (4.5)

@@ -41,4 +41,3 @@ found) and SHALL be safe to rerun. A rebuild SHALL never delete rows outside its
 #### Scenario: Scope is honored
 - **WHEN** the rebuild runs for one scope while rows exist for another
 - **THEN** rows outside the named scope are untouched
-

@@ -81,4 +81,3 @@ credential value SHALL appear in any log, receipt, or error message.
 - **WHEN** its runtime configuration is inspected
 - **THEN** it carries no ledger DSN — its only pulse-facing surfaces are the command API and
   its own queue
-

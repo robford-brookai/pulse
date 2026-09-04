@@ -19,7 +19,7 @@ regenerate it with `shasum -a 256 <file>` and diff.
 | File | sha256 |
 |---|---|
 | `overlay.yaml` | `235a3a25a8fc4df356783796f6944d3bb2575e92785d5c35fe1762b46a67f337` |
-| `referral_variants.json` | `2779386fdac159cd05cece6104377aedb61b97af0ce8559754f1421ed92a17c2` |
+| `referral_variants.json` | `b4349d9ff7d5e51f5b7ded5247d1187a7ddb82fe5a8eda112ce45024e6b2e02f` |
 | `consent_export_row.json` | `4f7c4a703abf4c9878ccb1dbaf4f6f7bfa9bdf085166154e717c689060b5e3e2` |
 | `verdict_mart_row.json` | `b1e97519c18258802207f2bce0d60e0713bfed9c9a93d05ffbb1ccbceb9f933b` |
 

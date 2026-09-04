@@ -49,4 +49,3 @@ but SHALL NOT gate step resolution.
 - **WHEN** an agent elsewhere computes the step
 - **THEN** the change resolves to archive, and worktree deletion is flagged as H7 hygiene on the
   machine that owns them
-

@@ -6,7 +6,10 @@
       "description": "Nothing in the population matches this referral yet: unknown identifier, no composite candidates, so identity resolution mints brook-fx-demo5-episode-0001.",
       "referral": {
         "identifiers": [
-          {"system": "PULSE-DEMO5", "value": "SYN-DEMO5-0001"}
+          {
+            "system": "PULSE-DEMO5",
+            "value": "SYN-DEMO5-0001"
+          }
         ],
         "demographics": {
           "first_name": "Jamie",
@@ -24,7 +27,10 @@
       "description": "A second referral for the same patient carries the identifier the mint minted against, so it short-circuits straight to that person.",
       "referral": {
         "identifiers": [
-          {"system": "PULSE-DEMO5", "value": "SYN-DEMO5-0001"}
+          {
+            "system": "PULSE-DEMO5",
+            "value": "SYN-DEMO5-0001"
+          }
         ],
         "demographics": {
           "first_name": "Jamie",
@@ -37,7 +43,10 @@
         {
           "person_id": "brook-fx-demo5-episode-0001",
           "identifiers": [
-            {"system": "PULSE-DEMO5", "value": "SYN-DEMO5-0001"}
+            {
+              "system": "PULSE-DEMO5",
+              "value": "SYN-DEMO5-0001"
+            }
           ],
           "demographics": {
             "first_name": "Jamie",
@@ -53,7 +62,7 @@
     },
     {
       "case": "quarantine",
-      "description": "A third referral for the same demographics carries no identifier and the population now holds two demographic-alike candidates — the patient's own resolved person and an unrelated decoy — so it quarantines rather than guessing.",
+      "description": "A third referral for the same demographics carries no identifier and the population now holds two demographic-alike candidates \u2014 the patient's own resolved person and an unrelated decoy \u2014 so it quarantines rather than guessing.",
       "referral": {
         "identifiers": [],
         "demographics": {
@@ -67,7 +76,10 @@
         {
           "person_id": "brook-fx-demo5-episode-0001",
           "identifiers": [
-            {"system": "PULSE-DEMO5", "value": "SYN-DEMO5-0001"}
+            {
+              "system": "PULSE-DEMO5",
+              "value": "SYN-DEMO5-0001"
+            }
           ],
           "demographics": {
             "first_name": "Jamie",
@@ -79,7 +91,10 @@
         {
           "person_id": "brook-fx-demo5-episode-0001-decoy",
           "identifiers": [
-            {"system": "MRN-OTHER", "value": "SYN-DEMO5-DECOY-0002"}
+            {
+              "system": "MRN-OTHER",
+              "value": "SYN-DEMO5-DECOY-0002"
+            }
           ],
           "demographics": {
             "first_name": "Jamie",
