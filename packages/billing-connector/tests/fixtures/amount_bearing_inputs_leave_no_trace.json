@@ -20,7 +20,9 @@
     "committed": 1,
     "replayed": 0,
     "rejected": 0,
-    "forbidden_fields": ["billed_amount_cents"],
+    "forbidden_fields": [
+      "billed_amount_cents"
+    ],
     "payload_leaks_forbidden_fields": false,
     "receipt_leaks_forbidden_fields": false,
     "log_leaks_forbidden_fields": false

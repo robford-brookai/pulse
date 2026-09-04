@@ -91,4 +91,3 @@ smoke-parse test SHALL keep it importable and its argument parser valid under th
 #### Scenario: Check passes without a stack
 - **WHEN** the check gate runs on a machine with no local stack
 - **THEN** the smoke-parse test passes and no demo stage executes
-

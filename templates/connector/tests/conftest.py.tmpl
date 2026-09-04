@@ -1,0 +1,16 @@
+"""Socket-blocked test posture: no live network in any {{DIST}} test.
+
+The `--disable-socket` flag only guards invocations that remember to pass it; this hook blocks
+sockets for every run that collects this package, including the combined `task test` run from the
+repo root. Same pattern as billing-connector, verdict-relay, schedules, and consent-ingress.
+
+Do not weaken this to make a test pass. A connector test that needs a socket needs a fake instead.
+"""
+
+from __future__ import annotations
+
+from pytest_socket import disable_socket
+
+
+def pytest_runtest_setup() -> None:
+    disable_socket()

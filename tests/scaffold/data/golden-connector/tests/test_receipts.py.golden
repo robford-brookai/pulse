@@ -1,0 +1,35 @@
+"""The receipt line's shape is the one thing this scaffold already promises.
+
+Every run of example-connector emits one line matching this format, byte for byte apart from the counts.
+Extend this test as `Receipt` grows a field; never loosen it.
+"""
+
+from __future__ import annotations
+
+from dataclasses import replace
+
+from example_connector.receipts import Receipt
+
+
+def test_empty_receipt_line_is_all_zeros() -> None:
+    expected = "service=example-connector committed=0 replayed=0 rejected=0 handled=0 deferred=0"
+
+    assert Receipt().format_line() == expected
+
+
+def test_counts_appear_in_the_line() -> None:
+    expected = "service=example-connector committed=2 replayed=1 rejected=0 handled=3 deferred=4"
+
+    receipt = Receipt(committed=2, replayed=1, rejected=0, handled=3, deferred=4)
+
+    assert receipt.format_line() == expected
+
+
+def test_a_tally_step_leaves_the_previous_receipt_alone() -> None:
+    """The counts accumulate by replacement, so `service.py` can hold one tally per run."""
+    original = Receipt(handled=1)
+
+    later = replace(original, handled=original.handled + 1, committed=1)
+
+    assert original.format_line().endswith("committed=0 replayed=0 rejected=0 handled=1 deferred=0")
+    assert later.format_line().endswith("committed=1 replayed=0 rejected=0 handled=2 deferred=0")

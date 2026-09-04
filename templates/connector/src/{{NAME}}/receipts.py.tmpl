@@ -1,0 +1,37 @@
+"""The connector's own counted receipt — the kit's three-count core, plus this connector's own.
+
+`Receipt` extends `pulse_core.connector.declare.DeclareCounts` (`committed`, `replayed`,
+`rejected`) with `handled` and `deferred`: every event this connector acted on, and every event it
+read and deliberately did nothing with. Add your own counts here as fields with a `0` default;
+`format_line` and `tests/test_receipts.py` are the golden that keeps the shape stable.
+
+Every field is a count. Nothing here carries a subject key, a value, or anything derived from
+patient data — a receipt line is safe to log, and stays that way only if it holds counts alone.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from pulse_core.connector.declare import DeclareCounts
+
+#: The `service=` label every receipt line carries. Matches the distribution name so a log search
+#: for the package finds its receipts.
+SERVICE_NAME = "{{DIST}}"
+
+
+@dataclass(frozen=True)
+class Receipt(DeclareCounts):
+    """One pass's full counted receipt."""
+
+    handled: int = 0
+    deferred: int = 0
+
+    def format_line(self) -> str:
+        """The single machine-parsable receipt line: space-separated `key=value` pairs, the kit's
+        counts first in `DeclareCounts` field order, then this connector's own.
+        """
+        return (
+            f"service={SERVICE_NAME} committed={self.committed} replayed={self.replayed} "
+            f"rejected={self.rejected} handled={self.handled} deferred={self.deferred}"
+        )

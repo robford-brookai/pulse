@@ -1,0 +1,23 @@
+# example-connector
+
+A PULSE connector scaffolded from `templates/connector/` by
+`uv run python scripts/connector_new.py --name example-connector`.
+
+## What is here
+
+| Path | What to do with it |
+| --- | --- |
+| `src/example_connector/config.py` | Add the variables this connector reads. `from_env` already collects every problem into one error. |
+| `src/example_connector/service.py` | Replace `handle_event` with what this connector actually does per event. |
+| `src/example_connector/receipts.py` | Add this connector's own counts alongside the kit's three. |
+| `tests/conftest.py` | Do not weaken it. Sockets are blocked for every run that collects this package. |
+| `tests/test_receipts.py` | The receipt-line golden. Extend it as `Receipt` grows. |
+
+## Next steps
+
+1. Register the package at the sites `scripts/connector_new.py` printed — root `pyproject.toml`
+   workspace members, sources and test lint exemption; `Taskfile.yml` `LINT_PATHS`,
+   `TYPED_PATHS`, `TESTED_PATHS`, `COV_PATHS`, and the image and deploy stanzas.
+2. `uv sync --all-packages`
+3. `uv run pytest packages/example-connector/tests`
+4. Read `docs/connectors/authoring.md` for what to build, in what order, and who to ask.
