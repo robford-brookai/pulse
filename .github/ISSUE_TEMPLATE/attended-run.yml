@@ -1,0 +1,73 @@
+name: Attended Run
+description: Track a production or system operation that requires human presence
+title: "Attended Run: "
+labels: ["attended-run"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        An attended run is a task that requires human presence to execute safely. This template helps track the runbook, approvals, and execution details.
+  - type: input
+    id: operation
+    attributes:
+      label: Operation
+      description: Brief description of what will be run
+      placeholder: "e.g., Genesis cutover, data backfill"
+    validations:
+      required: true
+  - type: textarea
+    id: runbook_pr
+    attributes:
+      label: Runbook PR
+      description: Link to the PR containing the runbook
+      placeholder: "https://github.com/.../pull/..."
+    validations:
+      required: true
+  - type: textarea
+    id: prerequisites
+    attributes:
+      label: Prerequisites
+      description: What must be true before starting
+      placeholder: "- Approval received\n- Backups verified\n- Team on-call assigned"
+    validations:
+      required: true
+  - type: input
+    id: target_env
+    attributes:
+      label: Target Environment
+      description: Which environment will be affected (prod, staging, etc.)
+      placeholder: "prod"
+    validations:
+      required: true
+  - type: input
+    id: operator
+    attributes:
+      label: Operator
+      description: GitHub handle of the person executing this
+      placeholder: "@username"
+    validations:
+      required: true
+  - type: input
+    id: scheduled_time
+    attributes:
+      label: Scheduled Time
+      description: When this will be executed
+      placeholder: "2026-09-04 14:00 UTC"
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification Steps
+      description: How to confirm success
+      placeholder: "- Check metric X in dashboard Y\n- Verify data matches baseline"
+    validations:
+      required: true
+  - type: textarea
+    id: rollback_plan
+    attributes:
+      label: Rollback Plan
+      description: What to do if something goes wrong
+      placeholder: "Revert commit X or run rollback script Y"
+    validations:
+      required: true
