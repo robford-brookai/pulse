@@ -27,6 +27,8 @@ nav:
       - Billing-state: runbooks/billing-state.md
       - Warehouse-sync-revival: runbooks/warehouse-sync-revival.md
       - Billing-connector: runbooks/billing-connector.md
+  - Connectors:
+      - Authoring: connectors/authoring.md
   - Process:
       - DevEx audit runbook: process/devex-audit/README.md
       - DevEx audit rubric: process/devex-audit/rubric.md

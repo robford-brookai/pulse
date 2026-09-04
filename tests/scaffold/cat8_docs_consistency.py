@@ -602,3 +602,76 @@ def test_claude_md_id_convention_names_the_command_not_the_sole_directory() -> N
     assert "the change named in the command" in CLAUDE, (
         "CLAUDE.md must define <id> as the change named in the command (design.md decision 9)"
     )
+
+
+# --- connector authoring guide (devex-eight 1.2) -----------------------------------------------
+
+CONNECTOR_GUIDE_PATH = "docs/connectors/authoring.md"
+
+
+def _connector_guide() -> str:
+    return (ROOT / CONNECTOR_GUIDE_PATH).read_text()
+
+
+def test_connector_authoring_guide_task_targets_are_defined() -> None:
+    """devex-eight 1.2: the guide is the first thing a connector author runs commands from, so a
+    target it names and the Taskfile does not is a dead first step. Same parse as
+    `test_documented_task_targets_are_defined` — Taskfile.yml read as YAML, never `task --list-all`,
+    because CI has no go-task."""
+    referenced = set(re.findall(r"`task ([a-z][a-z0-9:_-]*)", _connector_guide()))
+    assert referenced, f"no `task <target>` references found in {CONNECTOR_GUIDE_PATH} — check the regex"
+    assert not (referenced - DEFINED_TARGETS), (
+        f"{CONNECTOR_GUIDE_PATH} references undefined targets: {sorted(referenced - DEFINED_TARGETS)}"
+    )
+
+
+def test_connector_authoring_guide_uses_go_task_var_syntax() -> None:
+    """Same defect cat8 locks for README/AGENTS/WORKFLOW: go-task exits 2 on flag-style args."""
+    assert not re.search(r"task [a-z:_-]+ --[a-z]", _connector_guide()), (
+        f"{CONNECTOR_GUIDE_PATH} passes a flag to a task target; go-task needs `task <target> VAR=<value>`"
+    )
+
+
+def test_connector_authoring_guide_speaks_the_shipped_kit_vocabulary() -> None:
+    """The guide must be written against `pulse_core.connector`'s actual exported surface, not an
+    invented one — every name it teaches resolves in the kit's `__all__`."""
+    import pulse_core.connector as kit
+
+    guide = _connector_guide()
+    for name in ("RowSource", "CursorStore", "consume", "submit_with_retry"):
+        assert name in kit.__all__, f"{name} is no longer exported by the kit — the guide has drifted"
+        assert name in guide, f"{CONNECTOR_GUIDE_PATH} must teach the kit's {name}"
+
+
+def test_connector_authoring_guide_names_every_registration_site() -> None:
+    """devex-eight 1.2: a new package that misses one of the eight registration sites is lint-,
+    type-, test-, or coverage-invisible, which is how the audit found the gap. Until 1.4 automates
+    them the guide is the only list, so it must name all eight."""
+    guide = _connector_guide()
+    for site in (
+        "tool.uv.workspace",
+        "tool.uv.sources",
+        "LINT_PATHS",
+        "TYPED_PATHS",
+        "TESTED_PATHS",
+        "COV_PATHS",
+        ":image",
+        ":deploy",
+    ):
+        assert site in guide, f"{CONNECTOR_GUIDE_PATH} must name the {site} registration site"
+
+
+def test_connector_authoring_guide_cites_the_kit_spec_and_the_reference_connector() -> None:
+    guide = _connector_guide()
+    assert "openspec/specs/connector-kit/spec.md" in guide, "the guide must cite the connector-kit spec"
+    assert "packages/billing-connector" in guide, "the guide must point at billing-connector as the reference"
+
+
+def test_connector_authoring_guide_states_the_offline_test_posture() -> None:
+    """No live network in tests: the guide's scaffold instructions must carry the socket block, or
+    the first connector someone writes reaches the internet from `task check`."""
+    guide = _connector_guide()
+    assert "pytest_socket" in guide or "pytest-socket" in guide, (
+        "the guide must tell the author how the no-live-network posture is enforced"
+    )
+    assert "disable_socket" in guide, "the guide must show the socket-blocking conftest hook"
