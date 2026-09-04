@@ -1,1 +1,5 @@
-::: pkg_pulse.foo
+# Modules
+
+## Connector kit
+
+::: pulse_core.connector

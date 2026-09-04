@@ -1,17 +1,21 @@
-site_name: repo-ade
-repo_url: https://github.com/robford-brookai/repo-ade
-site_url: https://robford-brookai.github.io/repo-ade
-site_description: Repository agent development environment scaffold
+site_name: PULSE
+repo_url: https://github.com/robford-brookai/pulse
+site_url: https://robford-brookai.github.io/pulse
+site_description: Patient unified ledger of state and events
 site_author: Rob Ford
 edit_uri: edit/main/docs/
-repo_name: robford-brookai/repo-ade
+repo_name: robford-brookai/pulse
 copyright: Maintained by <a href="https://robford-brookai.com">robford-brookai</a>.
 
 nav:
   - Home: index.md
-  - Architecture: architecture.html
+  - Architecture:
+      - Overview: architecture.html
+      - Design handoff bundle: architecture/README.md
+      - Design system: architecture/project/_ds/brook-ai-design-system-b2b-marketing-e884144f-7e37-4fd5-be88-79aad08b6dba/README.md
   - Modules: modules.md
   - Runbooks:
+      - Demo 1 — ledger core: runbooks/demo1-ledger-core.md
       - Month-open: runbooks/month-open.md
       - Consent-sweep: runbooks/consent-sweep.md
       - Identity-quarantine: runbooks/identity-quarantine.md
@@ -27,6 +31,7 @@ nav:
       - Billing-state: runbooks/billing-state.md
       - Warehouse-sync-revival: runbooks/warehouse-sync-revival.md
       - Billing-connector: runbooks/billing-connector.md
+      - Verdict-relay: runbooks/verdict-relay.md
   - Connectors:
       - Authoring: connectors/authoring.md
   - Process:
@@ -35,17 +40,30 @@ nav:
       - DevEx audit task A (evidence): process/devex-audit/task-a.md
       - DevEx audit task B (scoring): process/devex-audit/task-b.md
       - DevEx audit task C (QA): process/devex-audit/task-c.md
+      - Dispatch template: process/dispatch-template.md
+      - Env vars retrieval (verdict-relay dev): process/env-vars-retreival.md
+      - Workflow drift review: process/workflow-drift-review.md
   - Contracts:
       - Consumes: contracts/consumes.md
       - Publishes: contracts/publishes.md
       - Producer-registry: contracts/producer-registry.md
       - Billing-boundary: contracts/billing-boundary.md
+  - Reference:
+      - CI and scaffold lessons: ci-lessons.md
+      - MCP servers: mcp-servers.md
+      - ADRs:
+          - ADR-0000 template: adr/ADR-0000-template.md
+          - ADR-0001 dependency strategy: adr/ADR-0001-dependency-strategy.md
+          - ADR-0002 OCEAN absorption and EventBridge transport: adr/ADR-0002-ocean-absorption-and-eventbridge-transport.md
+          - ADR-0003 ledger core write path: adr/ADR-0003-ledger-core-write-path.md
+          - ADR-0004 runtime readiness decisions: adr/ADR-0004-runtime-readiness-decisions.md
+          - ADR-0005 Customer.io consent on the governed path: adr/ADR-0005-customerio-consent-on-the-governed-path.md
 plugins:
   - search
   - mkdocstrings:
       handlers:
         python:
-          paths: ["src/pkg_pulse"]
+          paths: ["src/pkg_pulse", "packages/pulse-core/src"]
 theme:
   name: material
   feature:
@@ -71,9 +89,9 @@ theme:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/robford-brookai/repo-ade
+      link: https://github.com/robford-brookai/pulse
     - icon: fontawesome/brands/python
-      link: https://pypi.org/project/repo-ade
+      link: https://pypi.org/project/pulse
 
 markdown_extensions:
   - toc:
