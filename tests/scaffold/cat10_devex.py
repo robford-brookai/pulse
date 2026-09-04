@@ -142,7 +142,6 @@ def test_install_installs_pre_commit_hooks():
 # --- Fix 4 (S): bootstrap.sh refuses to run in a generated repo ------------------------------
 
 
-@open_finding
 def test_bootstrap_refuses_generated_repo_and_points_at_task_install():
     r = subprocess.run(  # noqa: S603
         ["bash", str(ROOT / "bootstrap.sh")],  # noqa: S607
