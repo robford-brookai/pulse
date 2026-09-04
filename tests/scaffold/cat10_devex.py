@@ -85,7 +85,6 @@ def test_connector_kit_all_names_resolve():
 # --- Fix 8 (M): one canonical connector spec -------------------------------------------------
 
 
-@open_finding
 def test_connector_spec_has_one_canonical_copy():
     design = ROOT / "design/platform/pulse-standard-connector-spec.md"
     spec = ROOT / "openspec/specs/connectors/pulse-standard-connector-spec.md"
