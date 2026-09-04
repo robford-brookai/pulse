@@ -1,7 +1,7 @@
 """Gate 9: End-to-End Golden Workflow.
 
-The documented daily loop — dispatch, then collect — run against committed fixtures and compared
-to known-good output.
+The documented daily loop — dispatch, then collect — plus the connector scaffold render, run
+against committed fixtures and compared to known-good output.
 
 Usage: uv run pytest tests/scaffold/cat9_golden_workflow.py -v
        uv run pytest tests/scaffold/cat9_golden_workflow.py -m slow -v   # fresh-clone smoke
@@ -27,9 +27,12 @@ from ._scaffold import DATA, ROOT, have, requires_task
 
 DISPATCH_CLI = ROOT / "scripts/dispatch_tasks.py"
 COLLECT_CLI = ROOT / "scripts/collect_handoffs.py"
+CONNECTOR_CLI = ROOT / "scripts/connector_new.py"
 FIXTURE_TASKS = DATA / "fixture-change/tasks.md.fixture"
 GOLDEN_WORK_ORDERS = DATA / "golden-work-orders"
 GOLDEN_SUMMARY = DATA / "golden-collect/SUMMARY.golden"
+GOLDEN_CONNECTOR = DATA / "golden-connector"
+GOLDEN_CONNECTOR_NAME = "example-connector"
 CHANGE = "fixture-change"
 REGEN = bool(os.environ.get("REGEN"))
 
@@ -145,6 +148,234 @@ def test_collect_skips_worktrees_without_a_handoff(tmp_path: Path) -> None:
     summary = run_collect(tmp_path, {"task-001": "# HANDOFF\n", "task-002": None})
     collected = sorted(p.name for p in summary.parent.glob("*.md") if p.name != "SUMMARY.md")
     assert collected == ["task-001.md"]
+
+
+# --- golden connector scaffold ------------------------------------------------------------------
+
+
+def render_connector(dest_parent: Path, name: str = GOLDEN_CONNECTOR_NAME) -> Path:
+    """Render templates/connector/ into a temp directory and return the package root."""
+    dest = dest_parent / name
+    r = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            str(CONNECTOR_CLI),
+            "--name",
+            name,
+            "--dest",
+            str(dest),
+            "--root",
+            str(ROOT),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert r.returncode == 0, r.stderr
+    return dest
+
+
+def rendered_paths(package: Path) -> list[str]:
+    """Every rendered file, as sorted repo-relative strings — sorted because it reaches asserts."""
+    return sorted(str(p.relative_to(package)) for p in package.rglob("*") if p.is_file())
+
+
+def test_connector_render_matches_golden(tmp_path: Path) -> None:
+    package = render_connector(tmp_path)
+    emitted = rendered_paths(package)
+    if REGEN:
+        shutil.rmtree(GOLDEN_CONNECTOR, ignore_errors=True)
+        for relative in emitted:
+            golden = GOLDEN_CONNECTOR / f"{relative}.golden"
+            golden.parent.mkdir(parents=True, exist_ok=True)
+            golden.write_text((package / relative).read_text())
+        pytest.skip(f"regenerated {len(emitted)} goldens in {GOLDEN_CONNECTOR}")
+
+    goldens = sorted(
+        str(p.relative_to(GOLDEN_CONNECTOR)).removesuffix(".golden") for p in GOLDEN_CONNECTOR.rglob("*.golden")
+    )
+    assert goldens, f"no goldens committed; run REGEN=1 pytest {Path(__file__).name}"
+    assert emitted == goldens
+    for relative in emitted:
+        actual = (package / relative).read_text()
+        expected = (GOLDEN_CONNECTOR / f"{relative}.golden").read_text()
+        assert actual == expected, f"{relative} drifted from its golden"
+
+
+def test_connector_render_is_deterministic(tmp_path_factory: pytest.TempPathFactory) -> None:
+    a = render_connector(tmp_path_factory.mktemp("connector_a"))
+    b = render_connector(tmp_path_factory.mktemp("connector_b"))
+    assert rendered_paths(a) == rendered_paths(b)
+    assert [(a / p).read_text() for p in rendered_paths(a)] == [(b / p).read_text() for p in rendered_paths(b)]
+
+
+def test_rendered_connector_package_tests_pass(tmp_path: Path) -> None:
+    """The scaffold ships a green test, not a stub the developer has to repair first.
+
+    Run from the rendered package so pytest reads *its* pyproject.toml, not the repo root's:
+    the point is that the package stands on its own.
+    """
+    package = render_connector(tmp_path)
+    env = {
+        **os.environ,
+        "PYTHONPATH": str(package / "src"),
+        "PYTHONDONTWRITEBYTECODE": "1",
+    }
+    # Built as a variable rather than inline: the two ruff versions in play (the venv's and the
+    # one .pre-commit-config.yaml pins) disagree about whether an inline literal argv triggers
+    # S603, and one of them then strips the noqa the other needs.
+    command = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"]
+    r = subprocess.run(  # noqa: S603
+        command,
+        cwd=package,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_rendered_connector_leaves_no_unsubstituted_tokens(tmp_path: Path) -> None:
+    package = render_connector(tmp_path)
+    leftover = [p for p in rendered_paths(package) if "{{" in (package / p).read_text()]
+    assert leftover == [], f"template tokens survived the render in {leftover}"
+
+
+def test_connector_new_rejects_an_unusable_name(tmp_path: Path) -> None:
+    r = subprocess.run(  # noqa: S603
+        [sys.executable, str(CONNECTOR_CLI), "--name", "Claims Connector", "--dest", str(tmp_path / "x")],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert r.returncode == 2
+    assert "claims-connector" in r.stderr, r.stderr
+
+
+def test_connector_new_refuses_an_occupied_destination(tmp_path: Path) -> None:
+    package = render_connector(tmp_path)
+    r = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            str(CONNECTOR_CLI),
+            "--name",
+            GOLDEN_CONNECTOR_NAME,
+            "--dest",
+            str(package),
+            "--root",
+            str(ROOT),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert r.returncode == 2
+    assert "already exists" in r.stderr, r.stderr
+
+
+# --- the registration diff ----------------------------------------------------------------------
+
+#: The Taskfile path variables the diff must extend, and what each must gain.
+TASKFILE_VARS = {
+    "LINT_PATHS": "packages/claims-connector",
+    "TYPED_PATHS": "packages/claims-connector/src",
+    "TESTED_PATHS": "packages/claims-connector/tests",
+    "COV_PATHS": "--cov=packages/claims-connector/src",
+}
+
+
+#: The files the registration diff edits. `task connector:new` (task 1.4) is what applies it.
+REGISTERED_FILES = ("pyproject.toml", "Taskfile.yml")
+
+
+def print_registrations(name: str) -> str:
+    """Run the script in report-only mode and return what it printed."""
+    r = subprocess.run(  # noqa: S603
+        [sys.executable, str(CONNECTOR_CLI), "--name", name, "--root", str(ROOT), "--print-registrations"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert r.returncode == 0, r.stderr
+    return r.stdout
+
+
+def added_lines(diff: str) -> list[str]:
+    return [line[1:] for line in diff.splitlines() if line.startswith("+") and not line.startswith("+++")]
+
+
+def test_registration_diff_names_every_site() -> None:
+    """A scaffolded package is useless until every site names it; the diff is that list."""
+    diff = print_registrations("claims-connector")
+
+    assert "--- a/pyproject.toml" in diff
+    assert "--- a/Taskfile.yml" in diff
+    added = added_lines(diff)
+
+    assert '    "packages/claims-connector",' in added
+    assert "claims-connector = { workspace = true }" in added
+    assert '"packages/claims-connector/tests/**" = ["S101"]' in added
+
+    for var, addition in TASKFILE_VARS.items():
+        line = next((a for a in added if a.startswith(f"  {var}:")), None)
+        assert line is not None, f"{var} is not in the diff"
+        assert line.endswith(f" {addition}"), line
+
+    assert "  # claims-connector:image:" in added
+    assert "  # claims-connector:deploy:" in added
+
+
+def test_registration_diff_applies_cleanly_and_is_idempotent(tmp_path: Path) -> None:
+    """The printed diff is a real patch, and a second run of the script has nothing left to say.
+
+    Both halves matter. A diff that does not apply is a diff a developer has to hand-translate,
+    which is the DX cost the scaffold exists to remove; a diff that reapplies would register the
+    same package twice.
+    """
+    for relative in REGISTERED_FILES:
+        (tmp_path / relative).write_text((ROOT / relative).read_text())
+    patch = tmp_path / "registrations.patch"
+    patch.write_text(print_registrations("claims-connector"))
+
+    applied = subprocess.run(  # noqa: S603
+        ["git", "apply", "-p1", str(patch)],  # noqa: S607
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert applied.returncode == 0, applied.stderr
+
+    rerun = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            str(CONNECTOR_CLI),
+            "--name",
+            "claims-connector",
+            "--root",
+            str(tmp_path),
+            "--print-registrations",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert rerun.returncode == 0, rerun.stderr
+    assert rerun.stdout == "", rerun.stdout
+
+
+def test_registration_diff_is_printed_but_not_applied(tmp_path: Path) -> None:
+    """1.3 renders and reports; `task connector:new` (1.4) is what edits the repo."""
+    before = {relative: (ROOT / relative).read_text() for relative in REGISTERED_FILES}
+    render_connector(tmp_path)
+    after = {relative: (ROOT / relative).read_text() for relative in before}
+    assert after == before
 
 
 # --- fresh-clone smoke ------------------------------------------------------------------------
