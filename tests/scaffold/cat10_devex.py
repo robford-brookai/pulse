@@ -239,14 +239,12 @@ def test_readme_states_prerequisites():
         assert tool.lower() in section.group(0).lower(), tool
 
 
-@open_finding
 def test_repo_names_an_owner_and_a_place_to_ask():
     assert (ROOT / ".github/CODEOWNERS").is_file() or (ROOT / "CODEOWNERS").is_file()
     text = (README + CONTRIBUTING).lower()
     assert re.search(r"slack|#[a-z][a-z0-9-]+|owner|ask ", text), "no channel or owner named"
 
 
-@open_finding
 def test_issue_and_pr_templates_exist():
     assert (ROOT / ".github/ISSUE_TEMPLATE").is_dir()
     assert (ROOT / ".github/PULL_REQUEST_TEMPLATE.md").is_file()
