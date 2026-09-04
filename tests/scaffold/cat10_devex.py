@@ -76,7 +76,6 @@ def test_connector_authoring_guide_exists_and_is_in_nav():
 # --- Fix 2 (S): the kit's advertised surface resolves ----------------------------------------
 
 
-@open_finding
 def test_connector_kit_all_names_resolve():
     import pulse_core.connector as kit
 

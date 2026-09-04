@@ -30,8 +30,15 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING
 
-from pulse_core.client import CommandResponse, ResponseClassification
+if TYPE_CHECKING:
+    # Deferred: `pulse_core.client` imports `pulse_core.connector.consume`, which — now that
+    # `pulse_core.connector.__init__` re-exports this module — would import back into a
+    # partially-initialized `pulse_core.client`. Annotations only need the names for type
+    # checking (`from __future__ import annotations` above defers their evaluation); the two
+    # call sites that touch `ResponseClassification` at runtime import it locally instead.
+    from pulse_core.client import CommandResponse, ResponseClassification
 
 Sleeper = Callable[[float], None]
 
@@ -81,6 +88,8 @@ def submit_with_retry(
     `max_attempts` transient answers have been spent — the caller's own submit callable is what
     talks to `PulseCoreClient`, so this loop never touches HTTP directly.
     """
+    from pulse_core.client import ResponseClassification
+
     if max_attempts < 1:
         msg = "max_attempts must be at least 1"
         raise ValueError(msg)
@@ -110,6 +119,8 @@ class DeclareCounts:
         `transient` is not a settled disposition (`submit_with_retry` never returns it) and
         raises rather than being silently folded into one of the three counts.
         """
+        from pulse_core.client import ResponseClassification
+
         if classification is ResponseClassification.COMMITTED:
             return replace(self, committed=self.committed + 1)
         if classification is ResponseClassification.REPLAYED:
