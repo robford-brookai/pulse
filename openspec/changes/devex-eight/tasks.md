@@ -73,7 +73,7 @@ task 3.1 batches the upstream PR.
       the rendered package's own test passes under pytest.
       `[model: opus | deps: 1.1 | lane: repo_change | wave: 1]`
 
-- [ ] 1.4 `task connector:new NAME=<x>` target that runs 1.3's script and performs the eight
+- [x] 1.4 `task connector:new NAME=<x>` target that runs 1.3's script and performs the eight
       registrations (`pyproject.toml` members and sources, `Taskfile.yml` `LINT_PATHS`,
       `TYPED_PATHS`, `TESTED_PATHS`, `COV_PATHS`, image and deploy stanzas as commented stubs).
       Tests: remove xfail from `test_connector_scaffold_command_exists`; a test that after a
