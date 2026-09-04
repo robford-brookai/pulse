@@ -2,9 +2,10 @@
 
 Extracted from the shipped integrations (consent-ingress, verdict-relay, twenty-projection),
 never invented: a primitive lands here only by refactoring a working copy out of a donor
-(connector-kit spec). Today the package holds the inbound read contract
-(`pulse_core.connector.rows`) and the outbound consume loop (`pulse_core.connector.consume`);
-the declare pipeline joins it as it is extracted.
+(connector-kit spec). The package holds the inbound read contract
+(`pulse_core.connector.rows`), the outbound consume loop (`pulse_core.connector.consume`), and
+the declare pipeline (`pulse_core.connector.declare`) — retry orchestration and the settled-
+outcome receipt every submission counts into.
 """
 
 from pulse_core.connector.consume import (
@@ -16,6 +17,14 @@ from pulse_core.connector.consume import (
     consume,
     consume_once,
     is_watermark_stale,
+)
+from pulse_core.connector.declare import (
+    DEFAULT_BASE_DELAY_SECONDS,
+    DEFAULT_MAX_ATTEMPTS,
+    DEFAULT_MAX_DELAY_SECONDS,
+    DeclareCounts,
+    TransientExhaustedError,
+    submit_with_retry,
 )
 from pulse_core.connector.rows import (
     DEFAULT_PAGE_SIZE,
@@ -40,6 +49,7 @@ __all__ = [
     "ConsumeReport",
     "ConsumerHandler",
     "CursorStore",
+    "DeclareCounts",
     "Deduper",
     "FixtureRowSource",
     "InMemoryDeduper",
@@ -48,6 +58,7 @@ __all__ = [
     "RowSource",
     "RowValidationError",
     "Sleeper",
+    "TransientExhaustedError",
     "ValidatedPage",
     "consume",
     "consume_once",
