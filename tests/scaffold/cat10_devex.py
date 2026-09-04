@@ -135,7 +135,6 @@ def test_billing_config_names_variable_on_invalid_value(monkeypatch):
 # --- Fix 1 (S): the documented install installs the documented hooks -------------------------
 
 
-@open_finding
 def test_install_installs_pre_commit_hooks():
     assert "pre-commit install" in _cmds("install"), CONTRIBUTING
 
