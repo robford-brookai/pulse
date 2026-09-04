@@ -1,5 +1,8 @@
 {
-  "exclude": ["**/services/**", "libs/**"],
+  "exclude": [
+    "**/services/**",
+    "libs/**"
+  ],
   "pythonVersion": "3.13",
   "typeCheckingMode": "off"
 }

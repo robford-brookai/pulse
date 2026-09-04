@@ -163,4 +163,3 @@ an all-zero receipt and exit 0, so a re-run is always safe **except** for the §
 | coverage rows fail commit (constraint) | billing-state migration not applied | §5: migrator DSN + `task ledger:migrate` |
 | base URL unreachable from laptop | by design (internal ClusterIP) | run from the Orca host (§4) |
 | stale pod IP after a deploy | pod recreated | re-retrieve from `getpods` (§4) |
-

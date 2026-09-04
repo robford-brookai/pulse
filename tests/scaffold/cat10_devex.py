@@ -179,7 +179,6 @@ def test_every_docs_page_is_in_nav():
 # --- Below the cut (S): shell gates run in an automated context ------------------------------
 
 
-@open_finding
 def test_test_all_runs_the_shell_gates():
     text = _cmds("test:all")
     for gate in ("cat2_toolchain.sh", "cat4_command_contract.sh", "cat7_gates_hooks.sh"):

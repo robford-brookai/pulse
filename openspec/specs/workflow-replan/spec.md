@@ -57,4 +57,3 @@ yet reflected in Linear sub-issues or work orders, before resolving to `execute`
 - **GIVEN** a replan PR merged and `linear:sync` has not run since
 - **WHEN** an agent computes the current step
 - **THEN** the resolution is sync_linear/dispatch for the delta, not a bare execute
-

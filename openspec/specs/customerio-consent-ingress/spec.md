@@ -118,4 +118,3 @@ consent state back to the Customer.io message that produced it.
 - **GIVEN** a credential registered as `PULSE_LEDGER_WRITER_TOKEN_CUSTOMER_IO`
 - **WHEN** the API resolves the writer id from that variable name
 - **THEN** the resolved id equals the ingress's declared writer id, `customer-io`, exactly
-
