@@ -124,10 +124,10 @@ markers = [
     "integration: needs Docker, excluded from the default run",
 ]
 addopts = '-m "not slow and not integration"'
-# The scaffold gates are named cat1_structure.py .. cat9_golden_workflow.py so the filename
+# The scaffold gates are named cat1_structure.py .. cat10_devex.py so the filename
 # states which gate it is. Without this they match no default pattern and are silently skipped
 # by `task test` and CI, while still passing when run by explicit path.
-python_files = ["test_*.py", "cat[0-9]_*.py"]
+python_files = ["test_*.py", "cat[0-9]*_*.py"]
 # Leaked OS resources fail the run. Both lines are load-bearing and neither works alone:
 # Python ignores ResourceWarning by default, so the first surfaces it at all; a warning raised
 # during garbage collection cannot propagate, so pytest re-reports it as an unraisable-exception
