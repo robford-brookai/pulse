@@ -1,12 +1,24 @@
 {
   "date": "2026-09-04",
-  "head": "c251238",
-  "open_findings": 17,
+  "head": "a45e510",
+  "open_findings": 14,
   "regressions": 0,
   "fixed_but_still_marked": 0,
   "protocol_frozen": true,
   "results": {
     "PASSED": [
+      {
+        "test": "test_install_installs_pre_commit_hooks",
+        "reason": ""
+      },
+      {
+        "test": "test_repo_names_an_owner_and_a_place_to_ask",
+        "reason": ""
+      },
+      {
+        "test": "test_issue_and_pr_templates_exist",
+        "reason": ""
+      },
       {
         "test": "test_devex_targets_exist",
         "reason": ""
@@ -55,10 +67,6 @@
         "reason": "open DevEx audit finding"
       },
       {
-        "test": "test_install_installs_pre_commit_hooks",
-        "reason": "open DevEx audit finding"
-      },
-      {
         "test": "test_bootstrap_refuses_generated_repo_and_points_at_task_install",
         "reason": "open DevEx audit finding"
       },
@@ -88,14 +96,6 @@
       },
       {
         "test": "test_readme_states_prerequisites",
-        "reason": "open DevEx audit finding"
-      },
-      {
-        "test": "test_repo_names_an_owner_and_a_place_to_ask",
-        "reason": "open DevEx audit finding"
-      },
-      {
-        "test": "test_issue_and_pr_templates_exist",
         "reason": "open DevEx audit finding"
       }
     ],
