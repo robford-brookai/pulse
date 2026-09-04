@@ -76,7 +76,6 @@ def test_connector_authoring_guide_exists_and_is_in_nav():
 # --- Fix 2 (S): the kit's advertised surface resolves ----------------------------------------
 
 
-@open_finding
 def test_connector_kit_all_names_resolve():
     import pulse_core.connector as kit
 
@@ -142,7 +141,6 @@ def test_install_installs_pre_commit_hooks():
 # --- Fix 4 (S): bootstrap.sh refuses to run in a generated repo ------------------------------
 
 
-@open_finding
 def test_bootstrap_refuses_generated_repo_and_points_at_task_install():
     r = subprocess.run(  # noqa: S603
         ["bash", str(ROOT / "bootstrap.sh")],  # noqa: S607
@@ -223,7 +221,6 @@ CHANGE_TARGETS = (
 )
 
 
-@open_finding
 def test_change_taking_targets_require_change():
     missing = [t for t in CHANGE_TARGETS if "CHANGE" not in TARGETS[t].get("requires", {}).get("vars", [])]
     assert missing == [], missing
@@ -240,14 +237,12 @@ def test_readme_states_prerequisites():
         assert tool.lower() in section.group(0).lower(), tool
 
 
-@open_finding
 def test_repo_names_an_owner_and_a_place_to_ask():
     assert (ROOT / ".github/CODEOWNERS").is_file() or (ROOT / "CODEOWNERS").is_file()
     text = (README + CONTRIBUTING).lower()
     assert re.search(r"slack|#[a-z][a-z0-9-]+|owner|ask ", text), "no channel or owner named"
 
 
-@open_finding
 def test_issue_and_pr_templates_exist():
     assert (ROOT / ".github/ISSUE_TEMPLATE").is_dir()
     assert (ROOT / ".github/PULL_REQUEST_TEMPLATE.md").is_file()
