@@ -147,6 +147,21 @@ def check_seeded_card(client: httpx.Client, base_url: str, token: str, subject_k
     )
 
 
+def check_board_reachable(client: httpx.Client, base_url: str, token: str, run_id: str) -> CheckResult:
+    """A `--run-id` walk seeds its own fresh patient's card, so the board only has to answer."""
+    try:
+        response = client.get(
+            f"{base_url.rstrip('/')}/rest/{BOARD_OBJECT_PLURAL}",
+            params={"limit": 1},
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=30.0,
+        )
+        response.raise_for_status()
+    except httpx.HTTPError as error:
+        return CheckResult("seeded-card", False, f"{TWENTY_URL_ENV} query failed: {type(error).__name__}")
+    return CheckResult("seeded-card", True, f"board reachable; the walk seeds the card for run id {run_id!r}")
+
+
 def missing_names(env: Mapping[str, str]) -> list[str]:
     return [
         name
@@ -161,6 +176,7 @@ def run_preflight(
     client: httpx.Client | None = None,
     fetch_head: Callable[[], str] | None = None,
     subject_key: str | None = None,
+    run_id: str | None = None,
 ) -> list[CheckResult]:
     """Run every check and return every result; the caller decides the exit code."""
     missing = missing_names(env)
@@ -169,10 +185,15 @@ def run_preflight(
     http = client or httpx.Client()
     key = subject_key if subject_key is not None else fixture_subject_key()
     head = fetch_head or (lambda: _postgres_head(env[DATABASE_URL_ENV]))
+    board_check = (
+        check_seeded_card(http, env[TWENTY_URL_ENV], env[TWENTY_TOKEN_ENV], key)
+        if run_id is None
+        else check_board_reachable(http, env[TWENTY_URL_ENV], env[TWENTY_TOKEN_ENV], run_id)
+    )
     results = [
         check_api_current(http, env[LEDGER_URL_ENV], env[REPLAY_TOKEN_ENV]),
         check_migration(head),
-        check_seeded_card(http, env[TWENTY_URL_ENV], env[TWENTY_TOKEN_ENV], key),
+        board_check,
     ]
     if client is None:
         http.close()
@@ -181,12 +202,18 @@ def run_preflight(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Demo 5 live preflight — image, schema head, seeded card.")
+    parser.add_argument(
+        "--run-id",
+        default=None,
+        metavar="ID",
+        help="the walk will run with this --run-id and seed its own card; check the board answers instead",
+    )
     return parser
 
 
 def main(argv: Sequence[str] | None = None, env: Mapping[str, str] | None = None) -> int:
-    build_parser().parse_args(argv)
-    results = run_preflight(env if env is not None else os.environ)
+    args = build_parser().parse_args(argv)
+    results = run_preflight(env if env is not None else os.environ, run_id=args.run_id)
     print("=== Demo 5 preflight ===")
     for result in results:
         print(f"{'ok  ' if result.ok else 'FAIL'} {result.name}: {result.message}")

@@ -264,6 +264,34 @@ task stage:e2e:live -- --no-preflight --from-stage=window_agreement
 `--from-stage` (PR #353) takes any stage name; stages 5 and 6 read committed state by subject
 key and need nothing from the earlier stages' in-process receipts.
 
+## 8. Watch it run, start to finish (added 2026-09-04)
+
+The purpose of 3.3 was for you to watch all six stages run live, and the 2026-09-02 session never
+got there: the run happened in the background across two invocations while the environment was
+being fixed. This is the procedure to sit and watch it, repeatable any day.
+
+1. Two terminals for the forwards, as in §0: `k port-forward svc/pulse-ledger-api 18000:8000`
+   and the relay pod plus `k port-forward pod/pg-relay 15432:5432` from §2 (re-create the pod if
+   it was deleted). Both stay open.
+2. In a third terminal, one command with a fresh run id:
+
+   ```bash
+   source scripts/verdict-env-vars.sh
+   export STAGE_E2E_DATABASE_URL="$(python3 -c "import os,urllib.parse as u; p=u.urlsplit(os.environ['DATABASE_URL']); print(u.urlunsplit((p.scheme, f'{p.username}:{p.password}@localhost:15432', p.path, p.query, p.fragment)))")"
+   task stage:e2e:live -- --run-id=$(date +%m%d%H%M)
+   ```
+
+3. Watch for: the preflight's three `ok` lines; `seeded the board card for fresh patient ...`;
+   six stage headers each ending `ok: <n> assertion(s)`; the receipt block;
+   `=== Demo 5: all stages passed ===`. Have the dev Twenty board open on Patient Programs
+   filtered to the run's patient id to see the card appear, move on the drag, vanish and return
+   on the rebuild drill.
+4. Before starting, check §5a: if `pulse-warehouse-sync` has been idle, restart it first, or
+   stage 5 fails on an empty warehouse window (DNA-1305).
+
+`--run-id` suffixes the fixture patient key at load time, so the committed fixture patient is
+untouched and each run id can be walked once.
+
 ## 7. Record the receipt
 
 1. Paste the receipt block (stage names, counts, subject keys, wait times) as a comment on #342.

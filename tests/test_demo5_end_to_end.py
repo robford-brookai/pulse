@@ -15,11 +15,13 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import json
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
 
 REPO_ROOT = Path(__file__).parents[1]
@@ -234,6 +236,73 @@ def test_resolve_live_config_refuses_an_unknown_twenty_target(monkeypatch: pytes
     monkeypatch.setattr(demo5, "TWENTY_TARGET", "not-a-real-target")
     with pytest.raises(demo5.LiveStartupError):
         demo5.resolve_live_config(_LIVE_ENV)
+
+
+# --- Fixtures re-keyed per run: load_fixtures(run_id) and the live card seed -----------------------
+
+
+def test_load_fixtures_without_a_run_id_is_the_committed_patient() -> None:
+    fixtures = demo5.load_fixtures()
+    assert fixtures["consent_export_row"]["subject_key"] == demo5.BASE_PATIENT_KEY
+    assert fixtures["verdict_mart_row"]["subject_id"] == demo5.BASE_PATIENT_KEY
+
+
+def test_load_fixtures_with_a_run_id_suffixes_every_occurrence_including_decoys() -> None:
+    fixtures = demo5.load_fixtures("r1")
+    fresh = f"{demo5.BASE_PATIENT_KEY}-r1"
+    assert fixtures["consent_export_row"]["subject_key"] == fresh
+    assert fixtures["verdict_mart_row"]["subject_id"] == fresh
+    by_case = {variant["case"]: variant for variant in fixtures["referral_variants"]}
+    assert by_case["exact_match"]["expected_person_id"] == fresh
+    assert f"{fresh}-decoy" in by_case["quarantine"]["expected_candidate_person_ids"]
+    assert demo5.BASE_PATIENT_KEY not in json.dumps(fixtures).replace(fresh, "")
+
+
+@pytest.mark.parametrize("bad", ["", "with space", "a/b", "x" * 33])
+def test_load_fixtures_rejects_a_run_id_that_is_not_a_key_fragment(bad: str) -> None:
+    with pytest.raises(ValueError, match="run id"):
+        demo5.load_fixtures(bad)
+
+
+def test_run_id_and_from_stage_parse_together() -> None:
+    args = demo5.build_arg_parser().parse_args(["--live", "--run-id", "0904a", "--from-stage", "board_drag"])
+    assert (args.run_id, args.from_stage) == ("0904a", "board_drag")
+
+
+def _board_transport(existing: list[dict[str, str]], posted: list[dict[str, Any]]) -> httpx.MockTransport:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            return httpx.Response(200, json={"data": {demo5.V1_BOARD.plural: existing}})
+        posted.append(json.loads(request.content))
+        return httpx.Response(201, json={"data": {"createPatientProgram": {"id": "new"}}})
+
+    return httpx.MockTransport(handler)
+
+
+def test_ensure_live_board_card_creates_the_missing_card_with_the_lifecycle_select() -> None:
+    posted: list[dict[str, Any]] = []
+    target = demo5.Target(name="dev", url="https://twenty.example/", token="t")  # noqa: S106 — a fixture placeholder, not a credential
+    with httpx.Client(transport=_board_transport([], posted)) as client:
+        created = demo5.ensure_live_board_card(target, "pt-r1", client=client)
+    assert created is True
+    assert posted == [
+        {
+            "name": "Demo 5 fixture pt-r1",
+            "canonicalPatientId": "pt-r1",
+            "programCode": "demo5",
+            "lifecycleStatus": "PENDING_START",
+        }
+    ]
+
+
+def test_ensure_live_board_card_leaves_an_existing_demo5_card_alone() -> None:
+    posted: list[dict[str, Any]] = []
+    target = demo5.Target(name="dev", url="https://twenty.example", token="t")  # noqa: S106 — a fixture placeholder, not a credential
+    existing = [{"canonicalPatientId": "pt-r1", "programCode": "demo5"}]
+    with httpx.Client(transport=_board_transport(existing, posted)) as client:
+        created = demo5.ensure_live_board_card(target, "pt-r1", client=client)
+    assert created is False
+    assert posted == []
 
 
 # --- Live warehouse window: _fetch_stg_events over a fake Snowflake connection ------------------
