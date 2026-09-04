@@ -107,7 +107,6 @@ _BILLING_VARS = (
 )
 
 
-@open_finding
 def test_billing_config_reports_all_missing_variables_at_once(monkeypatch):
     from billing_connector.config import Config
 
@@ -119,7 +118,6 @@ def test_billing_config_reports_all_missing_variables_at_once(monkeypatch):
     assert all(v in text for v in _BILLING_VARS), text
 
 
-@open_finding
 def test_billing_config_names_variable_on_invalid_value(monkeypatch):
     from billing_connector.config import Config
 
