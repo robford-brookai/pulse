@@ -153,7 +153,6 @@ def test_bootstrap_refuses_generated_repo_and_points_at_task_install():
 # --- Fix 9 (M): the docs site is this repo's -------------------------------------------------
 
 
-@open_finding
 def test_docs_site_is_pulse_not_the_template():
     assert MKDOCS["site_name"].lower() != "repo-ade"
     assert "repo-ade" not in MKDOCS.get("repo_url", "")
@@ -161,14 +160,12 @@ def test_docs_site_is_pulse_not_the_template():
     assert "pkg_pulse.foo" not in modules
 
 
-@open_finding
 def test_mkdocstrings_documents_the_connector_kit():
     handlers = next(p for p in MKDOCS["plugins"] if isinstance(p, dict) and "mkdocstrings" in p)
     paths = handlers["mkdocstrings"]["handlers"]["python"]["paths"]
     assert any("pulse-core" in p for p in paths), paths
 
 
-@open_finding
 def test_every_docs_page_is_in_nav():
     pages = {str(p.relative_to(DOCS)) for p in DOCS.rglob("*.md")}
     off_nav = sorted(pages - _nav_pages(MKDOCS["nav"]))
@@ -178,7 +175,6 @@ def test_every_docs_page_is_in_nav():
 # --- Below the cut (S): shell gates run in an automated context ------------------------------
 
 
-@open_finding
 def test_test_all_runs_the_shell_gates():
     text = _cmds("test:all")
     for gate in ("cat2_toolchain.sh", "cat4_command_contract.sh", "cat7_gates_hooks.sh"):

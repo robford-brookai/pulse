@@ -35,4 +35,3 @@ sub-issue edited by hand in Linear remains drift to be overwritten at next sync.
 - **WHEN** sync runs with APPLY=1
 - **THEN** tasks.md content other than id tokens is unchanged and the sub-issue description is
   overwritten from the file
-

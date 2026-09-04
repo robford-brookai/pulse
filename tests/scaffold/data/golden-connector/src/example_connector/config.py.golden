@@ -1,0 +1,106 @@
+"""Connector configuration — one credential name, the endpoints, staleness.
+
+`Config` holds the *name* of the environment variable this connector's token lives in, never the
+token's value: whatever submits commands reads `os.environ[config.credential_name]` at the one
+place it is used, so no secret is constructed, stored, or defaulted here.
+
+`from_env` collects **every** missing or invalid variable and raises a single `ConfigError` naming
+each one, its expected type or unit, and where its value comes from. One start of the process
+tells the operator everything that is wrong, not the first thing — the scaffold bakes that in so
+no connector has to rediscover it.
+"""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from datetime import timedelta
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+#: This connector's own writer credential *name* — the variable its token lives in. A constant,
+#: not read from the environment: what varies by deploy is the value, never which variable
+#: holds it.
+TOKEN_ENV_VAR = "EXAMPLE_CONNECTOR_TOKEN"  # noqa: S105 — an env var name, not a secret
+
+#: The connector's own inbound queue. The kit's consume loop reads from this URL.
+QUEUE_URL_ENV_VAR = "EXAMPLE_CONNECTOR_QUEUE_URL"
+
+#: The command-API base URL every declaration is submitted through. An HTTP endpoint, never a
+#: database connection string: reads come off the bus, writes go through the command API.
+LEDGER_BASE_URL_ENV_VAR = "EXAMPLE_CONNECTOR_LEDGER_BASE_URL"
+
+#: Optional. How old an inbound watermark may be before the connector reports it as stale
+#: instead of acting on it. Seconds.
+STALE_AFTER_ENV_VAR = "EXAMPLE_CONNECTOR_STALE_AFTER_SECONDS"
+
+DEFAULT_STALE_AFTER = timedelta(minutes=15)
+
+
+class ConfigError(RuntimeError):
+    """Startup configuration is unusable. Carries every problem found, not the first one."""
+
+    def __init__(self, problems: list[str]) -> None:
+        self.problems = list(problems)
+        body = "\n".join(f"  - {problem}" for problem in self.problems)
+        super().__init__(f"example-connector configuration is unusable:\n{body}")
+
+
+def _resolve_stale_after(raw: str, problems: list[str]) -> timedelta:
+    """Parse the optional staleness window, recording a problem rather than raising.
+
+    Every `from_env` helper takes this shape — append and return a usable default, never raise —
+    so one pass collects every problem instead of stopping at the first.
+    """
+    if not raw:
+        return DEFAULT_STALE_AFTER
+    try:
+        seconds = int(raw)
+    except ValueError:
+        problems.append(f"{STALE_AFTER_ENV_VAR}={raw!r} is not an integer — whole seconds")
+        return DEFAULT_STALE_AFTER
+    if seconds <= 0:
+        problems.append(f"{STALE_AFTER_ENV_VAR}={raw!r} must be positive — whole seconds")
+        return DEFAULT_STALE_AFTER
+    return timedelta(seconds=seconds)
+
+
+@dataclass(frozen=True)
+class Config:
+    """Everything this connector needs to start, resolved once at startup."""
+
+    queue_url: str
+    ledger_base_url: str
+    stale_after: timedelta = DEFAULT_STALE_AFTER
+    credential_name: str = TOKEN_ENV_VAR
+
+    @classmethod
+    def from_env(cls, env: Mapping[str, str] | None = None) -> Config:
+        """Resolve from `env` (defaults to `os.environ`), reporting every problem at once."""
+        source = os.environ if env is None else env
+        problems: list[str] = []
+
+        queue_url = source.get(QUEUE_URL_ENV_VAR, "").strip()
+        if not queue_url:
+            problems.append(f"{QUEUE_URL_ENV_VAR} is unset — the inbound SQS queue URL")
+
+        ledger_base_url = source.get(LEDGER_BASE_URL_ENV_VAR, "").strip()
+        if not ledger_base_url:
+            problems.append(f"{LEDGER_BASE_URL_ENV_VAR} is unset — the command-API base URL")
+
+        # Required to be *set*, never read: the value is the token, and this class never holds it.
+        if not source.get(TOKEN_ENV_VAR, "").strip():
+            problems.append(f"{TOKEN_ENV_VAR} is unset — this connector's ledger writer token")
+
+        stale_after = _resolve_stale_after(source.get(STALE_AFTER_ENV_VAR, "").strip(), problems)
+
+        if problems:
+            raise ConfigError(problems)
+
+        return cls(
+            queue_url=queue_url,
+            ledger_base_url=ledger_base_url,
+            stale_after=stale_after,
+        )

@@ -1,0 +1,14 @@
+"""PULSE example-connector — a connector built on the shared kit (`pulse_core.connector`).
+
+Reads its inbound events off the bus, derives whatever this connector is for, declares the result
+through the kit's declare pipeline, and ends every pass in a counted receipt. Four modules, each
+with one job: `config` resolves the environment, `service` is the process and the consume handler,
+`receipts` is the counted line every run emits, and this module is the version.
+
+Scaffolded by `scripts/connector_new.py`. `docs/connectors/authoring.md` says what to fill in and
+in what order; `packages/billing-connector` is the worked reference.
+"""
+
+from __future__ import annotations
+
+__version__ = "0.1.0"

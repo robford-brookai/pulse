@@ -27,6 +27,8 @@
     "committed": 1,
     "replayed": 0,
     "rejected": 0,
-    "verdict_types": ["billing_eligibility"]
+    "verdict_types": [
+      "billing_eligibility"
+    ]
   }
 }

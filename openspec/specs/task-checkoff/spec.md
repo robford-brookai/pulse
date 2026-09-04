@@ -68,4 +68,3 @@ producer of that state, not a new gate.
 - **GIVEN** wave N's last task merges and checkoff flips its box
 - **WHEN** `task dispatch CHANGE=<id>` runs
 - **THEN** wave N+1's eligible tasks are released exactly as if the box had been checked by hand
-
