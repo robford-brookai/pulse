@@ -59,7 +59,6 @@ def _nav_pages(node) -> set[str]:
 # --- Fix 10 (L): scaffold and authoring guide ------------------------------------------------
 
 
-@open_finding
 def test_connector_scaffold_command_exists():
     """`task connector:new NAME=x` exists and a template tree backs it."""
     assert "connector:new" in TARGETS

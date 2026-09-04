@@ -121,6 +121,17 @@ tasks:
     cmds:
       - uv run python -m pulse_core.twenty_metadata
 
+  connector:new:
+    desc: Scaffold a connector package (NAME) from templates/connector/ and register it at every site (devex-eight task 1.4)
+    # scripts/connector_new.py (devex-eight task 1.3) renders the tree and computes the
+    # registration diff; --apply-registrations is what writes that diff into pyproject.toml and
+    # Taskfile.yml instead of only printing it. Run `uv sync --all-packages` afterward so the new
+    # workspace member is installed.
+    requires:
+      vars: [NAME]
+    cmds:
+      - uv run python scripts/connector_new.py --name {{.NAME}} --root {{.ROOT_DIR}} --apply-registrations
+
   typecheck:
     desc: Type check — mypy on TYPED_PATHS (DNA-779), pyright on verdict-relay (s12), schedules (s13), identity (s14), consent-ingress (S1.1 task 1.1), archaeology (bf0a), billing-connector (billing-connector task 1.1)
     cmds:

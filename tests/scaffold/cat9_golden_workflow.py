@@ -378,6 +378,55 @@ def test_registration_diff_is_printed_but_not_applied(tmp_path: Path) -> None:
     assert after == before
 
 
+def test_connector_new_apply_registrations_names_every_site(tmp_path: Path) -> None:
+    """A dry-run render into a tmp copy: `--apply-registrations` is what `task connector:new` runs."""
+    for relative in REGISTERED_FILES:
+        (tmp_path / relative).write_text((ROOT / relative).read_text())
+
+    r = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            str(CONNECTOR_CLI),
+            "--name",
+            "claims-connector",
+            "--dest",
+            str(tmp_path / "packages" / "claims-connector"),
+            "--template",
+            str(ROOT / "templates/connector"),
+            "--root",
+            str(tmp_path),
+            "--apply-registrations",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert r.returncode == 0, r.stderr
+
+    for relative in REGISTERED_FILES:
+        assert "claims-connector" in (tmp_path / relative).read_text(), relative
+
+    # A second run has nothing left to say: applying does not register the package twice.
+    rerun = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            str(CONNECTOR_CLI),
+            "--name",
+            "claims-connector",
+            "--root",
+            str(tmp_path),
+            "--print-registrations",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert rerun.returncode == 0, rerun.stderr
+    assert rerun.stdout == "", rerun.stdout
+
+
 # --- fresh-clone smoke ------------------------------------------------------------------------
 
 
@@ -513,3 +562,57 @@ def test_fresh_clone_passes_its_own_gates(tmp_path: Path) -> None:
         env=env,
     )
     assert r.returncode == 0, f"fresh clone failed its own gates:\n{r.stdout}\n{r.stderr}"
+
+
+@pytest.mark.slow
+@requires_task
+@pytest.mark.skipif(not have("uv"), reason="uv not installed")
+def test_task_check_green_with_a_scaffolded_connector(tmp_path: Path) -> None:
+    """`task connector:new` (1.4) registers a package that then passes `task check`, unmodified.
+
+    A scaffolded package that only renders cleanly but breaks lint, typecheck, or docs the moment
+    it is registered would be a worse scaffold than none — the whole point of automating the
+    eight registrations is that what comes out the other end is already green.
+    """
+    clone = tmp_path / "clone"
+    env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
+    subprocess.run(  # noqa: S603
+        ["git", "clone", "-q", str(ROOT), str(clone)],  # noqa: S607
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["uv", "sync", "--frozen", "--quiet"],  # noqa: S607
+        cwd=clone,
+        check=True,
+        capture_output=True,
+        env=env,
+    )
+
+    scaffold = subprocess.run(
+        ["task", "connector:new", "NAME=scratch-connector"],  # noqa: S607
+        cwd=clone,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+    assert scaffold.returncode == 0, f"scaffold failed:\n{scaffold.stdout}\n{scaffold.stderr}"
+
+    subprocess.run(
+        ["uv", "sync", "--all-packages", "--quiet"],  # noqa: S607
+        cwd=clone,
+        check=True,
+        capture_output=True,
+        env=env,
+    )
+
+    r = subprocess.run(
+        ["task", "check"],  # noqa: S607
+        cwd=clone,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+    assert r.returncode == 0, f"task check failed with a scaffolded package registered:\n{r.stdout}\n{r.stderr}"

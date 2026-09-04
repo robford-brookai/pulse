@@ -257,17 +257,25 @@ REGISTRATIONS = (
 )
 
 
-def registration_diff(root: Path, names: Names) -> str:
-    """The unified diff of every registration edit, or "" when nothing needs changing."""
-    chunks: list[str] = []
+def _registration_changes(root: Path, names: Names) -> list[tuple[Path, str, str]]:
+    """(path, before, after) for every registration site whose content would change."""
+    changes: list[tuple[Path, str, str]] = []
     for relative, transform in REGISTRATIONS:
         path = root / relative
         if not path.is_file():
             continue
         before = path.read_text()
         after = transform(before, names)
-        if before == after:
-            continue
+        if before != after:
+            changes.append((path, before, after))
+    return changes
+
+
+def registration_diff(root: Path, names: Names) -> str:
+    """The unified diff of every registration edit, or "" when nothing needs changing."""
+    chunks: list[str] = []
+    for path, before, after in _registration_changes(root, names):
+        relative = path.relative_to(root)
         chunks.extend(
             difflib.unified_diff(
                 before.splitlines(keepends=True),
@@ -279,7 +287,51 @@ def registration_diff(root: Path, names: Names) -> str:
     return "".join(chunks)
 
 
-def main(argv: list[str] | None = None) -> int:
+def apply_registrations(root: Path, names: Names) -> list[Path]:
+    """Write every registration edit to disk; return the files actually changed, sorted.
+
+    `task connector:new` (devex-eight task 1.4) is the only caller: 1.3's script renders and
+    reports, this is what edits the repo.
+    """
+    changes = _registration_changes(root, names)
+    for path, _, after in changes:
+        path.write_text(after)
+    return sorted(path for path, _, _ in changes)
+
+
+def _report_print_registrations(root: Path, names: Names) -> int:
+    # The diff alone, so `git apply` can read it off stdout. Empty when nothing needs changing.
+    print(registration_diff(root, names), end="")
+    return 0
+
+
+def _report_apply_registrations(root: Path, names: Names) -> int:
+    changed = apply_registrations(root, names)
+    if changed:
+        print(f"Registered {names.dist} at {len(changed)} site(s):")
+        for path in changed:
+            print(f"  {path.relative_to(root)}")
+        print()
+        print("Next: uv sync --all-packages")
+    else:
+        print(f"{names.dist} is already registered at every site; nothing to apply.")
+    return 0
+
+
+def _report_registration_diff(root: Path, names: Names) -> int:
+    diff = registration_diff(root, names)
+    if diff:
+        print(f"Registration diff — the edits {names.dist} still needs (not applied):")
+        print()
+        print(diff, end="")
+        print()
+        print(f"Apply it with `task connector:new NAME={names.dist}`, then `uv sync --all-packages`.")
+    else:
+        print(f"{names.dist} is already registered at every site; no registration diff to apply.")
+    return 0
+
+
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="connector_new.py",
         description="Scaffold a PULSE connector package and print its registration diff.",
@@ -299,7 +351,20 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="print the registration diff only; render nothing",
     )
-    args = parser.parse_args(argv)
+    parser.add_argument(
+        "--apply-registrations",
+        action="store_true",
+        help="write the registration edits into pyproject.toml and Taskfile.yml, instead of only "
+        "printing the diff — what `task connector:new` (devex-eight task 1.4) runs",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _build_parser().parse_args(argv)
+    if args.print_registrations and args.apply_registrations:
+        print("error: --print-registrations and --apply-registrations are mutually exclusive", file=sys.stderr)
+        return 2
 
     try:
         names = parse_name(args.name)
@@ -312,26 +377,15 @@ def main(argv: list[str] | None = None) -> int:
             for path in written:
                 print(f"  {path}")
             print()
-
-        diff = registration_diff(args.root, names)
     except ConnectorNewError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
     if args.print_registrations:
-        # The diff alone, so `git apply` can read it off stdout. Empty when nothing needs changing.
-        print(diff, end="")
-        return 0
-
-    if diff:
-        print(f"Registration diff — the edits {names.dist} still needs (not applied):")
-        print()
-        print(diff, end="")
-        print()
-        print(f"Apply it with `task connector:new NAME={names.dist}`, then `uv sync --all-packages`.")
-    else:
-        print(f"{names.dist} is already registered at every site; no registration diff to apply.")
-    return 0
+        return _report_print_registrations(args.root, names)
+    if args.apply_registrations:
+        return _report_apply_registrations(args.root, names)
+    return _report_registration_diff(args.root, names)
 
 
 if __name__ == "__main__":
