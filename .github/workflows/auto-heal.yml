@@ -13,7 +13,7 @@ jobs:
       healthy: ${{ steps.aggregate.outputs.healthy }}
     steps:
       - name: Check out
-        uses: actions/checkout@0000000000000000000000000000000000000000 # v4.0
+        uses: actions/checkout@1e31de5234b9f8995739874a8ce0492dc87873e2 # v4.0
 
       - name: Diagnose Python 3.10
         id: d310
@@ -95,12 +95,19 @@ jobs:
     needs: diagnose
     runs-on: ubuntu-latest
     if: ${{ needs.diagnose.outputs.healthy == 'true' && github.event.workflow_run.conclusion == 'failure' }}
+    permissions:
+      actions: write
     steps:
       - name: Re-run failed workflow
-        uses: peter-evans/re-run-workflow@0000000000000000000000000000000000000000 # v2.0
+        uses: actions/github-script@e69ef5462fd455e02edcaf4dd7708eda96b9eda0 # v7.0
         with:
-          run_id: ${{ github.event.workflow_run.id }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.actions.reRunWorkflowFailedJobs({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.payload.workflow_run.id
+            })
 
   notify:
     needs: diagnose
@@ -108,7 +115,7 @@ jobs:
     if: ${{ needs.diagnose.outputs.healthy != 'true' && github.event.workflow_run.conclusion == 'failure' }}
     steps:
       - name: Open issue for human attention
-        uses: actions/github-script@0000000000000000000000000000000000000000 # v7.0
+        uses: actions/github-script@e69ef5462fd455e02edcaf4dd7708eda96b9eda0 # v7.0
         with:
           script: |
             github.issues.create({

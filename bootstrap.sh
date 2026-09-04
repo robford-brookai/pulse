@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ -f .ade-template-version ]]; then
+  echo "This repo is already generated; run \`task install\`."
+  exit 2
+fi
+
 # bootstrap.sh — run after cloning the template
 # Usage: ./bootstrap.sh <new-project-name> <package-name> <description>
 

@@ -563,6 +563,8 @@ tasks:
 
   spec:archive:
     desc: Archive a completed OpenSpec change (merges deltas to main specs)
+    requires:
+      vars: [CHANGE]
     deps: [spec:validate, lore:drift, test]
     cmds:
       - openspec archive {{.CHANGE}}
@@ -574,11 +576,15 @@ tasks:
 
   spec:status:
     desc: Show OpenSpec change status
+    requires:
+      vars: [CHANGE]
     cmds:
       - openspec status --change {{.CHANGE}}
 
   spec:validate:
     desc: Validate the current OpenSpec change
+    requires:
+      vars: [CHANGE]
     cmds:
       - openspec validate {{.CHANGE}}
 
@@ -604,21 +610,29 @@ tasks:
 
   checkoff:
     desc: Flip tasks.md checkboxes for merged tasks (needs CHANGE; COMMIT=1 to commit; COMMIT_SHA=<sha> to record one merge)
+    requires:
+      vars: [CHANGE]
     cmds:
       - uv run python scripts/checkoff_tasks.py --change {{.CHANGE}} {{if .COMMIT}}--commit{{end}} {{if .COMMIT_SHA}}--commit-sha {{.COMMIT_SHA}}{{end}}
 
   collect:
     desc: Collect HANDOFF.md files from Orca worktrees (needs CHANGE)
+    requires:
+      vars: [CHANGE]
     cmds:
       - uv run python scripts/collect_handoffs.py --change {{.CHANGE}}
 
   dispatch:
     desc: Parse OpenSpec tasks.md and emit work-order files (needs CHANGE)
+    requires:
+      vars: [CHANGE]
     cmds:
       - uv run python scripts/dispatch_tasks.py --change {{.CHANGE}}
 
   replan:
     desc: Validate a tasks.md amendment — delta plan-validation checks + spec validation, no human gate (needs CHANGE)
+    requires:
+      vars: [CHANGE]
     # openspec is an npm global CI runners do not have, so this stays out of `check`, like verify.
     cmds:
       - uv run python scripts/dispatch_tasks.py --change {{.CHANGE}} --validate-only
@@ -626,6 +640,8 @@ tasks:
 
   linear:sync:
     desc: Project tasks.md into Linear issues (needs CHANGE; plan only unless APPLY=1)
+    requires:
+      vars: [CHANGE]
     # Dry run by default: this writes to a shared system, and the plan it prints is the plan
     # it would apply. `task linear:sync CHANGE=x APPLY=1` performs the mutations.
     cmds:
@@ -648,6 +664,8 @@ tasks:
 
   sync-docs:
     desc: Run drift checks and print doc-updater instructions (needs CHANGE)
+    requires:
+      vars: [CHANGE]
     cmds:
       - openlore drift
       - openspec validate {{.CHANGE}}
