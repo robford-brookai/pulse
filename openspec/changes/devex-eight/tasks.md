@@ -55,7 +55,7 @@ task 3.1 batches the upstream PR.
       import *` binds every `__all__` name.
       `[model: sonnet | deps: — | lane: repo_change | wave: 1]`
 
-- [ ] 1.2 Connector authoring guide `docs/connectors/authoring.md`, answering in order: what a
+- [x] 1.2 Connector authoring guide `docs/connectors/authoring.md`, answering in order: what a
       connector is here, what to import, how to scaffold, how to configure, how to test offline,
       how to register the package (all eight sites, until 1.4 automates them), how to ship
       through the workflow, who to ask. Written in the shipped kit's vocabulary
@@ -65,7 +65,7 @@ task 3.1 batches the upstream PR.
       test that every `task` target the guide names exists in `Taskfile.yml`.
       `[model: opus | deps: 1.1 | lane: repo_change | wave: 1]`
 
-- [ ] 1.3 Scaffold: `templates/connector/` (pyproject, `src/<name>/{__init__,config,service,
+- [x] 1.3 Scaffold: `templates/connector/` (pyproject, `src/<name>/{__init__,config,service,
       receipts}.py`, socket-blocked `tests/conftest.py`, one passing test) and
       `scripts/connector_new.py` rendering it for `NAME` and printing the registration diff it
       will apply.
@@ -119,7 +119,7 @@ task 3.1 batches the upstream PR.
       one-missing, all-missing, invalid stale_after.
       `[model: sonnet | deps: — | lane: repo_change | wave: 2]`
 
-- [ ] 2.2 One canonical connector spec in the kit's vocabulary: keep
+- [x] 2.2 One canonical connector spec in the kit's vocabulary: keep
       `openspec/specs/connectors/pulse-standard-connector-spec.md` as canonical, reduce
       `design/platform/pulse-standard-connector-spec.md` to a pointer, move the PAP CX-1..CX-8
       breakdown to `design/migration/`. Spec content changes go to `HANDOFF.md` for the
@@ -127,7 +127,7 @@ task 3.1 batches the upstream PR.
       Tests: remove xfail from `test_connector_spec_has_one_canonical_copy`.
       `[model: opus | deps: 1.2 | lane: repo_change | wave: 2]`
 
-- [ ] 2.3 Docs site: `site_name: PULSE`, repo URLs to pulse, mkdocstrings `paths` covering
+- [x] 2.3 Docs site: `site_name: PULSE`, repo URLs to pulse, mkdocstrings `paths` covering
       `packages/pulse-core/src`, `docs/modules.md` documenting `pulse_core.connector`, every
       docs page in the nav.
       Tests: remove xfail from `test_docs_site_is_pulse_not_the_template`,
@@ -135,7 +135,7 @@ task 3.1 batches the upstream PR.
       `uv run mkdocs build -s` clean.
       `[model: sonnet | deps: 1.2 | lane: repo_change | wave: 2]`
 
-- [ ] 2.4 `task test:all` runs `cat2_toolchain.sh`, `cat4_command_contract.sh` and
+- [x] 2.4 `task test:all` runs `cat2_toolchain.sh`, `cat4_command_contract.sh` and
       `cat7_gates_hooks.sh` after pytest; fix the four cat7 failures on a fresh clone.
       Tests: remove xfail from `test_test_all_runs_the_shell_gates`; `task test:all` green.
       `[model: sonnet | deps: 1.5 | lane: repo_change | wave: 2 | serial: Taskfile.yml]`
