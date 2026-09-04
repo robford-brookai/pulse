@@ -215,7 +215,7 @@ Optional but recommended:
 
 - **openspec** and **openlore** (for the change lifecycle):
   ```bash
-  npm install -g @openspec/cli @openlore/cli
+  npm install -g @fission-ai/openspec openlore
   ```
 - **orca** (for Orca worktrees): installed via your Orca app
 - **gh** (GitHub CLI): `brew install gh` (macOS) or https://cli.github.com/
