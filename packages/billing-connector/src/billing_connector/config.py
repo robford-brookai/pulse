@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import importlib
 import os
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import cast
@@ -77,12 +77,23 @@ _DEFAULT_STALE_AFTER = timedelta(hours=24)
 CONNECTOR_KIT_MODULE_NAME = _connector_kit.__name__
 
 
-class MissingConfigVariableError(RuntimeError):
-    """A required environment variable is unset; startup fails naming it, never a value."""
+class ConfigError(RuntimeError):
+    """Every missing or invalid environment variable `from_env()` found, named at once.
 
-    def __init__(self, name: str) -> None:
-        self.name = name
-        super().__init__(f"required environment variable {name} is not set")
+    Before this class existed, `from_env()` raised on the first problem, so fixing a broken
+    environment was an edit-rerun loop: set one variable, rerun, hit the next (devex finding 7,
+    `.planning/reports/2026-09-02-devex-scorecard.md`). `from_env()` now checks every variable
+    before raising, so one `ConfigError` names all of them together.
+
+    `problems` holds the offending variable *names*, in the fixed order `from_env()` checks them
+    — never a value, so a secret variable that happens to be invalid still can't leak through
+    this exception. `str(error)` carries the human-readable detail: each variable, what type or
+    unit `from_env()` expected of it, and that it comes from the environment.
+    """
+
+    def __init__(self, problems: Sequence[str], *, detail: Sequence[str]) -> None:
+        self.problems = tuple(problems)
+        super().__init__("; ".join(detail))
 
 
 class RegistryUnavailableError(RuntimeError):
@@ -134,33 +145,51 @@ class Config:
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> Config:
-        """Resolve every value from the environment, failing on the first missing one, in the
-        fixed order below (spec: "Startup SHALL fail with the missing variable's name if any
-        value is absent").
+        """Resolve every value from the environment, checking all of them before raising, so one
+        `ConfigError` names every missing or invalid variable at once (spec: "Startup SHALL fail
+        with the missing variable's name if any value is absent"; devex finding 7 — a `from_env()`
+        that stopped at the first problem turned a broken environment into an edit-rerun loop).
 
         `env` defaults to `os.environ`; tests pass a plain `dict` so this never touches the real
         process environment. The credential is checked for *presence* only — its value is never
-        read into this function's return value.
+        read into this function's return value, and never into a `ConfigError` either.
         """
         source = os.environ if env is None else env
+        problems: list[str] = []
+        detail: list[str] = []
+
+        def _fail(name: str, *, expected: str, got: str | None = None) -> None:
+            problems.append(name)
+            reason = "is not set" if got is None else f"is invalid: expected {expected}, got {got!r}"
+            detail.append(f"{name} (environment variable) {reason}")
 
         if TOKEN_ENV_VAR not in source:
-            raise MissingConfigVariableError(TOKEN_ENV_VAR)
+            _fail(TOKEN_ENV_VAR, expected="a value naming the connector's writer credential")
 
         queue_url = source.get(QUEUE_URL_ENV_VAR)
         if queue_url is None:
-            raise MissingConfigVariableError(QUEUE_URL_ENV_VAR)
+            _fail(QUEUE_URL_ENV_VAR, expected="a URL string")
 
         ledger_base_url = source.get(LEDGER_BASE_URL_ENV_VAR)
         if ledger_base_url is None:
-            raise MissingConfigVariableError(LEDGER_BASE_URL_ENV_VAR)
+            _fail(LEDGER_BASE_URL_ENV_VAR, expected="a URL string")
 
         stale_after_raw = source.get(STALE_AFTER_ENV_VAR)
-        stale_after = _DEFAULT_STALE_AFTER if stale_after_raw is None else timedelta(seconds=int(stale_after_raw))
+        stale_after = _DEFAULT_STALE_AFTER
+        if stale_after_raw is not None:
+            try:
+                stale_after = timedelta(seconds=int(stale_after_raw))
+            except ValueError:
+                _fail(STALE_AFTER_ENV_VAR, expected="an integer number of seconds", got=stale_after_raw)
+
+        if problems:
+            raise ConfigError(problems, detail=detail)
 
         return cls(
             credential_name=TOKEN_ENV_VAR,
-            queue_url=queue_url,
-            ledger_base_url=ledger_base_url,
+            # Both narrowed to `str` here: each was checked for `None` above, and any `None`
+            # would have appended to `problems`, which would have raised just above instead.
+            queue_url=cast("str", queue_url),
+            ledger_base_url=cast("str", ledger_base_url),
             stale_after=stale_after,
         )

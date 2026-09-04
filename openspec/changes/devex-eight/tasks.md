@@ -48,7 +48,7 @@ task 3.1 batches the upstream PR.
 
 ## 1. Wave 1 — connector composite movers
 
-- [ ] 1.1 Kit exports: import the declare layer in `pulse_core/connector/__init__.py` so every
+- [x] 1.1 Kit exports: import the declare layer in `pulse_core/connector/__init__.py` so every
       `__all__` name resolves; refresh the module docstring (the declare pipeline has landed).
       Tests: remove xfail from `test_connector_kit_all_names_resolve`; add
       `packages/pulse-core/tests/test_connector_exports.py` asserting `from pulse_core.connector
@@ -87,32 +87,32 @@ task 3.1 batches the upstream PR.
       on a fresh clone after `task install` (slow).
       `[model: haiku | deps: — | lane: repo_change | wave: 1 | serial: Taskfile.yml]`
 
-- [ ] 1.6 `requires: vars: [CHANGE]` on `dispatch`, `checkoff`, `collect`, `replan`,
+- [x] 1.6 `requires: vars: [CHANGE]` on `dispatch`, `checkoff`, `collect`, `replan`,
       `spec:validate`, `spec:archive`, `spec:status`, `sync-docs`, `linear:sync`.
       Tests: remove xfail from `test_change_taking_targets_require_change`; cat4 command
       contract still green.
       `[model: haiku | deps: 1.5 | lane: repo_change | wave: 1 | serial: Taskfile.yml]`
 
-- [ ] 1.7 `bootstrap.sh` guard: if `.ade-template-version` exists in the current directory,
+- [x] 1.7 `bootstrap.sh` guard: if `.ade-template-version` exists in the current directory,
       print "This repo is already generated; run `task install`." and exit 2, before `${1:?}`.
       Five lines at the top so template sync conflicts stay small.
       Tests: remove xfail from `test_bootstrap_refuses_generated_repo_and_points_at_task_install`;
       the template path (no stamp) still reaches the usage message.
       `[model: haiku | deps: — | lane: repo_change | wave: 1]`
 
-- [ ] 1.8 Replace the four all-zeros action SHAs in `ci-health.yml` and `auto-heal.yml` with
+- [x] 1.8 Replace the four all-zeros action SHAs in `ci-health.yml` and `auto-heal.yml` with
       the real commit SHAs for the pinned versions; keep the version comments.
       Tests: remove xfail from `test_action_pins_are_real_shas`; `cat4_ci_contract.py` still green.
       `[model: sonnet | deps: — | lane: repo_change | wave: 1 | serial: .github]`
 
-- [ ] 1.9 README `## Prerequisites` block: `uv`, `go-task`, Node 22, Docker, with install lines
+- [x] 1.9 README `## Prerequisites` block: `uv`, `go-task`, Node 22, Docker, with install lines
       mirroring `tests/scaffold/cat2_toolchain.sh`.
       Tests: remove xfail from `test_readme_states_prerequisites`; cat8 docs consistency green.
       `[model: haiku | deps: — | lane: repo_change | wave: 1]`
 
 ## 2. Wave 2 — the M items
 
-- [ ] 2.1 `billing_connector.config.Config.from_env()` collects every missing or invalid
+- [x] 2.1 `billing_connector.config.Config.from_env()` collects every missing or invalid
       variable and raises one `ConfigError` naming each variable, its expected type or unit, and
       where the value comes from; the invalid-value path uses the same class.
       Tests: remove xfail from both `test_billing_config_*` tests; package tests for
@@ -140,7 +140,7 @@ task 3.1 batches the upstream PR.
       Tests: remove xfail from `test_test_all_runs_the_shell_gates`; `task test:all` green.
       `[model: sonnet | deps: 1.5 | lane: repo_change | wave: 2 | serial: Taskfile.yml]`
 
-- [ ] 2.5 `.github/CODEOWNERS`, `.github/ISSUE_TEMPLATE/attended-run.md`,
+- [x] 2.5 `.github/CODEOWNERS`, `.github/ISSUE_TEMPLATE/attended-run.md`,
       `.github/PULL_REQUEST_TEMPLATE.md`; `CONTRIBUTING.md` names the owner and the channel to
       ask and states the hook behaviour truthfully.
       Tests: remove xfail from `test_repo_names_an_owner_and_a_place_to_ask` and

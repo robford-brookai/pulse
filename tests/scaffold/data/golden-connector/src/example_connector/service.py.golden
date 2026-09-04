@@ -1,0 +1,83 @@
+"""Service entry point — wires config, the consume handler, and the kit's consume loop.
+
+This module is the connector's only process and its only decision about *when* to act.
+`handle_event` is the consume handler: `pulse_core.connector.consume` calls it once per delivered
+event, and the message is deleted from the queue only if it returns without raising. Replace its
+body with what this connector actually does; keep its shape.
+
+`main` resolves `Config.from_env()`, drives the consume loop, and logs one receipt line per run.
+`sqs_client` is a parameter, never constructed here, so a test injects a fake and no test needs a
+network: the kit builds a real `boto3` client itself when the parameter is left `None`.
+"""
+
+from __future__ import annotations
+
+import argparse
+import logging
+from dataclasses import replace
+from typing import TYPE_CHECKING, Any
+
+from pulse_core.connector import consume
+
+from example_connector.config import Config, ConfigError
+from example_connector.receipts import SERVICE_NAME, Receipt
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
+logger = logging.getLogger(SERVICE_NAME)
+
+
+def handle_event(event: Mapping[str, object], *, tally: Receipt) -> Receipt:
+    """Act on one delivered event and return the next tally. Never mutates `tally`.
+
+    Scaffold behavior: count the event as deferred and do nothing. Replace this with the fold,
+    the derivation, and the `submit_with_retry` call this connector exists for — and count each
+    settled response through `tally.record(...)` so the receipt stays true.
+    """
+    logger.debug("deferred event_type=%s", event.get("event_type"))
+    return replace(tally, deferred=tally.deferred + 1)
+
+
+def run(config: Config, *, sqs_client: Any = None, iterations: int | None = None) -> Receipt:
+    """Drive the consume loop, accumulating one receipt across every pass, and log it once."""
+    tally = Receipt()
+
+    def on_event(event: Mapping[str, object]) -> None:
+        nonlocal tally
+        tally = handle_event(event, tally=tally)
+
+    consume(
+        on_event,
+        queue_url=config.queue_url,
+        sqs_client=sqs_client,
+        iterations=iterations,
+    )
+    logger.info("%s", tally.format_line())
+    return tally
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Resolve config and run. Returns a process exit code; never raises on bad config."""
+    parser = argparse.ArgumentParser(prog=SERVICE_NAME, description=f"Run {SERVICE_NAME}")
+    parser.add_argument(
+        "--iterations",
+        type=int,
+        default=None,
+        help="stop after N consume passes (default: run until killed)",
+    )
+    args = parser.parse_args(argv)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
+    try:
+        config = Config.from_env()
+    except ConfigError as exc:
+        logger.error("%s", exc)  # noqa: TRY400 — the message is the whole diagnostic, not a trace
+        return 2
+
+    run(config, iterations=args.iterations)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
