@@ -82,7 +82,7 @@ task 3.1 batches the upstream PR.
       `[model: sonnet | deps: 1.3 | lane: repo_change | wave: 1 | serial: workspace roots and
       Taskfile.yml — coordinator releases alone across both in-flight changes]`
 
-- [ ] 1.5 `task install` runs `uv run pre-commit install` after `uv sync`.
+- [x] 1.5 `task install` runs `uv run pre-commit install` after `uv sync`.
       Tests: remove xfail from `test_install_installs_pre_commit_hooks`; cat7 hook check passes
       on a fresh clone after `task install` (slow).
       `[model: haiku | deps: — | lane: repo_change | wave: 1 | serial: Taskfile.yml]`
