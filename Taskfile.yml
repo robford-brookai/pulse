@@ -653,7 +653,23 @@ tasks:
       - echo "Review handoffs/ for plan-relevant updates"
       - 'echo "Apply via: edit openspec/changes/{{.CHANGE}}/specs/ then openspec validate {{.CHANGE}}"'
 
-  # --- 11. Template updates (generated repos) ---
+  # --- 11. DevEx loop ---
+  # The inner tier of the DevEx loop (docs/process/devex-audit/README.md). devex:check counts open
+  # audit findings from tests/scaffold/cat10_devex.py and freezes the audit protocol; it never
+  # prints a 0-10. The 0-10 comes from the LLM-judged audit, which devex:audit prepares but cannot
+  # run: three agents under Orca orchestration, coordinated by the session that says /devex-audit.
+
+  devex:check:
+    desc: Count open DevEx audit findings (METRIC devex_open_findings) and verify the frozen audit protocol
+    cmds:
+      - uv run python scripts/devex/check.py
+
+  devex:audit:
+    desc: Print the DevEx audit runbook and today's report paths (the audit itself runs via /devex-audit)
+    cmds:
+      - uv run python scripts/devex/check.py --prep-audit
+
+  # --- 12. Template updates (generated repos) ---
 
   template:diff:
     desc: Show ADE template changes since this repo was generated

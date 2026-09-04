@@ -1,0 +1,106 @@
+{
+  "date": "2026-09-04",
+  "head": "c251238",
+  "open_findings": 17,
+  "regressions": 0,
+  "fixed_but_still_marked": 0,
+  "protocol_frozen": true,
+  "results": {
+    "PASSED": [
+      {
+        "test": "test_devex_targets_exist",
+        "reason": ""
+      },
+      {
+        "test": "test_ledger_exists_with_a_baseline_row",
+        "reason": ""
+      },
+      {
+        "test": "test_pytest_collects_two_digit_gate_files",
+        "reason": ""
+      },
+      {
+        "test": "test_audit_protocol_is_frozen",
+        "reason": ""
+      },
+      {
+        "test": "test_command_routes_to_runbook",
+        "reason": ""
+      }
+    ],
+    "FAILED": [],
+    "XFAIL": [
+      {
+        "test": "test_connector_scaffold_command_exists",
+        "reason": "open DevEx audit finding"
+      },
+      {
+        "test": "test_connector_authoring_guide_exists_and_is_in_nav",
+        "reason": "open DevEx audit finding"
+      },
+      {
+        "test": "test_connector_kit_all_names_resolve",
+        "reason": "open DevEx audit finding"
+      },
+      {
+        "test": "test_connector_spec_has_one_canonical_copy",
+        "reason": "open DevEx audit finding"
+      },
+      {
+        "test": "test_billing_config_reports_all_missing_variables_at_once",
+        "reason": "open DevEx audit finding"
+      },
+      {
+        "test": "test_billing_config_names_variable_on_invalid_value",
+        "reason": "open DevEx audit finding"
+      },
+      {
+        "test": "test_install_installs_pre_commit_hooks",
+        "reason": "open DevEx audit finding"
+      },
+      {
+        "test": "test_bootstrap_refuses_generated_repo_and_points_at_task_install",
+        "reason": "open DevEx audit finding"
+      },
+      {
+        "test": "test_docs_site_is_pulse_not_the_template",
+        "reason": "open DevEx audit finding"
+      },
+      {
+        "test": "test_mkdocstrings_documents_the_connector_kit",
+        "reason": "open DevEx audit finding"
+      },
+      {
+        "test": "test_every_docs_page_is_in_nav",
+        "reason": "open DevEx audit finding"
+      },
+      {
+        "test": "test_test_all_runs_the_shell_gates",
+        "reason": "open DevEx audit finding"
+      },
+      {
+        "test": "test_action_pins_are_real_shas",
+        "reason": "open DevEx audit finding"
+      },
+      {
+        "test": "test_change_taking_targets_require_change",
+        "reason": "open DevEx audit finding"
+      },
+      {
+        "test": "test_readme_states_prerequisites",
+        "reason": "open DevEx audit finding"
+      },
+      {
+        "test": "test_repo_names_an_owner_and_a_place_to_ask",
+        "reason": "open DevEx audit finding"
+      },
+      {
+        "test": "test_issue_and_pr_templates_exist",
+        "reason": "open DevEx audit finding"
+      }
+    ],
+    "XPASS": [],
+    "ERROR": [],
+    "SKIPPED": []
+  }
+}
