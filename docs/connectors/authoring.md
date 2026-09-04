@@ -302,7 +302,7 @@ Before asking, the answer is usually in one of these:
 | What does the inbound read path look like? | `packages/consent-ingress`, `packages/verdict-relay` |
 | Why did CI fail on something local passed? | `docs/ci-lessons.md` |
 | How does a change get from proposal to main? | `WORKFLOW.md`, `AGENTS.md` |
-| What is a connector's standard shape overall? | `design/platform/pulse-standard-connector-spec.md` |
+| What is a connector's standard shape overall? | `openspec/specs/connectors/pulse-standard-connector-spec.md` |
 | How do I operate one once it is deployed? | [billing-connector runbook](../runbooks/billing-connector.md) |
 
 ## PHI
