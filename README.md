@@ -178,12 +178,56 @@ Two doc trees, split by concern.
 
 ## Running and verifying it
 
-### Quickstart
+### Prerequisites
+
+Before running this repo, install these tools:
+
+**uv** (Python package manager):
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+**go-task** (task runner):
+```bash
+# macOS
+brew install go-task/tap/go-task
+
+# Linux / Windows / other platforms
+npm install -g @go-task/cli
+```
+
+**Node.js 22** (required for OpenSpec and Twenty):
+```bash
+# macOS (using Homebrew)
+brew install node@22
+
+# Other platforms: visit https://nodejs.org/
+```
+
+**Docker** (for offline demos and Postgres):
+```bash
+# macOS: install Docker Desktop from https://www.docker.com/products/docker-desktop
+# Linux: https://docs.docker.com/engine/install/
+# Windows: Docker Desktop from https://www.docker.com/products/docker-desktop
+```
+
+Optional but recommended:
+
+- **openspec** and **openlore** (for the change lifecycle):
+  ```bash
+  npm install -g @openspec/cli @openlore/cli
+  ```
+- **orca** (for Orca worktrees): installed via your Orca app
+- **gh** (GitHub CLI): `brew install gh` (macOS) or https://cli.github.com/
+
+Once installed, run:
 
 ```bash
 task install
 task check
 ```
+
+### Quickstart
 
 `task install` runs `uv sync --all-packages`, setting up the virtual environment and every
 workspace package. `task check` runs the same gates continuous integration (CI) runs: lint,

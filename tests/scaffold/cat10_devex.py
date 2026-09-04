@@ -233,7 +233,6 @@ def test_change_taking_targets_require_change():
 # --- Fix 5 (S) and Community items: prerequisites, owner, templates --------------------------
 
 
-@open_finding
 def test_readme_states_prerequisites():
     section = re.search(r"^##+\s*Prerequisites.*?(?=^##\s|\Z)", README, re.S | re.M | re.I)
     assert section, "README has no Prerequisites section"
