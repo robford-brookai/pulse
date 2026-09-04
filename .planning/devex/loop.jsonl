@@ -12,3 +12,5 @@
 {"date": "2026-09-04", "kind": "pr", "ref": "34e3c4b", "pr": 369, "task": "2.4", "open_findings": null}
 {"date": "2026-09-04", "kind": "pr", "ref": "fd4acc1", "pr": 370, "task": "2.3", "open_findings": null}
 {"date": "2026-09-04", "kind": "pr", "ref": "adc8593", "pr": 371, "task": "2.2", "open_findings": 1}
+{"date": "2026-09-04", "kind": "pr", "ref": "fd4e09f", "pr": 372, "task": "3.1", "open_findings": null}
+{"date": "2026-09-04", "kind": "pr", "ref": "ed388cf", "pr": 373, "task": "1.4", "open_findings": 0}
