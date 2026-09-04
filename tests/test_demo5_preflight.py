@@ -119,6 +119,26 @@ def test_seeded_card_requires_both_fields() -> None:
     assert TOKEN not in result.message
 
 
+def test_board_reachable_replaces_the_card_check_for_a_run_id() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"data": {preflight.BOARD_OBJECT_PLURAL: []}})
+
+    result = preflight.check_board_reachable(_client(handler), "https://twenty.example", TOKEN, "r1")
+    assert result.ok is True
+    assert result.name == "seeded-card"
+    assert "r1" in result.message
+    assert TOKEN not in result.message
+
+
+def test_board_reachable_names_transport_errors_by_type_only() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("boom", request=request)
+
+    result = preflight.check_board_reachable(_client(handler), "https://twenty.example", TOKEN, "r1")
+    assert result.ok is False
+    assert "ConnectError" in result.message
+
+
 def test_fixture_subject_key_comes_from_the_committed_consent_row(tmp_path: Path) -> None:
     fixture = tmp_path / "row.json"
     fixture.write_text(json.dumps({"subject_key": "fx-9"}))

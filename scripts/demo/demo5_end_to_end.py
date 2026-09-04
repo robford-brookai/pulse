@@ -61,6 +61,7 @@ import hashlib
 import importlib
 import json
 import os
+import re
 import secrets
 import sys
 import time
@@ -78,6 +79,40 @@ from starlette.testclient import TestClient
 
 DEMO_DIR = Path(__file__).resolve().parent
 FIXTURES_DIR = DEMO_DIR / "fixtures"
+
+#: The fixture patient every committed fixture file names (scripts/demo/fixtures/MANIFEST.md). A
+#: live ledger keeps this subject's events after one walk and stage 2's declare is idempotent on
+#: the fixture row, so a second full walk stops at stage 2. `--run-id` suffixes every occurrence
+#: at load time — the checksummed files are never edited — so each live run mints a fresh patient.
+BASE_PATIENT_KEY = "brook-fx-demo5-episode-0001"
+RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{0,31}$")
+
+
+def _suffix_patient_key(value: Any, run_id: str) -> Any:
+    """Deep-copy `value`, replacing the base patient key inside every string (decoys included)."""
+    if isinstance(value, str):
+        return value.replace(BASE_PATIENT_KEY, f"{BASE_PATIENT_KEY}-{run_id}")
+    if isinstance(value, dict):
+        return {key: _suffix_patient_key(item, run_id) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_suffix_patient_key(item, run_id) for item in value]
+    return value
+
+
+def load_fixtures(run_id: str | None = None) -> dict[str, Any]:
+    """The three fixture files the stages read, optionally re-keyed to a fresh patient."""
+    fixtures: dict[str, Any] = {
+        "referral_variants": json.loads((FIXTURES_DIR / "referral_variants.json").read_text())["variants"],
+        "consent_export_row": json.loads((FIXTURES_DIR / "consent_export_row.json").read_text()),
+        "verdict_mart_row": json.loads((FIXTURES_DIR / "verdict_mart_row.json").read_text()),
+    }
+    if run_id is None:
+        return fixtures
+    if not RUN_ID_RE.match(run_id):
+        message = f"run id {run_id!r} must be 1-32 letters, digits, or hyphens"
+        raise ValueError(message)
+    return _suffix_patient_key(fixtures, run_id)
+
 
 # The four demos already expose their stage logic as free functions (design.md decision 1) — cross
 # import by path, the same pattern `tests/test_demo3_live_kanban_drag.py` uses for a demo script
@@ -316,6 +351,7 @@ def build_offline_context(
     compose_file: Path = demo1.DEFAULT_COMPOSE_FILE,
     database_url: str = demo1.DEFAULT_DATABASE_URL,
     skip_compose_up: bool = False,
+    run_id: str | None = None,
 ) -> DemoContext:
     """Offline context builder (task 2.1): compose stack up, fixture landing tables loaded,
     in-process board route.
@@ -354,11 +390,7 @@ def build_offline_context(
     test_client.__enter__()
     transport = test_client._transport
 
-    fixtures = {
-        "referral_variants": json.loads((FIXTURES_DIR / "referral_variants.json").read_text())["variants"],
-        "consent_export_row": json.loads((FIXTURES_DIR / "consent_export_row.json").read_text()),
-        "verdict_mart_row": json.loads((FIXTURES_DIR / "verdict_mart_row.json").read_text()),
-    }
+    fixtures = load_fixtures(run_id)
     patient_key = fixtures["consent_export_row"]["subject_key"]
 
     # Stage 5's board window (task 2.2): a record already exists for the patient's enrollment
@@ -589,8 +621,50 @@ def _default_live_pool(database_url: str) -> ConnectionPool:
     return ConnectionPool(database_url, min_size=1, max_size=5)
 
 
+def ensure_live_board_card(target: Target, patient_key: str, *, client: httpx.Client | None = None) -> bool:
+    """Seed the board record stages 3, 5, and 6 read for `patient_key` if dev Twenty lacks it.
+
+    Returns True when a record was created. Idempotent: an existing `demo5` record for the key is
+    left alone. Only a `--run-id` walk calls this — the committed fixture patient's card is seeded
+    once by hand per the runbook and checked by the preflight.
+    """
+    http = client or httpx.Client()
+    headers = {"Authorization": f"Bearer {target.token}"}
+    base = target.url.rstrip("/")
+    try:
+        found = http.get(
+            f"{base}/rest/{V1_BOARD.plural}",
+            headers=headers,
+            params={"filter": f'canonicalPatientId[eq]:"{patient_key}"'},
+            timeout=30.0,
+        )
+        found.raise_for_status()
+        records = found.json().get("data", {}).get(V1_BOARD.plural, ())
+        if any(record.get("programCode") == "demo5" for record in records):
+            return False
+        created = http.post(
+            f"{base}/rest/{V1_BOARD.plural}",
+            headers=headers,
+            json={
+                "name": f"Demo 5 fixture {patient_key}",
+                "canonicalPatientId": patient_key,
+                "programCode": "demo5",
+                "lifecycleStatus": "PENDING_START",
+            },
+            timeout=30.0,
+        )
+        created.raise_for_status()
+        return True
+    finally:
+        if client is None:
+            http.close()
+
+
 def build_live_context(
-    config: LiveConfig, *, pool_factory: Callable[[str], ConnectionPool] = _default_live_pool
+    config: LiveConfig,
+    *,
+    pool_factory: Callable[[str], ConnectionPool] = _default_live_pool,
+    run_id: str | None = None,
 ) -> DemoContext:
     """Live context builder (task 3.1): the dev ledger over HTTP and its Postgres, dev Twenty over
     `httpx` (demo3's own pattern), and `STG_EVENTS.EVENTS` read-only as the warehouse window — the
@@ -603,12 +677,10 @@ def build_live_context(
     pool = pool_factory(config.database_url)
     pool.wait()
 
-    fixtures = {
-        "referral_variants": json.loads((FIXTURES_DIR / "referral_variants.json").read_text())["variants"],
-        "consent_export_row": json.loads((FIXTURES_DIR / "consent_export_row.json").read_text()),
-        "verdict_mart_row": json.loads((FIXTURES_DIR / "verdict_mart_row.json").read_text()),
-    }
+    fixtures = load_fixtures(run_id)
     patient_key = fixtures["consent_export_row"]["subject_key"]
+    if run_id is not None and ensure_live_board_card(config.twenty_target, patient_key):
+        print(f"seeded the board card for fresh patient {patient_key!r}")
 
     def live_warehouse_reader(
         subjects: frozenset[tuple[str, str]],
@@ -1293,6 +1365,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "see docs/runbooks/demo5-end-to-end.md)",
     )
     parser.add_argument(
+        "--run-id",
+        default=None,
+        metavar="ID",
+        help="suffix the fixture patient key with -ID (letters, digits, hyphens) so this walk mints a "
+        "fresh patient; a live ledger keeps the committed fixture patient's events after one walk. "
+        "Live, the walk seeds the fresh patient's board card itself.",
+    )
+    parser.add_argument(
         "--from-stage",
         choices=[stage.name for stage in STAGES],
         default=None,
@@ -1321,7 +1401,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
 
     stages = stages_from(args.from_stage)
+    if args.run_id is not None and not RUN_ID_RE.match(args.run_id):
+        print(f"FAILED: --run-id {args.run_id!r} must be 1-32 letters, digits, or hyphens", file=sys.stderr)
+        return 2
     print("=== Demo 5: end to end ===")
+    if args.run_id:
+        print(f"run id {args.run_id!r}: fixture patient is {BASE_PATIENT_KEY}-{args.run_id}")
     if args.from_stage:
         print(
             f"starting at stage {args.from_stage!r}; skipping {[s.name for s in STAGES[: len(STAGES) - len(stages)]]}"
@@ -1332,12 +1417,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         except LiveStartupError as error:
             print(f"FAILED: {error}", file=sys.stderr)
             return 1
-        ctx = build_live_context(config)
+        ctx = build_live_context(config, run_id=args.run_id)
     else:
         ctx = build_offline_context(
             compose_file=args.compose_file,
             database_url=args.database_url,
             skip_compose_up=args.skip_compose_up,
+            run_id=args.run_id,
         )
     try:
         receipts = run_walk(stages, ctx)

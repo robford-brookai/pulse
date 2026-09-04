@@ -12,7 +12,9 @@
 #
 # Never prints a secret value: only variable names, key names, and set/MISSING.
 # Flags: --no-preflight skips step 4; --from-stage=NAME is passed through to the walk (stages 5
-# and 6 can run alone against events an earlier walk committed). Env overrides: STAGE_E2E_CONSENT_KEY / STAGE_E2E_REPLAY_KEY
+# and 6 can run alone against events an earlier walk committed); --run-id=ID goes to both the
+# preflight and the walk so a live run mints a fresh fixture patient and seeds its own card
+# (a persistent ledger walks the committed fixture patient once). Env overrides: STAGE_E2E_CONSENT_KEY / STAGE_E2E_REPLAY_KEY
 # name the Duplo secret keys to read when the prefix match is wrong or ambiguous.
 # STAGE_E2E_DATABASE_URL replaces the scratch file's DATABASE_URL — the laptop reaches the private
 # RDS only through a relay (env-vars process doc §4), so the DSN it dials is a localhost one.
@@ -25,12 +27,14 @@ DUPLO_SECRET="${DUPLO_SECRET:-pulse-ledger-api-secret}"
 SCRATCH="scripts/verdict-env-vars.sh"
 PREFLIGHT=1
 WALK_ARGS=()
+PREFLIGHT_ARGS=()
 for arg in "$@"; do
   case "$arg" in
     --no-preflight) PREFLIGHT=0 ;;
-    -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
     --from-stage=*) WALK_ARGS+=("$arg") ;;
-    *) echo "stage: unknown flag $arg (walk flags go as --from-stage=NAME)" >&2; exit 2 ;;
+    --run-id=*) WALK_ARGS+=("$arg"); PREFLIGHT_ARGS+=("$arg") ;;
+    *) echo "stage: unknown flag $arg (walk flags: --from-stage=NAME, --run-id=ID)" >&2; exit 2 ;;
   esac
 done
 
@@ -118,7 +122,7 @@ fi
 
 # 4. preflight
 if [[ "$PREFLIGHT" -eq 1 ]]; then
-  uv run python scripts/demo/demo5_preflight.py
+  uv run python scripts/demo/demo5_preflight.py ${PREFLIGHT_ARGS[@]+"${PREFLIGHT_ARGS[@]}"}
 fi
 
 # 5. the walk, in this shell

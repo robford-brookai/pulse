@@ -26,7 +26,7 @@ import httpx
 import pytest
 from billing.facts import SubjectFactsSnapshot
 from billing.rules import billing_eligibility
-from billing_connector.config import Config, MissingConfigVariableError
+from billing_connector.config import Config, ConfigError
 from billing_connector.evaluate import RegistryMismatchError
 from billing_connector.receipts import Receipt
 from billing_connector.service import (
@@ -590,15 +590,19 @@ class TestStartupRefusals:
     """Spec: "A missing value names itself", "A registry mismatch halts startup" — both before
     any connection is opened, so neither test needs a transport."""
 
-    def test_a_missing_variable_names_itself_and_nothing_else(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_every_missing_variable_names_itself_at_once(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("BILLING_CONNECTOR_TOKEN", raising=False)
         monkeypatch.delenv("BILLING_CONNECTOR_QUEUE_URL", raising=False)
         monkeypatch.delenv("BILLING_CONNECTOR_LEDGER_BASE_URL", raising=False)
 
-        with pytest.raises(MissingConfigVariableError) as raised:
+        with pytest.raises(ConfigError) as raised:
             main([])
 
-        assert raised.value.name == "BILLING_CONNECTOR_TOKEN"
+        assert raised.value.problems == (
+            "BILLING_CONNECTOR_TOKEN",
+            "BILLING_CONNECTOR_QUEUE_URL",
+            "BILLING_CONNECTOR_LEDGER_BASE_URL",
+        )
         assert "BILLING_CONNECTOR_TOKEN" in str(raised.value)
 
     def test_a_registry_mismatch_halts_before_consuming(self, monkeypatch: pytest.MonkeyPatch) -> None:
