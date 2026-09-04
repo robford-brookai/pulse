@@ -82,6 +82,7 @@ tasks:
     desc: Setup venv and install dependencies
     cmds:
       - uv sync --all-packages
+      - uv run pre-commit install
 
   mcp:check:
     desc: MCP diagnostics — duplicate scopes, dead servers (see docs/mcp-servers.md)
