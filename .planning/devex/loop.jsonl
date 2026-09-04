@@ -14,3 +14,4 @@
 {"date": "2026-09-04", "kind": "pr", "ref": "adc8593", "pr": 371, "task": "2.2", "open_findings": 1}
 {"date": "2026-09-04", "kind": "pr", "ref": "fd4e09f", "pr": 372, "task": "3.1", "open_findings": null}
 {"date": "2026-09-04", "kind": "pr", "ref": "ed388cf", "pr": 373, "task": "1.4", "open_findings": 0}
+{"date": "2026-09-04", "kind": "audit", "ref": "b26dee0", "open_findings": 0, "overall": 5.9, "connector": 5.8, "qa": "accept-with-corrections", "reports": ".planning/reports/2026-09-04-devex-*", "prior": {"overall": 3.8, "connector": 2.4}}
