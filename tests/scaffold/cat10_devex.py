@@ -399,12 +399,39 @@ def test_task_descriptions_carry_no_change_ids():
 _GIT_HELPER_FILES = ("tests/scaffold/cat5_glue_logic.py", "tests/scaffold/cat9_golden_workflow.py")
 
 
-@open_finding
 def test_scaffold_git_helpers_are_hermetic_to_global_signing():
     """Fix 1: the sandbox git helpers pin commit.gpgsign=false so a global signing config cannot fail the gate."""
     for rel in _GIT_HELPER_FILES:
         text = (ROOT / rel).read_text()
         assert "commit.gpgsign=false" in text, f"{rel} does not pin commit.gpgsign=false"
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not have("git"), reason="git not installed")
+def test_scaffold_gates_survive_a_global_gpgsign_true(tmp_path: Path):
+    """Behavioural twin: a hostile global config (gpgsign on, signing programs that always fail)
+    must not fail the fixture gates that commit through the sandboxed `_git` helpers."""
+    hostile = tmp_path / "gitconfig-global"
+    hostile.write_text(
+        "[init]\n\tdefaultBranch = main\n"
+        "[commit]\n\tgpgsign = true\n"
+        '[gpg]\n\tformat = x509\n\tprogram = false\n[gpg "x509"]\n\tprogram = false\n'
+    )
+    env = {**os.environ, "GIT_CONFIG_GLOBAL": str(hostile)}
+    node_ids = [
+        "tests/scaffold/cat5_glue_logic.py::test_commits_with_a_handoff_are_fine",
+        "tests/scaffold/cat5_glue_logic.py::test_explicit_commits_bypass_the_history_scan",
+        "tests/scaffold/cat9_golden_workflow.py::test_template_sync_survives_the_package_rename",
+    ]
+    r = subprocess.run(  # noqa: S603
+        [sys.executable, "-m", "pytest", "-o", "addopts=", *node_ids],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert r.returncode == 0, r.stdout[-4000:] + r.stderr[-2000:]
 
 
 @open_finding
