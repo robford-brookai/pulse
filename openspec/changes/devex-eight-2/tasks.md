@@ -93,7 +93,7 @@ non-Taskfile tasks alongside a serial one when they share no files.
 
 ## 4. Close-out
 
-- [ ] 4.1 Run `/devex-audit` when `task devex:check` reports 0 open findings; append the ledger
+- [x] 4.1 Run `/devex-audit` when `task devex:check` reports 0 open findings; append the ledger
       row; report whether the exit gate holds, else open `devex-eight-3`.
       Tests: ledger row present with `kind: audit`; the three dated reports exist.
       `[model: opus | deps: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 2.1, 2.2, 3.1 | lane: repo_change | wave: 4]`
