@@ -15,3 +15,11 @@
 {"date": "2026-09-04", "kind": "pr", "ref": "fd4e09f", "pr": 372, "task": "3.1", "open_findings": null}
 {"date": "2026-09-04", "kind": "pr", "ref": "ed388cf", "pr": 373, "task": "1.4", "open_findings": 0}
 {"date": "2026-09-04", "kind": "audit", "ref": "b26dee0", "open_findings": 0, "overall": 5.9, "connector": 5.8, "qa": "accept-with-corrections", "reports": ".planning/reports/2026-09-04-devex-*", "prior": {"overall": 3.8, "connector": 2.4}}
+{"date": "2026-09-05", "kind": "pr", "ref": "acb6109", "pr": 379, "task": "1.2", "open_findings": null, "change": "devex-eight-2"}
+{"date": "2026-09-05", "kind": "pr", "ref": "03be24d", "pr": 380, "task": "1.3", "open_findings": null, "change": "devex-eight-2"}
+{"date": "2026-09-05", "kind": "pr", "ref": "d17d0b0", "pr": 381, "task": "1.7", "open_findings": null, "change": "devex-eight-2"}
+{"date": "2026-09-05", "kind": "pr", "ref": "c292e87", "pr": 382, "task": "1.1", "open_findings": null, "change": "devex-eight-2"}
+{"date": "2026-09-05", "kind": "pr", "ref": "927189d", "pr": 383, "task": "1.4", "open_findings": null, "change": "devex-eight-2"}
+{"date": "2026-09-05", "kind": "pr", "ref": "8a01c5a", "pr": 384, "task": "1.5", "open_findings": null, "change": "devex-eight-2"}
+{"date": "2026-09-05", "kind": "pr", "ref": "b4fc49c", "pr": 385, "task": "1.6", "open_findings": null, "change": "devex-eight-2"}
+{"date": "2026-09-05", "kind": "pr", "ref": "b868c0a", "pr": 386, "task": "1.8", "open_findings": 3, "change": "devex-eight-2"}
