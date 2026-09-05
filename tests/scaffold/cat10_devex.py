@@ -243,7 +243,6 @@ def test_issue_and_pr_templates_exist():
 GUIDE = "docs/connectors/authoring.md"
 
 
-@open_finding
 def test_authoring_guide_linked_from_readme_and_contributing():
     """Fix 1: the best document in the repo is invisible from the two files GitHub shows first."""
     assert GUIDE in README and GUIDE in CONTRIBUTING
