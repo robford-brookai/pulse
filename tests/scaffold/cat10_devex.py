@@ -249,7 +249,6 @@ def test_authoring_guide_linked_from_readme_and_contributing():
     assert GUIDE in README and GUIDE in CONTRIBUTING
 
 
-@open_finding
 def test_docs_index_is_a_front_door():
     """Fix 2: docs/index.md is a real front door with a Getting started section, not a badge stub."""
     index = (DOCS / "index.md").read_text()
