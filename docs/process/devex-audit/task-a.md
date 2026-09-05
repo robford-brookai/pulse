@@ -12,9 +12,11 @@ CONTEXT
 - Persona: a competent engineer joining the team whose first job is to build a NEW connector for
   {{PERSONA_CONNECTOR}}. Walk their path: discover, clone, bootstrap, understand the connector
   kit, scaffold a connector, run tests, read errors, ship via the ADE workflow.
-- Blindness: do NOT read tests/scaffold/cat10_devex.py, scripts/devex/, .planning/devex/, or any
-  prior file matching .planning/reports/*devex*. You are measuring what a newcomer meets, not
-  checking a list.
+- Blindness: do NOT read any prior file matching .planning/reports/*devex*, nor the per-run check
+  output (.planning/devex/*-check.json). You are measuring what a newcomer meets, not checking a
+  list. The repo's own DX measurement machinery is part of what you audit in Step 8, so you MAY read
+  tests/scaffold/cat10_devex.py, scripts/devex/, and .planning/devex/loop.jsonl there, as a newcomer
+  who found them would; do not use them to steer Steps 0-7.
 - Constraints: READ-ONLY on the repo except your own report file. No PHI anywhere. No live
   network calls to production systems. You MAY run local commands (task, uv, pytest, bash, git)
   and MUST clone the repo into {{SCRATCH_DIR}} to time a fresh onboarding. Do not modify any

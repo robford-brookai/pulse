@@ -32,10 +32,12 @@ own; the coordinator fills in the four placeholders listed in each file's header
 
 Blindness rules, enforced by the specs:
 
-- A collects evidence from the persona's path only. It does not read `tests/scaffold/cat10_devex.py`,
-  `scripts/devex/`, `.planning/devex/` or any prior audit report.
-- B scores from A's evidence and its own spot checks. It does not read the inner-tier files or
-  the prior scorecard.
+- A collects evidence from the persona's path only. It does not read any prior audit report or the
+  per-run check output. In Step 8 it may read the repo's own measurement machinery
+  (`tests/scaffold/cat10_devex.py`, `scripts/devex/`, `.planning/devex/loop.jsonl`), since that
+  machinery is what Step 8 audits (protocol change 2026-09-04, after QA 6.1 of the second audit).
+- B scores from A's evidence and its own spot checks. It does not read the prior scorecard or the
+  check output; for dimension 8 it may verify A's claims against the same measurement files.
 - C does the boomerang: compares B's scorecard to the prior one, re-runs at least 15 cited
   commands on a second fresh clone, re-measures TTHW, and flags any dimension that rose 3 or
   more points without a merged PR behind it.
