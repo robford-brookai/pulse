@@ -81,3 +81,17 @@ credential value SHALL appear in any log, receipt, or error message.
 - **WHEN** its runtime configuration is inspected
 - **THEN** it carries no ledger DSN — its only pulse-facing surfaces are the command API and
   its own queue
+
+## Deprecations
+
+A name `pulse_core.connector` retires SHALL stay exported and working for one release after the
+retirement is announced, and SHALL raise `DeprecationWarning` naming its replacement on use. The
+announcement SHALL land in `packages/pulse-core/CHANGELOG.md` (a "Connector authors" line under a
+`### Deprecated` heading) in the same PR that starts the one-release grace window, and SHALL be
+listed here until the grace window closes and the name is removed:
+
+| Deprecated name | Replacement | Announced | Removal |
+| --- | --- | --- | --- |
+| _none yet_ | | | |
+
+Removing a name SHALL delete its row here in the same PR that removes the export.
