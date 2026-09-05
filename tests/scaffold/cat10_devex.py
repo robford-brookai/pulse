@@ -289,11 +289,19 @@ def test_connector_kit_exports_jitter():
     assert "Jitter" in kit.__all__ and hasattr(kit, "Jitter")
 
 
-@open_finding
 def test_template_ships_the_tests_the_guide_diagrams():
-    """Fix 6: every test file named in the guide's rendered-tree diagram exists in the template."""
+    """Fix 6: every test file named in the guide's rendered-tree diagram exists in the template.
+
+    Scoped to the ```text rendered-tree fence itself (step 3), not the whole guide: the guide also
+    names pulse-core's own gate tests (`test_connector_exports.py`,
+    `test_connector_credential_gate.py`) in prose elsewhere, and those are not part of what
+    `templates/connector/` renders.
+    """
     template_tests = ROOT / "templates/connector/tests"
-    diagrammed = set(re.findall(r"(test_[a-z_]+\.py|factories\.py|conftest\.py)", (ROOT / GUIDE).read_text()))
+    guide_text = (ROOT / GUIDE).read_text()
+    tree_diagram = re.search(r"```text\n(.*?)\n```", guide_text, re.S)
+    assert tree_diagram, "guide has no ```text rendered-tree fence to check against the template"
+    diagrammed = set(re.findall(r"(test_[a-z_]+\.py|factories\.py|conftest\.py)", tree_diagram.group(1)))
     shipped = {p.name.removesuffix(".tmpl") for p in template_tests.glob("*.tmpl")} | {
         p.name for p in template_tests.glob("*.py")
     }

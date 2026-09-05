@@ -1,0 +1,110 @@
+"""`example_connector.config` — the `from_env()` test the authoring guide names first (step 4).
+
+Every required environment variable is faked as a plain `dict`; `conftest.py` blocks sockets for
+the whole suite regardless — this module makes no network call either way.
+"""
+
+from __future__ import annotations
+
+import pytest
+from example_connector.config import (
+    LEDGER_BASE_URL_ENV_VAR,
+    QUEUE_URL_ENV_VAR,
+    STALE_AFTER_ENV_VAR,
+    TOKEN_ENV_VAR,
+    Config,
+    ConfigError,
+)
+
+#: A complete, synthetic environment — no real credential value, per the repo's no-secret fixture
+#: posture.
+COMPLETE_ENV: dict[str, str] = {
+    TOKEN_ENV_VAR: "fixture-token-do-not-use",
+    QUEUE_URL_ENV_VAR: "https://queue.test/example-connector",
+    LEDGER_BASE_URL_ENV_VAR: "https://ledger.test",
+}
+
+#: The variables `from_env()` requires present — `STALE_AFTER_ENV_VAR` has a default and is
+#: deliberately excluded from this set.
+_REQUIRED_ENV_VARS = (TOKEN_ENV_VAR, QUEUE_URL_ENV_VAR, LEDGER_BASE_URL_ENV_VAR)
+
+
+def test_a_complete_environment_resolves() -> None:
+    config = Config.from_env(COMPLETE_ENV)
+
+    assert config.credential_name == TOKEN_ENV_VAR
+    assert config.queue_url == COMPLETE_ENV[QUEUE_URL_ENV_VAR]
+    assert config.ledger_base_url == COMPLETE_ENV[LEDGER_BASE_URL_ENV_VAR]
+
+
+def test_stale_after_defaults_when_unset() -> None:
+    config = Config.from_env(COMPLETE_ENV)
+
+    assert config.stale_after.total_seconds() == 15 * 60
+
+
+def test_stale_after_reads_a_configured_duration() -> None:
+    env = {**COMPLETE_ENV, STALE_AFTER_ENV_VAR: "3600"}
+
+    config = Config.from_env(env)
+
+    assert config.stale_after.total_seconds() == 3600
+
+
+@pytest.mark.parametrize("missing_var", _REQUIRED_ENV_VARS)
+def test_one_missing_variable_names_itself(missing_var: str) -> None:
+    env = {name: value for name, value in COMPLETE_ENV.items() if name != missing_var}
+
+    with pytest.raises(ConfigError) as exc_info:
+        Config.from_env(env)
+
+    assert len(exc_info.value.problems) == 1
+    assert missing_var in str(exc_info.value)
+
+
+def test_all_missing_variables_are_named_in_one_error() -> None:
+    with pytest.raises(ConfigError) as exc_info:
+        Config.from_env({})
+
+    assert len(exc_info.value.problems) == len(_REQUIRED_ENV_VARS)
+    message = str(exc_info.value)
+    for name in _REQUIRED_ENV_VARS:
+        assert name in message
+
+
+def test_invalid_stale_after_names_itself_alongside_an_unrelated_missing_variable() -> None:
+    env = {name: value for name, value in COMPLETE_ENV.items() if name != LEDGER_BASE_URL_ENV_VAR} | {
+        STALE_AFTER_ENV_VAR: "banana"
+    }
+
+    with pytest.raises(ConfigError) as exc_info:
+        Config.from_env(env)
+
+    assert len(exc_info.value.problems) == 2
+    message = str(exc_info.value)
+    assert LEDGER_BASE_URL_ENV_VAR in message
+    assert STALE_AFTER_ENV_VAR in message
+    assert "banana" in message
+
+
+def test_from_env_defaults_to_the_real_process_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name, value in COMPLETE_ENV.items():
+        monkeypatch.setenv(name, value)
+
+    config = Config.from_env()
+
+    assert config.queue_url == COMPLETE_ENV[QUEUE_URL_ENV_VAR]
+
+
+def test_credential_name_is_the_env_var_name_not_its_value() -> None:
+    config = Config.from_env(COMPLETE_ENV)
+
+    assert config.credential_name == TOKEN_ENV_VAR
+    assert config.credential_name != COMPLETE_ENV[TOKEN_ENV_VAR]
+
+
+def test_no_configured_value_is_reachable_from_repr_or_str() -> None:
+    config = Config.from_env(COMPLETE_ENV)
+
+    for text in (repr(config), str(config)):
+        assert COMPLETE_ENV[TOKEN_ENV_VAR] not in text
