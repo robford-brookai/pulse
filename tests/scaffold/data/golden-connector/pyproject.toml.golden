@@ -21,6 +21,10 @@ dev = [
     # This package typechecks under pyright strict (see [tool.pyright] below). Add it to the
     # `typecheck` target's pyright list when you register the package.
     "pyright>=1.1.390",
+    # `tests/factories.py`'s `FakeCommandTransport` fakes `PulseCoreClient` at the
+    # `httpx.MockTransport` boundary — declared directly rather than relying on `pulse-core`'s
+    # transitive pin, so the workspace resolves one httpx (billing-connector's precedent).
+    "httpx>=0.28.1",
 ]
 
 [build-system]
