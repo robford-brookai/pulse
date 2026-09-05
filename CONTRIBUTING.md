@@ -2,7 +2,7 @@
 
 ## Owner
 
-**Owner: Rob Ford** (GitHub [@robford-brookai](https://github.com/robford-brookai)). Ask the owner directly on Slack; a dedicated channel has not been named yet.
+**Owner: Rob Ford** (GitHub [@robford-brookai](https://github.com/robford-brookai)). Ask the owner directly on Slack; a dedicated channel has not been named yet. Building a connector? Start with [`docs/connectors/authoring.md`](docs/connectors/authoring.md).
 
 ## Development Workflow
 
