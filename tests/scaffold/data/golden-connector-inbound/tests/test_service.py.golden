@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from pulse_core.connector import FixtureRowSource
+
 from example_connector.config import Config
 from example_connector.receipts import Receipt
 from example_connector.service import CURSOR_COLUMN, Reader, SourceRow, build_row_source, handle_page, run

@@ -19,6 +19,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -456,7 +457,6 @@ def test_connector_new_registers_pyright_not_mypy():
     assert "TYPED_PATHS" not in out or "packages/zapchk/src" not in out.split("TYPED_PATHS", 1)[1][:200]
 
 
-@open_finding
 def test_task_lint_is_read_only():
     """Fix 4: `task lint` is documented read-only; ruff must not run with fix=true under it."""
     import tomllib
@@ -464,6 +464,50 @@ def test_task_lint_is_read_only():
     cfg = tomllib.loads((ROOT / "pyproject.toml").read_text())
     ruff_fix = cfg.get("tool", {}).get("ruff", {}).get("fix", False)
     assert (not ruff_fix) or "--no-fix" in _cmds("lint"), "task lint rewrites files"
+
+
+@pytest.mark.skipif(not have("ruff"), reason="ruff not on PATH")
+def test_connector_new_renders_clean_regardless_of_name(tmp_path):
+    """Fix 4 (cont.): the rendered scaffold passes `ruff check --no-fix` whichever side of
+    `pulse_core` the connector's name sorts on. Without `pulse-core` declared explicitly
+    first-party (`pyproject.toml.tmpl`'s isort section), a name sorting before it (`papchk`) and
+    one sorting after it (`zapchk`) render with opposite import orders, and only one is clean —
+    the I001 the DevEx audit found. `--root`/`--template` point registration and rendering at a
+    scratch copy so this never touches the real `packages/` tree.
+    """
+    (tmp_path / "pyproject.toml").write_text((ROOT / "pyproject.toml").read_text())
+    (tmp_path / "Taskfile.yml").write_text((ROOT / "Taskfile.yml").read_text())
+    for name in ("papchk", "zapchk"):
+        render = subprocess.run(  # noqa: S603
+            [
+                sys.executable,
+                "scripts/connector_new.py",
+                "--name",
+                name,
+                "--direction",
+                "inbound",
+                "--template",
+                "templates/connector",
+                "--dest",
+                str(tmp_path / "packages" / name),
+                "--root",
+                str(tmp_path),
+                "--apply-registrations",
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert render.returncode == 0, render.stdout + render.stderr
+        lint = subprocess.run(  # noqa: S603
+            [shutil.which("ruff") or "ruff", "check", "--no-fix", f"packages/{name}"],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert lint.returncode == 0, f"{name}: {lint.stdout}{lint.stderr}"
 
 
 @open_finding
