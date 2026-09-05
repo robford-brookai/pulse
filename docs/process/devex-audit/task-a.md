@@ -33,6 +33,9 @@ Execute Steps 0 through 8 in the persona. Collect evidence, not scores. Do not a
 1. Getting started: real fresh clone into {{SCRATCH_DIR}}, then the documented quickstart, timed
    to the second per stage. TTHW = clone to a green `task check` or the closest equivalent.
    Record every point where you had to read a doc, guess, or hit an error. Note cache warmth.
+   Take these timings with nothing else running: no parallel gate, no second clone, no background
+   job of your own. If you must quote a number measured under contention, say so at the point of
+   use; it is not a benchmark.
 2. API/CLI/SDK ergonomics, connector-focused: attempt to understand and scaffold a connector for
    {{PERSONA_CONNECTOR}} following only what the repo tells you. Count files and docs read,
    concepts learned, whether a scaffold command exists, how far you got before getting stuck.
