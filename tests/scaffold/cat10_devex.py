@@ -451,7 +451,6 @@ def test_scaffold_ships_a_working_declare_example():
     )
 
 
-@open_finding
 def test_cursor_store_transport_errors_name_the_endpoint():
     """Fix 6: LedgerCursorStore wraps transport failures with the base URL tried and the variable that supplied it."""
     src = (ROOT / "packages/pulse-core/src/pulse_core/connector/rows.py").read_text()
