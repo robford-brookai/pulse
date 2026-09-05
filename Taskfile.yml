@@ -110,7 +110,11 @@ tasks:
     desc: Check formatting and lint rules (read-only)
     cmds:
       - uv run ruff format {{.LINT_PATHS}} --check
-      - uv run ruff check {{.LINT_PATHS}}
+      # --no-fix: `[tool.ruff] fix = true` makes `ruff check` rewrite files by default, which
+      # pre-commit's ruff-check hook relies on (CONTRIBUTING.md: "a hook that rewrites a file
+      # fails the commit by design"). This target's own desc says read-only, so pin that here
+      # instead of flipping the shared default.
+      - uv run ruff check --no-fix {{.LINT_PATHS}}
 
   twenty:gen:
     desc: Regenerate the Twenty app's generated surfaces and the Metadata API operation-set artifact

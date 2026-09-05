@@ -40,3 +40,15 @@ testpaths = ["tests"]
 [tool.pyright]
 include = ["src", "tests"]
 typeCheckingMode = "strict"
+
+[tool.ruff]
+extend = "../../pyproject.toml"
+
+[tool.ruff.lint.isort]
+# `src/{{NAME}}/*.py` gets this for free — a file inside the `{{NAME}}` package importing its own
+# submodules is self-evidently first-party. A file under `tests/`, outside that package, is not,
+# so without this isort falls back to bucketing `{{NAME}}` alongside `pulse_core` as one
+# alphabetically sorted group — making the import order that renders clean depend on whether the
+# connector's name sorts before or after "pulse_core". Declaring it explicitly here removes that
+# dependency everywhere in the package, not just under src/.
+known-first-party = ["{{NAME}}"]

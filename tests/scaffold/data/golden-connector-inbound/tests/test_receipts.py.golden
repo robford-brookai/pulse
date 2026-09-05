@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from pulse_core.connector import RowError, ValidatedPage
+
 from example_connector.receipts import Receipt
 
 
