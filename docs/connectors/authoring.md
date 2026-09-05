@@ -278,7 +278,11 @@ The change lifecycle is `WORKFLOW.md`'s, and a connector is an ordinary repo cha
 4. Push, open a **ready** PR (never a draft), and drive CI green yourself.
 5. Merge is the human step. `task collect CHANGE=<id>` gathers handoffs; `task checkoff
    CHANGE=<id>` flips the merged tasks' boxes, which is what opens the next wave;
-   `task verify CHANGE=<id>` runs the full gate including drift and spec validation.
+   `task verify CHANGE=<id>` runs the full gate including drift and spec validation (`CHANGE` is
+   required — it fails fast rather than validating the wrong change).
+6. On a fresh clone, `task lore:init` creates `.openlore/` before the first `task verify` or
+   `task lore:drift` — it runs `openlore init --force`, so it's safe to re-run on a clone that
+   already has one.
 
 Two things that are not ordinary repo changes:
 

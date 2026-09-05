@@ -133,7 +133,8 @@ directory listing). Resolve it once per command and fill it into every subsequen
 
 ## Conventions
 
-- `task check` is the contract between this machine and CI. Green locally means green in CI.
+- `task check` is the contract between this machine and CI: it reproduces `.github/workflows/main.yml`'s
+  `quality` job. Green locally means green in CI.
 - No live network in tests; CI has no secrets by default.
 - Specs are owned by the doc-updater: write proposed changes to `HANDOFF.md`, per `AGENTS.md`.
 - `docs/adr/` is append-only; a superseded decision gets a status flip and a new ADR.
