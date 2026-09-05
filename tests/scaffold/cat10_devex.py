@@ -484,7 +484,6 @@ def test_check_timings_are_recorded():
     assert "devex/timing" in _cmds("check") or "timing" in _cmds("check"), "task check records no timings"
 
 
-@open_finding
 def test_codeowners_names_the_connector_kit_owner_and_defect_template_exists():
     """Fix 10: a per-area CODEOWNERS line for the kit and a connector-kit-defect issue template."""
     co = (ROOT / ".github/CODEOWNERS").read_text()
