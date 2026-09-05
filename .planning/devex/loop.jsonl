@@ -38,3 +38,12 @@
 {"date": "2026-09-05", "kind": "timing", "target": "workflow:lint", "seconds": 0.123, "rc": 0}
 {"date": "2026-09-05", "kind": "timing", "target": "docs:lock-guard", "seconds": 0.059, "rc": 0}
 {"date": "2026-09-05", "kind": "timing", "target": "docs:build", "seconds": 1.428, "rc": 0}
+{"date": "2026-09-05", "kind": "timing", "target": "lint", "seconds": 0.263, "rc": 0}
+{"date": "2026-09-05", "kind": "timing", "target": "typecheck", "seconds": 10.33, "rc": 0}
+{"date": "2026-09-05", "kind": "timing", "target": "test", "seconds": 103.868, "rc": 0}
+{"date": "2026-09-05", "kind": "timing", "target": "twenty:validate", "seconds": 0.245, "rc": 0}
+{"date": "2026-09-05", "kind": "timing", "target": "twenty:test", "seconds": 5.994, "rc": 0}
+{"date": "2026-09-05", "kind": "timing", "target": "workflow:lint", "seconds": 0.166, "rc": 0}
+{"date": "2026-09-05", "kind": "timing", "target": "docs:lock-guard", "seconds": 0.184, "rc": 0}
+{"date": "2026-09-05", "kind": "timing", "target": "docs:build", "seconds": 1.936, "rc": 0}
+{"date": "2026-09-05", "kind": "audit", "ref": "5177d05", "open_findings": 0, "overall": 6.0, "connector": 5.6, "qa": "accept-with-corrections", "reports": ".planning/reports/2026-09-05b-devex-*", "prior": {"overall": 6.5, "connector": 6.7, "ref": "11622da"}, "change": "devex-eight-3", "task": "3.1", "persona": "labs", "note": "Second audit dated 2026-09-05 (suffix b). Gate not met. API/CLI -2 is a real regression from PR #403 (task 2.1: bare 'from factories' import in both test_service templates and an outbound def run line ruff format rejects); Upgrade/Community -1 are scorer drift with no relevant commits (QA C-B4). open_findings=0 while three defects were live: no gate renders a connector and runs its tests."}
