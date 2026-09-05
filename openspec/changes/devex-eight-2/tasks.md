@@ -84,7 +84,7 @@ non-Taskfile tasks alongside a serial one when they share no files.
 
 ## 3. Wave 3 — the L item
 
-- [ ] 3.1 `connector:new` `DIRECTION=inbound`: a second template overlay whose service implements
+- [x] 3.1 `connector:new` `DIRECTION=inbound`: a second template overlay whose service implements
       `RowSource` and `CursorStore` against the kit's inbound contract, with its own receipts and a
       passing test; outbound stays the default.
       Tests: remove xfail from `test_connector_new_supports_inbound_direction`; cat9 golden for the
