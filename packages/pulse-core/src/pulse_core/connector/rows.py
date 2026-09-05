@@ -190,14 +190,29 @@ class FixtureRowSource:
         return page
 
 
+class LedgerCursorStoreError(RuntimeError):
+    """The ledger was unreachable at the base URL a `LedgerCursorStore` was given.
+
+    Names the base URL tried and the configuration variable that supplied it — never a raw
+    `httpx` traceback, which names neither and leaves the operator to go hunting for both.
+    """
+
+    def __init__(self, base_url: str, base_url_env_var: str, cause: httpx.TransportError) -> None:
+        self.base_url = base_url
+        self.base_url_env_var = base_url_env_var
+        super().__init__(f"could not reach the ledger at {base_url!r} (from {base_url_env_var}): {cause}")
+
+
 class LedgerCursorStore:
     """The production `CursorStore`: the ledger's `GET/PUT /writers/{writer_id}/cursor`.
 
     `writer_id` is the connector's own writer id — the durable cursor is scoped to it, distinct
     from any D15 command-attribution credential the connector's declarer authenticates with.
-    `transport` is the seam tests use (`httpx.MockTransport`) to fake the boundary without a live
-    network; production passes none. Auth per D15: the token arrives from configuration (value
-    from the environment), and the ledger scopes the cursor to this credential's own writer id.
+    `base_url_env_var` names the configuration variable `base_url` came from — carried only for
+    `LedgerCursorStoreError` to name, never read from the environment itself. `transport` is the
+    seam tests use (`httpx.MockTransport`) to fake the boundary without a live network; production
+    passes none. Auth per D15: the token arrives from configuration (value from the environment),
+    and the ledger scopes the cursor to this credential's own writer id.
     """
 
     def __init__(
@@ -206,10 +221,13 @@ class LedgerCursorStore:
         *,
         writer_id: str,
         token: str,
+        base_url_env_var: str,
         transport: httpx.BaseTransport | None = None,
         timeout: float = 10.0,
     ) -> None:
         self._path = cursor_path(writer_id)
+        self._base_url = base_url
+        self._base_url_env_var = base_url_env_var
         self._http = httpx.Client(
             base_url=base_url,
             transport=transport,
@@ -227,7 +245,10 @@ class LedgerCursorStore:
         self._http.close()
 
     def load(self) -> Mapping[str, object] | None:
-        response = self._http.get(self._path)
+        try:
+            response = self._http.get(self._path)
+        except httpx.TransportError as exc:
+            raise LedgerCursorStoreError(self._base_url, self._base_url_env_var, exc) from exc
         if response.status_code == 404:
             return None
         response.raise_for_status()
@@ -237,5 +258,8 @@ class LedgerCursorStore:
 
     def save(self, cursor: Mapping[str, object]) -> None:
         canonical = validate_cursor(cursor)
-        response = self._http.put(self._path, json=canonical)
+        try:
+            response = self._http.put(self._path, json=canonical)
+        except httpx.TransportError as exc:
+            raise LedgerCursorStoreError(self._base_url, self._base_url_env_var, exc) from exc
         response.raise_for_status()

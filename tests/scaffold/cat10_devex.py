@@ -262,7 +262,6 @@ def test_verify_requires_change_and_lore_init_exists():
     assert "lore:init" in TARGETS or "openlore init" in _cmds("install")
 
 
-@open_finding
 def test_verify_guards_against_empty_change():
     """Audit 3 fix 2 (QA R1): `requires: vars: [CHANGE]` is satisfied by Taskfile.yml's empty CHANGE
     default, so `task verify` with no CHANGE runs the whole gate before failing. The target needs a
@@ -479,7 +478,6 @@ def test_scaffold_ships_a_working_declare_example():
     )
 
 
-@open_finding
 def test_cursor_store_transport_errors_name_the_endpoint():
     """Fix 6: LedgerCursorStore wraps transport failures with the base URL tried and the variable that supplied it."""
     src = (ROOT / "packages/pulse-core/src/pulse_core/connector/rows.py").read_text()
@@ -497,7 +495,6 @@ def test_authoring_guide_documents_every_exported_name():
     assert missing == [], f"guide omits kit exports: {missing}"
 
 
-@open_finding
 def test_rendered_readme_next_steps_do_not_redo_registration():
     """Fix 8: the rendered README's Next steps must not tell the author to register a package the scaffold already registered."""
     readme = (ROOT / "templates/connector/README.md.tmpl").read_text()
@@ -512,7 +509,6 @@ def test_check_timings_are_recorded():
     assert "devex/timing" in _cmds("check") or "timing" in _cmds("check"), "task check records no timings"
 
 
-@open_finding
 def test_codeowners_names_the_connector_kit_owner_and_defect_template_exists():
     """Fix 10: a per-area CODEOWNERS line for the kit and a connector-kit-defect issue template."""
     co = (ROOT / ".github/CODEOWNERS").read_text()

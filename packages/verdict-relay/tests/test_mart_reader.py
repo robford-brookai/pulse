@@ -293,13 +293,25 @@ class TestLedgerCursorStore:
 
     def test_load_returns_none_before_any_cursor_is_persisted(self) -> None:
         transport, _ = self._fake_ledger()
-        store = LedgerCursorStore("http://ledger", writer_id="verdict-relay", token=_TOKEN, transport=transport)
+        store = LedgerCursorStore(
+            "http://ledger",
+            writer_id="verdict-relay",
+            token=_TOKEN,
+            base_url_env_var="TEST_LEDGER_BASE_URL",
+            transport=transport,
+        )
 
         assert store.load() is None
 
     def test_save_then_load_round_trips_through_the_writer_state_route(self) -> None:
         transport, state = self._fake_ledger()
-        store = LedgerCursorStore("http://ledger", writer_id="verdict-relay", token=_TOKEN, transport=transport)
+        store = LedgerCursorStore(
+            "http://ledger",
+            writer_id="verdict-relay",
+            token=_TOKEN,
+            base_url_env_var="TEST_LEDGER_BASE_URL",
+            transport=transport,
+        )
         cursor = {"computed_at": "2026-08-03T01:00:00+00:00", "watermarks": {"subj-a": "2026-08-01T00:00:00+00:00"}}
 
         store.save(cursor)
@@ -313,7 +325,13 @@ class TestLedgerCursorStore:
 
     def test_save_rejects_a_cursor_that_is_not_json_native(self) -> None:
         transport, state = self._fake_ledger()
-        store = LedgerCursorStore("http://ledger", writer_id="verdict-relay", token=_TOKEN, transport=transport)
+        store = LedgerCursorStore(
+            "http://ledger",
+            writer_id="verdict-relay",
+            token=_TOKEN,
+            base_url_env_var="TEST_LEDGER_BASE_URL",
+            transport=transport,
+        )
 
         with pytest.raises(Exception, match="JSON-native"):
             store.save({"as_of": datetime(2026, 8, 1, tzinfo=timezone.utc)})
