@@ -28,7 +28,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from ._scaffold import ROOT, have
+from ._scaffold import ROOT, git, have
 
 TASKFILE_TEXT = (ROOT / "Taskfile.yml").read_text()
 TASKFILE = yaml.safe_load(TASKFILE_TEXT)
@@ -637,3 +637,355 @@ def test_tthw_fresh_clone_to_synced_env(tmp_path):
     rc_cold, seconds_cold, err_cold = _install("cold", cold_cache_dir)
     print(f"TTHW_INSTALL_SECONDS_COLD={seconds_cold}", file=sys.stderr)
     assert rc_cold == 0, err_cold[-2000:]
+
+
+# --- Audit 4 (2026-09-05b, scorecard ranked fixes): open findings for devex-eight-4 ----------
+#
+# Audit 4 at `5177d05` scored overall 6.0 and connector 5.6, down from 6.5/6.7, because PR #403
+# shipped two defects onto the golden path while this gate read `devex_open_findings=0`
+# throughout: no finding test rendered a connector and ran the real gate. Every test below
+# asserts the behaviour its fix produces, run against a rendered tree or the repo's own output —
+# never the presence of a config line (devex-loop lesson: #380's structural test closed a finding
+# that was still open).
+
+CONNECTOR_TEMPLATE = ROOT / "templates/connector"
+
+
+def _render(dest_root: Path, name: str, direction: str) -> Path:
+    """Render one connector into `dest_root/packages/<name>` and return the package directory.
+
+    `--root` points registration and rendering at the scratch tree, so nothing here can reach the
+    real `packages/` directory. Returns the package dir; raises with the script's own output when
+    the scaffold itself fails, which is the failure mode worth reading.
+    """
+    dest = dest_root / "packages" / name
+    command = [
+        sys.executable,
+        "scripts/connector_new.py",
+        "--name",
+        name,
+        "--direction",
+        direction,
+        "--template",
+        str(CONNECTOR_TEMPLATE),
+        "--dest",
+        str(dest),
+        "--root",
+        str(dest_root),
+    ]
+    r = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)  # noqa: S603
+    assert r.returncode == 0, r.stdout + r.stderr
+    return dest
+
+
+@open_finding
+def test_rendered_connector_suites_run_under_the_repos_import_mode(tmp_path: Path):
+    """Fix 1: `task connector:new` renders a suite that `task test` can actually run.
+
+    The repo runs `pytest --import-mode=importlib` over every package's tests in one process
+    (`Taskfile.yml`'s TESTED_PATHS). Under that mode sys.path is not extended with the test file's
+    directory, so the rendered `from factories import ...` raises ModuleNotFoundError — the
+    defect PR #403 shipped, on both directions, name-independently.
+
+    The run below includes `packages/billing-connector/tests` deliberately. That suite is the
+    repo's one existing `tests` package, and it is what a new connector joins in TESTED_PATHS; a
+    fix that gives the rendered tree its own top-level `tests` package collides with it inside
+    pytest's plugin manager ("Plugin already registered under a different name"), so a fix
+    verified on a rendered package alone is not verified at all.
+    """
+    packages = [_render(tmp_path, "aaachk", "outbound"), _render(tmp_path, "zzzchk", "inbound")]
+    env = {
+        **os.environ,
+        "PYTHONPATH": os.pathsep.join(str(p / "src") for p in packages),
+    }
+    r = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "packages/billing-connector/tests",
+            *[str(p / "tests") for p in packages],
+            "--import-mode=importlib",
+            "-o",
+            "addopts=",
+            "-q",
+        ],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert r.returncode == 0, (r.stdout + r.stderr)[-3000:]
+
+
+@open_finding
+def test_rendered_connector_is_a_ruff_format_fixed_point(tmp_path: Path):
+    """Fix 2: every file the scaffold renders is already formatted the way `task lint` wants.
+
+    The outbound `def run(` signature joins to 118 characters against `line-length = 120`, which
+    ruff's formatter then splits back out: an unconditional `task lint` failure on the default
+    direction, in a file the author never touched. Checked over the whole rendered tree in both
+    directions rather than that one signature, so the next long line is caught too.
+    """
+    (tmp_path / "pyproject.toml").write_text((ROOT / "pyproject.toml").read_text())
+    packages = [_render(tmp_path, "aaachk", "outbound"), _render(tmp_path, "zzzchk", "inbound")]
+    ruff = shutil.which("ruff") or str(Path(sys.executable).with_name("ruff"))
+    r = subprocess.run(  # noqa: S603
+        [ruff, "format", "--check", *[str(p) for p in packages]],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+@open_finding
+def test_documented_install_leaves_the_clone_able_to_commit_python(tmp_path: Path):
+    """Fix 3: after the documented install, the `openlore-drift` pre-commit hook has what it needs.
+
+    `.openlore/` is gitignored, so it is absent from a fresh clone and the hook fails every commit
+    that touches Python — the newcomer's third command, after two successes. `task lore:init` is
+    idempotent and already safe on a fresh clone; the install must run it.
+
+    Hermetic and credential-free: the chain is read from the Taskfile, and where `openlore` is on
+    PATH the initialising step is then run for real in a scratch directory (`openlore init` needs
+    no key — only `openlore generate` does) and its output directory asserted. No network, no
+    global config touched.
+    """
+    install = _cmds("install")
+    initialises = "lore:init" in install or "openlore init" in install
+    assert initialises, "`task install` never initialises .openlore, so the first Python commit fails"
+    if not have("openlore"):
+        return
+    r = subprocess.run(  # noqa: S603
+        [shutil.which("openlore") or "openlore", "init", "--force"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (tmp_path / ".openlore").is_dir(), "openlore init produced no .openlore/ to satisfy the hook"
+
+
+@open_finding
+def test_readme_names_the_owner_and_the_channel_above_the_fold():
+    """Fix 4: a reader who opens README.md learns who owns this and where to ask, without a hop.
+
+    The rubric's internal-repo interpretation checks `README.md` specifically. Today
+    `grep -in "slack|owner|channel" README.md` returns nothing at all; the information exists in
+    `CONTRIBUTING.md` and can be lifted verbatim. "Above the fold" is the first 40 lines — one
+    screenful, before the narrative starts.
+    """
+    fold = "\n".join(README.splitlines()[:40])
+    owner = re.search(r"@[\w.-]+|CODEOWNERS|\bowner\b|\bmaintainer\b", fold, re.I)
+    channel = re.search(r"#[a-z][a-z0-9-]{2,}|slack|linear|notion", fold, re.I)
+    assert owner, "README's first 40 lines name no owner"
+    assert channel, "README's first 40 lines name no place to ask"
+
+
+@open_finding
+def test_the_gate_measures_the_golden_path_not_the_command_listing():
+    """Fix 5: `devex_open_findings` is a claim about the connector path, not about a task target.
+
+    `test_connector_scaffold_command_exists` asserted that `task connector:new` is defined and a
+    template directory backs it. Both held at `5177d05` while the command it names rendered a
+    package that failed the repo's own gate in both directions, and this gate still read zero.
+    The claim is replaced by the slow control below, which renders and gates; this test is the
+    non-slow twin that keeps the replacement from being quietly dropped.
+    """
+    source = Path(__file__).read_text()
+    assert "def test_connector_scaffold_command_exists(" not in source, (
+        "the command-listing claim is still the gate's connector coverage"
+    )
+    assert "def test_rendered_connectors_pass_the_real_gate(" in source, "no render-and-gate control in this gate"
+
+
+@pytest.mark.slow
+@open_finding
+def test_rendered_connectors_pass_the_real_gate(tmp_path: Path):
+    """Fix 5, the control: render both directions, register them, run the repo's own gate.
+
+    The gate here is `task check`'s lint, format and test constituents run over the rendered tree,
+    not `task check` itself: this test runs inside `task test:all`, and `task check` would recurse
+    into itself. Typecheck is left out because `pyright` is an npm global CI runners do not have
+    (`docs/contracts/consumes.md`); the two defects this control exists to catch are a lint
+    failure and a collection error.
+
+    Marked `slow`, so it is deselected from the default run and does not enter the open-finding
+    count — the non-slow twin above carries that. When fixes 1 and 2 land, this marker comes off
+    with the second of them (tasks.md task 1.2), before wave 2 touches the twin.
+    """
+    (tmp_path / "pyproject.toml").write_text((ROOT / "pyproject.toml").read_text())
+    (tmp_path / "Taskfile.yml").write_text(TASKFILE_TEXT)
+    packages = []
+    for name, direction in (("aaachk", "outbound"), ("zzzchk", "inbound")):
+        packages.append(_render(tmp_path, name, direction))
+        register = subprocess.run(  # noqa: S603
+            [
+                sys.executable,
+                "scripts/connector_new.py",
+                "--name",
+                name,
+                "--direction",
+                direction,
+                "--template",
+                str(CONNECTOR_TEMPLATE),
+                "--dest",
+                str(tmp_path / "packages" / name),
+                "--root",
+                str(tmp_path),
+                "--apply-registrations",
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert register.returncode == 0, register.stdout + register.stderr
+    ruff = shutil.which("ruff") or str(Path(sys.executable).with_name("ruff"))
+    for args in (["format", "--check"], ["check", "--no-fix"]):
+        r = subprocess.run(  # noqa: S603
+            [ruff, *args, *[str(p) for p in packages]],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert r.returncode == 0, f"ruff {args[0]}: {r.stdout}{r.stderr}"
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(str(p / "src") for p in packages)}
+    tests = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "packages/billing-connector/tests",
+            *[str(p / "tests") for p in packages],
+            "--import-mode=importlib",
+            "-o",
+            "addopts=",
+            "-q",
+        ],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert tests.returncode == 0, (tests.stdout + tests.stderr)[-3000:]
+
+
+@open_finding
+def test_week_one_failures_name_the_repos_own_target(tmp_path: Path):
+    """Fix 6: a failing gate names the `task` target that fixes it, not the underlying tool's.
+
+    `task lint` prints ruff's diff and never mentions `task fmt`, which applies exactly it; a
+    missing `openspec`/`openlore` prints the shell's `not found in $PATH` while the install line
+    sits in `README.md`. Both are inherited messages the repo did not wrap, and both land in
+    week one.
+
+    The lint probe is behavioural and hermetic: `LINT_PATHS` is overridden to a scratch directory
+    holding one deliberately unformatted file, so the real target runs against nothing in the
+    tree. Where `task` is absent (CI installs uv and Python only), the lint half falls back to
+    reading the target, which is why this test never skips.
+    """
+    broken = tmp_path / "broken.py"
+    broken.write_text("def f( x ):\n  return x\n")
+    if have("task"):
+        r = subprocess.run(  # noqa: S603
+            [shutil.which("task") or "task", "lint", f"LINT_PATHS={tmp_path}"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert r.returncode != 0, "the probe file did not fail lint; the probe is broken, not the message"
+        assert "task fmt" in (r.stdout + r.stderr), (r.stdout + r.stderr)[-1500:]
+    else:
+        assert "task fmt" in _cmds("lint"), "task lint's failure names no repo target"
+    for target in ("spec:validate", "lore:drift"):
+        text = _cmds(target) + str(TARGETS[target].get("preconditions", ""))
+        assert "npm install -g" in text, f"{target} does not name the install line for its missing npm global"
+
+
+@open_finding
+def test_a_green_gate_leaves_the_tree_clean_and_summarises_itself():
+    """Fix 7: the timing instrument is feedback, not an uncommitted diff the newcomer did not author.
+
+    `scripts/devex/timing.py` appends a row per gate target to `.planning/devex/loop.jsonl`, a
+    tracked file, so the first documented `task check` on a fresh clone ends with a dirty tree and
+    no explanation anywhere in README, CONTRIBUTING or the guide. The path is read out of the
+    script rather than restated here: whichever file the timing wrapper appends to must not be
+    tracked. The ledger's `audit` rows are a different matter — they are the tracked receipt
+    `test_ledger_exists_with_a_baseline_row` reads, and a fresh clone still needs them.
+
+    The rows are worth keeping either way: printed back as the gate's closing summary they replace
+    a red vendor warning with the one thing the newcomer wants to see.
+    """
+    timing = (ROOT / "scripts/devex/timing.py").read_text()
+    written = re.search(r'LEDGER\s*=\s*ROOT\s*/\s*"([^"]+)"', timing)
+    assert written, "cannot tell which file scripts/devex/timing.py appends to"
+    tracked = git("ls-files", "--error-unmatch", written.group(1)).returncode == 0
+    assert not tracked, f"a green `task check` dirties the tree: {written.group(1)} is tracked and appended to"
+    last = str(TARGETS["check"]["cmds"][-1])
+    assert "summary" in last, f"`task check` ends on a gate, not a per-target summary: {last}"
+
+
+@open_finding
+def test_guide_import_block_carries_the_errors_the_pipeline_raises():
+    """Fix 8: an author who pastes the guide's import block gets the exceptions thrown at them.
+
+    The block lists constructors and protocols and no error types, while `submit_with_retry`
+    raises `TransientExhaustedError` and `LedgerCursorStore` raises `LedgerCursorStoreError`.
+    Both are named in the guide's prose, which is why the every-export test passes; the paste
+    block is what an author actually runs.
+    """
+    guide = (ROOT / GUIDE).read_text()
+    block = re.search(r"^from pulse_core\.connector import \(\n(.*?)^\)$", guide, re.S | re.M)
+    assert block, "the guide has no `from pulse_core.connector import (...)` block to paste"
+    names = set(re.findall(r"^\s{4}([A-Za-z_]\w*),", block.group(1), re.M))
+    import pulse_core.connector as kit
+
+    unimportable = sorted(n for n in names if not hasattr(kit, n))
+    assert unimportable == [], f"the paste block names what the kit does not export: {unimportable}"
+    missing = sorted({"TransientExhaustedError", "LedgerCursorStoreError"} - names)
+    assert missing == [], f"the paste block omits the errors the retry pipeline raises: {missing}"
+
+
+@open_finding
+def test_env_example_carries_the_variables_the_tooling_demands():
+    """Fix 9: `Config.from_env` names the variables; `.env.example` names the file they go in.
+
+    The variable names are read out of the scaffold's own config template rather than restated
+    here, so the two cannot drift: whatever `{{UPPER}}_*` shape the template generates must have
+    a commented example in `.env.example`. `PULSE_TWENTY_DEV_URL` and `PULSE_TWENTY_DEV_TOKEN`
+    are the pair `task twenty:deploy TARGET=dev` demands by name and the file has never carried.
+    """
+    env_example = (ROOT / ".env.example").read_text()
+    config_tmpl = (CONNECTOR_TEMPLATE / "src/{{NAME}}/config.py.tmpl").read_text()
+    suffixes = sorted(set(re.findall(r'"\{\{UPPER\}\}(_[A-Z_]+)"', config_tmpl)))
+    assert suffixes, "the config template no longer builds its variable names from {{UPPER}}"
+    missing = [s for s in suffixes if s not in env_example]
+    assert missing == [], f".env.example carries no connector block: {missing} unexampled"
+    for var in ("PULSE_TWENTY_DEV_URL", "PULSE_TWENTY_DEV_TOKEN"):
+        assert var in env_example, f".env.example does not name {var}"
+
+
+@open_finding
+def test_tthw_measures_clone_to_a_green_gate_in_both_arms():
+    """Fix 10: the onboarding number covers the wall clock a newcomer actually waits.
+
+    `test_tthw_fresh_clone_to_synced_env` times clone plus `uv sync` — 5s of the 152s a newcomer
+    spends, because `task check` is 97 percent of it. A metric that omits the dominant term
+    cannot detect the regression it exists for. Both cache arms must reach a green gate and
+    report a total, not an install time.
+    """
+    source = Path(__file__).read_text()
+    tthw = re.search(r"def test_tthw_[\w]*\(.*?(?=\n@|\ndef |\Z)", source, re.S)
+    assert tthw, "no TTHW test in this gate"
+    body = tthw.group(0)
+    assert re.search(r'"task",\s*"check"|task check', body), "the TTHW test never reaches a green gate"
+    for arm in ("TTHW_TOTAL_SECONDS_WARM", "TTHW_TOTAL_SECONDS_COLD"):
+        assert arm in body, f"the TTHW test reports no {arm}"
