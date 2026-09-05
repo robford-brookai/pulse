@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from pulse_core.client import ResponseClassification
-from pulse_core.connector.declare import submit_with_retry
+from pulse_core.connector import submit_with_retry
 from pulse_core.generated import DeclareTransitionCommand, DeclareVerdictCommand, VerdictOutcome
 
 if TYPE_CHECKING:

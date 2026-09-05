@@ -42,6 +42,11 @@ TEMPLATE_SUFFIX = ".tmpl"
 TEMPLATE_DIR = Path("templates/connector")
 DEFAULT_DEST_PARENT = Path("packages")
 
+#: Where Ocean's connector services already live. Checked from the invocation directory, not
+#: `--root` — `--root` isolates the registration diff onto a scratch copy of pyproject.toml and
+#: Taskfile.yml in tests, but there is only one real `packages/ocean/services/` to warn about.
+OCEAN_SERVICES_DIR = Path("packages/ocean/services")
+
 
 @dataclass(frozen=True)
 class Names:
@@ -71,6 +76,17 @@ def parse_name(raw: str) -> Names:
         )
         raise ConnectorNewError(msg)
     return Names(dist=name.replace("_", "-"), module=name.replace("-", "_"), upper=name.replace("-", "_").upper())
+
+
+def find_prior_art(dist_name: str, services_dir: Path = OCEAN_SERVICES_DIR) -> Path | None:
+    """The first entry under `services_dir` whose name starts with `dist_name`, or None.
+
+    Sorted so the choice among several matches (`pocar-connector`, `pocar-legacy`) is stable.
+    """
+    if not services_dir.is_dir():
+        return None
+    matches = sorted(p for p in services_dir.iterdir() if p.is_dir() and p.name.startswith(dist_name))
+    return matches[0] if matches else None
 
 
 def render_text(text: str, names: Names) -> str:
@@ -368,6 +384,9 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         names = parse_name(args.name)
+        prior_art = find_prior_art(names.dist)
+        if prior_art is not None:
+            print(f"Prior art: {prior_art} already exists under {OCEAN_SERVICES_DIR} — scaffolding anyway.")
         template_dir = args.template or args.root / TEMPLATE_DIR
         dest = args.dest or args.root / DEFAULT_DEST_PARENT / names.dist
 

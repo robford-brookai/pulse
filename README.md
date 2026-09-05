@@ -25,7 +25,7 @@ whatever the statement says right now.
 ## Status
 
 Phases 0 through 2 are complete and shipped as v2.0 on 2026-08-08. Phase 3 (projections) is
-active. Twenty-two changes have been archived, most recently `connector-pattern` (the shared
+active. Twenty changes have been archived, most recently `connector-pattern` (the shared
 connector kit) and `pulse-demo-closeout` (the end-to-end demonstration and the projection
 rebuild drill), both on 2026-09-02. `billing-connector` is the change currently in flight.
 
@@ -281,8 +281,8 @@ credential, and how to resume a stopped walk: `docs/runbooks/demo5-end-to-end.md
 
 ### Testing and the gates
 
-`task check` is the contract between your laptop and CI: `.github/workflows/main.yml` runs
-exactly this target, so green locally means green in CI. It covers lint, typecheck, the full
+`task check` is the contract between your laptop and CI: `.github/workflows/main.yml`'s `quality`
+job runs exactly this target, so green locally means green in CI. It covers lint, typecheck, the full
 test suite with coverage, Twenty artifact validation, the Twenty app's own test suite, workflow
 linting, and a strict docs build. No test here touches a live network or live credentials — the
 live-only paths (`demo:3`, `demo:4`, `demo:e2e:live`, every `deploy` target) are excluded by
