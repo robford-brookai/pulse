@@ -27,3 +27,6 @@
 {"date": "2026-09-05", "kind": "pr", "ref": "46d9e12", "pr": 388, "task": "2.1", "open_findings": 2, "change": "devex-eight-2"}
 {"date": "2026-09-05", "kind": "pr", "ref": "50d0b98", "pr": 389, "task": "2.2", "open_findings": 1, "change": "devex-eight-2"}
 {"date": "2026-09-05", "kind": "pr", "ref": "d6257f1", "pr": 390, "task": "3.1", "open_findings": 0, "change": "devex-eight-2"}
+{"date": "2026-09-05", "kind": "pr", "ref": "11622da", "pr": 391, "task": "3.1 follow-up", "open_findings": 0, "change": "devex-eight-2"}
+{"date": "2026-09-05", "kind": "reopen", "pr": 380, "task": "1.3", "change": "devex-eight-2", "finding": "test_verify_requires_change_and_lore_init_exists", "reason": "Taskfile.yml:49 CHANGE default satisfies requires; task verify with no CHANGE still runs to completion before failing (audit 3 QA R1). Encoded as a behavioural test in devex-eight-3."}
+{"date": "2026-09-05", "kind": "audit", "ref": "11622da", "open_findings": 0, "overall": 6.5, "connector": 6.7, "qa": "accept-with-corrections", "reports": ".planning/reports/2026-09-05-devex-*", "prior": {"overall": 5.9, "connector": 5.8}, "note": "QA R2: open_findings=0 means no encoded finding is open, not that the repo has no DX defects; audit 3 verified at least four."}
