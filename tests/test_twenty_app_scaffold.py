@@ -106,8 +106,14 @@ def _tracked(path: str) -> bool:
     return result.returncode == 0
 
 
+#: `task check` (devex-eight-3 task 2.3) times each gate through `scripts/devex/timing.py`, which
+#: shells `... -- task <name>` rather than using a `- task: <name>` cmd, so a target reached only
+#: that way needs its own match here too.
+_TASK_SHELL_CALL = re.compile(r"(?:^|\s)task\s+([\w:.-]+)")
+
+
 def _reachable(task_name: str) -> set[str]:
-    """Every target reached from ``task_name`` through deps and `task:` cmds."""
+    """Every target reached from ``task_name`` through deps, `task:` cmds, and shelled-out `task <name>` calls."""
     tasks = _taskfile()["tasks"]
 
     def walk(name: str, seen: set[str]) -> set[str]:
@@ -120,6 +126,10 @@ def _reachable(task_name: str) -> set[str]:
         for cmd in spec.get("cmds") or []:
             if isinstance(cmd, dict) and "task" in cmd:
                 walk(cmd["task"], seen)
+            elif isinstance(cmd, str):
+                for called in _TASK_SHELL_CALL.findall(cmd):
+                    if called in tasks:
+                        walk(called, seen)
         return seen
 
     return walk(task_name, set())
