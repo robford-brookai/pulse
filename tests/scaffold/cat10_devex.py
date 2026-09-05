@@ -460,7 +460,6 @@ def test_cursor_store_transport_errors_name_the_endpoint():
     assert "base_url" in src and ("CursorStoreError" in src or "LedgerCursorStoreError" in src)
 
 
-@open_finding
 def test_authoring_guide_documents_every_exported_name():
     """Fix 7: the guide's import section names every `__all__` export, checked by a test that diffs them."""
     import pulse_core.connector as kit
