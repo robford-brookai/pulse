@@ -257,9 +257,36 @@ def test_docs_index_is_a_front_door():
 
 
 def test_verify_requires_change_and_lore_init_exists():
-    """Fix 3: task verify declares CHANGE, and a documented target creates .openlore on a fresh clone."""
+    """devex-eight-2 fix 3: task verify declares CHANGE, and a documented target creates .openlore."""
     assert "CHANGE" in TARGETS["verify"].get("requires", {}).get("vars", [])
     assert "lore:init" in TARGETS or "openlore init" in _cmds("install")
+
+
+@open_finding
+def test_verify_guards_against_empty_change():
+    """Audit 3 fix 2 (QA R1): `requires: vars: [CHANGE]` is satisfied by Taskfile.yml's empty CHANGE
+    default, so `task verify` with no CHANGE runs the whole gate before failing. The target needs a
+    precondition that fails when CHANGE is empty, before `check` runs."""
+    verify = TARGETS["verify"]
+    pre = " ".join(str(p.get("sh", p) if isinstance(p, dict) else p) for p in verify.get("preconditions", []))
+    first_cmd = str(verify.get("cmds", [""])[0])
+    guarded = ("CHANGE" in pre) or (
+        "CHANGE" in first_cmd and ("exit" in first_cmd or "test -n" in first_cmd or "fail" in first_cmd)
+    )
+    assert guarded, "task verify has no fail-fast guard on an empty CHANGE"
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not have("task"), reason="go-task not installed")
+def test_verify_without_change_fails_fast():
+    """Behavioural twin of the guard test, slow because a missing guard runs the whole gate."""
+    t0 = time.monotonic()
+    r = subprocess.run(["task", "verify"], cwd=ROOT, capture_output=True, text=True, check=False)  # noqa: S607
+    seconds = time.monotonic() - t0
+    assert r.returncode != 0
+    if "CHANGE" not in " ".join(str(p) for p in TARGETS["verify"].get("preconditions", [])):
+        pytest.xfail(f"no guard yet; verify ran {seconds:.0f}s before failing")
+    assert seconds < 15, f"task verify without CHANGE ran {seconds:.0f}s before failing"
 
 
 def test_connector_new_warns_about_prior_art(tmp_path):
@@ -365,6 +392,105 @@ def test_task_descriptions_carry_no_change_ids():
         if isinstance(t, dict) and re.search(r"devex-eight task|DNA-\d+", str(t.get("desc", "")))
     ]
     assert noisy == [], noisy
+
+
+# --- Audit 3 (2026-09-05, scorecard ranked fixes): open findings for devex-eight-3 -----------
+
+_GIT_HELPER_FILES = ("tests/scaffold/cat5_glue_logic.py", "tests/scaffold/cat9_golden_workflow.py")
+
+
+@open_finding
+def test_scaffold_git_helpers_are_hermetic_to_global_signing():
+    """Fix 1: the sandbox git helpers pin commit.gpgsign=false so a global signing config cannot fail the gate."""
+    for rel in _GIT_HELPER_FILES:
+        text = (ROOT / rel).read_text()
+        assert "commit.gpgsign=false" in text, f"{rel} does not pin commit.gpgsign=false"
+
+
+@open_finding
+def test_connector_new_registers_pyright_not_mypy(tmp_path):
+    """Fix 3: the rendered package declares pyright strict; the registration diff must add a pyright line, not a TYPED_PATHS entry."""
+    r = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            "scripts/connector_new.py",
+            "--name",
+            "zapchk",
+            "--root",
+            str(tmp_path),
+            "--print-registrations",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    out = r.stdout + r.stderr
+    assert "pyright -p packages/zapchk" in out, out[-800:]
+    assert "TYPED_PATHS" not in out or "packages/zapchk/src" not in out.split("TYPED_PATHS", 1)[1][:200]
+
+
+@open_finding
+def test_task_lint_is_read_only():
+    """Fix 4: `task lint` is documented read-only; ruff must not run with fix=true under it."""
+    import tomllib
+
+    cfg = tomllib.loads((ROOT / "pyproject.toml").read_text())
+    ruff_fix = cfg.get("tool", {}).get("ruff", {}).get("fix", False)
+    assert (not ruff_fix) or "--no-fix" in _cmds("lint"), "task lint rewrites files"
+
+
+@open_finding
+def test_scaffold_ships_a_working_declare_example():
+    """Fix 5: the scaffold's handle_page declares through the kit instead of counting rows."""
+    hits = list((ROOT / "templates/connector").rglob("service.py.tmpl"))
+    assert hits, "no service template"
+    # A real call on a code line, not the comment or docstring that tells the author to add one.
+    call = re.compile(r"^\s*(?!#)[^\n`]*\bsubmit_with_retry\(", re.M)
+    assert any(call.search(h.read_text()) for h in hits), (
+        "no template calls submit_with_retry; handle_page is still a counting stub"
+    )
+
+
+@open_finding
+def test_cursor_store_transport_errors_name_the_endpoint():
+    """Fix 6: LedgerCursorStore wraps transport failures with the base URL tried and the variable that supplied it."""
+    src = (ROOT / "packages/pulse-core/src/pulse_core/connector/rows.py").read_text()
+    assert "httpx.TransportError" in src or "TransportError" in src, "cursor store does not catch transport errors"
+    assert "base_url" in src and ("CursorStoreError" in src or "LedgerCursorStoreError" in src)
+
+
+@open_finding
+def test_authoring_guide_documents_every_exported_name():
+    """Fix 7: the guide's import section names every `__all__` export, checked by a test that diffs them."""
+    import pulse_core.connector as kit
+
+    guide = (ROOT / GUIDE).read_text()
+    missing = sorted(n for n in kit.__all__ if f"`{n}`" not in guide)
+    assert missing == [], f"guide omits kit exports: {missing}"
+
+
+@open_finding
+def test_rendered_readme_next_steps_do_not_redo_registration():
+    """Fix 8: the rendered README's Next steps must not tell the author to register a package the scaffold already registered."""
+    readme = (ROOT / "templates/connector/README.md.tmpl").read_text()
+    assert "already registered" in readme.lower() or "registered for you" in readme.lower(), (
+        "rendered README still asks the author to register the package"
+    )
+
+
+@open_finding
+def test_check_timings_are_recorded():
+    """Fix 9: `task check` appends per-target timings to the ledger so gate regressions are visible."""
+    assert "devex/timing" in _cmds("check") or "timing" in _cmds("check"), "task check records no timings"
+
+
+@open_finding
+def test_codeowners_names_the_connector_kit_owner_and_defect_template_exists():
+    """Fix 10: a per-area CODEOWNERS line for the kit and a connector-kit-defect issue template."""
+    co = (ROOT / ".github/CODEOWNERS").read_text()
+    assert "pulse_core/connector" in co, "no per-area CODEOWNERS line for the kit"
+    assert (ROOT / ".github/ISSUE_TEMPLATE/connector-kit-defect.yml").is_file()
 
 
 # --- Measurement machinery: these pass from wave 0 and must stay green -----------------------
