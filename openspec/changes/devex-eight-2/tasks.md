@@ -16,7 +16,7 @@ non-Taskfile tasks alongside a serial one when they share no files.
 
 ## 0. Wave 0 — findings encoded (one PR, coordinator session)
 
-- [ ] 0.1 Twelve audit-2 findings as `xfail(strict=True)` tests in `tests/scaffold/cat10_devex.py`;
+- [x] 0.1 Twelve audit-2 findings as `xfail(strict=True)` tests in `tests/scaffold/cat10_devex.py`;
       change artifacts; `task replan CHANGE=devex-eight-2` green.
       Tests: `task devex:check` prints `METRIC devex_open_findings=12`; `task check` green.
       `[model: opus | deps: — | lane: repo_change | wave: 0]`
