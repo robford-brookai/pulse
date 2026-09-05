@@ -15,8 +15,9 @@ task check      # must pass before every commit; it is what CI runs
 
 ## Pre-commit Hooks
 
-Pre-commit hooks run `ruff`, `mypy` and `openlore drift` on every commit. A hook that rewrites
-a file fails the commit by design — re-stage and commit again.
+Pre-commit hooks run `ruff` and `openlore drift` on every commit. A hook that rewrites a file
+fails the commit by design — re-stage and commit again. Type checking is not a pre-commit hook:
+it runs via `task check` (`task typecheck`), the same gate CI runs.
 
 ## Before Making Changes
 

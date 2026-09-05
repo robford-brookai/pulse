@@ -318,6 +318,24 @@ Before asking, the answer is usually in one of these:
 | How does a change get from proposal to main? | `WORKFLOW.md`, `AGENTS.md` |
 | What is a connector's standard shape overall? | `openspec/specs/connectors/pulse-standard-connector-spec.md` |
 | How do I operate one once it is deployed? | [billing-connector runbook](../runbooks/billing-connector.md) |
+| What changed in the kit since I last synced? | `packages/pulse-core/CHANGELOG.md` |
+
+## 10. How the kit changes
+
+The kit reaches every connector on the next `uv sync` — nothing prompts you to go read anything.
+Two places carry that signal, and checking both is part of pulling a kit upgrade, not optional
+follow-up:
+
+- **`packages/pulse-core/CHANGELOG.md`** — every change that touches `pulse_core.connector` gets
+  an entry in the same PR that makes it, with a "Connector authors" line naming the concrete
+  effect on your build. Read it top-down; it is short.
+- **Deprecations** — a name the kit is retiring stays exported and working for one release, with
+  the CHANGELOG entry naming the replacement. `openspec/specs/connector-kit/spec.md`'s
+  `## Deprecations` section is the durable record of what's retiring and by when; the CHANGELOG
+  entry is the point-in-time announcement.
+
+If a kit release drops a name your connector imports without either of these naming it first,
+that is a kit defect — file it against `connector-kit`, don't work around it silently.
 
 ## PHI
 
