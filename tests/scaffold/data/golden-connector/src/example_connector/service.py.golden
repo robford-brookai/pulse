@@ -2,50 +2,149 @@
 
 This module is the connector's only process and its only decision about *when* to act.
 `handle_event` is the consume handler: `pulse_core.connector.consume` calls it once per delivered
-event, and the message is deleted from the queue only if it returns without raising. Replace its
-body with what this connector actually does; keep its shape.
+event, and the message is deleted from the queue only if it returns without raising.
 
-`main` resolves `Config.from_env()`, drives the consume loop, and logs one receipt line per run.
-`sqs_client` is a parameter, never constructed here, so a test injects a fake and no test needs a
-network: the kit builds a real `boto3` client itself when the parameter is left `None`.
+What to replace, in order:
+
+1. `_declaration` — the command one delivered event declares, and the `SUBJECT_TYPE`/`TO_STATE`
+   pair it reads. Returning `None` defers the event: counted, acknowledged, nothing declared.
+   That is the one place this connector's own contract lives.
+2. `handle_event` around it already declares through `submit_with_retry` and counts every settled
+   response onto the receipt, and needs no change to stay correct.
+
+`main` resolves `Config.from_env()`, builds the writer client, drives the consume loop, and logs
+one receipt line per run. `sqs_client` and `client` are parameters, never constructed here, so a
+test injects fakes and no test needs a network: the kit builds a real `boto3` client itself when
+`sqs_client` is left `None`, and `tests/factories.py` fakes the command API at the client
+boundary.
+
+A redelivered event declares the same command under the same D16 idempotency key — `effective_at`
+comes off the envelope, not the clock — so the ledger answers it `replayed` and no fact is
+written twice. SQS at-least-once delivery therefore costs a replay, never a duplicate.
 """
 
 from __future__ import annotations
 
 import argparse
 import logging
+import os
+import random
+import time
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
-from pulse_core.connector import consume
+from pulse_core.client import PulseCoreClient
+from pulse_core.connector import Jitter, Sleeper, consume, parse_instant, submit_with_retry
+from pulse_core.generated import DeclareTransitionCommand
 
 from example_connector.config import Config, ConfigError
 from example_connector.receipts import SERVICE_NAME, Receipt
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
+    from datetime import datetime
+
+    from pulse_core.client import CommandResponse
 
 logger = logging.getLogger(SERVICE_NAME)
 
+#: This connector's own writer id — the credential it declares under is named by
+#: `Config.credential_name`; this is the identity the ledger attributes its commands to.
+WRITER_ID = "example-connector"
 
-def handle_event(event: Mapping[str, object], *, tally: Receipt) -> Receipt:
-    """Act on one delivered event and return the next tally. Never mutates `tally`.
+#: The subject a declaration is about, and the state a delivered event declares it into. Both are
+#: scaffold placeholders standing in for this connector's own contract: replace them together
+#: with `_declaration`, which is the one place either is read.
+SUBJECT_TYPE = "person"
+TO_STATE = "seen"
 
-    Scaffold behavior: count the event as deferred and do nothing. Replace this with the fold,
-    the derivation, and the `submit_with_retry` call this connector exists for — and count each
-    settled response through `tally.record(...)` so the receipt stays true.
+#: The envelope fields `_declaration` needs. An event missing either is deferred, never guessed at.
+SUBJECT_KEY_FIELD = "subject_key"
+OCCURRED_AT_FIELD = "occurred_at"
+
+
+def _declaration(event: Mapping[str, object]) -> tuple[DeclareTransitionCommand, datetime] | None:
+    """The command one delivered event declares and the instant it is effective at, or `None`.
+
+    `None` defers the event: the kit deletes the message, the receipt counts it as `deferred`,
+    and nothing is declared. That is the honest answer for an envelope this connector has no
+    contract for — an event it cannot name a fact from must not invent one.
+
+    The scaffold asserts the least it can that is still a real fact: this subject reached
+    `TO_STATE` at the envelope's own `occurred_at`. Replace the whole function, `SUBJECT_TYPE`
+    and `TO_STATE` with this connector's own derivation.
     """
-    logger.debug("deferred event_type=%s", event.get("event_type"))
-    return replace(tally, deferred=tally.deferred + 1)
+    subject_key = event.get(SUBJECT_KEY_FIELD)
+    occurred_at = parse_instant(event, OCCURRED_AT_FIELD)
+    if not isinstance(subject_key, str) or not subject_key or occurred_at is None:
+        return None
+    command = DeclareTransitionCommand(
+        subject_type=SUBJECT_TYPE,
+        subject_key=subject_key,
+        to_state=TO_STATE,
+        reason=f"{SERVICE_NAME} consumed event_type={event.get('event_type')}",
+    )
+    return command, occurred_at
 
 
-def run(config: Config, *, sqs_client: Any = None, iterations: int | None = None) -> Receipt:
-    """Drive the consume loop, accumulating one receipt across every pass, and log it once."""
+def declare_event(
+    client: PulseCoreClient,
+    command: DeclareTransitionCommand,
+    effective_at: datetime,
+    ref: str,
+    *,
+    sleep: Sleeper = time.sleep,
+    jitter: Jitter = random.random,
+) -> CommandResponse:
+    """Declare one command through the kit's retry loop, returning its settled response.
+
+    `submit_with_retry` owns the retry policy — transient answers only, jittered backoff — which
+    is why `client` is pinned to `max_attempts=1` where it is built: two retry loops would spend
+    the budget twice. `ref` names the submission by the envelope's `event_id`, never by anything
+    the payload carries, so an exhausted budget is diagnosable from the raised error alone.
+
+    `sleep` and `jitter` are the schedule's seam: production takes the defaults, and a test pins
+    them so exercising the transient path costs no wall-clock and never flakes.
+    """
+    return submit_with_retry(
+        lambda: client.submit_command(command, effective_at=effective_at),
+        ref=ref,
+        sleep=sleep,
+        jitter=jitter,
+    )
+
+
+def handle_event(event: Mapping[str, object], *, tally: Receipt, client: PulseCoreClient) -> Receipt:
+    """Declare one delivered event and return the next tally. Never mutates `tally`.
+
+    One `submit_with_retry` call per event this connector has a declaration for, its settled
+    response counted through `DeclareCounts.record` so `committed`, `replayed` and `rejected`
+    stay true; an event `_declaration` defers is counted and nothing else. Raising here leaves
+    the message on the queue for redelivery, which declares as a replay rather than a duplicate.
+    """
+    declaration = _declaration(event)
+    if declaration is None:
+        logger.debug("deferred event_type=%s", event.get("event_type"))
+        return replace(tally, deferred=tally.deferred + 1)
+    command, effective_at = declaration
+    ref = f"{SERVICE_NAME} event_id={event.get('event_id')}"
+    response = declare_event(client, command, effective_at, ref)
+    return replace(tally.record(response.classification), handled=tally.handled + 1)
+
+
+def run(
+    config: Config, *, client: PulseCoreClient, sqs_client: Any = None, iterations: int | None = None
+) -> Receipt:
+    """Drive the consume loop, accumulating one receipt across every pass, and log it once.
+
+    `client` is the writer seam every test uses: pass one built on `tests/factories.py`'s
+    `FakeCommandTransport` and no socket is opened.
+    """
     tally = Receipt()
 
     def on_event(event: Mapping[str, object]) -> None:
         nonlocal tally
-        tally = handle_event(event, tally=tally)
+        tally = handle_event(event, tally=tally, client=client)
 
     consume(
         on_event,
@@ -75,7 +174,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         logger.error("%s", exc)  # noqa: TRY400 — the message is the whole diagnostic, not a trace
         return 2
 
-    run(config, iterations=args.iterations)
+    # The token's *value* is read here, at the one place it is used, from the variable
+    # `config.credential_name` names — the config object never holds it. `max_attempts=1` pins
+    # the client to a single attempt because `declare_event`'s `submit_with_retry` owns retry.
+    with PulseCoreClient(
+        config.ledger_base_url,
+        writer_id=WRITER_ID,
+        token=os.environ[config.credential_name],
+        max_attempts=1,
+    ) as client:
+        run(config, client=client, iterations=args.iterations)
     return 0
 
 

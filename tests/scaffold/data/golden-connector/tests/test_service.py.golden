@@ -1,0 +1,162 @@
+"""`example_connector.service` — the consume handler and its declare, driven by fakes only.
+
+Every test here holds a fake SQS client and a writer client backed by `factories.py`'s
+`FakeCommandTransport`, and nothing else. `conftest.py` blocks sockets for the whole suite
+regardless — no test in this file would open one.
+"""
+
+from __future__ import annotations
+
+import json
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Any
+
+import httpx
+import pytest
+from factories import FakeCommandTransport
+from pulse_core.connector import TransientExhaustedError
+from pulse_core.generated import DeclareTransitionCommand
+
+from example_connector.config import Config
+from example_connector.receipts import Receipt
+from example_connector.service import SUBJECT_TYPE, TO_STATE, declare_event, handle_event, run
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+#: One well-formed envelope. Synthetic throughout — no real subject key ever appears in a fixture.
+EVENT: Mapping[str, object] = {
+    "event_id": "event-1",
+    "event_type": "person.seen",
+    "subject_key": "subject-1",
+    "occurred_at": "2026-01-01T00:00:00+00:00",
+}
+
+#: An envelope this connector has no declaration for: no `subject_key`, so it is deferred.
+UNDECLARABLE_EVENT: Mapping[str, object] = {"event_id": "event-2", "event_type": "person.noticed"}
+
+
+def _no_sleep(_seconds: float) -> None:
+    """The retry schedule, pinned: the transient path costs no wall-clock in a test."""
+
+
+def _no_jitter() -> float:
+    return 0.0
+
+
+class FakeSqsClient:
+    """The queue faked at the boto3 boundary; every message is delivered once, then nothing."""
+
+    def __init__(self, events: list[Mapping[str, object]]) -> None:
+        self.messages: list[dict[str, str]] = [
+            {"Body": json.dumps({"detail": dict(event)}), "ReceiptHandle": f"handle-{index}"}
+            for index, event in enumerate(events)
+        ]
+        self.deleted: list[str] = []
+
+    def receive_message(self, **_kwargs: Any) -> dict[str, object]:
+        pending, self.messages = self.messages, []
+        return {"Messages": pending}
+
+    def delete_message(self, **kwargs: Any) -> None:
+        self.deleted.append(str(kwargs["ReceiptHandle"]))
+
+
+def config(**overrides: object) -> Config:
+    return Config(
+        queue_url="https://sqs.test/queue",
+        ledger_base_url="http://ledger.test",
+        **overrides,  # type: ignore[arg-type]
+    )
+
+
+def test_a_delivered_event_declares_once_and_counts_the_commit() -> None:
+    transport = FakeCommandTransport()
+
+    with transport.client() as client:
+        tally = handle_event(EVENT, tally=Receipt(), client=client)
+
+    assert len(transport.declares) == 1
+    assert (tally.committed, tally.replayed, tally.rejected) == (1, 0, 0)
+    assert (tally.handled, tally.deferred) == (1, 0)
+
+
+def test_the_declared_command_carries_the_envelope_subject_and_the_scaffold_transition() -> None:
+    transport = FakeCommandTransport()
+
+    with transport.client() as client:
+        handle_event(EVENT, tally=Receipt(), client=client)
+
+    body = transport.bodies[0]
+    assert body["subject_type"] == SUBJECT_TYPE
+    assert body["subject_key"] == "subject-1"
+    assert body["to_state"] == TO_STATE
+    assert body["effective_at"] == "2026-01-01T00:00:00+00:00"
+
+
+def test_handle_event_does_not_mutate_the_previous_tally() -> None:
+    transport = FakeCommandTransport()
+    original = Receipt()
+
+    with transport.client() as client:
+        handle_event(EVENT, tally=original, client=client)
+
+    assert (original.committed, original.handled) == (0, 0)
+
+
+def test_an_event_with_no_declaration_is_deferred_and_declares_nothing() -> None:
+    transport = FakeCommandTransport()
+
+    with transport.client() as client:
+        tally = handle_event(UNDECLARABLE_EVENT, tally=Receipt(), client=client)
+
+    assert transport.declares == []
+    assert (tally.handled, tally.deferred) == (0, 1)
+
+
+def test_a_redelivered_event_declares_nothing_new() -> None:
+    """SQS delivers at least once. The second delivery replays; it does not write a second fact."""
+    transport = FakeCommandTransport()
+
+    with transport.client() as client:
+        first = handle_event(EVENT, tally=Receipt(), client=client)
+        second = handle_event(EVENT, tally=first, client=client)
+
+    assert len(transport.declares) == 1
+    assert (second.committed, second.replayed) == (1, 1)
+    assert second.handled == 2
+
+
+def test_a_rejected_declaration_is_counted_not_raised() -> None:
+    transport = FakeCommandTransport([httpx.Response(422, json={"detail": {"message": "unknown state"}})])
+
+    with transport.client() as client:
+        tally = handle_event(EVENT, tally=Receipt(), client=client)
+
+    assert (tally.committed, tally.rejected) == (0, 1)
+
+
+def test_an_exhausted_transient_budget_names_the_event() -> None:
+    """The error names the envelope's `event_id` and nothing off its payload."""
+    transport = FakeCommandTransport([httpx.Response(503, text="upstream unavailable")])
+    command = DeclareTransitionCommand(subject_type=SUBJECT_TYPE, subject_key="subject-1", to_state=TO_STATE)
+    effective_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+    with transport.client() as client, pytest.raises(TransientExhaustedError) as raised:
+        declare_event(client, command, effective_at, "example-connector event_id=event-1", sleep=_no_sleep, jitter=_no_jitter)
+
+    assert "event-1" in str(raised.value)
+    assert "subject-1" not in str(raised.value)
+
+
+def test_run_drains_the_queue_and_logs_one_receipt() -> None:
+    sqs = FakeSqsClient([EVENT, UNDECLARABLE_EVENT])
+    transport = FakeCommandTransport()
+
+    with transport.client() as client:
+        receipt = run(config(), client=client, sqs_client=sqs, iterations=1)
+
+    assert (receipt.handled, receipt.deferred) == (1, 1)
+    assert receipt.committed == 1
+    assert len(sqs.deleted) == 2
+    assert "committed=1" in receipt.format_line()

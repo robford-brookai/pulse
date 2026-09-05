@@ -155,11 +155,11 @@ task connector:new NAME=my-reader DIRECTION=inbound
 ```
 
 Inbound is an overlay, not a flag the templates branch on:
-`templates/connector/direction/inbound/` holds the files that variant replaces (`config.py`,
-`service.py`, `receipts.py`, `__init__.py`, `README.md`, and their tests) plus the ones only it
-has (`tests/test_service.py`). Every other file — `pyproject.toml`, `tests/conftest.py`,
-`tests/factories.py` — comes from the base tree and is edited in one place. An overlay file
-replaces its base counterpart whole; there is no merging.
+`templates/connector/direction/inbound/` holds the files that variant replaces — `config.py`,
+`service.py`, `receipts.py`, `__init__.py`, `README.md`, and their tests, `tests/test_service.py`
+included. Every other file — `pyproject.toml`, `tests/conftest.py`, `tests/factories.py` — comes
+from the base tree and is edited in one place. An overlay file replaces its base counterpart
+whole; there is no merging.
 
 The tree it renders:
 
@@ -176,11 +176,13 @@ packages/my-connector/
     ├── __init__.py
     ├── conftest.py                # the socket block — see step 5
     ├── factories.py               # fakes at the httpx boundary
-    └── test_config.py
+    ├── test_config.py
+    └── test_service.py            # the declare, the deferred event, the replay
 ```
 
-`DIRECTION=inbound` renders the same tree with `tests/test_service.py` added — the reader's
-contract: per-row validation, the durable cursor, and resume.
+Both directions render a green `tests/test_service.py`; `DIRECTION=inbound` replaces it with the
+reader's own — per-row validation, the durable cursor, resume, and the same declare and replay
+assertions against a paged source.
 
 `pyproject.toml` starts from the reference's: `requires-python = ">=3.10,<4.0"`,
 `pulse-core = { workspace = true }` under `[tool.uv.sources]`, `[tool.hatch.build.targets.wheel]`
