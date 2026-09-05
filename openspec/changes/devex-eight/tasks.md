@@ -155,7 +155,7 @@ task 3.1 batches the upstream PR.
       Tests: `task template:diff` shows the fixes as no-ops once merged upstream.
       `[model: sonnet | deps: 1.5, 1.6, 1.7, 2.4 | lane: repo_change | wave: 3]`
 
-- [ ] 3.2 Run `/devex-audit` when `task devex:check` reports 0 open findings; append the ledger
+- [x] 3.2 Run `/devex-audit` when `task devex:check` reports 0 open findings; append the ledger
       row; open `devex-eight-2` from the new top-10 if the exit gate does not hold.
       Tests: ledger row present with `kind: audit`; the three dated reports exist.
       `[model: opus | deps: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.1, 2.2, 2.3, 2.4, 2.5 | lane: repo_change | wave: 3]`
