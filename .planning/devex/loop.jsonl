@@ -23,3 +23,7 @@
 {"date": "2026-09-05", "kind": "pr", "ref": "8a01c5a", "pr": 384, "task": "1.5", "open_findings": null, "change": "devex-eight-2"}
 {"date": "2026-09-05", "kind": "pr", "ref": "b4fc49c", "pr": 385, "task": "1.6", "open_findings": null, "change": "devex-eight-2"}
 {"date": "2026-09-05", "kind": "pr", "ref": "b868c0a", "pr": 386, "task": "1.8", "open_findings": 3, "change": "devex-eight-2"}
+{"date": "2026-09-05", "kind": "pr", "ref": "b0690c6", "pr": 387, "task": "2.2", "open_findings": null, "change": "devex-eight-2"}
+{"date": "2026-09-05", "kind": "pr", "ref": "46d9e12", "pr": 388, "task": "2.1", "open_findings": 2, "change": "devex-eight-2"}
+{"date": "2026-09-05", "kind": "pr", "ref": "50d0b98", "pr": 389, "task": "2.2", "open_findings": 1, "change": "devex-eight-2"}
+{"date": "2026-09-05", "kind": "pr", "ref": "d6257f1", "pr": 390, "task": "3.1", "open_findings": 0, "change": "devex-eight-2"}

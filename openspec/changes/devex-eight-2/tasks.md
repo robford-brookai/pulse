@@ -68,14 +68,14 @@ non-Taskfile tasks alongside a serial one when they share no files.
 
 ## 2. Wave 2 — the M items
 
-- [ ] 2.1 Template ships `tests/test_config.py.tmpl` (the `from_env()` test the guide names first)
+- [x] 2.1 Template ships `tests/test_config.py.tmpl` (the `from_env()` test the guide names first)
       and `tests/factories.py.tmpl`; the guide's rendered-tree diagram is generated from the
       template listing or gated by a test that diffs them.
       Tests: remove xfail from `test_template_ships_the_tests_the_guide_diagrams`; cat9 golden
       regenerated with REGEN=1 and reviewed.
       `[model: sonnet | deps: 1.4 | lane: repo_change | wave: 2]`
 
-- [ ] 2.2 `packages/pulse-core/CHANGELOG.md` starting at the current version with the audit-era
+- [x] 2.2 `packages/pulse-core/CHANGELOG.md` starting at the current version with the audit-era
       changes; proposed `## Deprecations` section for the connector-kit spec written to
       `HANDOFF.md`; guide gains section 10, absorbing a kit change.
       Tests: remove xfail from `test_kit_has_changelog_and_deprecation_policy` once the doc-updater
@@ -84,7 +84,7 @@ non-Taskfile tasks alongside a serial one when they share no files.
 
 ## 3. Wave 3 — the L item
 
-- [ ] 3.1 `connector:new` `DIRECTION=inbound`: a second template overlay whose service implements
+- [x] 3.1 `connector:new` `DIRECTION=inbound`: a second template overlay whose service implements
       `RowSource` and `CursorStore` against the kit's inbound contract, with its own receipts and a
       passing test; outbound stays the default.
       Tests: remove xfail from `test_connector_new_supports_inbound_direction`; cat9 golden for the
