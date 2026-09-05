@@ -262,7 +262,6 @@ def test_verify_requires_change_and_lore_init_exists():
     assert "lore:init" in TARGETS or "openlore init" in _cmds("install")
 
 
-@open_finding
 def test_connector_new_warns_about_prior_art(tmp_path):
     """Fix 4: scaffolding a name that already exists under packages/ocean/services names the prior art."""
     r = subprocess.run(  # noqa: S603
