@@ -9,6 +9,7 @@ and prints; it does not apply the registrations. `task connector:new NAME=<x>` (
 
 Usage:
     uv run python scripts/connector_new.py --name claims-connector
+    uv run python scripts/connector_new.py --name claims-connector --direction inbound
     uv run python scripts/connector_new.py --name claims-connector --print-registrations
         prints the diff alone, on stdout, so `git apply -p1` can read it — and nothing else.
     uv run python scripts/connector_new.py --name claims-connector --dest /tmp/out --root .
@@ -16,6 +17,13 @@ Usage:
 NAME is the distribution name (kebab-case, e.g. `claims-connector`). The module name is its
 snake_case form (`claims_connector`) and the environment-variable prefix its upper form
 (`CLAIMS_CONNECTOR`). All three are derived; none is passed separately.
+
+DIRECTION picks which worked example the package starts from. `outbound` (the default) consumes
+events off the bus and declares what it derives; `inbound` pages a source system through the kit's
+inbound read contract (`RowSource`, `CursorStore`) and declares each validated page. The base tree
+is the outbound connector; `templates/connector/direction/inbound/` is an overlay whose files
+replace their base counterparts and add the ones only that direction has — so outbound renders
+exactly as it always did, byte for byte, and a shared file is edited in one place.
 
 Exit codes:
     0  rendered (and/or printed) successfully
@@ -41,6 +49,16 @@ TEMPLATE_SUFFIX = ".tmpl"
 
 TEMPLATE_DIR = Path("templates/connector")
 DEFAULT_DEST_PARENT = Path("packages")
+
+#: The overlay root inside the template tree. Everything under it belongs to one direction and is
+#: skipped by the base walk; `direction/<name>/` is that direction's overlay.
+DIRECTION_DIR_NAME = "direction"
+
+#: The default direction, and the one the base tree already is — it has no overlay of its own.
+OUTBOUND = "outbound"
+
+#: Every direction `--direction` accepts. Ordered as the help text lists them, default first.
+DIRECTIONS = (OUTBOUND, "inbound")
 
 #: Where Ocean's connector services already live. Checked from the invocation directory, not
 #: `--root` — `--root` isolates the registration diff onto a scratch copy of pyproject.toml and
@@ -96,18 +114,56 @@ def render_text(text: str, names: Names) -> str:
     return text
 
 
-def template_files(template_dir: Path) -> list[Path]:
-    """Every template file, as paths relative to `template_dir`, sorted.
+def _files_under(root: Path, *, skip_top: str | None = None) -> list[Path]:
+    """Every file under `root`, relative and sorted, skipping the `skip_top` top-level directory.
 
-    Sorted because this list reaches stdout and the golden gate compares it — an unsorted
+    Sorted because these lists reach stdout and the golden gate compares them — an unsorted
     directory walk flakes between filesystems.
+    """
+    return sorted(
+        relative
+        for path in root.rglob("*")
+        if path.is_file() and (relative := path.relative_to(root)).parts[0] != skip_top
+    )
+
+
+def template_files(template_dir: Path) -> list[Path]:
+    """Every base template file, as paths relative to `template_dir`, sorted.
+
+    The base tree is the outbound connector. `direction/` is excluded: its contents belong to one
+    direction's overlay, and rendering them as base files would drop an `inbound/service.py` into
+    every package regardless of what was asked for.
     """
     if not template_dir.is_dir():
         msg = f"template tree not found: {template_dir}"
         raise ConnectorNewError(msg)
-    found = sorted(p.relative_to(template_dir) for p in template_dir.rglob("*") if p.is_file())
+    found = _files_under(template_dir, skip_top=DIRECTION_DIR_NAME)
     if not found:
         msg = f"template tree is empty: {template_dir}"
+        raise ConnectorNewError(msg)
+    return found
+
+
+def overlay_dir(template_dir: Path, direction: str) -> Path:
+    """Where `direction`'s overlay lives."""
+    return template_dir / DIRECTION_DIR_NAME / direction
+
+
+def overlay_files(template_dir: Path, direction: str) -> list[Path]:
+    """Every overlay file for `direction`, relative to its overlay directory, sorted.
+
+    Empty for `outbound`: the base tree already is the outbound connector, so it carries no
+    overlay of its own and there is nothing to lay over it.
+    """
+    if direction == OUTBOUND:
+        return []
+    directory = overlay_dir(template_dir, direction)
+    if not directory.is_dir():
+        msg = f"no {direction} overlay: {directory}"
+        raise ConnectorNewError(msg)
+    found = _files_under(directory)
+    if not found:
+        msg = f"{direction} overlay is empty: {directory}"
         raise ConnectorNewError(msg)
     return found
 
@@ -121,22 +177,39 @@ def rendered_path(relative: Path, names: Names) -> Path:
     return rendered
 
 
-def render(template_dir: Path, dest: Path, names: Names, *, force: bool = False) -> list[Path]:
+def render_plan(template_dir: Path, names: Names, *, direction: str = OUTBOUND) -> dict[Path, Path]:
+    """Which template file each rendered path comes from, keyed by rendered path, sorted.
+
+    The overlay is applied second, so an overlay file that renders to the same path as a base one
+    replaces it outright — the whole file, never a merge. A direction that needs a different
+    `config.py` ships its own; one that does not, does not, and the base file stays the single
+    place that file is edited.
+    """
+    plan = {rendered_path(relative, names): template_dir / relative for relative in template_files(template_dir)}
+    overlay = overlay_dir(template_dir, direction)
+    for relative in overlay_files(template_dir, direction):
+        plan[rendered_path(relative, names)] = overlay / relative
+    return dict(sorted(plan.items()))
+
+
+def render(
+    template_dir: Path, dest: Path, names: Names, *, direction: str = OUTBOUND, force: bool = False
+) -> list[Path]:
     """Write the rendered package into `dest` and return the files written, sorted.
 
     Refuses a destination that already exists unless `force`: a half-overwritten package is worse
     than a stopped command, and the caller has not lost anything by being told to pick a name.
     """
-    relatives = template_files(template_dir)
+    plan = render_plan(template_dir, names, direction=direction)
     if dest.exists() and not force:
         msg = f"destination already exists: {dest} (pass --force to overwrite)"
         raise ConnectorNewError(msg)
 
     written: list[Path] = []
-    for relative in relatives:
-        target = dest / rendered_path(relative, names)
+    for relative, source in plan.items():
+        target = dest / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(render_text((template_dir / relative).read_text(), names))
+        target.write_text(render_text(source.read_text(), names))
         written.append(target)
     return written
 
@@ -354,6 +427,14 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--name", required=True, help="distribution name, e.g. claims-connector")
     parser.add_argument(
+        "--direction",
+        choices=DIRECTIONS,
+        default=OUTBOUND,
+        help="which worked example to start from: outbound consumes the bus and declares "
+        "(the default); inbound pages a source system through the kit's RowSource/CursorStore "
+        f"contract (default: {OUTBOUND})",
+    )
+    parser.add_argument(
         "--dest",
         type=Path,
         default=None,
@@ -391,8 +472,8 @@ def main(argv: list[str] | None = None) -> int:
         dest = args.dest or args.root / DEFAULT_DEST_PARENT / names.dist
 
         if not args.print_registrations:
-            written = render(template_dir, dest, names, force=args.force)
-            print(f"Rendered {names.dist} ({names.module}) into {dest}:")
+            written = render(template_dir, dest, names, direction=args.direction, force=args.force)
+            print(f"Rendered {names.dist} ({names.module}), {args.direction}, into {dest}:")
             for path in written:
                 print(f"  {path}")
             print()

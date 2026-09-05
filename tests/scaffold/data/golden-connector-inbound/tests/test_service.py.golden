@@ -1,0 +1,174 @@
+"""`example_connector.service` — the reader against the kit's inbound contract, driven by fixtures only.
+
+Every test here holds a `RowSource` and a `CursorStore` and nothing else: `FixtureRowSource` is
+the kit's own recorded-row source, and `MemoryCursorStore` below is a `CursorStore` over a dict.
+`conftest.py` blocks sockets for the whole suite regardless — no test in this file would open one.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+import pytest
+from pulse_core.connector import FixtureRowSource
+from example_connector.config import Config
+from example_connector.receipts import Receipt
+from example_connector.service import CURSOR_COLUMN, Reader, SourceRow, build_row_source, handle_page, run
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+#: Three well-formed rows in cursor order. Synthetic throughout — no real subject key ever appears
+#: in a fixture.
+ROWS: list[Mapping[str, object]] = [
+    {"subject_key": "subject-1", "event_id": "event-1", "event_time": "2026-01-01T00:00:00+00:00"},
+    {"subject_key": "subject-2", "event_id": "event-2", "event_time": "2026-01-02T00:00:00+00:00"},
+    {"subject_key": "subject-3", "event_id": "event-3", "event_time": "2026-01-03T00:00:00+00:00"},
+]
+
+#: A row that parses its cursor value but violates the contract on another column.
+MALFORMED_ROW: Mapping[str, object] = {
+    "subject_key": "",
+    "event_id": "event-4",
+    "event_time": "2026-01-04T00:00:00+00:00",
+}
+
+
+class MemoryCursorStore:
+    """A `CursorStore` over a dict — the durable cursor without the ledger."""
+
+    def __init__(self, cursor: Mapping[str, object] | None = None) -> None:
+        self.cursor: Mapping[str, object] | None = cursor
+        self.saves = 0
+
+    def load(self) -> Mapping[str, object] | None:
+        return self.cursor
+
+    def save(self, cursor: Mapping[str, object]) -> None:
+        self.cursor = cursor
+        self.saves += 1
+
+
+def source(rows: list[Mapping[str, object]]) -> FixtureRowSource:
+    return FixtureRowSource(rows, cursor_column=CURSOR_COLUMN)
+
+
+def config(**overrides: object) -> Config:
+    return Config(
+        source_table="synthetic.landing.rows",
+        ledger_base_url="https://ledger.test",
+        **overrides,  # type: ignore[arg-type]
+    )
+
+
+def test_a_reader_validates_every_row_it_pages() -> None:
+    reader = Reader(source(ROWS), MemoryCursorStore())
+
+    pages = list(reader.batches())
+
+    assert [row.event_id for page in pages for row in page.rows] == ["event-1", "event-2", "event-3"]
+    assert all(isinstance(row, SourceRow) for page in pages for row in page.rows)
+
+
+def test_a_malformed_row_is_counted_and_the_rest_of_its_page_still_validates() -> None:
+    reader = Reader(source([*ROWS, MALFORMED_ROW]), MemoryCursorStore())
+
+    pages = list(reader.batches())
+
+    rows = [row for page in pages for row in page.rows]
+    errors = [error for page in pages for error in page.errors]
+    assert len(rows) == 3
+    assert [error.column for error in errors] == ["subject_key"]
+
+
+def test_an_error_names_its_column_and_no_payload_value() -> None:
+    reader = Reader(source([MALFORMED_ROW]), MemoryCursorStore())
+
+    errors = [error for page in reader.batches() for error in page.errors]
+
+    assert len(errors) == 1
+    assert errors[0].column == "subject_key"
+    assert "event-4" not in errors[0].detail
+
+
+def test_commit_persists_the_page_position() -> None:
+    store = MemoryCursorStore()
+    reader = Reader(source(ROWS), store, page_size=1)
+
+    next(reader.batches())
+    reader.commit()
+
+    assert store.cursor == {CURSOR_COLUMN: "2026-01-01T00:00:00+00:00"}
+
+
+def test_a_persisted_cursor_resumes_past_what_was_already_read() -> None:
+    store = MemoryCursorStore({CURSOR_COLUMN: "2026-01-02T00:00:00+00:00"})
+    reader = Reader(source(ROWS), store)
+
+    read = [row.event_id for page in reader.batches() for row in page.rows]
+
+    assert read == ["event-3"]
+
+
+def test_a_page_whose_rows_carry_no_cursor_value_is_yielded_once_and_stops() -> None:
+    """Re-fetching with the same `after` would return this page forever; the reader stops instead."""
+    unparseable = {"subject_key": "subject-9", "event_id": "event-9", "event_time": "not-a-timestamp"}
+    reader = Reader(source([unparseable]), MemoryCursorStore())
+
+    pages = list(reader.batches())
+
+    assert len(pages) == 1
+    assert [error.column for error in pages[0].errors] == [CURSOR_COLUMN]
+
+
+def test_an_empty_source_yields_nothing() -> None:
+    assert list(Reader(source([]), MemoryCursorStore()).batches()) == []
+
+
+def test_a_page_size_below_one_is_refused() -> None:
+    with pytest.raises(ValueError, match="page_size"):
+        Reader(source(ROWS), MemoryCursorStore(), page_size=0)
+
+
+def test_handle_page_counts_without_mutating_the_previous_tally() -> None:
+    page = next(Reader(source(ROWS), MemoryCursorStore()).batches())
+    original = Receipt()
+
+    tally = handle_page(page, tally=original)
+
+    assert (tally.read, tally.invalid) == (3, 0)
+    assert (original.read, original.invalid) == (0, 0)
+
+
+def test_run_drains_the_source_and_commits() -> None:
+    store = MemoryCursorStore()
+
+    receipt = run(config(page_size=1), cursor_store=store, source=source(ROWS))
+
+    assert receipt.read == 3
+    assert receipt.invalid == 0
+    assert store.cursor == {CURSOR_COLUMN: "2026-01-03T00:00:00+00:00"}
+    assert store.saves == 3
+
+
+def test_run_stops_at_max_pages_with_the_cursor_committed() -> None:
+    store = MemoryCursorStore()
+
+    receipt = run(config(page_size=1), cursor_store=store, source=source(ROWS), max_pages=1)
+
+    assert receipt.read == 1
+    assert store.cursor == {CURSOR_COLUMN: "2026-01-01T00:00:00+00:00"}
+
+
+def test_run_resumes_where_the_previous_run_stopped() -> None:
+    store = MemoryCursorStore()
+
+    run(config(page_size=1), cursor_store=store, source=source(ROWS), max_pages=1)
+    receipt = run(config(), cursor_store=store, source=source(ROWS))
+
+    assert receipt.read == 2
+
+
+def test_the_scaffold_row_source_stub_reads_nothing() -> None:
+    """An unmodified package starts, reads nothing, and exits 0 rather than pretending."""
+    assert build_row_source(config()).fetch(after=None, limit=10) == []

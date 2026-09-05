@@ -122,16 +122,20 @@ tasks:
       - uv run python -m pulse_core.twenty_metadata
 
   connector:new:
-    desc: Scaffold a connector package (NAME) from templates/connector/ and register it at every site
-    # devex-eight task 1.4.
+    desc: Scaffold a connector package (NAME, DIRECTION=outbound|inbound) from templates/connector/ and register it at every site
+    # devex-eight task 1.4; DIRECTION added by devex-eight-2 task 3.1.
     # scripts/connector_new.py (devex-eight task 1.3) renders the tree and computes the
     # registration diff; --apply-registrations is what writes that diff into pyproject.toml and
     # Taskfile.yml instead of only printing it. Run `uv sync --all-packages` afterward so the new
     # workspace member is installed.
+    # DIRECTION picks the worked example: outbound (the default) consumes the bus and declares;
+    # inbound pages a source system through the kit's RowSource/CursorStore contract.
     requires:
       vars: [NAME]
+    vars:
+      DIRECTION: '{{.DIRECTION | default "outbound"}}'
     cmds:
-      - uv run python scripts/connector_new.py --name {{.NAME}} --root {{.ROOT_DIR}} --apply-registrations
+      - uv run python scripts/connector_new.py --name {{.NAME}} --direction {{.DIRECTION}} --root {{.ROOT_DIR}} --apply-registrations
 
   typecheck:
     desc: Type check — mypy on TYPED_PATHS, pyright on verdict-relay, schedules, identity, consent-ingress, archaeology, and billing-connector
