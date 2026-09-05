@@ -555,6 +555,9 @@ tasks:
     desc: Full local gate — check plus drift and spec validation (needs CHANGE)
     requires:
       vars: [CHANGE]
+    preconditions:
+      - sh: '[ -n "{{.CHANGE}}" ]'
+        msg: "CHANGE is required, e.g. task verify CHANGE=<change-id>"
     cmds:
       - task: check
       - task: workflow:lint:linear

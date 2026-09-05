@@ -535,23 +535,7 @@ def test_explicit_commits_bypass_the_history_scan(tmp_path: Path) -> None:
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)  # noqa: S603, S607
 
     def commit(subject: str) -> str:
-        subprocess.run(  # noqa: S603
-            [  # noqa: S607
-                "git",
-                "-C",
-                str(tmp_path),
-                "-c",
-                "user.email=t@test.invalid",
-                "-c",
-                "user.name=T",
-                "commit",
-                "--allow-empty",
-                "-q",
-                "-m",
-                subject,
-            ],
-            check=True,
-        )
+        _git("commit", "--allow-empty", "-q", "-m", subject, cwd=tmp_path)
         return subprocess.run(  # noqa: S603
             ["git", "-C", str(tmp_path), "rev-parse", "HEAD"],  # noqa: S607
             capture_output=True,
@@ -935,12 +919,30 @@ def test_apply_without_a_key_is_an_error_not_a_silent_no_op(monkeypatch: pytest.
 
 
 def _git(*args: str, cwd: Path) -> None:
-    subprocess.run(  # noqa: S603
-        ["git", "-c", "user.email=g@test.invalid", "-c", "user.name=G", *args],  # noqa: S607
-        cwd=cwd,
-        check=True,
-        capture_output=True,
-    )
+    """Run git sandboxed against the operator's global config.
+
+    `commit.gpgsign=false` and a neutral `gpg.format` stop a global signing config (a real key,
+    or an `ssh`/`x509` format with no matching key) from turning a fixture commit into a signing
+    failure. A failure here is re-raised with `exc.stderr` — `capture_output` alone hides it
+    behind a bare `CalledProcessError`, which is illegible in a sandbox where the git binary and
+    its config are not what the traceback's reader expects.
+    """
+    cmd = [
+        "git",
+        "-c",
+        "commit.gpgsign=false",
+        "-c",
+        "gpg.format=openpgp",
+        "-c",
+        "user.email=g@test.invalid",
+        "-c",
+        "user.name=G",
+        *args,
+    ]
+    try:
+        subprocess.run(cmd, cwd=cwd, check=True, capture_output=True, text=True)  # noqa: S603
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(f"git {' '.join(args)} failed:\n{exc.stderr}") from exc  # noqa: TRY003
 
 
 def _repo_with_worktree(tmp_path: Path, *, commit_in_worktree: bool, handoff: bool) -> tuple[Path, Path]:

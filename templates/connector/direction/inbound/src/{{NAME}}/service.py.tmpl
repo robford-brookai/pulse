@@ -44,7 +44,7 @@ from pulse_core.connector import (
 )
 from pulse_core.cursor import validate_cursor
 
-from {{NAME}}.config import Config, ConfigError
+from {{NAME}}.config import LEDGER_BASE_URL_ENV_VAR, Config, ConfigError
 from {{NAME}}.receipts import SERVICE_NAME, Receipt
 
 if TYPE_CHECKING:
@@ -232,6 +232,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         config.ledger_base_url,
         writer_id=CURSOR_WRITER_ID,
         token=os.environ[config.credential_name],
+        base_url_env_var=LEDGER_BASE_URL_ENV_VAR,
     ) as cursor_store:
         run(config, cursor_store=cursor_store, max_pages=args.max_pages)
     return 0

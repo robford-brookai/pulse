@@ -1,0 +1,49 @@
+name: Connector Kit Defect
+description: Report a defect in packages/pulse-core/src/pulse_core/connector/ found while authoring or operating a connector
+title: "Connector kit defect: "
+labels: ["connector-kit"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        File this when the kit itself is wrong — a dropped export the CHANGELOG never named, a
+        registration site that disagrees with what `connector:new` renders, a scaffold that fails
+        offline for reasons the connector author cannot fix in their own package. See
+        `docs/connectors/authoring.md` §10.
+  - type: input
+    id: connector
+    attributes:
+      label: Connector
+      description: Which connector package surfaced the defect
+      placeholder: "e.g., packages/billing-connector"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What the kit's documented contract says should happen
+      placeholder: "e.g., `authoring.md` §2 lists this export"
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened, with the exact error text if any
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: Minimal steps, ideally from `task connector:new`
+    validations:
+      required: true
+  - type: input
+    id: kit_version
+    attributes:
+      label: Kit version
+      description: pulse-core version or commit the connector was synced against
+    validations:
+      required: false
