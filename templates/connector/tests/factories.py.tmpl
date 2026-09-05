@@ -1,0 +1,45 @@
+"""Fixture builders for {{DIST}} tests.
+
+`FakeCommandTransport` fakes the command API at the `httpx.MockTransport` boundary so a test
+drives `pulse_core.client.PulseCoreClient` (and, through it, `submit_with_retry`) without opening
+a socket — the same pattern as `billing-connector`, `verdict-relay`, and `consent-ingress`. Extend
+this module with your own row/event builders as this connector's shape firms up; keep them here so
+every test file shares one fixture surface instead of each inventing its own.
+"""
+
+from __future__ import annotations
+
+import json
+from typing import cast
+
+import httpx
+from pulse_core.client import PulseCoreClient
+
+
+class FakeCommandTransport:
+    """The command API faked at the client boundary; the last scripted response repeats.
+
+    A caller that scripts no responses gets one synthesized `committed` reply per call, keyed by
+    call order, so a fixture that only cares about the submitted body need not script anything.
+    """
+
+    def __init__(self, responses: list[httpx.Response] | None = None) -> None:
+        self.bodies: list[dict[str, object]] = []
+        self._responses = list(responses or [])
+
+    def handler(self, request: httpx.Request) -> httpx.Response:
+        parsed: object = json.loads(request.content)
+        assert isinstance(parsed, dict)
+        self.bodies.append(cast("dict[str, object]", parsed))
+        if not self._responses:
+            return httpx.Response(201, json={"event_id": f"event-{len(self.bodies)}", "replayed": False})
+        return self._responses[min(len(self.bodies), len(self._responses)) - 1]
+
+    def client(self, *, base_url: str = "http://ledger.test", writer_id: str = "{{DIST}}") -> PulseCoreClient:
+        return PulseCoreClient(
+            base_url,
+            writer_id=writer_id,
+            token="unit-test-token",  # noqa: S106 — a fixture value, not a secret
+            transport=httpx.MockTransport(self.handler),
+            max_attempts=1,
+        )
