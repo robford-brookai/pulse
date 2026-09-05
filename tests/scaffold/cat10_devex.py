@@ -262,7 +262,6 @@ def test_verify_requires_change_and_lore_init_exists():
     assert "lore:init" in TARGETS or "openlore init" in _cmds("install")
 
 
-@open_finding
 def test_verify_guards_against_empty_change():
     """Audit 3 fix 2 (QA R1): `requires: vars: [CHANGE]` is satisfied by Taskfile.yml's empty CHANGE
     default, so `task verify` with no CHANGE runs the whole gate before failing. The target needs a

@@ -10,7 +10,11 @@ session on `main`, or run `task devex:audit`, and follow this page. Two tiers:
 
 The inner tier is a regression gate, not a score. It counts audit findings that are still open
 (`tests/scaffold/cat10_devex.py`, one test per finding, `xfail(strict=True)` while the defect
-exists). It never prints a 0-10. The only 0-10 comes from the outer tier.
+exists). It never prints a 0-10. The only 0-10 comes from the outer tier. A count of 0 means "no
+finding from a prior audit is still encoded as open", not "the repo has no DX defects": the next
+audit will find new ones, and a finding test that passes without fixing the behaviour (as #380's
+did) is a test defect to correct, not a closed finding (protocol note 2026-09-05, after QA R1/R2
+of the third audit).
 
 ## Exit gate
 
@@ -42,6 +46,10 @@ Blindness rules, enforced by the specs:
   commands on a second fresh clone, re-measures TTHW, and flags any dimension that rose 3 or
   more points without a merged PR behind it.
 - The persona's target connector rotates each audit and is never `billing`.
+- Timings are measured on an idle machine. Agent A runs its fresh-clone, `task install` and `task
+  check` timings with no other gate, worker or background clone running, and states the cache
+  state; a timing taken under contention is quoted with that caveat at the point of use and is
+  not a benchmark (protocol note 2026-09-05, after QA A4/A6 of the third audit).
 
 ## Coordinator steps
 
