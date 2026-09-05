@@ -310,7 +310,6 @@ def test_connector_new_supports_inbound_direction():
     assert "--direction" in r.stdout and "inbound" in r.stdout, r.stdout[-600:]
 
 
-@open_finding
 def test_kit_has_changelog_and_deprecation_policy():
     """Fix 8: the kit reaches every connector on the next uv sync; it needs a changelog and a deprecations section."""
     assert (ROOT / "packages/pulse-core/CHANGELOG.md").is_file()
