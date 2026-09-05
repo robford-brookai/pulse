@@ -16,7 +16,7 @@ non-Taskfile tasks alongside a serial one when they share no files.
 
 ## 0. Wave 0 — findings encoded (one PR, coordinator session)
 
-- [ ] 0.1 Ten audit-3 findings as `xfail(strict=True)` tests in `tests/scaffold/cat10_devex.py`,
+- [x] 0.1 Ten audit-3 findings as `xfail(strict=True)` tests in `tests/scaffold/cat10_devex.py`,
       including the structural `verify` guard test that replaces the one #380 satisfied without
       fixing the behaviour; change artifacts; `task replan CHANGE=devex-eight-3` green.
       Tests: `task devex:check` prints `METRIC devex_open_findings=10`; `task check` green.
