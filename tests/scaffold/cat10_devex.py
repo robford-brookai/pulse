@@ -466,7 +466,6 @@ def test_task_lint_is_read_only():
     assert (not ruff_fix) or "--no-fix" in _cmds("lint"), "task lint rewrites files"
 
 
-@open_finding
 def test_scaffold_ships_a_working_declare_example():
     """Fix 5: the scaffold's handle_page declares through the kit instead of counting rows."""
     hits = list((ROOT / "templates/connector").rglob("service.py.tmpl"))

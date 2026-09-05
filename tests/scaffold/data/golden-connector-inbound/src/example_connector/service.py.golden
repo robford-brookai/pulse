@@ -13,9 +13,10 @@ What to replace, in order:
    catches it into a counted `RowError` naming the row's page offset and column, never a value.
 2. `build_row_source` — the adapter for the real source. The scaffold returns an empty fixture
    source, so an unmodified package starts, reads nothing, and exits 0 rather than pretending.
-3. `handle_page` — what this connector derives and declares per page. The scaffold counts the
-   page and does nothing else; add the `submit_with_retry` call and record each settled response
-   through the receipt so the counts stay true.
+3. `_declaration` — the command one validated row declares. The scaffold declares a transition
+   into `TO_STATE` for `SUBJECT_TYPE`; replace both, and the derivation, with what this connector
+   actually asserts. `handle_page` around it already declares one row at a time through
+   `submit_with_retry` and counts every settled response, and needs no change to stay correct.
 
 The crash/resume contract: `Reader.batches()` yields a page, the caller declares it, then
 `commit()` persists the page position. A crash in between re-reads at most that one page, which
@@ -27,22 +28,29 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import random
+import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from pulse_core.client import PulseCoreClient
 from pulse_core.connector import (
     DEFAULT_PAGE_SIZE,
     CursorStore,
     FixtureRowSource,
+    Jitter,
     LedgerCursorStore,
     RowSource,
+    Sleeper,
     ValidatedPage,
     parse_instant,
     required_string,
     required_timestamp,
+    submit_with_retry,
     validate_page,
 )
 from pulse_core.cursor import validate_cursor
+from pulse_core.generated import DeclareTransitionCommand
 
 from example_connector.config import LEDGER_BASE_URL_ENV_VAR, Config, ConfigError
 from example_connector.receipts import SERVICE_NAME, Receipt
@@ -50,6 +58,8 @@ from example_connector.receipts import SERVICE_NAME, Receipt
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping, Sequence
     from datetime import datetime
+
+    from pulse_core.client import CommandResponse
 
 logger = logging.getLogger(SERVICE_NAME)
 
@@ -67,6 +77,12 @@ _CURSOR_PAGE_KEY = CURSOR_COLUMN
 #: This connector's own writer id — the durable cursor is scoped to it, distinct from any
 #: command-attribution credential the declarer authenticates with.
 CURSOR_WRITER_ID = "example-connector"
+
+#: The subject a declaration is about, and the state a row declares it into. Both are scaffold
+#: placeholders standing in for this connector's own contract: replace them together with
+#: `_declaration`, which is the one place either is read.
+SUBJECT_TYPE = "person"
+TO_STATE = "seen"
 
 
 @dataclass(frozen=True)
@@ -169,29 +185,85 @@ def build_row_source(config: Config) -> RowSource:
     return FixtureRowSource([], cursor_column=CURSOR_COLUMN)
 
 
-def handle_page(page: ValidatedPage[SourceRow], *, tally: Receipt) -> Receipt:
-    """Act on one validated page and return the next tally. Never mutates `tally`.
+def _declaration(row: SourceRow) -> DeclareTransitionCommand:
+    """The command one validated row declares. Replace with this connector's own derivation.
 
-    Scaffold behavior: count the page and do nothing with it. Replace this with the derivation
-    and the `submit_with_retry` call this connector exists for — and count each settled response
-    through the receipt so `committed`, `replayed` and `rejected` stay true.
+    The scaffold asserts the least it can that is still a real fact: this subject reached
+    `TO_STATE` at the row's own `event_time`. Nothing here is derived from a value the row
+    carries beyond its keys, so the command is safe to name in a log line.
+    """
+    return DeclareTransitionCommand(
+        subject_type=SUBJECT_TYPE,
+        subject_key=row.subject_key,
+        to_state=TO_STATE,
+        reason=f"{SERVICE_NAME} read event_id={row.event_id}",
+    )
+
+
+def declare_row(
+    client: PulseCoreClient,
+    row: SourceRow,
+    *,
+    sleep: Sleeper = time.sleep,
+    jitter: Jitter = random.random,
+) -> CommandResponse:
+    """Declare one validated row through the kit's retry loop, returning its settled response.
+
+    `submit_with_retry` owns the retry policy — transient answers only, jittered backoff — which
+    is why `client` is pinned to `max_attempts=1` where it is built: two retry loops would spend
+    the budget twice. `ref` names the submission by the row's keys, never by a value it carries,
+    so an exhausted budget is diagnosable from the raised error alone.
+
+    `effective_at=row.event_time` is what makes a re-read page harmless: it feeds the D16
+    idempotency key `submit_command` derives, so the same row always submits under the same key
+    and the ledger answers every resubmission `replayed`.
+
+    `sleep` and `jitter` are the schedule's seam: production takes the defaults, and a test pins
+    them so exercising the transient path costs no wall-clock and never flakes.
+    """
+    return submit_with_retry(
+        lambda: client.submit_command(_declaration(row), effective_at=row.event_time),
+        ref=f"{SERVICE_NAME} event_id={row.event_id}",
+        sleep=sleep,
+        jitter=jitter,
+    )
+
+
+def handle_page(page: ValidatedPage[SourceRow], *, tally: Receipt, client: PulseCoreClient) -> Receipt:
+    """Declare every valid row on one page and return the next tally. Never mutates `tally`.
+
+    One `submit_with_retry` call per valid row, each settled response counted through
+    `DeclareCounts.record`, so `committed`, `replayed` and `rejected` stay true. The page's
+    malformed rows are counted by `record_page` and never declared.
+
+    A page the crash/resume contract re-reads declares the same facts under the same idempotency
+    keys: every submission comes back `replayed`, `committed` does not move, and nothing is
+    written twice. Replace `_declaration`, not this loop.
     """
     logger.debug("page rows=%d errors=%d", len(page.rows), len(page.errors))
-    return tally.record_page(page)
+    next_tally = tally.record_page(page)
+    for row in page.rows:
+        next_tally = next_tally.record(declare_row(client, row).classification)
+    return next_tally
 
 
 def run(
     config: Config,
     *,
     cursor_store: CursorStore,
+    client: PulseCoreClient,
     source: RowSource | None = None,
     max_pages: int | None = None,
 ) -> Receipt:
     """Drain the reader, accumulating one receipt across every page, and log it once.
 
-    `source` is the seam every test uses: pass a `FixtureRowSource` and no adapter is built and no
+    `source` and `client` are the two seams every test uses: pass a `FixtureRowSource` and a
+    client built on `tests/factories.py`'s `FakeCommandTransport` and no adapter is built and no
     socket is opened. `max_pages` stops after that many pages, cursor committed, so a bounded run
     is an ordinary resume rather than a special case.
+
+    The cursor is committed only after the page's rows are declared: a crash between the two
+    re-reads that one page, which declares as replays rather than duplicate facts.
     """
     reader = Reader(
         source if source is not None else build_row_source(config),
@@ -200,7 +272,7 @@ def run(
     )
     tally = Receipt()
     for pages_read, page in enumerate(reader.batches(), start=1):
-        tally = handle_page(page, tally=tally)
+        tally = handle_page(page, tally=tally, client=client)
         reader.commit()
         if max_pages is not None and pages_read >= max_pages:
             break
@@ -227,14 +299,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     # The token's *value* is read here, at the one place it is used, from the variable
-    # `config.credential_name` names — the config object never holds it.
-    with LedgerCursorStore(
-        config.ledger_base_url,
-        writer_id=CURSOR_WRITER_ID,
-        token=os.environ[config.credential_name],
-        base_url_env_var=LEDGER_BASE_URL_ENV_VAR,
-    ) as cursor_store:
-        run(config, cursor_store=cursor_store, max_pages=args.max_pages)
+    # `config.credential_name` names — the config object never holds it. `max_attempts=1` pins
+    # the client to a single attempt because `declare_row`'s `submit_with_retry` owns retry.
+    token = os.environ[config.credential_name]
+    with (
+        LedgerCursorStore(
+            config.ledger_base_url,
+            writer_id=CURSOR_WRITER_ID,
+            token=token,
+            base_url_env_var=LEDGER_BASE_URL_ENV_VAR,
+        ) as cursor_store,
+        PulseCoreClient(
+            config.ledger_base_url,
+            writer_id=CURSOR_WRITER_ID,
+            token=token,
+            max_attempts=1,
+        ) as client,
+    ):
+        run(config, cursor_store=cursor_store, client=client, max_pages=args.max_pages)
     return 0
 
 
