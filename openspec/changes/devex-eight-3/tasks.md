@@ -24,14 +24,14 @@ non-Taskfile tasks alongside a serial one when they share no files.
 
 ## 1. Wave 1 — the S fixes
 
-- [ ] 1.1 Pin `-c commit.gpgsign=false` (and `gpg.format` neutral) in the `_git` helpers of
+- [x] 1.1 Pin `-c commit.gpgsign=false` (and `gpg.format` neutral) in the `_git` helpers of
       `tests/scaffold/cat5_glue_logic.py` and `cat9_golden_workflow.py`; re-raise with `exc.stderr`
       in the message so a sandbox git failure is legible.
       Tests: remove xfail from `test_scaffold_git_helpers_are_hermetic_to_global_signing`; the
       gates pass with `GIT_CONFIG_GLOBAL` pointing at a config that sets `commit.gpgsign=true`.
       `[model: sonnet | deps: — | lane: repo_change | wave: 1]`
 
-- [ ] 1.2 `verify` fails fast on an empty `CHANGE`: a `preconditions` entry that names CHANGE and
+- [x] 1.2 `verify` fails fast on an empty `CHANGE`: a `preconditions` entry that names CHANGE and
       exits before `check` runs; same for any other CHANGE-taking target that the empty default
       lets through.
       Tests: remove xfail from `test_verify_guards_against_empty_change`; the slow behavioural twin
@@ -58,13 +58,13 @@ non-Taskfile tasks alongside a serial one when they share no files.
       Tests: remove xfail from `test_authoring_guide_documents_every_exported_name`.
       `[model: sonnet | deps: — | lane: repo_change | wave: 1]`
 
-- [ ] 1.6 The rendered README's "Next steps" states what the scaffold already did (registration,
+- [x] 1.6 The rendered README's "Next steps" states what the scaffold already did (registration,
       tests) and points at the declare step instead.
       Tests: remove xfail from `test_rendered_readme_next_steps_do_not_redo_registration`; cat9
       goldens regenerated with REGEN=1 and reviewed.
       `[model: haiku | deps: — | lane: repo_change | wave: 1]`
 
-- [ ] 1.7 `.github/CODEOWNERS` per-area line for `packages/pulse-core/src/pulse_core/connector/`;
+- [x] 1.7 `.github/CODEOWNERS` per-area line for `packages/pulse-core/src/pulse_core/connector/`;
       `.github/ISSUE_TEMPLATE/connector-kit-defect.yml`; the missing `billing-connector` row in
       `docs/contracts/producer-registry.md`.
       Tests: remove xfail from `test_codeowners_names_the_connector_kit_owner_and_defect_template_exists`.
@@ -79,7 +79,7 @@ non-Taskfile tasks alongside a serial one when they share no files.
       regenerated and the rendered suites green.
       `[model: opus | deps: 1.3 | lane: repo_change | wave: 2]`
 
-- [ ] 2.2 `LedgerCursorStore` wraps `httpx.TransportError` in a kit error naming the base URL and
+- [x] 2.2 `LedgerCursorStore` wraps `httpx.TransportError` in a kit error naming the base URL and
       the variable that supplied it; guide section 4 shows the message.
       Tests: remove xfail from `test_cursor_store_transport_errors_name_the_endpoint`; a
       refused-connection test in `packages/pulse-core/tests`.
