@@ -272,10 +272,9 @@ In `pyproject.toml`:
 In `Taskfile.yml`, the four path variables at the top:
 
 3. `LINT_PATHS` — add `packages/my-connector` (the package root: `src` and `tests` both).
-4. `TYPED_PATHS` — add `packages/my-connector/src` if mypy covers it; if the package is pyright-
-   strict instead (the newer posture, and the one the reference uses), add a
-   `uv run pyright -p packages/my-connector` line to the `typecheck` target rather than a
-   `TYPED_PATHS` entry.
+4. The `typecheck` target — the rendered `pyproject.toml` sets `[tool.pyright] typeCheckingMode
+   = "strict"`, so add a `uv run pyright -p packages/my-connector` line there. `TYPED_PATHS` is
+   mypy's list; a pyright-strict package never joins it.
 5. `TESTED_PATHS` — add `packages/my-connector/tests`.
 6. `COV_PATHS` — add `--cov=packages/my-connector/src`.
 

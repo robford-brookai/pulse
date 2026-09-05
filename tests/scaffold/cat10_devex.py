@@ -407,9 +407,9 @@ def test_scaffold_git_helpers_are_hermetic_to_global_signing():
         assert "commit.gpgsign=false" in text, f"{rel} does not pin commit.gpgsign=false"
 
 
-@open_finding
-def test_connector_new_registers_pyright_not_mypy(tmp_path):
+def test_connector_new_registers_pyright_not_mypy():
     """Fix 3: the rendered package declares pyright strict; the registration diff must add a pyright line, not a TYPED_PATHS entry."""
+    # --print-registrations only reads pyproject.toml/Taskfile.yml, never writes — ROOT is safe.
     r = subprocess.run(  # noqa: S603
         [
             sys.executable,
@@ -417,7 +417,7 @@ def test_connector_new_registers_pyright_not_mypy(tmp_path):
             "--name",
             "zapchk",
             "--root",
-            str(tmp_path),
+            str(ROOT),
             "--print-registrations",
         ],
         cwd=ROOT,
