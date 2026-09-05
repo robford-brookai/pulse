@@ -329,10 +329,24 @@ def register_pyproject(text: str, names: Names) -> str:
     )
 
 
+def _append_pyright_target(text: str, names: Names) -> str:
+    """Add a `uv run pyright -p packages/<name>` line to the `typecheck` target's cmds.
+
+    The rendered package's `pyproject.toml` sets `[tool.pyright] typeCheckingMode = "strict"`
+    (`templates/connector/pyproject.toml.tmpl`), so registration matches that posture: a pyright
+    line under `typecheck`, not a `TYPED_PATHS` entry — mypy never sees the package.
+    """
+    return _insert_after_last_matching(
+        text,
+        re.compile(r"^      - uv run pyright -p packages/"),
+        f"      - uv run pyright -p packages/{names.dist}\n",
+    )
+
+
 def register_taskfile(text: str, names: Names) -> str:
-    """The four path variables, plus the commented image and deploy stanzas."""
+    """The path variables, the pyright typecheck target, plus the commented deploy stanzas."""
     text = _append_to_taskfile_var(text, "LINT_PATHS", f"packages/{names.dist}")
-    text = _append_to_taskfile_var(text, "TYPED_PATHS", f"packages/{names.dist}/src")
+    text = _append_pyright_target(text, names)
     text = _append_to_taskfile_var(text, "TESTED_PATHS", f"packages/{names.dist}/tests")
     text = _append_to_taskfile_var(text, "COV_PATHS", f"--cov=packages/{names.dist}/src")
     return _insert_deploy_stubs(text, names)

@@ -34,9 +34,12 @@ Two directions, and most connectors are one of them:
 
 ## 2. What to import
 
-Everything shared lives in `pulse_core.connector`. Import from the package root, not the
-submodules — the root is the supported surface and `__all__` is checked against it by
-`packages/pulse-core/tests/test_connector_exports.py`.
+Everything shared lives in `pulse_core.connector`. Import from that package's root, not its own
+submodules (`pulse_core.connector.rows`, `.declare`, `.consume`) — the root is the supported
+surface and `__all__` is checked against it by
+`packages/pulse-core/tests/test_connector_exports.py`. This rule is scoped to the connector kit's
+own internals; it says nothing about `pulse_core`'s other top-level modules, which a connector
+imports directly (see below).
 
 ```python
 from pulse_core.connector import (
@@ -45,20 +48,39 @@ from pulse_core.connector import (
     RowSource,            # Protocol: fetch(after=..., limit=...) -> raw rows
     LedgerCursorStore,    # the production CursorStore, via the ledger's writer-state API
     FixtureRowSource,     # the RowSource every test drives
+    DEFAULT_PAGE_SIZE,    # the page size `fetch` is called with when a reader has no opinion
     validate_page,        # catch-and-collect validation over one raw page
-    required_string,      # per-column validators; raise RowValidationError naming the column
+    ValidatedPage,        # one page split into what validated (`rows`) and what didn't (`errors`)
+    RowError,             # one row's page offset and offending column — never its value
+    RowValidationError,   # raised by a per-column validator, caught into a RowError
+    required_string,      # per-column validators; raise `RowValidationError` naming the column
     required_timestamp,
+    parse_instant,        # a row's column as a timezone-aware instant, or None if it doesn't parse
     # outbound: the consume loop
     consume,              # receive/process/delete forever (or `iterations` times)
     consume_once,         # one pass, when you want to emit a receipt line per pass
+    ConsumeReport,        # what one consume_once pass did — for logging and tests
+    ConsumerHandler,      # the handler's type: Callable[[Mapping[str, object]], None]
+    Deduper,              # Protocol: seen(event_id) -> bool
     InMemoryDeduper,      # event-id dedupe
+    is_watermark_stale,   # whether an incoming sequence must not reapply to an ahead-of-it target
     # declaring: the retry pipeline and the receipt
     submit_with_retry,    # retries `transient` only; raises TransientExhaustedError
     Sleeper,              # the `sleep` callable's type: Callable[[float], None]
     Jitter,               # the `jitter` callable's type: Callable[[], float] in [0, 1]
     DeclareCounts,        # committed / replayed / rejected — the receipt's core
+    DEFAULT_MAX_ATTEMPTS,       # submit_with_retry's default attempt budget
+    DEFAULT_BASE_DELAY_SECONDS, # submit_with_retry's default first-retry delay
+    DEFAULT_MAX_DELAY_SECONDS,  # submit_with_retry's default backoff ceiling
 )
 ```
+
+Two more modules a connector imports directly, never through `pulse_core.connector` — they are
+siblings of the kit package, not submodules of it, so the root-only rule above does not apply to
+them: `pulse_core.client` (`PulseCoreClient`, `ResponseClassification`, `CommandResponse` — the
+command API transport) and `pulse_core.generated` (the generated command classes, e.g.
+`DeclareTransitionCommand`). A reader's durable cursor also reaches into `pulse_core.cursor`
+(`cursor_path`, `validate_cursor`) directly for the same reason.
 
 Do not write your own retry loop, cursor persistence, page validator, or dedupe. If the kit is
 missing a primitive you need, it is missing because nothing shipped has needed it yet: build it
@@ -69,23 +91,34 @@ invented").
 What each piece gives you:
 
 - **`RowSource`** is a `Protocol` with one method, `fetch(*, after, limit)`, returning raw
-  mappings. Production implements it against the real source; tests pass `FixtureRowSource` over
-  recorded rows. Never fake the source below this seam.
+  mappings at most `DEFAULT_PAGE_SIZE` long unless the reader passes its own `limit`. Production
+  implements it against the real source; tests pass `FixtureRowSource` over recorded rows. Never
+  fake the source below this seam.
 - **`CursorStore`** is `load()`/`save()`. `LedgerCursorStore` persists through the ledger's
   writer-state facility scoped to your writer id, so a crashed run resumes without loss and rows
   already declared classify as replays.
-- **`consume`** wraps `consume_once` in a loop with backoff. A message is deleted only after your
-  handler returns without raising — a failure is left for the queue's visibility timeout and DLQ
-  redrive, never swallowed. A malformed message is dropped rather than retried forever.
+- **`validate_page`** runs each row through your per-column validators — `required_string` and
+  `required_timestamp` — and returns a `ValidatedPage`: the rows that passed, and a `RowError` per
+  row that didn't — the offset and the offending column, never a payload value. A validator raises
+  `RowValidationError`, which `validate_page` catches into that `RowError`. `parse_instant` reads a
+  row's column as a timezone-aware instant, or `None` when it doesn't parse as one, so a validator
+  can build on it.
+- **`consume`** wraps `consume_once` in a loop with backoff; each pass returns a `ConsumeReport` —
+  what it did, for logging and tests. A message is deleted only after your `ConsumerHandler`
+  returns without raising — a failure is left for the queue's visibility timeout and DLQ redrive,
+  never swallowed. A malformed message is dropped rather than retried forever. `Deduper` is the
+  `seen(event_id)` protocol `InMemoryDeduper` implements; `is_watermark_stale` says whether an
+  incoming sequence must not reapply to a target already at or ahead of it.
 - **`submit_with_retry`** takes a `submit` callable and a `ref` string naming the submission (never
-  its content). It retries only a `transient` classification, and raises
+  its content). It retries only a `transient` classification, up to `DEFAULT_MAX_ATTEMPTS` with
+  backoff between `DEFAULT_BASE_DELAY_SECONDS` and `DEFAULT_MAX_DELAY_SECONDS`, and raises
   `TransientExhaustedError` naming `ref` once the attempt budget is spent. Pin your
   `PulseCoreClient` to `max_attempts=1` and let this own the retry policy, so nothing retries
-  twice. It also takes `sleep: Sleeper` and `jitter: Jitter` — inject `time.sleep` and
-  `random.random` in production, and something deterministic in tests so the backoff schedule is
-  pinned.
-- **`DeclareCounts.record(classification)`** returns the next tally — it never mutates. Extend it
-  with a frozen dataclass for your own dispositions, as
+  twice. It also takes `sleep`, typed `Sleeper`, and `jitter`, typed `Jitter` — inject
+  `time.sleep` and `random.random` in production, and something deterministic in tests so the
+  backoff schedule is pinned.
+- **`DeclareCounts`**, via `DeclareCounts.record(classification)`, returns the next tally — it
+  never mutates. Extend it with a frozen dataclass for your own dispositions, as
   `packages/billing-connector/src/billing_connector/receipts.py` does with `evaluated` and
   `deferred`.
 
@@ -194,6 +227,10 @@ Rules the gate and the reviewer both check:
   error when `MY_CONNECTOR_STALE_AFTER=banana`, or the author is left bisecting the environment.
 - Anything the *external* system's own registry or catalog decides is not configuration. Read it
   from there, so widening it stays a reviewed edit rather than an environment variable.
+- Pass `LEDGER_BASE_URL_ENV_VAR` to `LedgerCursorStore(..., base_url_env_var=LEDGER_BASE_URL_ENV_VAR)`
+  alongside `ledger_base_url` — a ledger the store cannot reach raises `LedgerCursorStoreError`
+  naming both, e.g. `could not reach the ledger at 'https://ledger.internal' (from
+  MY_CONNECTOR_LEDGER_BASE_URL): ...`, never a raw `httpx` traceback that names neither.
 
 ## 5. How to test offline
 
@@ -272,10 +309,9 @@ In `pyproject.toml`:
 In `Taskfile.yml`, the four path variables at the top:
 
 3. `LINT_PATHS` — add `packages/my-connector` (the package root: `src` and `tests` both).
-4. `TYPED_PATHS` — add `packages/my-connector/src` if mypy covers it; if the package is pyright-
-   strict instead (the newer posture, and the one the reference uses), add a
-   `uv run pyright -p packages/my-connector` line to the `typecheck` target rather than a
-   `TYPED_PATHS` entry.
+4. The `typecheck` target — the rendered `pyproject.toml` sets `[tool.pyright] typeCheckingMode
+   = "strict"`, so add a `uv run pyright -p packages/my-connector` line there. `TYPED_PATHS` is
+   mypy's list; a pyright-strict package never joins it.
 5. `TESTED_PATHS` — add `packages/my-connector/tests`.
 6. `COV_PATHS` — add `--cov=packages/my-connector/src`.
 

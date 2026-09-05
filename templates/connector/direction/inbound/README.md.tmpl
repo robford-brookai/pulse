@@ -21,9 +21,12 @@ declares what validated. The outbound variant — consume the bus, derive, decla
 
 ## Next steps
 
-1. Register the package at the sites `scripts/connector_new.py` printed — root `pyproject.toml`
-   workspace members, sources and test lint exemption; `Taskfile.yml` `LINT_PATHS`,
-   `TYPED_PATHS`, `TESTED_PATHS`, `COV_PATHS`, and the image and deploy stanzas.
+1. The package is already registered — `task connector:new` applied it at every site: root
+   `pyproject.toml` workspace members, sources and test lint exemption; `Taskfile.yml`
+   `LINT_PATHS`, `TYPED_PATHS`, `TESTED_PATHS`, `COV_PATHS`, and the image and deploy stanzas.
 2. `uv sync --all-packages`
-3. `uv run pytest packages/{{DIST}}/tests`
-4. Read `docs/connectors/authoring.md` for what to build, in what order, and who to ask.
+3. `uv run pytest packages/{{DIST}}/tests` — already green; extend it as you build.
+4. Do the declare step: pin `CONTRACT_COLUMNS` and `SourceRow`, replace `build_row_source` with
+   the real adapter, then `handle_page` in `src/{{NAME}}/service.py` with what this connector
+   declares.
+5. Read `docs/connectors/authoring.md` for what to build, in what order, and who to ask.

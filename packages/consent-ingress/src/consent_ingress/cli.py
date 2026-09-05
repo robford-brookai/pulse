@@ -220,7 +220,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     base_url = os.environ[PULSE_CORE_BASE_URL_ENV_VAR]
     client = PulseCoreClient(base_url, writer_id=CUSTOMERIO_WRITER_ID, token=os.environ[CUSTOMERIO_TOKEN_ENV_VAR])
-    cursor_store = LedgerCursorStore(base_url, writer_id=CURSOR_WRITER_ID, token=os.environ[CURSOR_TOKEN_ENV_VAR])
+    cursor_store = LedgerCursorStore(
+        base_url,
+        writer_id=CURSOR_WRITER_ID,
+        token=os.environ[CURSOR_TOKEN_ENV_VAR],
+        base_url_env_var=PULSE_CORE_BASE_URL_ENV_VAR,
+    )
     return run_consent_ingress_job(source, client, cursor_store, page_size=args.page_size)
 
 
