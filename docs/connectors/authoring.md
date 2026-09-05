@@ -97,7 +97,13 @@ task check            # the rendered package ships one green test
 ```
 
 `scripts/connector_new.py` is what the target runs; `--print-registrations` shows the diff it
-will apply without writing anything. The tree it renders:
+will apply without writing anything.
+
+Prior art: if `packages/ocean/services/` already has a directory whose name starts with `NAME`,
+the command names that path before rendering and continues — Ocean may already have a connector
+for this service, worth checking before you build a second one.
+
+The tree it renders:
 
 ```text
 packages/my-connector/
