@@ -17,6 +17,7 @@ import pytest
 from pulse_core.connector import (
     FixtureRowSource,
     LedgerCursorStore,
+    LedgerCursorStoreError,
     RowError,
     RowValidationError,
     required_string,
@@ -32,6 +33,8 @@ _TOKEN = "unit-test-token"  # noqa: S105 — a fixture value, not a secret
 _FIXTURE_CONTACT_VALUE = "patient137@example-fixture.test"
 
 _WRITER_ID = "kit-test-connector"
+_BASE_URL = "https://ledger.test"
+_BASE_URL_ENV_VAR = "KIT_TEST_LEDGER_BASE_URL"
 
 
 def _row(key: str, *, seen_at: str) -> dict[str, object]:
@@ -115,9 +118,10 @@ class _CursorBackend:
 
 def _store(backend: _CursorBackend) -> LedgerCursorStore:
     return LedgerCursorStore(
-        "https://ledger.test",
+        _BASE_URL,
         writer_id=_WRITER_ID,
         token=_TOKEN,
+        base_url_env_var=_BASE_URL_ENV_VAR,
         transport=httpx.MockTransport(backend.handler),
     )
 
@@ -186,6 +190,38 @@ class TestFixtureRowSourcePaging:
         source = FixtureRowSource(rows, cursor_column="seen_at")
         assert [row["key"] for row in source.fetch(after=None, limit=10)] == ["bad"]
         assert [row["key"] for row in source.fetch(after="2026-08-01T00:00:00+00:00", limit=10)] == ["bad"]
+
+
+class TestCursorStoreTransportErrorsNameTheEndpoint:
+    """Spec scenario: a refused connection is named, not a raw `httpx` traceback."""
+
+    def _refusing_store(self) -> LedgerCursorStore:
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("connection refused", request=request)  # noqa: TRY003
+
+        return LedgerCursorStore(
+            _BASE_URL,
+            writer_id=_WRITER_ID,
+            token=_TOKEN,
+            base_url_env_var=_BASE_URL_ENV_VAR,
+            transport=httpx.MockTransport(handler),
+        )
+
+    def test_load_names_the_base_url_and_its_variable(self) -> None:
+        with self._refusing_store() as store, pytest.raises(LedgerCursorStoreError) as excinfo:
+            store.load()
+
+        assert excinfo.value.base_url == _BASE_URL
+        assert excinfo.value.base_url_env_var == _BASE_URL_ENV_VAR
+        assert _BASE_URL in str(excinfo.value)
+        assert _BASE_URL_ENV_VAR in str(excinfo.value)
+
+    def test_save_names_the_base_url_and_its_variable(self) -> None:
+        with self._refusing_store() as store, pytest.raises(LedgerCursorStoreError) as excinfo:
+            store.save({"seen_at": "2026-08-01T00:00:00+00:00"})
+
+        assert excinfo.value.base_url == _BASE_URL
+        assert excinfo.value.base_url_env_var == _BASE_URL_ENV_VAR
 
 
 def test_required_timestamp_returns_the_parsed_instant() -> None:

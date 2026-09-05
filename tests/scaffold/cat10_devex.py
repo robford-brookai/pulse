@@ -262,7 +262,6 @@ def test_verify_requires_change_and_lore_init_exists():
     assert "lore:init" in TARGETS or "openlore init" in _cmds("install")
 
 
-@open_finding
 def test_verify_guards_against_empty_change():
     """Audit 3 fix 2 (QA R1): `requires: vars: [CHANGE]` is satisfied by Taskfile.yml's empty CHANGE
     default, so `task verify` with no CHANGE runs the whole gate before failing. The target needs a
@@ -399,12 +398,39 @@ def test_task_descriptions_carry_no_change_ids():
 _GIT_HELPER_FILES = ("tests/scaffold/cat5_glue_logic.py", "tests/scaffold/cat9_golden_workflow.py")
 
 
-@open_finding
 def test_scaffold_git_helpers_are_hermetic_to_global_signing():
     """Fix 1: the sandbox git helpers pin commit.gpgsign=false so a global signing config cannot fail the gate."""
     for rel in _GIT_HELPER_FILES:
         text = (ROOT / rel).read_text()
         assert "commit.gpgsign=false" in text, f"{rel} does not pin commit.gpgsign=false"
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not have("git"), reason="git not installed")
+def test_scaffold_gates_survive_a_global_gpgsign_true(tmp_path: Path):
+    """Behavioural twin: a hostile global config (gpgsign on, signing programs that always fail)
+    must not fail the fixture gates that commit through the sandboxed `_git` helpers."""
+    hostile = tmp_path / "gitconfig-global"
+    hostile.write_text(
+        "[init]\n\tdefaultBranch = main\n"
+        "[commit]\n\tgpgsign = true\n"
+        '[gpg]\n\tformat = x509\n\tprogram = false\n[gpg "x509"]\n\tprogram = false\n'
+    )
+    env = {**os.environ, "GIT_CONFIG_GLOBAL": str(hostile)}
+    node_ids = [
+        "tests/scaffold/cat5_glue_logic.py::test_commits_with_a_handoff_are_fine",
+        "tests/scaffold/cat5_glue_logic.py::test_explicit_commits_bypass_the_history_scan",
+        "tests/scaffold/cat9_golden_workflow.py::test_template_sync_survives_the_package_rename",
+    ]
+    r = subprocess.run(  # noqa: S603
+        [sys.executable, "-m", "pytest", "-o", "addopts=", *node_ids],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert r.returncode == 0, r.stdout[-4000:] + r.stderr[-2000:]
 
 
 @open_finding
@@ -452,7 +478,6 @@ def test_scaffold_ships_a_working_declare_example():
     )
 
 
-@open_finding
 def test_cursor_store_transport_errors_name_the_endpoint():
     """Fix 6: LedgerCursorStore wraps transport failures with the base URL tried and the variable that supplied it."""
     src = (ROOT / "packages/pulse-core/src/pulse_core/connector/rows.py").read_text()
@@ -469,7 +494,6 @@ def test_authoring_guide_documents_every_exported_name():
     assert missing == [], f"guide omits kit exports: {missing}"
 
 
-@open_finding
 def test_rendered_readme_next_steps_do_not_redo_registration():
     """Fix 8: the rendered README's Next steps must not tell the author to register a package the scaffold already registered."""
     readme = (ROOT / "templates/connector/README.md.tmpl").read_text()
@@ -484,7 +508,6 @@ def test_check_timings_are_recorded():
     assert "devex/timing" in _cmds("check") or "timing" in _cmds("check"), "task check records no timings"
 
 
-@open_finding
 def test_codeowners_names_the_connector_kit_owner_and_defect_template_exists():
     """Fix 10: a per-area CODEOWNERS line for the kit and a connector-kit-defect issue template."""
     co = (ROOT / ".github/CODEOWNERS").read_text()

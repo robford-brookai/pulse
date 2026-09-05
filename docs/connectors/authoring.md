@@ -227,6 +227,10 @@ Rules the gate and the reviewer both check:
   error when `MY_CONNECTOR_STALE_AFTER=banana`, or the author is left bisecting the environment.
 - Anything the *external* system's own registry or catalog decides is not configuration. Read it
   from there, so widening it stays a reviewed edit rather than an environment variable.
+- Pass `LEDGER_BASE_URL_ENV_VAR` to `LedgerCursorStore(..., base_url_env_var=LEDGER_BASE_URL_ENV_VAR)`
+  alongside `ledger_base_url` — a ledger the store cannot reach raises `LedgerCursorStoreError`
+  naming both, e.g. `could not reach the ledger at 'https://ledger.internal' (from
+  MY_CONNECTOR_LEDGER_BASE_URL): ...`, never a raw `httpx` traceback that names neither.
 
 ## 5. How to test offline
 
