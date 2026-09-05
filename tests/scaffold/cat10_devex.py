@@ -256,7 +256,6 @@ def test_docs_index_is_a_front_door():
     assert "connectors/authoring.md" in index
 
 
-@open_finding
 def test_verify_requires_change_and_lore_init_exists():
     """Fix 3: task verify declares CHANGE, and a documented target creates .openlore on a fresh clone."""
     assert "CHANGE" in TARGETS["verify"].get("requires", {}).get("vars", [])
