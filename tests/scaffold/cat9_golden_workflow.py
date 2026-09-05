@@ -304,10 +304,11 @@ def test_connector_new_refuses_an_occupied_destination(tmp_path: Path) -> None:
 
 # --- the registration diff ----------------------------------------------------------------------
 
-#: The Taskfile path variables the diff must extend, and what each must gain.
+#: The Taskfile path variables the diff must extend, and what each must gain. TYPED_PATHS is not
+#: one of them: the rendered package's pyproject.toml is pyright strict, so registration adds a
+#: `uv run pyright -p packages/claims-connector` line to the `typecheck` target instead (Fix 3).
 TASKFILE_VARS = {
     "LINT_PATHS": "packages/claims-connector",
-    "TYPED_PATHS": "packages/claims-connector/src",
     "TESTED_PATHS": "packages/claims-connector/tests",
     "COV_PATHS": "--cov=packages/claims-connector/src",
 }
@@ -350,6 +351,8 @@ def test_registration_diff_names_every_site() -> None:
         line = next((a for a in added if a.startswith(f"  {var}:")), None)
         assert line is not None, f"{var} is not in the diff"
         assert line.endswith(f" {addition}"), line
+
+    assert "      - uv run pyright -p packages/claims-connector" in added
 
     assert "  # claims-connector:image:" in added
     assert "  # claims-connector:deploy:" in added
