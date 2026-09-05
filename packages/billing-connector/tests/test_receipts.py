@@ -8,7 +8,7 @@ is pinned against (spec: "The receipt shape is stable").
 from __future__ import annotations
 
 from billing_connector.receipts import Receipt
-from pulse_core.connector.declare import DeclareCounts
+from pulse_core.connector import DeclareCounts
 
 #: The golden line for an all-zero receipt — the shape every run's line matches byte for byte
 #: apart from the counts (spec scenario: "The receipt shape is stable").

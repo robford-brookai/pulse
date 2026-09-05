@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pulse_core.connector.declare import DeclareCounts
+from pulse_core.connector import DeclareCounts
 
 
 @dataclass(frozen=True)

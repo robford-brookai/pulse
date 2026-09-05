@@ -675,3 +675,53 @@ def test_connector_authoring_guide_states_the_offline_test_posture() -> None:
         "the guide must tell the author how the no-live-network posture is enforced"
     )
     assert "disable_socket" in guide, "the guide must show the socket-blocking conftest hook"
+
+
+# --- devex-eight 1.6: hand-maintained counts in the README are gated, not just fixed once ------
+
+NUMBER_WORDS = {
+    "twelve": 12,
+    "fourteen": 14,
+    "twenty": 20,
+    "twenty-two": 22,
+}
+
+
+def test_readme_archived_change_count_matches_the_tree() -> None:
+    """The Status section's archived-change count is hand-written prose (it read "Twenty-two"
+    when the tree had 20). Gate it so a merge that adds an archive without updating the count
+    fails loudly instead of drifting silently again."""
+    archived = len([p for p in (ROOT / "openspec/changes/archive").iterdir() if p.is_dir()])
+    m = re.search(r"([A-Za-z-]+) changes have been archived", README)
+    assert m, "README's Status section no longer states an archived-change count"
+    claimed = NUMBER_WORDS.get(m.group(1).lower())
+    assert claimed is not None, f"unrecognized archived-change count word: {m.group(1)!r}"
+    assert claimed == archived, f"README claims {claimed} archived changes, tree has {archived}"
+
+
+def test_readme_package_count_matches_the_tree() -> None:
+    """'Fourteen packages live under `packages/`. Twelve are Python' is hand-maintained prose,
+    not computed — it happened to be correct at devex-eight time, but nothing held it there."""
+    packages = sorted(p.name for p in (ROOT / "packages").iterdir() if p.is_dir())
+    ts_packages = {"twenty-app", "twenty-model"}
+    python_packages = [p for p in packages if p not in ts_packages]
+    m = re.search(r"([A-Za-z-]+) packages live under `packages/`\. ([A-Za-z-]+) are Python", README)
+    assert m, "README's Packages section no longer states the package/Python counts"
+    total_claimed = NUMBER_WORDS.get(m.group(1).lower())
+    python_claimed = NUMBER_WORDS.get(m.group(2).lower())
+    assert total_claimed is not None, f"unrecognized package count word: {m.group(1)!r}"
+    assert python_claimed is not None, f"unrecognized Python package count word: {m.group(2)!r}"
+    assert total_claimed == len(packages), f"README claims {total_claimed} packages, tree has {len(packages)}"
+    assert python_claimed == len(python_packages), (
+        f"README claims {python_claimed} Python packages, tree has {len(python_packages)}"
+    )
+
+
+def test_contributing_pre_commit_claims_match_the_config() -> None:
+    """CONTRIBUTING.md claimed a `mypy` pre-commit hook that `.pre-commit-config.yaml` never
+    configured — mypy runs via `task check` instead. Every hook id CONTRIBUTING names must be
+    real, and if it says a hook does not run there, that must hold too."""
+    contributing = (ROOT / "CONTRIBUTING.md").read_text()
+    hooks_config = (ROOT / ".pre-commit-config.yaml").read_text()
+    if "mypy" in contributing.lower():
+        assert "mypy" in hooks_config, "CONTRIBUTING claims a mypy pre-commit hook that is not configured"
