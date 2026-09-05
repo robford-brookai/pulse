@@ -243,13 +243,11 @@ def test_issue_and_pr_templates_exist():
 GUIDE = "docs/connectors/authoring.md"
 
 
-@open_finding
 def test_authoring_guide_linked_from_readme_and_contributing():
     """Fix 1: the best document in the repo is invisible from the two files GitHub shows first."""
     assert GUIDE in README and GUIDE in CONTRIBUTING
 
 
-@open_finding
 def test_docs_index_is_a_front_door():
     """Fix 2: docs/index.md is a real front door with a Getting started section, not a badge stub."""
     index = (DOCS / "index.md").read_text()
@@ -258,7 +256,6 @@ def test_docs_index_is_a_front_door():
     assert "connectors/authoring.md" in index
 
 
-@open_finding
 def test_verify_requires_change_and_lore_init_exists():
     """Fix 3: task verify declares CHANGE, and a documented target creates .openlore on a fresh clone."""
     assert "CHANGE" in TARGETS["verify"].get("requires", {}).get("vars", [])

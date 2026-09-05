@@ -97,7 +97,8 @@ already committed instead of writing a second one.
 
 Every external system — an EHR feed, a partner API, a legacy Mongo export — reaches PULSE through
 a connector package built on the shared kit in
-[`pulse_core.connector`](packages/pulse-core/src/pulse_core/connector/). The kit provides the
+[`pulse_core.connector`](packages/pulse-core/src/pulse_core/connector/). See
+[`docs/connectors/authoring.md`](docs/connectors/authoring.md) for the guide to building one. The kit provides the
 inbound read contract (a row source with per-row validation and a durable cursor), the declare
 pipeline (idempotency-key derivation and receipt classification), and the outbound consume loop
 (queue dedupe and watermarked write-backs). A malformed row fails by naming its position and
