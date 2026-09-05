@@ -1,6 +1,6 @@
 # Handoff Summary: devex-eight-3
 
-Collected 8 handoff(s). Seven wave-1 receipts (1.1, 1.2, 1.3, 1.5, 1.6, 1.7, 2.2) are reconstructed from
+Collected 10 handoff(s). Seven wave-1 receipts (1.1, 1.2, 1.3, 1.5, 1.6, 1.7, 2.2) are reconstructed from
 their workers' `worker_done` messages: the worktrees were removed before `task collect` ran.
 
 ## Files
@@ -12,7 +12,9 @@ their workers' `worker_done` messages: the worktrees were removed before `task c
 - [devex3-1-5.md](handoffs/devex-eight-3/devex3-1-5.md)
 - [devex3-1-6.md](handoffs/devex-eight-3/devex3-1-6.md)
 - [devex3-1-7.md](handoffs/devex-eight-3/devex3-1-7.md)
+- [devex3-2-1.md](handoffs/devex-eight-3/devex3-2-1.md)
 - [devex3-2-2.md](handoffs/devex-eight-3/devex3-2-2.md)
+- [devex3-2-3.md](handoffs/devex-eight-3/devex3-2-3.md)
 
 ## Doc-Updater Instructions
 

@@ -72,7 +72,7 @@ non-Taskfile tasks alongside a serial one when they share no files.
 
 ## 2. Wave 2 — the M items
 
-- [ ] 2.1 The scaffold's `handle_page` declares: a complete `submit_with_retry` call per valid row
+- [x] 2.1 The scaffold's `handle_page` declares: a complete `submit_with_retry` call per valid row
       with a fake command client in the template tests and a replay assertion (a re-delivered page
       declares nothing), in both direction overlays.
       Tests: remove xfail from `test_scaffold_ships_a_working_declare_example`; both goldens
@@ -85,7 +85,7 @@ non-Taskfile tasks alongside a serial one when they share no files.
       refused-connection test in `packages/pulse-core/tests`.
       `[model: sonnet | deps: — | lane: repo_change | wave: 2]`
 
-- [ ] 2.3 `task check` appends `{date, kind: timing, target, seconds, rc}` rows to
+- [x] 2.3 `task check` appends `{date, kind: timing, target, seconds, rc}` rows to
       `.planning/devex/loop.jsonl` via a small wrapper, and the TTHW slow test gains a cold-cache
       arm (`UV_CACHE_DIR` pointed at an empty dir) that records both numbers.
       Tests: remove xfail from `test_check_timings_are_recorded`; the ledger parser in
