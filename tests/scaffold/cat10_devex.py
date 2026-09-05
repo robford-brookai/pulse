@@ -334,7 +334,6 @@ def test_readme_and_contributing_claims_are_current():
         assert "mypy" in hooks, "CONTRIBUTING claims a mypy pre-commit hook that is not configured"
 
 
-@open_finding
 def test_editor_and_runtime_pins_exist():
     """Fix 10: .nvmrc pins Node 22 to match CI; .editorconfig and .vscode/extensions.json exist."""
     assert (ROOT / ".nvmrc").is_file() and (ROOT / ".nvmrc").read_text().strip().startswith("22")
