@@ -342,13 +342,11 @@ def test_editor_and_runtime_pins_exist():
     assert (ROOT / ".vscode/extensions.json").is_file()
 
 
-@open_finding
 def test_pr_template_names_task_check():
     """Below the cut: the PR checklist names the CI contract, not three of its eight parts."""
     assert "task check" in (ROOT / ".github/PULL_REQUEST_TEMPLATE.md").read_text()
 
 
-@open_finding
 def test_task_descriptions_carry_no_change_ids():
     """Below the cut: task descriptions are for the newcomer's first screen, not ticket bookkeeping."""
     noisy = [

@@ -24,8 +24,7 @@
 ## Checklist
 
 - [ ] My changes follow the code style guidelines in `CONTRIBUTING.md`
-- [ ] I have run `task fmt` and `task lint`
-- [ ] I have run `task test` and all tests pass
+- [ ] `task check` passes (lint, typecheck, tests, Twenty app suite, docs build)
 - [ ] I have not added any PHI or sensitive data to code, tests, or documentation
 - [ ] I have updated relevant documentation
 
