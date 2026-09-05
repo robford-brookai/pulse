@@ -469,7 +469,6 @@ def test_authoring_guide_documents_every_exported_name():
     assert missing == [], f"guide omits kit exports: {missing}"
 
 
-@open_finding
 def test_rendered_readme_next_steps_do_not_redo_registration():
     """Fix 8: the rendered README's Next steps must not tell the author to register a package the scaffold already registered."""
     readme = (ROOT / "templates/connector/README.md.tmpl").read_text()

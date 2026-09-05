@@ -15,9 +15,11 @@ A PULSE connector scaffolded from `templates/connector/` by
 
 ## Next steps
 
-1. Register the package at the sites `scripts/connector_new.py` printed — root `pyproject.toml`
-   workspace members, sources and test lint exemption; `Taskfile.yml` `LINT_PATHS`,
-   `TYPED_PATHS`, `TESTED_PATHS`, `COV_PATHS`, and the image and deploy stanzas.
+1. The package is already registered — `task connector:new` applied it at every site: root
+   `pyproject.toml` workspace members, sources and test lint exemption; `Taskfile.yml`
+   `LINT_PATHS`, `TYPED_PATHS`, `TESTED_PATHS`, `COV_PATHS`, and the image and deploy stanzas.
 2. `uv sync --all-packages`
-3. `uv run pytest packages/example-connector/tests`
-4. Read `docs/connectors/authoring.md` for what to build, in what order, and who to ask.
+3. `uv run pytest packages/example-connector/tests` — already green; extend it as you build.
+4. Do the declare step: replace `handle_event` in `src/example_connector/service.py` with what this
+   connector actually does per event.
+5. Read `docs/connectors/authoring.md` for what to build, in what order, and who to ask.
