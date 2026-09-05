@@ -54,6 +54,8 @@ from pulse_core.connector import (
     InMemoryDeduper,      # event-id dedupe
     # declaring: the retry pipeline and the receipt
     submit_with_retry,    # retries `transient` only; raises TransientExhaustedError
+    Sleeper,              # the `sleep` callable's type: Callable[[float], None]
+    Jitter,               # the `jitter` callable's type: Callable[[], float] in [0, 1]
     DeclareCounts,        # committed / replayed / rejected — the receipt's core
 )
 ```
@@ -79,7 +81,9 @@ What each piece gives you:
   its content). It retries only a `transient` classification, and raises
   `TransientExhaustedError` naming `ref` once the attempt budget is spent. Pin your
   `PulseCoreClient` to `max_attempts=1` and let this own the retry policy, so nothing retries
-  twice.
+  twice. It also takes `sleep: Sleeper` and `jitter: Jitter` — inject `time.sleep` and
+  `random.random` in production, and something deterministic in tests so the backoff schedule is
+  pinned.
 - **`DeclareCounts.record(classification)`** returns the next tally — it never mutates. Extend it
   with a frozen dataclass for your own dispositions, as
   `packages/billing-connector/src/billing_connector/receipts.py` does with `evaluated` and
@@ -97,7 +101,13 @@ task check            # the rendered package ships one green test
 ```
 
 `scripts/connector_new.py` is what the target runs; `--print-registrations` shows the diff it
-will apply without writing anything. The tree it renders:
+will apply without writing anything.
+
+Prior art: if `packages/ocean/services/` already has a directory whose name starts with `NAME`,
+the command names that path before rendering and continues — Ocean may already have a connector
+for this service, worth checking before you build a second one.
+
+The tree it renders:
 
 ```text
 packages/my-connector/
@@ -272,7 +282,11 @@ The change lifecycle is `WORKFLOW.md`'s, and a connector is an ordinary repo cha
 4. Push, open a **ready** PR (never a draft), and drive CI green yourself.
 5. Merge is the human step. `task collect CHANGE=<id>` gathers handoffs; `task checkoff
    CHANGE=<id>` flips the merged tasks' boxes, which is what opens the next wave;
-   `task verify CHANGE=<id>` runs the full gate including drift and spec validation.
+   `task verify CHANGE=<id>` runs the full gate including drift and spec validation (`CHANGE` is
+   required — it fails fast rather than validating the wrong change).
+6. On a fresh clone, `task lore:init` creates `.openlore/` before the first `task verify` or
+   `task lore:drift` — it runs `openlore init --force`, so it's safe to re-run on a clone that
+   already has one.
 
 Two things that are not ordinary repo changes:
 

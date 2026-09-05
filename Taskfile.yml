@@ -545,6 +545,8 @@ tasks:
 
   verify:
     desc: Full local gate — check plus drift and spec validation (needs CHANGE)
+    requires:
+      vars: [CHANGE]
     cmds:
       - task: check
       - task: workflow:lint:linear
@@ -608,6 +610,11 @@ tasks:
     desc: Build call graph and structural digest
     cmds:
       - openlore analyze
+
+  lore:init:
+    desc: Initialize OpenLore (idempotent — safe on a fresh clone or an existing .openlore/)
+    cmds:
+      - openlore init --force
 
   lore:drift:
     desc: Detect spec/code drift

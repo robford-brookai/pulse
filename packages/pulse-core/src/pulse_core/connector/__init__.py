@@ -23,6 +23,7 @@ from pulse_core.connector.declare import (
     DEFAULT_MAX_ATTEMPTS,
     DEFAULT_MAX_DELAY_SECONDS,
     DeclareCounts,
+    Jitter,
     TransientExhaustedError,
     submit_with_retry,
 )
@@ -53,6 +54,7 @@ __all__ = [
     "Deduper",
     "FixtureRowSource",
     "InMemoryDeduper",
+    "Jitter",
     "LedgerCursorStore",
     "RowError",
     "RowSource",

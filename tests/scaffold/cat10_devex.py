@@ -256,14 +256,12 @@ def test_docs_index_is_a_front_door():
     assert "connectors/authoring.md" in index
 
 
-@open_finding
 def test_verify_requires_change_and_lore_init_exists():
     """Fix 3: task verify declares CHANGE, and a documented target creates .openlore on a fresh clone."""
     assert "CHANGE" in TARGETS["verify"].get("requires", {}).get("vars", [])
     assert "lore:init" in TARGETS or "openlore init" in _cmds("install")
 
 
-@open_finding
 def test_connector_new_warns_about_prior_art(tmp_path):
     """Fix 4: scaffolding a name that already exists under packages/ocean/services names the prior art."""
     r = subprocess.run(  # noqa: S603
@@ -284,7 +282,6 @@ def test_connector_new_warns_about_prior_art(tmp_path):
     assert "packages/ocean/services" in (r.stdout + r.stderr), (r.stdout + r.stderr)[-800:]
 
 
-@open_finding
 def test_connector_kit_exports_jitter():
     """Fix 5: the guide names Jitter as a kit primitive; the package root must export it."""
     import pulse_core.connector as kit
@@ -334,7 +331,6 @@ def test_readme_and_contributing_claims_are_current():
         assert "mypy" in hooks, "CONTRIBUTING claims a mypy pre-commit hook that is not configured"
 
 
-@open_finding
 def test_editor_and_runtime_pins_exist():
     """Fix 10: .nvmrc pins Node 22 to match CI; .editorconfig and .vscode/extensions.json exist."""
     assert (ROOT / ".nvmrc").is_file() and (ROOT / ".nvmrc").read_text().strip().startswith("22")
