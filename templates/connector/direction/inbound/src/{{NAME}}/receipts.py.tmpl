@@ -43,7 +43,11 @@ class Receipt(DeclareCounts):
         Counts the page's two lengths and nothing else — no row, column, or payload value from
         either list reaches the receipt.
         """
-        return replace(self, read=self.read + len(page.rows) + len(page.errors), invalid=self.invalid + len(page.errors))
+        return replace(
+            self,
+            read=self.read + len(page.rows) + len(page.errors),
+            invalid=self.invalid + len(page.errors),
+        )
 
     def format_line(self) -> str:
         """The single machine-parsable receipt line: space-separated `key=value` pairs, the kit's

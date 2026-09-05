@@ -592,12 +592,14 @@ def test_fresh_clone_passes_its_own_gates(tmp_path: Path) -> None:
 @pytest.mark.slow
 @requires_task
 @pytest.mark.skipif(not have("uv"), reason="uv not installed")
-def test_task_check_green_with_a_scaffolded_connector(tmp_path: Path) -> None:
+@pytest.mark.parametrize("direction", DIRECTIONS)
+def test_task_check_green_with_a_scaffolded_connector(tmp_path: Path, direction: str) -> None:
     """`task connector:new` (1.4) registers a package that then passes `task check`, unmodified.
 
     A scaffolded package that only renders cleanly but breaks lint, typecheck, or docs the moment
     it is registered would be a worse scaffold than none — the whole point of automating the
-    eight registrations is that what comes out the other end is already green.
+    eight registrations is that what comes out the other end is already green. Both directions:
+    the inbound overlay ships its own service and tests, and they are held to the same bar.
     """
     clone = tmp_path / "clone"
     env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
@@ -614,8 +616,12 @@ def test_task_check_green_with_a_scaffolded_connector(tmp_path: Path) -> None:
         env=env,
     )
 
-    scaffold = subprocess.run(
-        ["task", "connector:new", "NAME=scratch-connector"],  # noqa: S607
+    # Built as a variable rather than inline for the reason documented on
+    # `test_rendered_connector_package_tests_pass`: the two ruff versions in play disagree about
+    # whether an inline argv triggers S603, and one strips the noqa the other needs.
+    scaffold_command = ["task", "connector:new", "NAME=scratch-connector", f"DIRECTION={direction}"]
+    scaffold = subprocess.run(  # noqa: S603
+        scaffold_command,
         cwd=clone,
         capture_output=True,
         text=True,

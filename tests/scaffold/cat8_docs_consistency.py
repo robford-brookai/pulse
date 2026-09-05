@@ -12,6 +12,7 @@ this gate holds in CI, where go-task is not installed.
 
 import json
 import re
+import subprocess
 
 import pytest
 import yaml
@@ -699,10 +700,28 @@ def test_readme_archived_change_count_matches_the_tree() -> None:
     assert claimed == archived, f"README claims {claimed} archived changes, tree has {archived}"
 
 
+def _tracked_packages() -> list[str]:
+    """The package directories git tracks, sorted.
+
+    Tracked, not what `packages/` happens to contain: `cat9`'s scaffold gate renders a connector
+    into a clone and then runs `task check` over it, so a filesystem count sees a package the
+    README is not about and this gate fails for a reason that has nothing to do with the README.
+    The claim is about the committed tree, so the count is taken from the committed tree.
+    """
+    listing = subprocess.run(
+        ["git", "ls-files", "-z", "--", "packages"],  # noqa: S607
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return sorted({entry.split("/")[1] for entry in listing.stdout.split("\0") if entry.startswith("packages/")})
+
+
 def test_readme_package_count_matches_the_tree() -> None:
     """'Fourteen packages live under `packages/`. Twelve are Python' is hand-maintained prose,
     not computed — it happened to be correct at devex-eight time, but nothing held it there."""
-    packages = sorted(p.name for p in (ROOT / "packages").iterdir() if p.is_dir())
+    packages = _tracked_packages()
     ts_packages = {"twenty-app", "twenty-model"}
     python_packages = [p for p in packages if p not in ts_packages]
     m = re.search(r"([A-Za-z-]+) packages live under `packages/`\. ([A-Za-z-]+) are Python", README)
