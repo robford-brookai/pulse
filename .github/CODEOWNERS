@@ -1,2 +1,5 @@
 # Pulse code owners
 * @robford-brookai
+
+# The connector kit every connector depends on
+packages/pulse-core/src/pulse_core/connector/ @robford-brookai
