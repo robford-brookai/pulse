@@ -38,21 +38,21 @@ non-Taskfile tasks alongside a serial one when they share no files.
       passes in under 15 s.
       `[model: haiku | deps: — | lane: repo_change | wave: 1 | serial: Taskfile.yml]`
 
-- [ ] 1.3 `scripts/connector_new.py --apply-registrations` adds `uv run pyright -p packages/<name>`
+- [x] 1.3 `scripts/connector_new.py --apply-registrations` adds `uv run pyright -p packages/<name>`
       to `typecheck` instead of a `TYPED_PATHS` entry, matching the rendered pyright-strict posture;
       guide section 7 updated.
       Tests: remove xfail from `test_connector_new_registers_pyright_not_mypy`; cat9 registration
       tests updated.
       `[model: sonnet | deps: — | lane: repo_change | wave: 1]`
 
-- [ ] 1.4 `task lint` is read-only (`ruff check --no-fix`, or `fix = false` in `pyproject.toml`
+- [x] 1.4 `task lint` is read-only (`ruff check --no-fix`, or `fix = false` in `pyproject.toml`
       with `task fmt` carrying the fixes); fix the name-conditional `I001` in the templates so a
       package sorting before `pulse_core` renders clean.
       Tests: remove xfail from `test_task_lint_is_read_only`; render `papchk` and `zapchk` and run
       `ruff check --no-fix` on both.
       `[model: sonnet | deps: — | lane: repo_change | wave: 1 | serial: pyproject.toml and Taskfile.yml]`
 
-- [ ] 1.5 `docs/connectors/authoring.md` section 2 names every `__all__` export plus
+- [x] 1.5 `docs/connectors/authoring.md` section 2 names every `__all__` export plus
       `pulse_core.client`, `pulse_core.generated` and `pulse_core.cursor`; corrects the root-only
       rule; a test diffs the list against `__all__`.
       Tests: remove xfail from `test_authoring_guide_documents_every_exported_name`.
