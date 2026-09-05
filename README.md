@@ -25,7 +25,7 @@ whatever the statement says right now.
 ## Status
 
 Phases 0 through 2 are complete and shipped as v2.0 on 2026-08-08. Phase 3 (projections) is
-active. Twenty-two changes have been archived, most recently `connector-pattern` (the shared
+active. Twenty changes have been archived, most recently `connector-pattern` (the shared
 connector kit) and `pulse-demo-closeout` (the end-to-end demonstration and the projection
 rebuild drill), both on 2026-09-02. `billing-connector` is the change currently in flight.
 

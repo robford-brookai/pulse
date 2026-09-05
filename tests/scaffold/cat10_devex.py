@@ -323,7 +323,6 @@ def test_kit_has_changelog_and_deprecation_policy():
     assert re.search(r"^##+\s*Deprecations", spec, re.M), "connector-kit spec has no Deprecations section"
 
 
-@open_finding
 def test_readme_and_contributing_claims_are_current():
     """Fix 9: the countable claims in README and CONTRIBUTING match the tree."""
     archived = len([p for p in (ROOT / "openspec/changes/archive").iterdir() if p.is_dir()])
