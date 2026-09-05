@@ -310,14 +310,14 @@ def _sqs_client() -> Any:
 def _count_declaration(receipt: Receipt, result: DeclareResult) -> Receipt:
     """Fold one settled declaration into the running receipt — a new `Receipt`, never a mutation.
 
-    `DeclareCounts.record` (the kit) owns the three-way classification count; its return type is
-    the base class, but it is a `dataclasses.replace` of `self`, so the value is this `Receipt`
-    subclass with its `evaluated`/`deferred` intact — hence the cast rather than a rebuild. A
-    rejected paired transition then counts as a `rejected` of its own alongside the verdict's own
-    disposition (spec: "A rejected transition keeps its evidence" — the verdict's commit and the
-    transition's rejection are both true, so the receipt shows both).
+    `DeclareCounts.record` (the kit) owns the three-way classification count; it is a
+    `dataclasses.replace` of `self` and is typed to return the caller's own type, so the value is
+    this `Receipt` with its `evaluated`/`deferred` intact. A rejected paired transition then
+    counts as a `rejected` of its own alongside the verdict's own disposition (spec: "A rejected
+    transition keeps its evidence" — the verdict's commit and the transition's rejection are both
+    true, so the receipt shows both).
     """
-    counted = cast("Receipt", receipt.record(result.classification))
+    counted = receipt.record(result.classification)
     if result.transition_rejected:
         counted = dataclasses.replace(counted, rejected=counted.rejected + 1)
     return counted

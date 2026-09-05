@@ -510,7 +510,6 @@ def test_connector_new_renders_clean_regardless_of_name(tmp_path):
         assert lint.returncode == 0, f"{name}: {lint.stdout}{lint.stderr}"
 
 
-@open_finding
 def test_scaffold_ships_a_working_declare_example():
     """Fix 5: the scaffold's handle_page declares through the kit instead of counting rows."""
     hits = list((ROOT / "templates/connector").rglob("service.py.tmpl"))

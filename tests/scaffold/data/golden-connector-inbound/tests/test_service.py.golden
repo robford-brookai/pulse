@@ -1,20 +1,35 @@
 """`example_connector.service` — the reader against the kit's inbound contract, driven by fixtures only.
 
-Every test here holds a `RowSource` and a `CursorStore` and nothing else: `FixtureRowSource` is
-the kit's own recorded-row source, and `MemoryCursorStore` below is a `CursorStore` over a dict.
-`conftest.py` blocks sockets for the whole suite regardless — no test in this file would open one.
+Every test here holds a `RowSource`, a `CursorStore`, and a writer client, and nothing else:
+`FixtureRowSource` is the kit's own recorded-row source, `MemoryCursorStore` below is a
+`CursorStore` over a dict, and `factories.py`'s `FakeCommandTransport` fakes the command API at
+the `httpx.MockTransport` boundary — idempotent the way the ledger is, so a redelivered page
+answers `replayed`. `conftest.py` blocks sockets for the whole suite regardless — no test in this
+file would open one.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import httpx
 import pytest
-from pulse_core.connector import FixtureRowSource
+from factories import FakeCommandTransport
+from pulse_core.connector import FixtureRowSource, TransientExhaustedError
 
 from example_connector.config import Config
 from example_connector.receipts import Receipt
-from example_connector.service import CURSOR_COLUMN, Reader, SourceRow, build_row_source, handle_page, run
+from example_connector.service import (
+    CURSOR_COLUMN,
+    SUBJECT_TYPE,
+    TO_STATE,
+    Reader,
+    SourceRow,
+    build_row_source,
+    declare_row,
+    handle_page,
+    run,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -52,6 +67,14 @@ class MemoryCursorStore:
 
 def source(rows: list[Mapping[str, object]]) -> FixtureRowSource:
     return FixtureRowSource(rows, cursor_column=CURSOR_COLUMN)
+
+
+def _no_sleep(_seconds: float) -> None:
+    """The retry schedule, pinned: the transient path costs no wall-clock in a test."""
+
+
+def _no_jitter() -> float:
+    return 0.0
 
 
 def config(**overrides: object) -> Config:
@@ -131,31 +154,101 @@ def test_a_page_size_below_one_is_refused() -> None:
         Reader(source(ROWS), MemoryCursorStore(), page_size=0)
 
 
-def test_handle_page_counts_without_mutating_the_previous_tally() -> None:
+def test_handle_page_declares_every_valid_row_without_mutating_the_previous_tally() -> None:
     page = next(Reader(source(ROWS), MemoryCursorStore()).batches())
+    transport = FakeCommandTransport()
     original = Receipt()
 
-    tally = handle_page(page, tally=original)
+    with transport.client() as client:
+        tally = handle_page(page, tally=original, client=client)
 
+    assert len(transport.declares) == 3
     assert (tally.read, tally.invalid) == (3, 0)
-    assert (original.read, original.invalid) == (0, 0)
+    assert (tally.committed, tally.replayed, tally.rejected) == (3, 0, 0)
+    assert (original.read, original.committed) == (0, 0)
 
 
-def test_run_drains_the_source_and_commits() -> None:
+def test_a_declared_command_carries_the_row_subject_and_the_scaffold_transition() -> None:
+    page = next(Reader(source(ROWS), MemoryCursorStore()).batches())
+    transport = FakeCommandTransport()
+
+    with transport.client() as client:
+        handle_page(page, tally=Receipt(), client=client)
+
+    body = transport.bodies[0]
+    assert body["subject_type"] == SUBJECT_TYPE
+    assert body["subject_key"] == "subject-1"
+    assert body["to_state"] == TO_STATE
+    assert body["effective_at"] == "2026-01-01T00:00:00+00:00"
+
+
+def test_a_malformed_row_is_never_declared() -> None:
+    page = next(Reader(source([*ROWS, MALFORMED_ROW]), MemoryCursorStore()).batches())
+    transport = FakeCommandTransport()
+
+    with transport.client() as client:
+        tally = handle_page(page, tally=Receipt(), client=client)
+
+    assert len(transport.declares) == 3
+    assert (tally.invalid, tally.committed) == (1, 3)
+
+
+def test_a_redelivered_page_declares_nothing_new() -> None:
+    """The crash/resume contract re-reads at most one page. It replays; it writes no second fact."""
+    page = next(Reader(source(ROWS), MemoryCursorStore()).batches())
+    transport = FakeCommandTransport()
+
+    with transport.client() as client:
+        first = handle_page(page, tally=Receipt(), client=client)
+        second = handle_page(page, tally=first, client=client)
+
+    assert len(transport.declares) == 3
+    assert (second.committed, second.replayed) == (3, 3)
+
+
+def test_a_rejected_declaration_is_counted_not_raised() -> None:
+    page = next(Reader(source(ROWS), MemoryCursorStore()).batches())
+    transport = FakeCommandTransport([httpx.Response(422, json={"detail": {"message": "unknown state"}})])
+
+    with transport.client() as client:
+        tally = handle_page(page, tally=Receipt(), client=client)
+
+    assert (tally.committed, tally.rejected) == (0, 3)
+
+
+def test_an_exhausted_transient_budget_names_the_row() -> None:
+    """The error names the row's `event_id` and nothing off its payload."""
+    row = next(Reader(source(ROWS), MemoryCursorStore()).batches()).rows[0]
+    transport = FakeCommandTransport([httpx.Response(503, text="upstream unavailable")])
+
+    with transport.client() as client, pytest.raises(TransientExhaustedError) as raised:
+        declare_row(client, row, sleep=_no_sleep, jitter=_no_jitter)
+
+    assert "event-1" in str(raised.value)
+    assert "subject-1" not in str(raised.value)
+
+
+def test_run_drains_the_source_declaring_each_page_before_it_commits() -> None:
     store = MemoryCursorStore()
+    transport = FakeCommandTransport()
 
-    receipt = run(config(page_size=1), cursor_store=store, source=source(ROWS))
+    with transport.client() as client:
+        receipt = run(config(page_size=1), cursor_store=store, client=client, source=source(ROWS))
 
     assert receipt.read == 3
     assert receipt.invalid == 0
+    assert receipt.committed == 3
+    assert len(transport.declares) == 3
     assert store.cursor == {CURSOR_COLUMN: "2026-01-03T00:00:00+00:00"}
     assert store.saves == 3
 
 
 def test_run_stops_at_max_pages_with_the_cursor_committed() -> None:
     store = MemoryCursorStore()
+    transport = FakeCommandTransport()
 
-    receipt = run(config(page_size=1), cursor_store=store, source=source(ROWS), max_pages=1)
+    with transport.client() as client:
+        receipt = run(config(page_size=1), cursor_store=store, client=client, source=source(ROWS), max_pages=1)
 
     assert receipt.read == 1
     assert store.cursor == {CURSOR_COLUMN: "2026-01-01T00:00:00+00:00"}
@@ -163,9 +256,11 @@ def test_run_stops_at_max_pages_with_the_cursor_committed() -> None:
 
 def test_run_resumes_where_the_previous_run_stopped() -> None:
     store = MemoryCursorStore()
+    transport = FakeCommandTransport()
 
-    run(config(page_size=1), cursor_store=store, source=source(ROWS), max_pages=1)
-    receipt = run(config(), cursor_store=store, source=source(ROWS))
+    with transport.client() as client:
+        run(config(page_size=1), cursor_store=store, client=client, source=source(ROWS), max_pages=1)
+        receipt = run(config(), cursor_store=store, client=client, source=source(ROWS))
 
     assert receipt.read == 2
 

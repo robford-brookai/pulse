@@ -5,6 +5,10 @@ drives `pulse_core.client.PulseCoreClient` (and, through it, `submit_with_retry`
 a socket — the same pattern as `billing-connector`, `verdict-relay`, and `consent-ingress`. Extend
 this module with your own row/event builders as this connector's shape firms up; keep them here so
 every test file shares one fixture surface instead of each inventing its own.
+
+The fake is idempotent the way the ledger is (D16): a body whose `idempotency_key` it has already
+answered comes back `replayed`, and `declares` counts distinct facts rather than HTTP calls. That
+is what lets a test redeliver the same page and assert the connector declared nothing new.
 """
 
 from __future__ import annotations
@@ -17,25 +21,50 @@ from pulse_core.client import PulseCoreClient
 
 
 class FakeCommandTransport:
-    """The command API faked at the client boundary; the last scripted response repeats.
+    """The command API faked at the client boundary; idempotent unless responses are scripted.
 
-    A caller that scripts no responses gets one synthesized `committed` reply per call, keyed by
-    call order, so a fixture that only cares about the submitted body need not script anything.
+    A caller that scripts no responses gets a real answer per call: `committed` the first time an
+    idempotency key is seen, `replayed` every time after. `responses` overrides that for the
+    failure paths — the scripted list is consumed in call order and its last entry repeats.
     """
 
     def __init__(self, responses: list[httpx.Response] | None = None) -> None:
         self.bodies: list[dict[str, object]] = []
         self._responses = list(responses or [])
+        #: idempotency key -> the event id the first submission of that fact was given.
+        self._declared: dict[str, str] = {}
+
+    @property
+    def declares(self) -> list[str]:
+        """The distinct facts declared, as idempotency keys in first-seen order.
+
+        One entry per fact, not per call: a resubmission of an already-declared fact adds nothing
+        here, which is exactly the assertion a replay test makes.
+        """
+        return list(self._declared)
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         parsed: object = json.loads(request.content)
         assert isinstance(parsed, dict)
-        self.bodies.append(cast("dict[str, object]", parsed))
-        if not self._responses:
-            return httpx.Response(201, json={"event_id": f"event-{len(self.bodies)}", "replayed": False})
-        return self._responses[min(len(self.bodies), len(self._responses)) - 1]
+        body = cast("dict[str, object]", parsed)
+        self.bodies.append(body)
+        if self._responses:
+            return self._responses[min(len(self.bodies), len(self._responses)) - 1]
+        key = str(body.get("idempotency_key", len(self.bodies)))
+        replayed = key in self._declared
+        if not replayed:
+            self._declared[key] = f"event-{len(self._declared) + 1}"
+        return httpx.Response(
+            200 if replayed else 201,
+            json={"event_id": self._declared[key], "replayed": replayed},
+        )
 
     def client(self, *, base_url: str = "http://ledger.test", writer_id: str = "example-connector") -> PulseCoreClient:
+        """A client wired to this fake, pinned to one attempt.
+
+        `max_attempts=1` because retry policy belongs to `submit_with_retry`, not the client —
+        a client that retried too would double the budget the connector thinks it set.
+        """
         return PulseCoreClient(
             base_url,
             writer_id=writer_id,

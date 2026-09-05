@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 if TYPE_CHECKING:
     # Deferred: `pulse_core.client` imports `pulse_core.connector.consume`, which — now that
@@ -45,6 +45,10 @@ Sleeper = Callable[[float], None]
 #: Returns a jitter factor in [0, 1]; the backoff delay is scaled by it. Injectable so tests pin
 #: the schedule.
 Jitter = Callable[[], float]
+
+#: Only so `DeclareCounts.record` returns the caller's own receipt type. Bound to the base so
+#: a connector's `Receipt` keeps its extra counts instead of degrading to `DeclareCounts`.
+CountsT = TypeVar("CountsT", bound="DeclareCounts")
 
 DEFAULT_MAX_ATTEMPTS = 5
 DEFAULT_BASE_DELAY_SECONDS = 0.5
@@ -113,8 +117,12 @@ class DeclareCounts:
     replayed: int = 0
     rejected: int = 0
 
-    def record(self, classification: ResponseClassification) -> DeclareCounts:
+    def record(self: CountsT, classification: ResponseClassification) -> CountsT:
         """The next tally after one settled response — never mutates this one.
+
+        Returns the caller's own type, not this base one: `replace` reconstructs `type(self)`, so
+        a connector's `Receipt` that adds its own counts keeps them and stays a `Receipt` through
+        a whole run's worth of settled responses.
 
         `transient` is not a settled disposition (`submit_with_retry` never returns it) and
         raises rather than being silently folded into one of the three counts.

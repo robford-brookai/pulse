@@ -8,9 +8,10 @@ A PULSE connector scaffolded from `templates/connector/` by
 | Path | What to do with it |
 | --- | --- |
 | `src/{{NAME}}/config.py` | Add the variables this connector reads. `from_env` already collects every problem into one error. |
-| `src/{{NAME}}/service.py` | Replace `handle_event` with what this connector actually does per event. |
+| `src/{{NAME}}/service.py` | Replace `_declaration` with the command this connector declares per event. `handle_event` already declares it through the kit's retry loop and counts the answer. |
 | `src/{{NAME}}/receipts.py` | Add this connector's own counts alongside the kit's three. |
 | `tests/conftest.py` | Do not weaken it. Sockets are blocked for every run that collects this package. |
+| `tests/test_service.py` | The handler's contract: the declare, the deferred event, the replay. Extend it as the connector grows. |
 | `tests/test_receipts.py` | The receipt-line golden. Extend it as `Receipt` grows. |
 
 ## Next steps
@@ -20,6 +21,7 @@ A PULSE connector scaffolded from `templates/connector/` by
    `LINT_PATHS`, `TYPED_PATHS`, `TESTED_PATHS`, `COV_PATHS`, and the image and deploy stanzas.
 2. `uv sync --all-packages`
 3. `uv run pytest packages/{{DIST}}/tests` — already green; extend it as you build.
-4. Do the declare step: replace `handle_event` in `src/{{NAME}}/service.py` with what this
-   connector actually does per event.
+4. Do the declare step: replace `_declaration` in `src/{{NAME}}/service.py`, and the
+   `SUBJECT_TYPE`/`TO_STATE` pair it reads, with the command this connector declares per event.
+   The `submit_with_retry` call around it is already wired and already counted.
 5. Read `docs/connectors/authoring.md` for what to build, in what order, and who to ask.

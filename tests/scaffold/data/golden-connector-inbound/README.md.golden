@@ -13,10 +13,10 @@ declares what validated. The outbound variant — consume the bus, derive, decla
 | Path | What to do with it |
 | --- | --- |
 | `src/example_connector/config.py` | Add the variables this connector reads. `from_env` already collects every problem into one error. |
-| `src/example_connector/service.py` | Pin `CONTRACT_COLUMNS` and `SourceRow`, replace `build_row_source` with the real adapter, then `handle_page` with what this connector declares. |
+| `src/example_connector/service.py` | Pin `CONTRACT_COLUMNS` and `SourceRow`, replace `build_row_source` with the real adapter, then `_declaration` with the command each validated row declares. `handle_page` already declares it through the kit's retry loop and counts the answer. |
 | `src/example_connector/receipts.py` | Add this connector's own counts alongside the kit's three and this variant's `read` / `invalid`. |
 | `tests/conftest.py` | Do not weaken it. Sockets are blocked for every run that collects this package. |
-| `tests/test_service.py` | The reader's contract: validation, the durable cursor, resume. Extend it as the reader grows. |
+| `tests/test_service.py` | The reader's contract: validation, the durable cursor, resume, and the declare — including the replay a re-read page produces. Extend it as the reader grows. |
 | `tests/test_receipts.py` | The receipt-line golden. Extend it as `Receipt` grows. |
 
 ## Next steps
@@ -27,6 +27,7 @@ declares what validated. The outbound variant — consume the bus, derive, decla
 2. `uv sync --all-packages`
 3. `uv run pytest packages/example-connector/tests` — already green; extend it as you build.
 4. Do the declare step: pin `CONTRACT_COLUMNS` and `SourceRow`, replace `build_row_source` with
-   the real adapter, then `handle_page` in `src/example_connector/service.py` with what this connector
-   declares.
+   the real adapter, then `_declaration` in `src/example_connector/service.py`, and the
+   `SUBJECT_TYPE`/`TO_STATE` pair it reads, with the command each validated row declares. The
+   `submit_with_retry` call around it is already wired and already counted.
 5. Read `docs/connectors/authoring.md` for what to build, in what order, and who to ask.
