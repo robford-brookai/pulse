@@ -267,6 +267,7 @@ def build_production_dependencies(
         config.pulse_core_base_url,
         writer_id=WRITER_ID,
         token=config.pulse_core_token,
+        base_url_env_var=PULSE_CORE_BASE_URL_ENV_VAR,
     )
     # max_attempts=1: retry policy belongs to the `Declarer` (declarer.py design decision 4); a
     # client that also retried would multiply the attempt budget, exactly what `service_client`
