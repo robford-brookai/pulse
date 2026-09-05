@@ -545,7 +545,6 @@ def test_rendered_readme_next_steps_do_not_redo_registration():
     )
 
 
-@open_finding
 def test_check_timings_are_recorded():
     """Fix 9: `task check` appends per-target timings to the ledger so gate regressions are visible."""
     assert "devex/timing" in _cmds("check") or "timing" in _cmds("check"), "task check records no timings"
@@ -604,19 +603,37 @@ def test_command_routes_to_runbook():
 @pytest.mark.slow
 @pytest.mark.skipif(not have("uv"), reason="uv not installed")
 def test_tthw_fresh_clone_to_synced_env(tmp_path):
-    """Time clone plus the documented install. Prints `TTHW_INSTALL_SECONDS=<n>` for the ledger."""
-    clone = tmp_path / "pulse-fresh"
-    t0 = time.monotonic()
-    subprocess.run(["git", "clone", "-q", str(ROOT), str(clone)], check=True)  # noqa: S603, S607
-    env = {**os.environ, "UV_NO_PROGRESS": "1"}
-    r = subprocess.run(
-        ["uv", "sync", "--all-packages"],  # noqa: S607
-        cwd=clone,
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    seconds = round(time.monotonic() - t0)
-    print(f"TTHW_INSTALL_SECONDS={seconds}", file=sys.stderr)
-    assert r.returncode == 0, r.stderr[-2000:]
+    """Time clone plus the documented install, warm cache and cold cache.
+
+    Prints `TTHW_INSTALL_SECONDS_WARM=<n>` (ambient uv cache — what a repeat contributor sees) and
+    `TTHW_INSTALL_SECONDS_COLD=<n>` (`UV_CACHE_DIR` pointed at an empty dir — the number a brand
+    new machine actually sees) for the ledger. Audit 3's timings were only valid measured idle
+    (devex-loop-lessons); this test already runs alone, so both arms stay comparable.
+    """
+
+    def _install(label: str, cache_dir: Path | None) -> tuple[int, int, str]:
+        clone = tmp_path / f"pulse-fresh-{label}"
+        t0 = time.monotonic()
+        subprocess.run(["git", "clone", "-q", str(ROOT), str(clone)], check=True)  # noqa: S603, S607
+        env = {**os.environ, "UV_NO_PROGRESS": "1"}
+        if cache_dir is not None:
+            env["UV_CACHE_DIR"] = str(cache_dir)
+        r = subprocess.run(
+            ["uv", "sync", "--all-packages"],  # noqa: S607
+            cwd=clone,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return r.returncode, round(time.monotonic() - t0), r.stderr
+
+    rc_warm, seconds_warm, err_warm = _install("warm", None)
+    print(f"TTHW_INSTALL_SECONDS_WARM={seconds_warm}", file=sys.stderr)
+    assert rc_warm == 0, err_warm[-2000:]
+
+    cold_cache_dir = tmp_path / "uv-cache-cold"
+    cold_cache_dir.mkdir()
+    rc_cold, seconds_cold, err_cold = _install("cold", cold_cache_dir)
+    print(f"TTHW_INSTALL_SECONDS_COLD={seconds_cold}", file=sys.stderr)
+    assert rc_cold == 0, err_cold[-2000:]

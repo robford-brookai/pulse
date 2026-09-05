@@ -28,7 +28,20 @@ AUDIT_DIR = ROOT / "docs/process/devex-audit"
 CHECKSUMS = AUDIT_DIR / "CHECKSUMS"
 FROZEN = ("README.md", "rubric.md", "task-a.md", "task-b.md", "task-c.md")
 OUT_DIR = ROOT / ".planning/devex"
+LEDGER = OUT_DIR / "loop.jsonl"
 RESULT = re.compile(r"^(PASSED|FAILED|XFAIL|XPASS|ERROR|SKIPPED) (\S+?)(?: - (.*))?$")
+
+
+def read_timings(today: str) -> list[dict]:
+    """Today's `kind: timing` rows from the ledger, in the shape `scripts/devex/timing.py` writes.
+
+    Every other row kind (`audit`, `pr`, `reopen`, and any future kind) is skipped rather than
+    rejected: this reads the ledger, it does not own its schema.
+    """
+    if not LEDGER.exists():
+        return []
+    rows = (json.loads(line) for line in LEDGER.read_text().splitlines() if line.strip())
+    return [row for row in rows if row.get("kind") == "timing" and row.get("date") == today]
 
 
 def digests() -> dict[str, str]:
@@ -87,6 +100,7 @@ def check() -> int:
         "fixed_but_still_marked": len(results["XPASS"]),
         "protocol_frozen": ok,
         "results": results,
+        "timings": read_timings(today),
     }
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out = OUT_DIR / f"{today}-check.json"

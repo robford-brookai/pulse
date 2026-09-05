@@ -540,15 +540,19 @@ tasks:
   # twenty:test is CI-safe by that provision rather than by needing no toolchain (task 3.4).
   check:
     desc: All CI gates — lint, typecheck, tests, Twenty app suite, docs build (what main.yml runs)
+    # Each gate runs through scripts/devex/timing.py (task 2.3), which appends a
+    # {date, kind: timing, target, seconds, rc} row per gate to .planning/devex/loop.jsonl and
+    # exits with the gate's own return code, so a timed gate still fails `check` the same way an
+    # untimed `task: <name>` call would.
     cmds:
-      - task: lint
-      - task: typecheck
-      - task: test
-      - task: twenty:validate
-      - task: twenty:test
-      - task: workflow:lint
-      - task: docs:lock-guard
-      - task: docs:build
+      - uv run python scripts/devex/timing.py lint -- task lint
+      - uv run python scripts/devex/timing.py typecheck -- task typecheck
+      - uv run python scripts/devex/timing.py test -- task test
+      - uv run python scripts/devex/timing.py twenty:validate -- task twenty:validate
+      - uv run python scripts/devex/timing.py twenty:test -- task twenty:test
+      - uv run python scripts/devex/timing.py workflow:lint -- task workflow:lint
+      - uv run python scripts/devex/timing.py docs:lock-guard -- task docs:lock-guard
+      - uv run python scripts/devex/timing.py docs:build -- task docs:build
 
   pre-commit:
     desc: Run all pre-commit hooks
