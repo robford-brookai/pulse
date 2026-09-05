@@ -1,0 +1,55 @@
+"""The connector's own counted receipt — the kit's three-count core, plus this connector's own.
+
+`Receipt` extends `pulse_core.connector.declare.DeclareCounts` (`committed`, `replayed`,
+`rejected`) with the two counts an inbound run owns: `read`, every row the reader pulled off the
+source, and `invalid`, every row that failed the pinned contract and became a counted `RowError`.
+Add your own counts here as fields with a `0` default; `format_line` and `tests/test_receipts.py`
+are the golden that keeps the shape stable.
+
+Every field is a count. Nothing here carries a subject key, a value, or anything derived from
+patient data — a receipt line is safe to log, and stays that way only if it holds counts alone.
+That is the whole reason `record_page` takes a `ValidatedPage` and keeps only its two lengths.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING, TypeVar
+
+from pulse_core.connector.declare import DeclareCounts
+
+if TYPE_CHECKING:
+    from pulse_core.connector import ValidatedPage
+
+#: Only so `record_page` accepts any connector's validated row type. `ValidatedPage` is invariant,
+#: so a plain `ValidatedPage[object]` parameter would reject `ValidatedPage[SourceRow]`.
+RowT = TypeVar("RowT")
+
+#: The `service=` label every receipt line carries. Matches the distribution name so a log search
+#: for the package finds its receipts.
+SERVICE_NAME = "example-connector"
+
+
+@dataclass(frozen=True)
+class Receipt(DeclareCounts):
+    """One pass's full counted receipt."""
+
+    read: int = 0
+    invalid: int = 0
+
+    def record_page(self, page: ValidatedPage[RowT]) -> Receipt:
+        """The next tally after one validated page. Never mutates `self`.
+
+        Counts the page's two lengths and nothing else — no row, column, or payload value from
+        either list reaches the receipt.
+        """
+        return replace(self, read=self.read + len(page.rows) + len(page.errors), invalid=self.invalid + len(page.errors))
+
+    def format_line(self) -> str:
+        """The single machine-parsable receipt line: space-separated `key=value` pairs, the kit's
+        counts first in `DeclareCounts` field order, then this connector's own.
+        """
+        return (
+            f"service={SERVICE_NAME} committed={self.committed} replayed={self.replayed} "
+            f"rejected={self.rejected} read={self.read} invalid={self.invalid}"
+        )

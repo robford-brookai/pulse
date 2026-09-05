@@ -1,0 +1,72 @@
+"""The receipt line's shape is the one thing this scaffold already promises.
+
+Every run of example-connector emits one line matching this format, byte for byte apart from the counts.
+Extend this test as `Receipt` grows a field; never loosen it.
+"""
+
+from __future__ import annotations
+
+from dataclasses import replace
+
+from pulse_core.connector import RowError, ValidatedPage
+from example_connector.receipts import Receipt
+
+
+def test_empty_receipt_line_is_all_zeros() -> None:
+    expected = "service=example-connector committed=0 replayed=0 rejected=0 read=0 invalid=0"
+
+    assert Receipt().format_line() == expected
+
+
+def test_counts_appear_in_the_line() -> None:
+    expected = "service=example-connector committed=2 replayed=1 rejected=0 read=3 invalid=1"
+
+    receipt = Receipt(committed=2, replayed=1, rejected=0, read=3, invalid=1)
+
+    assert receipt.format_line() == expected
+
+
+def test_a_tally_step_leaves_the_previous_receipt_alone() -> None:
+    """The counts accumulate by replacement, so `service.py` can hold one tally per run."""
+    original = Receipt(read=1)
+
+    later = replace(original, read=original.read + 1, committed=1)
+
+    assert original.format_line().endswith("committed=0 replayed=0 rejected=0 read=1 invalid=0")
+    assert later.format_line().endswith("committed=1 replayed=0 rejected=0 read=2 invalid=0")
+
+
+def test_record_page_counts_valid_and_invalid_rows() -> None:
+    page: ValidatedPage[str] = ValidatedPage(
+        rows=["one", "two"],
+        errors=[RowError(row_index=2, column="event_time", detail="event_time is timezone-naive")],
+    )
+
+    tally = Receipt().record_page(page)
+
+    assert (tally.read, tally.invalid) == (3, 1)
+
+
+def test_record_page_accumulates_across_pages_without_mutating() -> None:
+    first: ValidatedPage[str] = ValidatedPage(rows=["one"], errors=[])
+    second: ValidatedPage[str] = ValidatedPage(
+        rows=[], errors=[RowError(row_index=0, column="subject_key", detail="missing or empty 'subject_key'")]
+    )
+
+    one = Receipt().record_page(first)
+    two = one.record_page(second)
+
+    assert (one.read, one.invalid) == (1, 0)
+    assert (two.read, two.invalid) == (2, 1)
+
+
+def test_a_receipt_line_carries_counts_only() -> None:
+    """No column name, no row index, nothing derived from a row reaches the logged line."""
+    page: ValidatedPage[str] = ValidatedPage(
+        rows=[], errors=[RowError(row_index=7, column="subject_key", detail="missing or empty 'subject_key'")]
+    )
+
+    line = Receipt().record_page(page).format_line()
+
+    assert "subject_key" not in line
+    assert line == "service=example-connector committed=0 replayed=0 rejected=0 read=1 invalid=1"

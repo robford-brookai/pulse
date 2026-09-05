@@ -1,0 +1,15 @@
+"""PULSE {{DIST}} — an inbound connector built on the shared kit (`pulse_core.connector`).
+
+Pages a source system through the kit's inbound read contract (`RowSource`, `CursorStore`),
+validates each page against a pinned column contract, declares what validated, and ends every pass
+in a counted receipt. Three modules, each with one job: `config` resolves the environment,
+`service` is the process — the reader, its durable cursor, and the run that drains them — and
+`receipts` is the counted line every run emits. This module is the version.
+
+Scaffolded by `scripts/connector_new.py --direction inbound`. `docs/connectors/authoring.md` says
+what to fill in and in what order; `packages/consent-ingress` is the worked inbound reference.
+"""
+
+from __future__ import annotations
+
+__version__ = "0.1.0"

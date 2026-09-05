@@ -33,6 +33,10 @@ GOLDEN_WORK_ORDERS = DATA / "golden-work-orders"
 GOLDEN_SUMMARY = DATA / "golden-collect/SUMMARY.golden"
 GOLDEN_CONNECTOR = DATA / "golden-connector"
 GOLDEN_CONNECTOR_NAME = "example-connector"
+#: One golden tree per direction. Outbound is the base template; inbound is the base with
+#: `templates/connector/direction/inbound/` laid over it (devex-eight-2 task 3.1).
+GOLDEN_CONNECTOR_DIRS = {"outbound": GOLDEN_CONNECTOR, "inbound": DATA / "golden-connector-inbound"}
+DIRECTIONS = tuple(GOLDEN_CONNECTOR_DIRS)
 CHANGE = "fixture-change"
 REGEN = bool(os.environ.get("REGEN"))
 
@@ -153,7 +157,7 @@ def test_collect_skips_worktrees_without_a_handoff(tmp_path: Path) -> None:
 # --- golden connector scaffold ------------------------------------------------------------------
 
 
-def render_connector(dest_parent: Path, name: str = GOLDEN_CONNECTOR_NAME) -> Path:
+def render_connector(dest_parent: Path, name: str = GOLDEN_CONNECTOR_NAME, direction: str = "outbound") -> Path:
     """Render templates/connector/ into a temp directory and return the package root."""
     dest = dest_parent / name
     r = subprocess.run(  # noqa: S603
@@ -162,6 +166,8 @@ def render_connector(dest_parent: Path, name: str = GOLDEN_CONNECTOR_NAME) -> Pa
             str(CONNECTOR_CLI),
             "--name",
             name,
+            "--direction",
+            direction,
             "--dest",
             str(dest),
             "--root",
@@ -181,42 +187,60 @@ def rendered_paths(package: Path) -> list[str]:
     return sorted(str(p.relative_to(package)) for p in package.rglob("*") if p.is_file())
 
 
-def test_connector_render_matches_golden(tmp_path: Path) -> None:
-    package = render_connector(tmp_path)
+@pytest.mark.parametrize("direction", DIRECTIONS)
+def test_connector_render_matches_golden(tmp_path: Path, direction: str) -> None:
+    golden_dir = GOLDEN_CONNECTOR_DIRS[direction]
+    package = render_connector(tmp_path, direction=direction)
     emitted = rendered_paths(package)
     if REGEN:
-        shutil.rmtree(GOLDEN_CONNECTOR, ignore_errors=True)
+        shutil.rmtree(golden_dir, ignore_errors=True)
         for relative in emitted:
-            golden = GOLDEN_CONNECTOR / f"{relative}.golden"
+            golden = golden_dir / f"{relative}.golden"
             golden.parent.mkdir(parents=True, exist_ok=True)
             golden.write_text((package / relative).read_text())
-        pytest.skip(f"regenerated {len(emitted)} goldens in {GOLDEN_CONNECTOR}")
+        pytest.skip(f"regenerated {len(emitted)} goldens in {golden_dir}")
 
-    goldens = sorted(
-        str(p.relative_to(GOLDEN_CONNECTOR)).removesuffix(".golden") for p in GOLDEN_CONNECTOR.rglob("*.golden")
-    )
+    goldens = sorted(str(p.relative_to(golden_dir)).removesuffix(".golden") for p in golden_dir.rglob("*.golden"))
     assert goldens, f"no goldens committed; run REGEN=1 pytest {Path(__file__).name}"
     assert emitted == goldens
     for relative in emitted:
         actual = (package / relative).read_text()
-        expected = (GOLDEN_CONNECTOR / f"{relative}.golden").read_text()
+        expected = (golden_dir / f"{relative}.golden").read_text()
         assert actual == expected, f"{relative} drifted from its golden"
 
 
-def test_connector_render_is_deterministic(tmp_path_factory: pytest.TempPathFactory) -> None:
-    a = render_connector(tmp_path_factory.mktemp("connector_a"))
-    b = render_connector(tmp_path_factory.mktemp("connector_b"))
+def test_the_two_directions_render_different_services(tmp_path_factory: pytest.TempPathFactory) -> None:
+    """The overlay replaces whole files, and leaves the ones it does not ship alone."""
+    outbound = render_connector(tmp_path_factory.mktemp("outbound"), direction="outbound")
+    inbound = render_connector(tmp_path_factory.mktemp("inbound"), direction="inbound")
+
+    service = f"src/{GOLDEN_CONNECTOR_NAME.replace('-', '_')}/service.py"
+    assert (outbound / service).read_text() != (inbound / service).read_text()
+    # The inbound service stands on the kit's inbound read contract, per the connector-kit spec.
+    assert "RowSource" in (inbound / service).read_text()
+    assert "CursorStore" in (inbound / service).read_text()
+    # conftest.py ships in the base tree only; both directions get the same socket-blocked posture.
+    assert (outbound / "tests/conftest.py").read_text() == (inbound / "tests/conftest.py").read_text()
+    # Only the base tree renders: no overlay directory leaks into a rendered package.
+    assert not any(p.startswith("direction/") for p in rendered_paths(outbound) + rendered_paths(inbound))
+
+
+@pytest.mark.parametrize("direction", DIRECTIONS)
+def test_connector_render_is_deterministic(tmp_path_factory: pytest.TempPathFactory, direction: str) -> None:
+    a = render_connector(tmp_path_factory.mktemp("connector_a"), direction=direction)
+    b = render_connector(tmp_path_factory.mktemp("connector_b"), direction=direction)
     assert rendered_paths(a) == rendered_paths(b)
     assert [(a / p).read_text() for p in rendered_paths(a)] == [(b / p).read_text() for p in rendered_paths(b)]
 
 
-def test_rendered_connector_package_tests_pass(tmp_path: Path) -> None:
+@pytest.mark.parametrize("direction", DIRECTIONS)
+def test_rendered_connector_package_tests_pass(tmp_path: Path, direction: str) -> None:
     """The scaffold ships a green test, not a stub the developer has to repair first.
 
     Run from the rendered package so pytest reads *its* pyproject.toml, not the repo root's:
     the point is that the package stands on its own.
     """
-    package = render_connector(tmp_path)
+    package = render_connector(tmp_path, direction=direction)
     env = {
         **os.environ,
         "PYTHONPATH": str(package / "src"),
@@ -237,8 +261,9 @@ def test_rendered_connector_package_tests_pass(tmp_path: Path) -> None:
     assert r.returncode == 0, r.stdout + r.stderr
 
 
-def test_rendered_connector_leaves_no_unsubstituted_tokens(tmp_path: Path) -> None:
-    package = render_connector(tmp_path)
+@pytest.mark.parametrize("direction", DIRECTIONS)
+def test_rendered_connector_leaves_no_unsubstituted_tokens(tmp_path: Path, direction: str) -> None:
+    package = render_connector(tmp_path, direction=direction)
     leftover = [p for p in rendered_paths(package) if "{{" in (package / p).read_text()]
     assert leftover == [], f"template tokens survived the render in {leftover}"
 

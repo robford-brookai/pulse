@@ -107,6 +107,27 @@ Prior art: if `packages/ocean/services/` already has a directory whose name star
 the command names that path before rendering and continues — Ocean may already have a connector
 for this service, worth checking before you build a second one.
 
+### Which direction
+
+`DIRECTION` picks the worked example the package starts from. It defaults to `outbound`, so the
+command above and every existing connector are unaffected.
+
+| `DIRECTION` | What the rendered service does | Worked reference |
+| --- | --- | --- |
+| `outbound` (default) | Consumes events off the bus through the kit's `consume` loop, derives, declares. `handle_event` is the seam. | `packages/billing-connector` |
+| `inbound` | Pages a source system through the kit's inbound read contract — `RowSource`, `validate_page`, and a durable `CursorStore` — and declares each validated page. `build_row_source`, `handle_page` and the pinned `CONTRACT_COLUMNS` are the seams. | `packages/consent-ingress` |
+
+```bash
+task connector:new NAME=my-reader DIRECTION=inbound
+```
+
+Inbound is an overlay, not a flag the templates branch on:
+`templates/connector/direction/inbound/` holds the files that variant replaces (`config.py`,
+`service.py`, `receipts.py`, `__init__.py`, `README.md`, and their tests) plus the ones only it
+has (`tests/test_service.py`). Every other file — `pyproject.toml`, `tests/conftest.py`,
+`tests/factories.py` — comes from the base tree and is edited in one place. An overlay file
+replaces its base counterpart whole; there is no merging.
+
 The tree it renders:
 
 ```text
@@ -124,6 +145,9 @@ packages/my-connector/
     ├── factories.py               # fakes at the httpx boundary
     └── test_config.py
 ```
+
+`DIRECTION=inbound` renders the same tree with `tests/test_service.py` added — the reader's
+contract: per-row validation, the durable cursor, and resume.
 
 `pyproject.toml` starts from the reference's: `requires-python = ">=3.10,<4.0"`,
 `pulse-core = { workspace = true }` under `[tool.uv.sources]`, `[tool.hatch.build.targets.wheel]`

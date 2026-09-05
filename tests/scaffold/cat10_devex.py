@@ -309,13 +309,20 @@ def test_template_ships_the_tests_the_guide_diagrams():
     assert not missing, f"guide diagrams test files the template does not ship: {missing}"
 
 
-@open_finding
 def test_connector_new_supports_inbound_direction():
     """Fix 7: the scaffold renders an inbound variant, not only outbound."""
-    r = subprocess.run(  # noqa: S603
-        [sys.executable, "scripts/connector_new.py", "--help"], cwd=ROOT, capture_output=True, text=True, check=False
-    )
+    # Built as a variable rather than inline: the two ruff versions in play (the venv's and the
+    # one .pre-commit-config.yaml pins) disagree about whether an inline literal argv triggers
+    # S603, and one of them then strips the noqa the other needs — same as cat9.
+    command = [sys.executable, "scripts/connector_new.py", "--help"]
+    r = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)  # noqa: S603
     assert "--direction" in r.stdout and "inbound" in r.stdout, r.stdout[-600:]
+    # The overlay behind the flag, not just the flag: cat9's golden pins what it renders.
+    overlay = ROOT / "templates/connector/direction/inbound"
+    assert overlay.is_dir(), f"--direction inbound has no overlay at {overlay}"
+    service = overlay / "src/{{NAME}}/service.py.tmpl"
+    assert service.is_file(), f"the inbound overlay ships no service module at {service}"
+    assert {"RowSource", "CursorStore"} <= set(re.findall(r"\w+", service.read_text()))
 
 
 def test_kit_has_changelog_and_deprecation_policy():
