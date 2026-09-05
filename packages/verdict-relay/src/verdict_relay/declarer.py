@@ -63,8 +63,8 @@ from os import environ
 import httpx
 import pydantic
 from pulse_core.client import CommandResponse, PulseCoreClient, ResponseClassification
-from pulse_core.connector.declare import DeclareCounts, Jitter, Sleeper, submit_with_retry
-from pulse_core.connector.declare import TransientExhaustedError as _KitTransientExhaustedError
+from pulse_core.connector import DeclareCounts, Jitter, Sleeper, submit_with_retry
+from pulse_core.connector import TransientExhaustedError as _KitTransientExhaustedError
 from pulse_core.generated import DeclareTransitionCommand, DeclareVerdictCommand
 
 logger = logging.getLogger("verdict_relay.declarer")

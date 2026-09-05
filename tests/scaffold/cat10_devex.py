@@ -286,7 +286,6 @@ def test_connector_new_warns_about_prior_art(tmp_path):
     assert "packages/ocean/services" in (r.stdout + r.stderr), (r.stdout + r.stderr)[-800:]
 
 
-@open_finding
 def test_connector_kit_exports_jitter():
     """Fix 5: the guide names Jitter as a kit primitive; the package root must export it."""
     import pulse_core.connector as kit
