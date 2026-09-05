@@ -238,6 +238,130 @@ def test_issue_and_pr_templates_exist():
     assert (ROOT / ".github/PULL_REQUEST_TEMPLATE.md").is_file()
 
 
+# --- Audit 2 (2026-09-04, scorecard ranked fixes): open findings for devex-eight-2 -----------
+
+GUIDE = "docs/connectors/authoring.md"
+
+
+@open_finding
+def test_authoring_guide_linked_from_readme_and_contributing():
+    """Fix 1: the best document in the repo is invisible from the two files GitHub shows first."""
+    assert GUIDE in README and GUIDE in CONTRIBUTING
+
+
+@open_finding
+def test_docs_index_is_a_front_door():
+    """Fix 2: docs/index.md is a real front door with a Getting started section, not a badge stub."""
+    index = (DOCS / "index.md").read_text()
+    assert re.search(r"^##+\s*Getting started", index, re.M | re.I), "no Getting started section"
+    assert len(index.splitlines()) >= 40, "index.md is still a stub"
+    assert "connectors/authoring.md" in index
+
+
+@open_finding
+def test_verify_requires_change_and_lore_init_exists():
+    """Fix 3: task verify declares CHANGE, and a documented target creates .openlore on a fresh clone."""
+    assert "CHANGE" in TARGETS["verify"].get("requires", {}).get("vars", [])
+    assert "lore:init" in TARGETS or "openlore init" in _cmds("install")
+
+
+@open_finding
+def test_connector_new_warns_about_prior_art(tmp_path):
+    """Fix 4: scaffolding a name that already exists under packages/ocean/services names the prior art."""
+    r = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            "scripts/connector_new.py",
+            "--name",
+            "pocar",
+            "--root",
+            str(tmp_path),
+            "--print-registrations",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert "packages/ocean/services" in (r.stdout + r.stderr), (r.stdout + r.stderr)[-800:]
+
+
+@open_finding
+def test_connector_kit_exports_jitter():
+    """Fix 5: the guide names Jitter as a kit primitive; the package root must export it."""
+    import pulse_core.connector as kit
+
+    assert "Jitter" in kit.__all__ and hasattr(kit, "Jitter")
+
+
+@open_finding
+def test_template_ships_the_tests_the_guide_diagrams():
+    """Fix 6: every test file named in the guide's rendered-tree diagram exists in the template."""
+    template_tests = ROOT / "templates/connector/tests"
+    diagrammed = set(re.findall(r"(test_[a-z_]+\.py|factories\.py|conftest\.py)", (ROOT / GUIDE).read_text()))
+    shipped = {p.name.removesuffix(".tmpl") for p in template_tests.glob("*.tmpl")} | {
+        p.name for p in template_tests.glob("*.py")
+    }
+    missing = sorted(diagrammed - shipped)
+    assert not missing, f"guide diagrams test files the template does not ship: {missing}"
+
+
+@open_finding
+def test_connector_new_supports_inbound_direction():
+    """Fix 7: the scaffold renders an inbound variant, not only outbound."""
+    r = subprocess.run(  # noqa: S603
+        [sys.executable, "scripts/connector_new.py", "--help"], cwd=ROOT, capture_output=True, text=True, check=False
+    )
+    assert "--direction" in r.stdout and "inbound" in r.stdout, r.stdout[-600:]
+
+
+@open_finding
+def test_kit_has_changelog_and_deprecation_policy():
+    """Fix 8: the kit reaches every connector on the next uv sync; it needs a changelog and a deprecations section."""
+    assert (ROOT / "packages/pulse-core/CHANGELOG.md").is_file()
+    spec = (ROOT / "openspec/specs/connector-kit/spec.md").read_text()
+    assert re.search(r"^##+\s*Deprecations", spec, re.M), "connector-kit spec has no Deprecations section"
+
+
+@open_finding
+def test_readme_and_contributing_claims_are_current():
+    """Fix 9: the countable claims in README and CONTRIBUTING match the tree."""
+    archived = len([p for p in (ROOT / "openspec/changes/archive").iterdir() if p.is_dir()])
+    m = re.search(r"(\d+|Twenty-two|twenty-two|twenty)\s+archived", README)
+    if m:
+        words = {"twenty": 20, "twenty-two": 22}
+        claimed = words.get(m.group(1).lower()) or int(m.group(1))
+        assert claimed == archived, f"README claims {claimed} archived changes, tree has {archived}"
+    hooks = (ROOT / ".pre-commit-config.yaml").read_text()
+    if "mypy" in CONTRIBUTING.lower():
+        assert "mypy" in hooks, "CONTRIBUTING claims a mypy pre-commit hook that is not configured"
+
+
+@open_finding
+def test_editor_and_runtime_pins_exist():
+    """Fix 10: .nvmrc pins Node 22 to match CI; .editorconfig and .vscode/extensions.json exist."""
+    assert (ROOT / ".nvmrc").is_file() and (ROOT / ".nvmrc").read_text().strip().startswith("22")
+    assert (ROOT / ".editorconfig").is_file()
+    assert (ROOT / ".vscode/extensions.json").is_file()
+
+
+@open_finding
+def test_pr_template_names_task_check():
+    """Below the cut: the PR checklist names the CI contract, not three of its eight parts."""
+    assert "task check" in (ROOT / ".github/PULL_REQUEST_TEMPLATE.md").read_text()
+
+
+@open_finding
+def test_task_descriptions_carry_no_change_ids():
+    """Below the cut: task descriptions are for the newcomer's first screen, not ticket bookkeeping."""
+    noisy = [
+        n
+        for n, t in TARGETS.items()
+        if isinstance(t, dict) and re.search(r"devex-eight task|DNA-\d+", str(t.get("desc", "")))
+    ]
+    assert noisy == [], noisy
+
+
 # --- Measurement machinery: these pass from wave 0 and must stay green -----------------------
 
 
