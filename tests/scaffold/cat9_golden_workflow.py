@@ -456,12 +456,30 @@ def test_connector_new_apply_registrations_names_every_site(tmp_path: Path) -> N
 
 
 def _git(*args: str, cwd: Path) -> None:
-    subprocess.run(  # noqa: S603
-        ["git", "-c", "user.email=gate@test.invalid", "-c", "user.name=Gate", *args],  # noqa: S607
-        cwd=cwd,
-        check=True,
-        capture_output=True,
-    )
+    """Run git sandboxed against the operator's global config.
+
+    `commit.gpgsign=false` and a neutral `gpg.format` stop a global signing config (a real key,
+    or an `ssh`/`x509` format with no matching key) from turning a fixture commit into a signing
+    failure. A failure here is re-raised with `exc.stderr` — `capture_output` alone hides it
+    behind a bare `CalledProcessError`, which is illegible in a sandbox where the git binary and
+    its config are not what the traceback's reader expects.
+    """
+    cmd = [
+        "git",
+        "-c",
+        "commit.gpgsign=false",
+        "-c",
+        "gpg.format=openpgp",
+        "-c",
+        "user.email=gate@test.invalid",
+        "-c",
+        "user.name=Gate",
+        *args,
+    ]
+    try:
+        subprocess.run(cmd, cwd=cwd, check=True, capture_output=True, text=True)  # noqa: S603
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(f"git {' '.join(args)} failed:\n{exc.stderr}") from exc  # noqa: TRY003
 
 
 def _export_head(dest: Path) -> None:
