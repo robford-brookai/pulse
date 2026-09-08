@@ -21,7 +21,7 @@ from synthea_seed.regen import (
     JarChecksumError,
     JarDownloadError,
     ManifestMissingError,
-    _urllib_download,
+    download_jar,
     ensure_jar,
     generation_command,
     main,
@@ -133,28 +133,28 @@ class TestJarDownload:
         opener = FlakyOpener(failures=1)
         pauses: list[float] = []
         dest = tmp_path / "synthea.jar"
-        _urllib_download("https://example.invalid/synthea.jar", dest, opener=opener, sleep=pauses.append)
+        download_jar("https://example.invalid/synthea.jar", dest, opener=opener, sleep=pauses.append)
         assert dest.read_bytes() == JAR_BYTES
         assert len(opener.calls) == 2
         assert pauses == [5.0], "one backoff between the failed attempt and the successful one"
 
     def test_every_attempt_is_bounded_by_a_timeout(self, tmp_path: Path) -> None:
         opener = FlakyOpener(failures=0)
-        _urllib_download("https://example.invalid/synthea.jar", tmp_path / "j.jar", opener=opener, sleep=lambda _: None)
+        download_jar("https://example.invalid/synthea.jar", tmp_path / "j.jar", opener=opener, sleep=lambda _: None)
         assert [timeout for _, timeout in opener.calls] == [120.0]
 
     def test_exhausted_retries_raise_a_regen_error_not_a_url_error(self, tmp_path: Path) -> None:
         opener = FlakyOpener(failures=99)
         pauses: list[float] = []
         with pytest.raises(JarDownloadError, match="after 3 attempts"):
-            _urllib_download("https://example.invalid/j.jar", tmp_path / "j.jar", opener=opener, sleep=pauses.append)
+            download_jar("https://example.invalid/j.jar", tmp_path / "j.jar", opener=opener, sleep=pauses.append)
         assert len(opener.calls) == 3
         assert pauses == [5.0, 10.0], "linear backoff, and none after the final attempt"
 
     def test_a_timeout_is_retried_like_any_other_network_failure(self, tmp_path: Path) -> None:
         opener = FlakyOpener(failures=1, error=TimeoutError("read timed out"))
         dest = tmp_path / "j.jar"
-        _urllib_download("https://example.invalid/j.jar", dest, opener=opener, sleep=lambda _: None)
+        download_jar("https://example.invalid/j.jar", dest, opener=opener, sleep=lambda _: None)
         assert dest.read_bytes() == JAR_BYTES
 
 
@@ -265,7 +265,7 @@ class TestCli:
 
     def test_cli_verifies_through_the_same_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr("synthea_seed.regen.load_pin", _pin)
-        monkeypatch.setattr("synthea_seed.regen._urllib_download", _fake_downloader)
+        monkeypatch.setattr("synthea_seed.regen.download_jar", _fake_downloader)
         monkeypatch.setattr("synthea_seed.regen._subprocess_runner", FixtureTreeRunner(TestVerification.FILES))
         monkeypatch.setattr("synthea_seed.regen.PACKAGE_ROOT", tmp_path)
         assert main(["--profile", "dev", "--repin"]) == 0

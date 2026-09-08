@@ -78,7 +78,7 @@ def _open_url(url: str, timeout: float) -> IO[bytes]:  # pragma: no cover — li
     return urllib.request.urlopen(url, timeout=timeout)  # noqa: S310 — pin validates https
 
 
-def _urllib_download(
+def download_jar(
     url: str,
     dest: Path,
     *,
@@ -112,7 +112,7 @@ def _subprocess_runner(command: Sequence[str]) -> int:  # pragma: no cover — s
     return subprocess.run(list(command), check=False).returncode  # noqa: S603 — argv built from the validated pin
 
 
-def ensure_jar(pin: PinConfig, cache_dir: Path, downloader: Downloader = _urllib_download) -> Path:
+def ensure_jar(pin: PinConfig, cache_dir: Path, downloader: Downloader = download_jar) -> Path:
     """The pinned JAR, downloaded if absent and checksum-verified on every call."""
     cache_dir.mkdir(parents=True, exist_ok=True)
     jar = cache_dir / f"synthea-{pin.jar.version}.jar"
@@ -183,7 +183,7 @@ def regenerate(
     """
     root = package_root if package_root is not None else PACKAGE_ROOT
     run = runner if runner is not None else _subprocess_runner
-    download = downloader if downloader is not None else _urllib_download
+    download = downloader if downloader is not None else download_jar
     resolved_pin = pin if pin is not None else load_pin()
     profile = resolved_pin.profile(profile_name)
 
