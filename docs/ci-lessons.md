@@ -12,6 +12,29 @@ fix applied there reaches nobody else.
 
 ---
 
+- **2026-09-08 — A scheduled workflow was archived on a smoke-parse and had never run.** Symptom:
+  every scheduled run of `.github/workflows/synthea-regen.yml` since 2026-08-10 failed — five
+  consecutive Mondays, identically, each after paying for a 50k-patient generation. Root cause:
+  the job verifies the generated tree against `packages/synthea-seed/manifests/staging.manifest.json`,
+  which had never existed in git. A manifest-verified job has a bootstrap step by construction —
+  the first run must *author* the receipt, and every run after it compares against it — and that
+  bootstrap re-pin was never dispatched. The workflow's own comment made it unreachable, claiming
+  re-pinning was "a reviewed change through REPIN=1 locally, never something this workflow does",
+  while `synthea-pin.yaml`'s header named the CI runner "the manifest-authoring platform of
+  record". The pin was right: JVM determinism does not carry across machines, so a locally
+  authored manifest could never have verified on `ubuntu-latest`. The reason nobody noticed is
+  the wider lesson: the change that shipped this workflow checked off its task on a smoke-parse
+  of the YAML. A workflow that parses is not a workflow that runs, and a scheduled one has no
+  PR to turn red — its first real execution was a week after the change archived, watched by
+  nobody. Rules baked in: a task that ships a scheduled workflow is not done until one dispatch
+  of it has been watched to green; and a job whose steady state is verification against a
+  committed artifact must have that artifact produced, reviewed and committed in the same change.
+  The mechanical half is enforced by
+  `cat4_ci_contract.py::test_scheduled_regen_profiles_have_a_committed_manifest`, which fails
+  when a scheduled `synthea:regen` names a profile with no committed manifest. The judgement half
+  — "checking a task off on a parse is not evidence of execution" — is not gated, and cannot be:
+  nothing offline can tell a workflow that has run from one that has only been read.
+
 - **2026-08-01 — A tool's own suggestion was documented without checking it applied.** Symptom:
   WORKFLOW.md told a newly generated project to consider `openlore generate` to fill
   `openspec/specs/`. On a fresh scaffold the only code is a placeholder returning its argument,
