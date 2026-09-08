@@ -6,6 +6,11 @@ breaking change upstream is traceable to the consumers it affects.
 **Never satisfy a dependency by cloning the producing repo into this one.** Consume a published
 surface — a Snowflake object, an API, or a released package.
 
+Warehouse modeling ownership splits by producer, not by warehouse — pulse commits SQL over the
+surfaces it produces, data-platform's dbt owns marts computed from business logic
+([ADR-0006](../adr/ADR-0006-warehouse-modeling-ownership.md)); each row below states which side of
+that rule it is on.
+
 | Dependency | Kind | Publisher contract | Breakage risk |
 |---|---|---|---|
 | _e.g._ `RAW.ZCC_CONTACTS` | Snowflake table | `zcc-ingest/docs/contracts/publishes.md` | schema drift on upstream vendor change |
@@ -39,8 +44,11 @@ coverage state; and `subject_id` for the two coverage verdict types is the patie
 key, the only identifying field a coverage row has — the mart contract carries no payer or
 member-id column, and none may be added, because that key convention is what keeps payer
 identifiers out of relay logs. The key format is pinned (coverage-state delta, billing-state):
-`{patient_subject_key}:{first 16 hex of sha256(payer identifier, lowercased, UTF-8)}`, derived by
-the mart-row producer — the raw payer identifier never leaves the adjudicating system. Coverage-detail values (QMB status, benefit categories, copay)
+`{patient_subject_key}:{first 16 hex of sha256(payer identifier, lowercased, UTF-8)}`. **Decided
+2026-09-08:** the Benefits Investigation Platform (Billy) derives this digest at adjudication —
+Billy is the mart-row producer and the only system that ever holds the raw payer identifier.
+data-platform's dbt carries the digest through the mart unchanged, computing and storing nothing
+from the raw identifier itself. No raw payer identifier enters the mart at any stage. Coverage-detail values (QMB status, benefit categories, copay)
 belong in the verdict payload and `lineage_ref`, never in a new column and never in the state
 vocabulary. Rows whose verdict types the mart does not yet produce simply never arrive; the relay
 declares what it reads.
