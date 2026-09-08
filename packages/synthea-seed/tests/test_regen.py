@@ -7,16 +7,21 @@ refresh" through injected fake runners that materialize fixture trees determinis
 from __future__ import annotations
 
 import hashlib
+import io
+import urllib.error
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import IO, Any, ClassVar
 
 import pytest
 from synthea_seed.pin import PinConfig
 from synthea_seed.regen import (
+    LARGE_POPULATION_HEAP,
     GenerationFailedError,
     JarChecksumError,
+    JarDownloadError,
     ManifestMissingError,
+    _urllib_download,
     ensure_jar,
     generation_command,
     main,
@@ -106,6 +111,53 @@ class TestJarPinning:
         assert ensure_jar(_pin(), cache, must_not_download).exists()
 
 
+class FlakyOpener:
+    """An opener that fails `failures` times before serving the JAR bytes."""
+
+    def __init__(self, failures: int, error: OSError | None = None) -> None:
+        self.failures = failures
+        self.error = error if error is not None else urllib.error.URLError("connection reset")
+        self.calls: list[tuple[str, float]] = []
+
+    def __call__(self, url: str, timeout: float) -> IO[bytes]:
+        self.calls.append((url, timeout))
+        if len(self.calls) <= self.failures:
+            raise self.error
+        return io.BytesIO(JAR_BYTES)
+
+
+class TestJarDownload:
+    """A transient network failure must not end a 40-minute generation run."""
+
+    def test_a_transient_failure_is_retried_and_then_succeeds(self, tmp_path: Path) -> None:
+        opener = FlakyOpener(failures=1)
+        pauses: list[float] = []
+        dest = tmp_path / "synthea.jar"
+        _urllib_download("https://example.invalid/synthea.jar", dest, opener=opener, sleep=pauses.append)
+        assert dest.read_bytes() == JAR_BYTES
+        assert len(opener.calls) == 2
+        assert pauses == [5.0], "one backoff between the failed attempt and the successful one"
+
+    def test_every_attempt_is_bounded_by_a_timeout(self, tmp_path: Path) -> None:
+        opener = FlakyOpener(failures=0)
+        _urllib_download("https://example.invalid/synthea.jar", tmp_path / "j.jar", opener=opener, sleep=lambda _: None)
+        assert [timeout for _, timeout in opener.calls] == [120.0]
+
+    def test_exhausted_retries_raise_a_regen_error_not_a_url_error(self, tmp_path: Path) -> None:
+        opener = FlakyOpener(failures=99)
+        pauses: list[float] = []
+        with pytest.raises(JarDownloadError, match="after 3 attempts"):
+            _urllib_download("https://example.invalid/j.jar", tmp_path / "j.jar", opener=opener, sleep=pauses.append)
+        assert len(opener.calls) == 3
+        assert pauses == [5.0, 10.0], "linear backoff, and none after the final attempt"
+
+    def test_a_timeout_is_retried_like_any_other_network_failure(self, tmp_path: Path) -> None:
+        opener = FlakyOpener(failures=1, error=TimeoutError("read timed out"))
+        dest = tmp_path / "j.jar"
+        _urllib_download("https://example.invalid/j.jar", dest, opener=opener, sleep=lambda _: None)
+        assert dest.read_bytes() == JAR_BYTES
+
+
 class TestGenerationCommand:
     def test_command_carries_every_pinned_input(self, tmp_path: Path) -> None:
         pin = _pin()
@@ -121,6 +173,20 @@ class TestGenerationCommand:
         ):
             assert command[command.index(flag) + 1] == value
         assert command[-1] == "Massachusetts"
+
+    def test_large_profiles_carry_an_explicit_heap_before_the_jar(self, tmp_path: Path) -> None:
+        """50k patients outgrow the JVM default heap on a standard runner."""
+        pin = _pin()
+        properties = write_properties(pin, tmp_path / "output" / "staging", tmp_path / "staging.properties")
+        command = generation_command(tmp_path / "synthea.jar", pin, pin.profile("staging"), properties)
+        assert command[:2] == ["java", LARGE_POPULATION_HEAP]
+        assert command[2] == "-jar", "the heap option must precede -jar, not the JAR's own argv"
+
+    def test_small_profiles_leave_the_heap_to_the_jvm(self, tmp_path: Path) -> None:
+        pin = _pin()
+        properties = write_properties(pin, tmp_path / "output" / "dev", tmp_path / "dev.properties")
+        command = generation_command(tmp_path / "synthea.jar", pin, pin.profile("dev"), properties)
+        assert not [arg for arg in command if arg.startswith("-Xmx")]
 
     def test_properties_file_is_sorted_and_pins_base_directory(self, tmp_path: Path) -> None:
         pin = _pin()
@@ -186,6 +252,16 @@ class TestCli:
         monkeypatch.setattr("synthea_seed.regen.PACKAGE_ROOT", tmp_path)
         assert main(["--profile", "prod"]) == 2
         assert "unknown profile 'prod'" in capsys.readouterr().err
+
+    def test_unreachable_jar_is_an_error_not_a_traceback(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        monkeypatch.setattr("synthea_seed.regen.load_pin", _pin)
+        monkeypatch.setattr("synthea_seed.regen.PACKAGE_ROOT", tmp_path)
+        monkeypatch.setattr("synthea_seed.regen._open_url", FlakyOpener(failures=99))
+        monkeypatch.setattr("synthea_seed.regen.DOWNLOAD_BACKOFF_SECONDS", 0.0)
+        assert main(["--profile", "dev"]) == 2
+        assert "could not download the pinned JAR" in capsys.readouterr().err
 
     def test_cli_verifies_through_the_same_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr("synthea_seed.regen.load_pin", _pin)
