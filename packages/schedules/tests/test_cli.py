@@ -449,3 +449,241 @@ class TestMainDispatchDryRun:
         payload = json.loads(capsys.readouterr().out)
         assert payload["dry_run"] is True
         assert len(payload["would_declare"]) == 1
+
+
+class TestReconcileSweepExportDiffJob:
+    """`reconcile-sweep --family communication_consent`: the registry dispatches to the identical
+    `export_diff` pipeline `TestConsentSweepJob` above exercises through `consent-sweep` (design.md
+    decision 10) — only the printed shape (decision 7's `Receipt`) and the exit contract (0/1/2,
+    decision 10) differ.
+    """
+
+    def test_full_agreement_exits_zero_and_the_receipt_is_clean(self) -> None:
+        csv_text = (CONSENT_SWEEP_FIXTURES / "full_agreement.csv").read_text()
+        ledger_states = [
+            _ledger_state("SUBJ-010", "sms", "opted_out"),
+            _ledger_state("SUBJ-011", "email", "opted_in"),
+        ]
+        api = ScriptedApi([], writer_id=RECONCILIATION_WRITER_ID)
+        stream = io.StringIO()
+
+        exit_code = cli.run_reconcile_export_diff_job(
+            csv_text,
+            ledger_states,
+            api.client(),
+            family="communication_consent",
+            file_id="export-42",
+            export_as_of=date(2026, 8, 5),
+            run_date=date(2026, 9, 8),
+            stream=stream,
+        )
+
+        assert exit_code == 0
+        receipt = json.loads(stream.getvalue())
+        assert receipt["kind"] == "export_diff"
+        assert receipt["family"] == "communication_consent"
+        assert receipt["consumers"][0]["agreements"] == 2
+        assert receipt["consumers"][0]["divergences"] == {}
+        assert receipt["failed_declarations"] == 0
+
+    def test_a_committed_correction_is_a_named_state_divergence(self) -> None:
+        csv_text = (CONSENT_SWEEP_FIXTURES / "opt_out_drift.csv").read_text()
+        api = ScriptedApi([committed()], writer_id=RECONCILIATION_WRITER_ID)
+        stream = io.StringIO()
+
+        exit_code = cli.run_reconcile_export_diff_job(
+            csv_text,
+            [],
+            api.client(),
+            family="communication_consent",
+            file_id="export-42",
+            export_as_of=date(2026, 8, 5),
+            run_date=date(2026, 9, 8),
+            stream=stream,
+        )
+
+        assert exit_code == 0
+        receipt = json.loads(stream.getvalue())
+        assert receipt["consumers"][0]["divergences"] == {"state": 1}
+        assert receipt["consumers"][0]["subject_keys"]["state"]["keys"] == ["SUBJ-001:sms"]
+        assert receipt["consumers"][0]["subject_keys"]["state"]["total"] == 1
+
+    def test_a_rejected_correction_exits_one_matching_the_failed_declaration_semantics(self) -> None:
+        csv_text = (CONSENT_SWEEP_FIXTURES / "opt_out_drift.csv").read_text()
+        api = ScriptedApi([rejected()], writer_id=RECONCILIATION_WRITER_ID)
+        stream = io.StringIO()
+
+        exit_code = cli.run_reconcile_export_diff_job(
+            csv_text,
+            [],
+            api.client(),
+            family="communication_consent",
+            file_id="export-42",
+            export_as_of=date(2026, 8, 5),
+            run_date=date(2026, 9, 8),
+            stream=stream,
+        )
+
+        assert exit_code == 1
+        receipt = json.loads(stream.getvalue())
+        assert receipt["failed_declarations"] == 1
+        assert receipt["failed_subject_keys"] == ["SUBJ-001:sms"]
+
+    def test_an_empty_export_has_nothing_to_compare_and_exits_two(self) -> None:
+        stream = io.StringIO()
+        api = ScriptedApi([], writer_id=RECONCILIATION_WRITER_ID)
+
+        exit_code = cli.run_reconcile_export_diff_job(
+            "subject_key,channel,suppressed\n",
+            [],
+            api.client(),
+            family="communication_consent",
+            file_id="export-42",
+            export_as_of=date(2026, 8, 5),
+            run_date=date(2026, 9, 8),
+            stream=stream,
+        )
+
+        assert exit_code == 2
+        receipt = json.loads(stream.getvalue())
+        assert receipt["consumers"][0]["agreements"] == 0
+        assert receipt["consumers"][0]["divergences"] == {}
+
+
+class TestReconcileSweepExportDiffDryRunJob:
+    def test_prints_the_receipt_and_never_declares(self) -> None:
+        csv_text = (CONSENT_SWEEP_FIXTURES / "opt_out_drift.csv").read_text()
+        stream = io.StringIO()
+
+        exit_code = cli.run_reconcile_export_diff_dry_run_job(
+            csv_text, [], family="communication_consent", run_date=date(2026, 9, 8), stream=stream
+        )
+
+        assert exit_code == 0
+        receipt = json.loads(stream.getvalue())
+        assert receipt["kind"] == "export_diff"
+        assert receipt["consumers"][0]["divergences"] == {"state": 1}
+        assert receipt["failed_declarations"] == 0
+
+
+class TestReconcileSweepProjectionConformanceJob:
+    """`reconcile-sweep --family <ledger family>`: today's registry (task 3.2 registers the first
+    consumers in wave 2) has none, so every run passes with `no_consumers` (design.md decision 6)
+    rather than exiting 2 — there being nothing registered yet is not "no rows could be compared"."""
+
+    def test_no_registered_consumers_passes_with_no_consumers_and_exits_zero(self) -> None:
+        stream = io.StringIO()
+
+        exit_code = cli.run_reconcile_projection_conformance_job(
+            family="enrollment", run_date=date(2026, 9, 8), stream=stream
+        )
+
+        assert exit_code == 0
+        receipt = json.loads(stream.getvalue())
+        assert receipt["kind"] == "projection_conformance"
+        assert receipt["no_consumers"] is True
+
+    def test_a_family_with_zero_classified_comparisons_and_registered_consumers_exits_two(self) -> None:
+        from schedules.projection_conformance import ConsumerConformance
+
+        stream = io.StringIO()
+
+        exit_code = cli.run_reconcile_projection_conformance_job(
+            family="enrollment",
+            consumers=[ConsumerConformance(consumer="twenty-board", family="enrollment", comparisons=())],
+            run_date=date(2026, 9, 8),
+            stream=stream,
+        )
+
+        assert exit_code == 2
+
+    def test_at_least_one_classified_comparison_exits_zero(self) -> None:
+        from schedules.projection_conformance import Comparison, ConsumerConformance
+
+        stream = io.StringIO()
+
+        exit_code = cli.run_reconcile_projection_conformance_job(
+            family="enrollment",
+            consumers=[
+                ConsumerConformance(
+                    consumer="twenty-board",
+                    family="enrollment",
+                    comparisons=(Comparison(subject_key="enr-1", consumer="twenty-board", outcome="agreement"),),
+                )
+            ],
+            run_date=date(2026, 9, 8),
+            stream=stream,
+        )
+
+        assert exit_code == 0
+
+
+class TestMainDispatchReconcileSweep:
+    """`main` wired to real argv for `reconcile-sweep`: the registry (built from the real released
+    catalog) picks the sweep kind, so these tests exercise `communication_consent` (export_diff)
+    and `enrollment` (projection_conformance, no consumers registered yet) — the same two families
+    `test_sweep_registry.py` pins."""
+
+    def test_communication_consent_dispatches_the_export_diff_pipeline(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        export_file = tmp_path / "export.csv"
+        export_file.write_text((CONSENT_SWEEP_FIXTURES / "opt_out_drift.csv").read_text())
+        api = ScriptedApi([committed()], writer_id=RECONCILIATION_WRITER_ID)
+
+        def fake_client(*, writer_id: str, token_env_var: str) -> PulseCoreClient:
+            return api.client()
+
+        monkeypatch.setattr(cli, "_ledger_connection_from_env", _fake_ledger_connection)
+        monkeypatch.setattr(cli, "enumerate_state", _fake_enumerate_state)
+        monkeypatch.setattr(cli, "_pulse_core_client_from_env", fake_client)
+
+        exit_code = cli.main([
+            "reconcile-sweep",
+            "--family",
+            "communication_consent",
+            "--export-file",
+            str(export_file),
+            "--file-id",
+            "export-42",
+            "--export-as-of",
+            "2026-08-05",
+        ])
+
+        assert exit_code == 0
+        receipt = json.loads(capsys.readouterr().out)
+        assert receipt["kind"] == "export_diff"
+        assert receipt["consumers"][0]["divergences"] == {"state": 1}
+
+    def test_communication_consent_without_export_args_exits_nonzero_with_usage_help(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        with pytest.raises(SystemExit) as exc_info:
+            cli.main(["reconcile-sweep", "--family", "communication_consent"])
+
+        assert exc_info.value.code == 2
+        assert "usage" in capsys.readouterr().err.lower()
+
+    def test_a_ledger_family_dispatches_projection_conformance_and_never_touches_the_ledger_env(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        def _forbidden(*args: object, **kwargs: object) -> None:
+            msg = "reconcile-sweep for a ledger family must not touch consent-sweep env wiring"
+            raise AssertionError(msg)
+
+        monkeypatch.setattr(cli, "_ledger_connection_from_env", _forbidden)
+        monkeypatch.setattr(cli, "_pulse_core_client_from_env", _forbidden)
+
+        exit_code = cli.main(["reconcile-sweep", "--family", "enrollment"])
+
+        assert exit_code == 0
+        receipt = json.loads(capsys.readouterr().out)
+        assert receipt["kind"] == "projection_conformance"
+        assert receipt["no_consumers"] is True
+
+    def test_an_unknown_family_exits_nonzero_with_usage_help(self, capsys: pytest.CaptureFixture[str]) -> None:
+        with pytest.raises(SystemExit) as exc_info:
+            cli.main(["reconcile-sweep", "--family", "not-a-real-family"])
+
+        assert exc_info.value.code == 2
+        assert "usage" in capsys.readouterr().err.lower()

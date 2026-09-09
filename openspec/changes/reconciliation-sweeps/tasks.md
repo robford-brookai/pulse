@@ -65,7 +65,7 @@ Task 4.1 is live execution (GitHub issue + runbook PR + attended run per WORKFLO
       Opus because the classifier decides what counts as drift; a wrong rule reports false
       divergences every day for every family.
 
-- [ ] 2.2 Receipt and CLI: `Receipt` per design.md decision 7 (JSON line, tags, subject-key cap
+- [x] 2.2 Receipt and CLI: `Receipt` per design.md decision 7 (JSON line, tags, subject-key cap
       200 with totals), `reconcile-sweep --family <name> [--dry-run]` subcommand in `cli.py` with
       exit 0 when rows were compared and 2 when none could be, the consent sweep dispatched
       through the registry as the `communication_consent` entry with its existing tests untouched

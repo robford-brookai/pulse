@@ -46,7 +46,7 @@ import argparse
 import json
 import os
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict
 from datetime import date
 from pathlib import Path
@@ -84,6 +84,14 @@ from schedules.month_open import (
     load_enrollment_fixture,
     run_month_open,
 )
+from schedules.projection_conformance import MIN_COMPLETE_FROM, ConsumerConformance, SubjectSnapshot, conform_family
+from schedules.receipt import (
+    build_export_diff_receipt,
+    build_projection_conformance_receipt,
+    receipt_payload,
+    rows_compared,
+)
+from schedules.sweep_registry import UnknownOwnershipError, build_registry
 from schedules.verdict_relay_poll import run_verdict_relay_poll_job
 
 #: This job's own D15 credential name (mirrors `consent_sweep.RECONCILIATION_WRITER_ID`) — the
@@ -225,6 +233,110 @@ def _failed_correction_subject_keys(declarations: Sequence[ConsentCorrectionDecl
     ]
 
 
+def run_reconcile_export_diff_job(
+    csv_text: str,
+    ledger_states: Sequence[SubjectState],
+    client: PulseCoreClient,
+    *,
+    family: str,
+    file_id: str,
+    export_as_of: date,
+    run_date: date,
+    stream: TextIO | None = None,
+) -> int:
+    """`reconcile-sweep --family communication_consent`'s real-wiring path: the registry dispatches
+    `communication_consent` to `export_diff` (design.md decision 1), which is this sweep's own
+    consent-reconciliation pipeline, unchanged (design.md decision 10: "Registering the consent
+    sweep in the registry SHALL change none of its observable behavior") — every call below is the
+    same one `run_consent_sweep_job` already makes; only the printed shape is decision 7's `Receipt`
+    instead of the bare `DriftReceipt`.
+
+    Exit code mirrors `run_consent_sweep_job`'s own failed-declaration rule (design.md decision 10:
+    "matching the failed-declaration semantics s13 pinned") ahead of the new rows-compared rule: a
+    rejected/transient declaration exits 1 regardless of how many rows were compared; otherwise exit
+    2 only when the export held no parseable row at all — "no rows could be compared", the
+    configuration/connectivity/empty-read case decision 10 names, never a fully-agreeing export.
+    """
+    parse_result = parse_export(csv_text)
+    corrections = diff_consent(parse_result.rows, ledger_states)
+    declarations = declare_consent_corrections(corrections, client, file_id=file_id, export_as_of=export_as_of)
+    drift = build_drift_receipt(parse_result, corrections)
+    receipt = build_export_diff_receipt(
+        drift, family=family, run_date=run_date, floor=MIN_COMPLETE_FROM, corrections=corrections
+    )
+    failed = _failed_correction_subject_keys(declarations)
+
+    payload = receipt_payload(receipt)
+    payload["failed_declarations"] = len(failed)
+    payload["failed_subject_keys"] = failed
+    _emit(payload, stream=stream if stream is not None else sys.stdout)
+    if failed:
+        return 1
+    return 0 if parse_result.rows else 2
+
+
+def run_reconcile_export_diff_dry_run_job(
+    csv_text: str,
+    ledger_states: Sequence[SubjectState],
+    *,
+    family: str,
+    run_date: date,
+    stream: TextIO | None = None,
+) -> int:
+    """`reconcile-sweep --family communication_consent --dry-run`: the same receipt shape as
+    `run_reconcile_export_diff_job`, built without ever declaring a correction — no client, no
+    submission, no socket (spec: "Both jobs support an offline dry-run"). Neither `file_id` nor
+    `export_as_of` is a parameter here: both only matter to a declared correction's provenance and
+    D16 idempotency key (`consent_sweep.build_record_communication_consent_command`), and this
+    receipt names disagreements, never commands. `failed_declarations` is always zero: with nothing
+    declared, nothing can be rejected.
+    """
+    parse_result = parse_export(csv_text)
+    corrections = diff_consent(parse_result.rows, ledger_states)
+    drift = build_drift_receipt(parse_result, corrections)
+    receipt = build_export_diff_receipt(
+        drift, family=family, run_date=run_date, floor=MIN_COMPLETE_FROM, corrections=corrections
+    )
+    payload = receipt_payload(receipt)
+    payload["failed_declarations"] = 0
+    payload["failed_subject_keys"] = []
+    _emit(payload, stream=stream if stream is not None else sys.stdout)
+    return 0 if parse_result.rows else 2
+
+
+def run_reconcile_projection_conformance_job(
+    *,
+    family: str,
+    consumers: Sequence[ConsumerConformance] = (),
+    snapshot: Mapping[str, SubjectSnapshot] | None = None,
+    run_date: date,
+    floor: date = MIN_COMPLETE_FROM,
+    stream: TextIO | None = None,
+) -> int:
+    """`reconcile-sweep --family <ledger family>`'s path: build this run's `FamilyConformance`
+    (task 2.1) from already-read consumer comparisons and snapshot, print its `Receipt`, and return
+    the exit code decision 10 pins.
+
+    A family with no registered consumers (`consumers=()`, today's registry for every ledger
+    family — task 3.2 registers the first ones) passes with `no_consumers` and exits 0 (design.md
+    decision 6: "passes ... not a divergence"), never 2: there being nothing to compare yet is the
+    documented steady state before wave 2 lands, not "no rows could be compared" the way an empty
+    read or a connectivity failure is. Once consumers are registered, exit 2 fires only when every
+    one of them produced zero classified comparisons.
+    """
+    conformance = conform_family(
+        family=family,
+        snapshot=snapshot or {},
+        consumers=consumers,
+        floor=floor,
+    )
+    receipt = build_projection_conformance_receipt(conformance, run_date=run_date)
+    _emit(receipt_payload(receipt), stream=stream if stream is not None else sys.stdout)
+    if conformance.no_consumers:
+        return 0
+    return 0 if rows_compared(receipt) > 0 else 2
+
+
 def _ledger_connection_from_env() -> psycopg.Connection:
     """The production `EnrollmentSource`'s connection: a live Postgres DSN from the environment,
     never a literal (never the warehouse either — `pulse_ledger.reads.enumerate_state` reads the
@@ -326,6 +438,46 @@ def _build_parser() -> argparse.ArgumentParser:
         "cursor already at the mart's watermark is a no-op run.",
     )
 
+    reconcile_sweep_parser = subparsers.add_parser(
+        "reconcile-sweep",
+        help="Run one catalog family's referee sweep through the sweep registry (design.md "
+        "decision 1): export_diff for a recorded family (communication_consent), "
+        "projection_conformance for a ledger family.",
+    )
+    reconcile_sweep_parser.add_argument(
+        "--family", required=True, help="A catalog family name, e.g. communication_consent, enrollment."
+    )
+    reconcile_sweep_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the would-declare set (export_diff) or the receipt (projection_conformance) "
+        "and exit; no ledger connection, no API call, no socket.",
+    )
+    reconcile_sweep_parser.add_argument(
+        "--export-file",
+        type=Path,
+        default=None,
+        help="Required when --family names an export_diff family: path to its delivered export CSV.",
+    )
+    reconcile_sweep_parser.add_argument(
+        "--file-id",
+        default=None,
+        help="Required when --family names an export_diff family: this export's id.",
+    )
+    reconcile_sweep_parser.add_argument(
+        "--export-as-of",
+        type=date.fromisoformat,
+        default=None,
+        help="Required when --family names an export_diff family: the export's as-of date (YYYY-MM-DD).",
+    )
+    reconcile_sweep_parser.add_argument(
+        "--ledger-fixture",
+        type=Path,
+        default=None,
+        help="Optional with --dry-run for an export_diff family: a ledger consent-state fixture, "
+        "same shape as consent-sweep --ledger-fixture.",
+    )
+
     return parser
 
 
@@ -370,6 +522,62 @@ def _dispatch_verdict_relay_poll() -> int:
     return run_verdict_relay_poll_job(reader, declarer, stream=sys.stdout)
 
 
+def _dispatch_reconcile_export_diff(args: argparse.Namespace, parser: argparse.ArgumentParser, *, family: str) -> int:
+    """`reconcile-sweep --family communication_consent`'s two paths — the same shape
+    `_dispatch_consent_sweep` already has, since this is the identical pipeline (design.md decision
+    10). Every argument an export_diff run needs is optional at the argparse level (a ledger family
+    needs none of them), so this is where "required for this family" is actually enforced."""
+    if args.export_file is None or args.file_id is None or args.export_as_of is None:
+        parser.error("reconcile-sweep --family communication_consent requires --export-file, --file-id, --export-as-of")
+    csv_text = args.export_file.read_text()
+    run_date = date.today()
+    if args.dry_run:
+        ledger_states = load_ledger_state_fixture(args.ledger_fixture) if args.ledger_fixture is not None else []
+        return run_reconcile_export_diff_dry_run_job(
+            csv_text,
+            ledger_states,
+            family=family,
+            run_date=run_date,
+        )
+    conn = _ledger_connection_from_env()
+    ledger_states = enumerate_state(conn, CONSENT_SUBJECT_TYPE)
+    client = _pulse_core_client_from_env(writer_id=RECONCILIATION_WRITER_ID, token_env_var=CONSENT_SWEEP_TOKEN_ENV_VAR)
+    return run_reconcile_export_diff_job(
+        csv_text,
+        ledger_states,
+        client,
+        family=family,
+        file_id=args.file_id,
+        export_as_of=args.export_as_of,
+        run_date=run_date,
+    )
+
+
+def _dispatch_reconcile_projection_conformance(family: str) -> int:
+    """`reconcile-sweep --family <ledger family>`'s one path today: no consumer is registered for
+    any ledger family yet (task 3.2, wave 2), so every run reports `no_consumers` and exits 0
+    (design.md decision 6) — the honest state of wave 1's wiring. This is the seam wave 2 replaces
+    with a real per-family consumer/reader lookup and a real snapshot read; nothing about
+    `run_reconcile_projection_conformance_job`'s own signature has to change for that."""
+    return run_reconcile_projection_conformance_job(family=family, run_date=date.today())
+
+
+def _dispatch_reconcile_sweep(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
+    """`reconcile-sweep`'s dispatch: the registry (design.md decision 1), built from the released
+    catalog, says which sweep kind `--family` gets; an unregistered or misconfigured family name
+    exits with usage help rather than reaching either job."""
+    try:
+        registry = build_registry()
+    except UnknownOwnershipError as exc:
+        parser.error(str(exc))
+    family = registry.get(args.family)
+    if family is None:
+        parser.error(f"reconcile-sweep --family {args.family!r} is not a catalog family")
+    if family.sweep_kind == "export_diff":
+        return _dispatch_reconcile_export_diff(args, parser, family=family.name)
+    return _dispatch_reconcile_projection_conformance(family.name)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Parse `argv`, run the named job against production wiring, and return its exit code."""
     parser = _build_parser()
@@ -379,10 +587,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _dispatch_month_open(args, parser)
     if args.command == "verdict-relay-poll":
         return _dispatch_verdict_relay_poll()
+    if args.command == "reconcile-sweep":
+        return _dispatch_reconcile_sweep(args, parser)
 
-    # Only "month-open", "verdict-relay-poll", and "consent-sweep" are registered subparsers, so
-    # `args.command` is one of them by the time argparse's own required-subparser validation has
-    # passed.
+    # Only "month-open", "verdict-relay-poll", "reconcile-sweep", and "consent-sweep" are
+    # registered subparsers, so `args.command` is one of them by the time argparse's own
+    # required-subparser validation has passed.
     return _dispatch_consent_sweep(args)
 
 
