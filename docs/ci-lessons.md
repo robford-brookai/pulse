@@ -22,18 +22,28 @@ fix applied there reaches nobody else.
   re-pinning was "a reviewed change through REPIN=1 locally, never something this workflow does",
   while `synthea-pin.yaml`'s header named the CI runner "the manifest-authoring platform of
   record". The pin was right: JVM determinism does not carry across machines, so a locally
-  authored manifest could never have verified on `ubuntu-latest`. The reason nobody noticed is
-  the wider lesson: the change that shipped this workflow checked off its task on a smoke-parse
-  of the YAML. A workflow that parses is not a workflow that runs, and a scheduled one has no
-  PR to turn red — its first real execution was a week after the change archived, watched by
-  nobody. Rules baked in: a task that ships a scheduled workflow is not done until one dispatch
-  of it has been watched to green; and a job whose steady state is verification against a
-  committed artifact must have that artifact produced, reviewed and committed in the same change.
-  The mechanical half is enforced by
-  `cat4_ci_contract.py::test_scheduled_regen_profiles_have_a_committed_manifest`, which fails
-  when a scheduled `synthea:regen` names a profile with no committed manifest. The judgement half
-  — "checking a task off on a parse is not evidence of execution" — is not gated, and cannot be:
-  nothing offline can tell a workflow that has run from one that has only been read.
+  authored manifest could never have verified on `ubuntu-latest`. **And behind that defect sat a
+  second one that the first had been hiding.** Dispatching the bootstrap re-pin (run
+  34292720706) did not produce a manifest either: it ran 41m34s and the runner crashed with
+  `System.IO.IOException: No space left on device`, unable even to write its own diagnostic log,
+  so no job log survives. Measured locally at the same seed, 500 patients produce 2.21 GiB across
+  571 files — ~4.5 MB per patient — which puts the 50k staging profile at roughly 221 GiB and
+  ~57,000 files against a runner with tens of GB free. The profile has never been generable on
+  a GitHub-hosted runner, on any Monday, for any reason. Rules baked in: a task that ships a
+  scheduled workflow is not done until one dispatch of it has been watched to green; a job whose
+  steady state is verification against a committed artifact must have that artifact produced,
+  reviewed and committed in the same change; and a generated-data volume is a capacity number to
+  measure at the small tier and multiply, not a shape to assume scales. The reason none of this
+  surfaced for a month is the residue this entry exists for: the change that shipped the workflow
+  checked off its task on a smoke-parse of the YAML. A workflow that parses is not a workflow
+  that runs, and a scheduled one has no PR to turn red — its first real execution was a week
+  after the change archived, watched by nobody, and the failure it reported was not even the
+  real one. The manifest precondition is enforced by
+  `cat4_ci_contract.py::test_scheduled_regen_profiles_have_a_committed_manifest` (xfail while the
+  population decision is open; it xpasses the moment a manifest lands). Neither the capacity
+  finding nor "checking a task off on a parse is not evidence of execution" is gated, and neither
+  can be: nothing offline can tell a workflow that has run from one that has only been read, and
+  nothing offline knows how much disk a generator will want.
 
 - **2026-08-01 — A tool's own suggestion was documented without checking it applied.** Symptom:
   WORKFLOW.md told a newly generated project to consider `openlore generate` to fill

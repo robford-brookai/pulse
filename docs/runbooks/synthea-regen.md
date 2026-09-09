@@ -9,6 +9,26 @@ Divergence is a failure, never a refresh.
 Everything here is synthetic by construction — Synthea generates people who do not exist. No
 step of this procedure touches PHI, and the uploaded artifacts carry none.
 
+## Status: the staging profile does not currently fit on the runner
+
+**`staging` has no committed manifest and cannot be given one on `ubuntu-latest` as pinned.**
+Measured 2026-09-08: 500 patients (Massachusetts, seed 20260809, FHIR transaction bundles, the
+default 10-year history) produce **2.21 GiB across 571 files** — about 4.5 MB per patient.
+Generation is linear in population, so the 50k staging profile needs roughly **221 GiB and
+~57,000 files**. A GitHub-hosted standard runner has tens of GB free, so the job cannot finish:
+run
+[34292720706](https://github.com/robford-brookai/pulse/actions/runs/34292720706) ran 41m34s and
+died with a runner-level `System.IO.IOException: No space left on device` — it could not even
+write its own diagnostic log, which is why no job log was uploaded.
+
+`exporter.pretty_print = false` does not help: passed through the `-c` properties file on
+v3.3.0 it is ignored, measured at 2,321,224 KB against 2,322,596 KB for the same seed.
+
+Closing this needs a decision, not a knob, because the population is recorded in
+`synthea-pin.yaml` and `design/delivery/pulse-runtime-readiness.md` §2.1 ("prod-scale shape,
+~50k patients"). The options are in the PR that added this runbook. Everything below is the
+procedure once that decision lands; the re-pin dispatch itself works.
+
 ## Who authors the manifest
 
 The CI runner, and only the CI runner. `synthea-pin.yaml`'s header names it "the
@@ -48,6 +68,8 @@ verifies, so the schedule can never quietly rewrite the receipt.
 Re-pin when, and only when, the pin itself changed — a new JAR version, a new seed, a changed
 module property, a changed population — or when bootstrapping a profile that has no manifest yet.
 
+0. Confirm the profile fits the runner: population × ~4.5 MB must leave headroom on the host's
+   free disk. For `staging` today it does not — see the status section above.
 1. Branch, and make the pin edit in
    `packages/synthea-seed/src/synthea_seed/config/synthea-pin.yaml`. Editing that file *is* the
    re-pin decision; it invalidates every existing manifest by construction. Push the branch.
@@ -114,6 +136,11 @@ The run step exits nonzero and the message names the failure class. Read the las
   16 GB runner. A larger population needs that constant revisited, and the population itself is
   a design decision recorded in `synthea-pin.yaml` and
   `design/delivery/pulse-runtime-readiness.md` §2.1 — never change it silently to make a run fit.
+- **No step conclusion at all, no uploaded log, an annotation reading
+  `System.IO.IOException: No space left on device`.** The runner filled its disk and crashed
+  before it could report. This is not a flake and re-dispatching will not clear it — see the
+  status section at the top. Confirm by comparing the profile's population against the ~4.5 MB
+  per patient measured above.
 
 Job-level `timeout-minutes: 120` bounds the whole thing; a run that hits it was hung, not slow.
 
