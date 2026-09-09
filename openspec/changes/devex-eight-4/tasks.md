@@ -48,7 +48,7 @@ non-Taskfile tasks alongside a serial one when they share no files.
 
 ## 2. Wave 2 — the M items
 
-- [ ] 2.1 Delete `test_connector_scaffold_command_exists` and let the render-and-gate control carry
+- [x] 2.1 Delete `test_connector_scaffold_command_exists` and let the render-and-gate control carry
       the gate's connector coverage; widen the control if the audit's below-the-cut tree-diagram
       item is cheap to fold in.
       Tests: remove xfail from `test_the_gate_measures_the_golden_path_not_the_command_listing`;
