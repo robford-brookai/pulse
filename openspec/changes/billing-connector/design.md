@@ -96,6 +96,18 @@ ledger-native path from a consent event to the billing episodes it affects.
     sub-issues. Alternative (Billing project) deferred until the connector has a production
     deploy to report on.
 
+11. **Cut at 3.2; window and cutover move to `billing-cutover`.** Rob's call 2026-09-08: no
+    production billing cutover at this time. Tasks 4.1, 4.2, 5.1 and 5.2 and the delta specs
+    `verdict-reconciliation` (whole) and `verdict-mart-read` (retirement) leave this change for
+    a queued `billing-cutover` change, carried by `design/delivery/billing-cutover-seed.md` the
+    same way decision 9 of `connector-pattern` carried this one. Entry gates for that change:
+    (a) the dbt spike files committed in `data-platform` (seed gate 3, still open), (b) a cutover
+    decision recorded with a date, (c) serial-lane coordination with `reconciliation-sweeps`, which
+    also edits `packages/schedules/infra/terraform/generated/schedule_catalog.auto.tfvars.json`.
+    Consequence: the relay's Snowflake mart read stays on the write path indefinitely, and the
+    two-writer arbitration named in Risks is not exercised until the window opens. This change
+    archives with the connector deploy-ready on dev, declaring nothing in production.
+
 ## Risks / Trade-offs
 
 - [Scaffold stubs drift from the spec before behavior lands] → each stub's docstring names its
@@ -114,10 +126,10 @@ ledger-native path from a consent event to the billing episodes it affects.
 
 Wave 0 scaffold PRs merge in order (a) → (b) → (c) → (d), each green on `task check`. Wave 1
 fills the stubs. Wave 2 deploys to dev under the `billing-connector` credential, mart relay
-untouched. Wave 3 opens the window (live execution). Wave 4 cuts over (live execution, gated).
+untouched. Waves 3 and 4 (window, cutover) moved to `billing-cutover` on 2026-09-08 (decision 11).
 Rollback per proposal.md.
 
 ## Open Questions
 
-- Whether the sweep also back-checks the mart's historical seed rows or only the window —
-  decidable when the window opens, changes no spec or task.
+- (Moved to `billing-cutover` with the window, 2026-09-08.) Whether the sweep also back-checks
+  the mart's historical seed rows or only the window.
