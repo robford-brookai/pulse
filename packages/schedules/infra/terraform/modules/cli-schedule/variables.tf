@@ -4,6 +4,7 @@ variable "schedules" {
     cron_expression              = string
     description                  = string
     target_subcommand            = string
+    target_argument              = optional(string)
     maximum_retry_attempts       = number
     maximum_event_age_in_seconds = number
   }))
