@@ -264,8 +264,11 @@ services:
 
   graph-projection:
     build:
-      context: ..
-      dockerfile: services/graph-projection/Dockerfile
+      # The repo root, unlike every other ocean service: this image installs pulse-core
+      # (packages/pulse-core), which the operator rebuild reads the ledger's replay route through
+      # (m1-retire-patient-state design decision 12) and which no narrower context can reach.
+      context: ../../..
+      dockerfile: packages/ocean/services/graph-projection/Dockerfile
     environment:
       <<: *localstack-env
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ocean:changeme@postgres:5432/ocean}

@@ -4,16 +4,24 @@ WORKDIR /app
 
 RUN pip install uv --quiet
 
-# Copy ocean-events library first (build context = repo root)
-COPY libs/ocean-events /libs/ocean-events
+# Build context is the repo root, not packages/ocean: this service installs pulse-core, which
+# lives outside the ocean tree (packages/pulse-core). Every other ocean service builds from
+# packages/ocean; the compose entry for this one names the wider context to match.
+# Copy the local libraries first (build context = repo root)
+COPY packages/ocean/libs/ocean-events /libs/ocean-events
 
-# Install ocean-events editable so it's available to graph-projection
-RUN uv pip install --system --no-cache -e /libs/ocean-events
+# pulse-core is the kit `src/rebuild_patients.py` reads the ledger's replay route through
+# (m1-retire-patient-state design decision 12). A workspace package exists on no index, so it can
+# only be installed from a path in the context. The consumer path imports nothing from it.
+COPY packages/pulse-core /libs/pulse-core
+
+# Install the local libraries editable so they are available to graph-projection
+RUN uv pip install --system --no-cache -e /libs/ocean-events -e /libs/pulse-core
 
 # Copy graph-projection pyproject.toml and install deps
-COPY services/graph-projection/pyproject.toml .
+COPY packages/ocean/services/graph-projection/pyproject.toml .
 
-# Install dependencies (ocean-events already installed above)
+# Install dependencies (ocean-events and pulse-core already installed above)
 RUN uv pip install --system --no-cache \
     fastapi==0.135.1 \
     uvicorn==0.41.0 \
@@ -23,6 +31,6 @@ RUN uv pip install --system --no-cache \
     "structlog==25.5.0"
 
 # Copy source code
-COPY services/graph-projection/src ./src
+COPY packages/ocean/services/graph-projection/src ./src
 
 CMD ["python", "-m", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

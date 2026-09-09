@@ -10,6 +10,12 @@ dependencies = [
     "aioboto3>=13.0.0",
     "structlog==25.5.0",
     "ocean-events",
+    # `src/rebuild_patients.py` only (design.md decision 12): the operator rebuild reads the
+    # ledger's replay route through `pulse_core.client.PulseCoreClient`. The live consumer path
+    # imports nothing from it, so a broken kit release cannot stop the projection applying events.
+    # Declared here because the module's import is real; not installed in the Dockerfile because
+    # pulse-core is outside that build context and the image never runs the rebuild (see there).
+    "pulse-core",
 ]
 
 [build-system]

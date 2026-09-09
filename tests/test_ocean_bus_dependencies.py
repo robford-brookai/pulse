@@ -49,6 +49,22 @@ MODULE_DISTS: dict[str, set[str]] = {
 
 OCEAN_LIBS = {"ocean-events", "ocean-broker", "ocean-connector-mcp"}
 
+#: Repo-local distributions outside `packages/ocean` that a service image may install by path.
+#: A workspace package exists on no index, so an image can only get one from its build context —
+#: which is why a service installing one widens its context (graph-projection's compose entry).
+#: `pulse-core` is the kit graph-projection's operator rebuild reads the ledger's replay route
+#: through (m1-retire-patient-state design decision 12).
+EXTERNAL_LOCAL_PACKAGES = {"pulse-core"}
+
+
+def _local_package_dir(name: str) -> Path | None:
+    """Where a repo-local distribution's pyproject lives, or `None` if it is not repo-local."""
+    if name in OCEAN_LIBS:
+        return LIBS / name
+    if name in EXTERNAL_LOCAL_PACKAGES:
+        return REPO_ROOT / "packages" / name
+    return None
+
 
 def _normalize(requirement: str) -> str:
     """Reduce a requirement string to its lowercase distribution name."""
@@ -56,14 +72,17 @@ def _normalize(requirement: str) -> str:
 
 
 def _lib_dependencies(lib: str, seen: set[str] | None = None) -> set[str]:
-    """Distributions a local ocean lib declares, expanded through local libs."""
+    """Distributions a repo-local package declares, expanded through repo-local packages."""
     seen = seen if seen is not None else set()
     if lib in seen:
         return set()
     seen.add(lib)
-    with (LIBS / lib / "pyproject.toml").open("rb") as fh:
+    directory = _local_package_dir(lib)
+    if directory is None:
+        return set()
+    with (directory / "pyproject.toml").open("rb") as fh:
         deps = {_normalize(d) for d in tomllib.load(fh)["project"].get("dependencies", [])}
-    for dep in sorted(deps & OCEAN_LIBS):
+    for dep in sorted(deps):
         deps |= _lib_dependencies(dep, seen)
     return deps
 
@@ -80,7 +99,7 @@ def _installed_distributions(dockerfile: Path) -> set[str]:
                 continue
             if "/" in token:
                 name = token.rstrip("/").rsplit("/", 1)[-1]
-                if name in OCEAN_LIBS:
+                if _local_package_dir(name) is not None:
                     installed.add(name)
                     installed |= _lib_dependencies(name)
                 continue

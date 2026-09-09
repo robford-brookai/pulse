@@ -17,9 +17,9 @@ than the table not being readable yet).
   service holding `patients`, not the ledger's own Postgres).
 - AWS credential for dev (`AWS_PROFILE=duplo-dev01`, per the `warehouse-sync-revival` pattern) —
   needed to apply the `eventbridge-ocean` Terraform module and to confirm the rule with the CLI.
-- A ledger read credential for the ambient journal reader (the same replay route
-  `task projection:rebuild` uses for the board projection — see step 3; there is no committed
-  CLI wrapper for `patient_state.rebuild` yet, see the note there).
+- The kit's replay credential for the ledger read in step 3 — `PULSE_CORE_BASE_URL` and
+  `PULSE_CORE_REPLAY_TOKEN` (`pulse_core.replay`), the same pair `task projection:rebuild` uses
+  for the board projection. A read over HTTP; never a ledger DSN.
 - Hasura admin secret for dev (`HASURA_URL`, `HASURA_GRAPHQL_ADMIN_SECRET`).
 
 ## Steps
@@ -57,22 +57,30 @@ than the table not being readable yet).
    against the real rule. Until this step lands, the handler from step 3 is inert on dev — the
    documented safe failure, not a defect (design.md decision 11).
 
-3. **Rebuild:** replay every committed `enrollment` event through
-   `graph_projection.handlers.patient_state.rebuild(journal_reader, session)` before anyone reads
-   the projected rows (design.md decision 10; `patient_state.py:335`). It applies the same
-   `handle_patient_state` the live consumer does, so it is a real assertion of monotonicity, not a
-   second implementation to trust separately.
+3. **Rebuild:** replay every committed `enrollment` event into `patients` before anyone reads
+   the projected rows (design.md decisions 10 and 12):
 
-   **No committed CLI wraps this yet** — unlike `task projection:rebuild` for the board, this
-   package has no production `JournalReader` implementation, only the `Protocol` and a test
-   fixture (`patient_state.py:161`, `test_patient_state.py:410`). The operator script for this run
-   supplies one reading the ledger's replay route (the same credential and route
-   `twenty_projection.rebuild` uses) and calls `rebuild()` directly; write it once for this run and
-   attach it to the tracking issue rather than committing a throwaway wrapper.
+   ```bash
+   DATABASE_URL=<dev graph postgres> \
+   PULSE_CORE_BASE_URL=<dev command api> PULSE_CORE_REPLAY_TOKEN=<dev replay token> \
+     task projection:rebuild-patients TARGET=dev OPERATOR=<who>
+   ```
 
-   PASS: the printed `RebuildReceipt` (`patient_state.py:173`) shows a subject count with zero
-   unparked failures beyond what the credential and replay window explain; parked subjects are
-   expected and counted, never silently dropped.
+   The CLI is `packages/ocean/services/graph-projection/src/rebuild_patients.py` (task 3.3). It
+   reads each subject's committed events through the ledger's replay route over HTTP
+   (`PulseCoreClient.subject_history`, paged to exhaustion) and folds them through the same
+   `handle_patient_state` the live consumer applies, so this is a real assertion of monotonicity,
+   not a second implementation to trust separately. Scope is every `patient_id` already in
+   `patients` — the legacy rows adoption exists for — plus any subject with no row yet, named as
+   `SUBJECT="pt-a pt-b"`. Safe to rerun: a second pass with no intervening events writes nothing
+   and counts every event as a skip.
+
+   PASS: the printed `RebuildReceipt` (counts only — events read, subjects, rows written, skipped
+   stale, parked) shows rows written for the subjects the ledger has minted `enrollment` events
+   for, and exit 0. Parked is expected and counted, never a failure: it is subjects the ledger has
+   no history for yet (legacy rows awaiting genesis, which keep their status and null `ledger_seq`)
+   plus any event that resolved to no canonical patient id. Exit 2 means a variable is unset and
+   nothing was read or written; the message names every missing one.
 
 4. **Apply Hasura metadata** — select-only grant on `patients` for every service role, columns
    including `ledger_seq` (design.md decision 4; `packages/ocean/infra/hasura/apply_metadata.py`):
