@@ -1,0 +1,28 @@
+{
+  "scenario": "A landed event the ledger does not know is an orphan (spec projection-conformance)",
+  "family": "enrollment",
+  "as_of": "2026-09-08T12:00:00+00:00",
+  "consumer": {
+    "name": "warehouse-landing",
+    "cite_field": "seq",
+    "freshness_budget_s": 900
+  },
+  "snapshot": [],
+  "rows": [
+    {
+      "subject_key": "enr-ghost",
+      "fields": {
+        "state": "active"
+      },
+      "cited_seq": 3
+    }
+  ],
+  "malformed": [],
+  "expected": [
+    {
+      "subject_key": "enr-ghost",
+      "outcome": "orphan",
+      "fields": []
+    }
+  ]
+}

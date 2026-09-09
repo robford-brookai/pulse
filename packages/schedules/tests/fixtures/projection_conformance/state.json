@@ -1,0 +1,59 @@
+{
+  "scenario": "Divergence names the subject, never the value (spec projection-conformance)",
+  "family": "enrollment",
+  "as_of": "2026-09-08T12:00:00+00:00",
+  "consumer": {
+    "name": "twenty-board",
+    "cite_field": "ledger_seq",
+    "freshness_budget_s": 60
+  },
+  "snapshot": [
+    {
+      "subject_key": "enr-1",
+      "head_seq": 7,
+      "head_recorded_at": "2026-09-01T00:00:00+00:00",
+      "fields": {
+        "state": "active"
+      }
+    },
+    {
+      "subject_key": "enr-2",
+      "head_seq": 4,
+      "head_recorded_at": "2026-09-01T00:00:00+00:00",
+      "fields": {
+        "state": "active"
+      }
+    }
+  ],
+  "rows": [
+    {
+      "subject_key": "enr-1",
+      "fields": {
+        "state": "on_hold"
+      },
+      "cited_seq": 7
+    },
+    {
+      "subject_key": "enr-2",
+      "fields": {
+        "state": "active"
+      },
+      "cited_seq": 4
+    }
+  ],
+  "malformed": [],
+  "expected": [
+    {
+      "subject_key": "enr-1",
+      "outcome": "state",
+      "fields": [
+        "state"
+      ]
+    },
+    {
+      "subject_key": "enr-2",
+      "outcome": "agreement",
+      "fields": []
+    }
+  ]
+}

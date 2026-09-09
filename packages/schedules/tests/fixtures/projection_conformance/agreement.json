@@ -1,0 +1,37 @@
+{
+  "scenario": "Agreement (spec projection-conformance: Projected state equals ledger current state per subject)",
+  "family": "enrollment",
+  "as_of": "2026-09-08T12:00:00+00:00",
+  "consumer": {
+    "name": "twenty-board",
+    "cite_field": "ledger_seq",
+    "freshness_budget_s": 60
+  },
+  "snapshot": [
+    {
+      "subject_key": "enr-1",
+      "head_seq": 7,
+      "head_recorded_at": "2026-09-01T00:00:00+00:00",
+      "fields": {
+        "state": "active"
+      }
+    }
+  ],
+  "rows": [
+    {
+      "subject_key": "enr-1",
+      "fields": {
+        "state": "active"
+      },
+      "cited_seq": 7
+    }
+  ],
+  "malformed": [],
+  "expected": [
+    {
+      "subject_key": "enr-1",
+      "outcome": "agreement",
+      "fields": []
+    }
+  ]
+}
