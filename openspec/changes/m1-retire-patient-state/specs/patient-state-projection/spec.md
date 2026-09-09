@@ -30,9 +30,10 @@ The projection SHALL create a `patients` row when it applies the first `enrollme
 subject, keyed by the canonical patient id that subject resolves to, with `enrollment_status`
 equal to the event's resulting catalog state and `ledger_seq` equal to the event's ledger
 sequence. `enrollment_status` SHALL hold only names from the catalog's `enrollment` family
-(`pending_start`, `active`, `on_hold`, `ended`) for projected rows. A subject that does not
-resolve to a canonical patient id SHALL park without failing the consumer, as the board projection
-does.
+(`pending_start`, `active`, `on_hold`, `ended`) for projected rows (guaranteed by the ledger
+write-path validation against the catalog; the projection does not re-encode the family). A
+subject that does not resolve to a canonical patient id SHALL park without failing the consumer,
+as the board projection does.
 
 #### Scenario: First enrollment event mints the row
 - **GIVEN** no `patients` row for canonical patient P
