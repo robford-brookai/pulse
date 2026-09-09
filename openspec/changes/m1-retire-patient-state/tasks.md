@@ -22,7 +22,7 @@ never a worktree.
 
 ## 1. Wave 0 — the projection replaces the bootstrap
 
-- [ ] 1.1 Patient-state projection handler: `packages/ocean/services/graph-projection/src/handlers/patient_state.py`
+- [x] 1.1 Patient-state projection handler: `packages/ocean/services/graph-projection/src/handlers/patient_state.py`
       subscribes to `patient-state` events for `enrollment` subjects, resolves the canonical
       patient id (the lookup `twenty-projection` uses), mints or updates `patients`
       (`enrollment_status` = resulting catalog state, `ledger_seq` = event sequence) monotonically
