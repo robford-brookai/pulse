@@ -186,6 +186,22 @@ than escaping); SELECT values are stored UPPER_SNAKE-encoded (`referral.received
 | core REST record surface | REST API, live-verified against dev v2.30.0 (2026-08-17) | Twenty; bearer token per target environment | grammar and relation-column drift surfaces at the client boundary (refused values, 400s), never as silent misreads; re-verified by `task twenty:verify:live TARGET=dev` on any tag bump |
 | view read surface | metadata GraphQL `getViews` on `/metadata`, live-verified v2.30.0 (2026-08-17, `twenty-dev-instance` 6.5) — there is no `getCoreViews` on `/graphql`, and the live `View` type carries no `universalIdentifier`, so boards match on (object id, type, name) | Twenty; bearer token per target environment | a surface drift fails demo3's assertion 2 by name, never a silent mismatch; the unit suite pins the query shape offline |
 
+### Reconciliation sweeps' warehouse fold (`reconciliation-sweeps`)
+
+`packages/schedules`' `warehouse-landing` consumer (`LandingReader`) reads the fold view this same
+repo publishes, `STREAMLINE.STG_EVENTS.SUBJECT_CURRENT_STATE`
+(`docs/contracts/publishes.md`'s "Reconciliation sweep surfaces" entry) — an internal cross-package
+dependency, not a cross-repo one, but pinned here because the two sides can drift independently.
+The sweep's own floor constant, `schedules.projection_conformance.MIN_COMPLETE_FROM`
+(`date(2026, 8, 26)`), must equal both the fold view's `_loaded_at` bound and the `min_complete_from`
+date on the `STG_EVENTS.EVENTS` row in `publishes.md` (design.md decision 5) — a test asserts the
+constant against the contract doc, but the fold view's own literal is not test-pinned to either, so
+a floor revival (`projection-rebuild-drill`) that moves the documented date must also edit the view.
+
+| Dependency | Kind | Source | Breakage risk |
+|---|---|---|---|
+| `STREAMLINE.STG_EVENTS.SUBJECT_CURRENT_STATE` floor (`min_complete_from`) | Snowflake view literal, pulse-committed | this repo, `packages/ocean/infra/snowflake/subject_current_state.sql` | a floor date edited in the view without a matching edit to `publishes.md` and `MIN_COMPLETE_FROM` reports `pre_floor` subjects the contract doc no longer agrees are pre-floor, or vice versa — the test pins the latter two together, not the view |
+
 ### Producer-policy gate (`producer-ingress-policy`, DNA-885–DNA-888)
 
 `tests/test_producer_ingress_policy.py` classifies `packages/ocean` producer source against the

@@ -31,6 +31,7 @@ nav:
       - Billing-state: runbooks/billing-state.md
       - Warehouse-sync-revival: runbooks/warehouse-sync-revival.md
       - Billing-connector: runbooks/billing-connector.md
+      - Reconciliation-sweeps: runbooks/reconciliation-sweeps.md
       - Verdict-relay: runbooks/verdict-relay.md
       - Synthea-regen: runbooks/synthea-regen.md
   - Connectors:
