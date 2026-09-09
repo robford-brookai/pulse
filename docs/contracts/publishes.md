@@ -45,6 +45,19 @@ documented, not as data loss.
 |---|---|---|---|
 | `STREAMLINE.STG_EVENTS.EVENTS` | Snowflake view | beta | grain: one row per envelope `event_id`, earliest arrival wins (`QUALIFY ROW_NUMBER() OVER (PARTITION BY data:event_id ORDER BY _loaded_at ASC) = 1`); no `_topic` filter — consumers filter on `_topic` themselves; columns: `event_id`, `event_type`, `subject_type`, `subject_key`, `seq`, `effective_at`, `occurred_at`, `recorded_at`, `producer`, `schema_version`, `rule_version`, `correlation_id`, `causation_id`, `reverses_event_id`, `actor`, `evidence`, `evidence_class`, `epoch`, `payload`, `key`, `_topic`, `_loaded_at`; freshness query: `SELECT TIMESTAMPDIFF('minute', MAX(_loaded_at), CURRENT_TIMESTAMP()) FROM STREAMLINE.OCEAN_RAW.EVENTS`; `min_complete_from`: `2026-08-26` — rows before this date are absent by design, not by loss; `projection-rebuild-drill` is the change that backfills history and closes the pre-revival gap |
 
+### Reconciliation sweep surfaces (`reconciliation-sweeps`)
+
+Per-family referee sweeps generalizing S1.3's consent sweep (`packages/schedules`): every catalog
+family gets a sweep by construction, `ownership: recorded` → the existing `export_diff`,
+`ownership: ledger` → `projection_conformance`, a referee that holds read credentials only and
+never writes (design.md decisions 1-2). The warehouse side of the comparison is a second
+pulse-committed view beside `STG_EVENTS.EVENTS`, per ADR-0006 (design.md decision 3).
+
+| Surface | Kind | Stability | Notes |
+|---|---|---|---|
+| `STREAMLINE.STG_EVENTS.SUBJECT_CURRENT_STATE` | Snowflake view | beta | grain: one row per `(subject_type, subject_key)`, latest landed event by `seq` (the ledger's own commit order, never `effective_at`/`recorded_at`); `state` is that row's `payload:to_state`, `NULL` when the winner carries none; columns: `subject_type`, `subject_key`, `seq`, `state`, `event_id`, `event_type`, `effective_at`, `occurred_at`, `recorded_at`, `_loaded_at`; floored on `_loaded_at >= min_complete_from` (`2026-08-26`, same floor as the `STG_EVENTS.EVENTS` row above — a subject whose whole history is pre-floor is absent from this view, read by the sweep as `pre_floor`, never a warehouse divergence); committed at `packages/ocean/infra/snowflake/subject_current_state.sql`, applied idempotently by `task snowflake:subject-current-state` |
+| Reconciliation sweep receipt | operator-visible contract, one JSON line per family per run (`schedules.receipt.Receipt`) | beta | fields: `date`, `family`, `kind`, `floor`, `snapshot_head`, `no_consumers`, per-consumer `agreements`/`divergences` by kind (`state`, `lag`, `missing`, `orphan`)/`uncitable`/`in_flight`/`malformed`/`pre_floor`, `subject_keys` by outcome capped at 200 with the true total beside the cap; tags `project:pulse`, `service:schedules`, `family:<name>`; never a payload value, payer identifier, or demographic. Emitted by `reconcile-sweep --family <name> [--dry-run]` (`schedules.cli`), exit 0 when rows were compared (a divergence is a receipt, not a failure) or when a family has `no_consumers`, exit 2 when nothing could be compared; ten consecutive clean daily receipts for a family are the P0 streak (`schedules.receipt.compute_streak`) — same line, whichever sweep kind produced it, is what is posted on the attended-run tracking issue (design.md decision 7) |
+
 ### Ledger command and read surfaces (`pulse-ledger-core`, DNA-784)
 
 The ledger's write path is one HTTP command API (`packages/pulse-ledger`), consumed through the

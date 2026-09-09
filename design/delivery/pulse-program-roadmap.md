@@ -170,7 +170,7 @@ Gate: Phase 2 exit; Twenty dev instance from `environment-matrix`.
 | `customerio-projection` | segment/attribute sync from ledger events | Phase 2 exit |
 | `snowflake-projection` | STG_EVENTS ledger contract (flat projection proven in S1.1 task 5.1) atop the existing `OCEAN_RAW.EVENTS` landing | Phase 2 exit |
 | `survey-engine-ingress` | PX survey responses become attributed commands/facts on the ledger's single write path — actor is the survey engine's service identity, message-level provenance, same shape as `customerio-consent-ingress`; born compliant with the `producer-ingress-policy` CI gate | Phase 2 exit + PX schema validation |
-| `reconciliation-sweeps` | per-family referee sweeps generalizing S1.3's consent sweep; corrections actor `reconciliation`; optional legacy-inference drift sentinel (legacy-harvest #4) | `snowflake-projection` |
+| `reconciliation-sweeps` | per-family referee sweeps generalizing S1.3's consent sweep; corrections actor `reconciliation` (the legacy-inference drift sentinel, legacy-harvest #4, is dropped — decision 9, superseded by P6) | `snowflake-projection` |
 | `projection-rebuild-drill` | ADR §4.6 authoritative rebuild as a drill; folded into `pulse-demo-closeout` as Demo 5's stage 6, closing the roadmap's original Demo 3 promise | `twenty-projection` |
 | `m1-retire-patient-state` | ADR §6.2: `patients` rows only from ledger projection; three read surfaces cut over; `enrollment_status` read-only; `alerts.py` bootstrap insert deleted | `twenty-projection` |
 | `billing-cutover` | the billing connector's reconciliation window (one full billing month on dev, connector vs mart, empty-or-explained sweep) and the cutover that retires the relay's Snowflake mart read; seeded 2026-09-08 in `design/delivery/billing-cutover-seed.md` from `billing-connector` decision 11 | seed gates: dbt spike files committed in `data-platform` (seed gate 3) + a cutover decision (none planned as of 2026-09-08) + serial-lane coordination with `reconciliation-sweeps` on the schedule catalog |
@@ -258,7 +258,9 @@ byte-identical.
 - **P5 — Verdict path**: `s12-verdict-relay` supersedes the clinic-rules-engine emitter; the
   qualification mart becomes a consumed contract in `docs/contracts/consumes.md`.
 - **P6 — Signal adapter superseded**: forward role by ingress adapters (ADR §4.4), backfill role
-  by the BF ladder; the drift-detector idea survives as the reconciliation sentinel option.
+  by the BF ladder. The drift-detector idea's reconciliation-sentinel option is dropped, not
+  carried forward: legacy-harvest item 4 hung on the signal adapter this decision already
+  superseded, and nothing else triggers it (`reconciliation-sweeps` design.md decision 9).
 - **P7 — TIDE retires as a name** at BF-1 — "person key", `packages/identity`.
 
 ## Open decision register
