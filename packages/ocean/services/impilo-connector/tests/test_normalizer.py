@@ -145,6 +145,14 @@ class TestPatientEvents:
         assert event.entity_type == "patient"
         assert domain == "signals"
 
+    def test_patient_payload_carries_no_enrollment_status(self) -> None:
+        """Spec "No asserted enrollment state travels the bus from a producer": only the ledger
+        projection mints or updates enrollment state, so the normalizer's `patient.*` payload
+        carries the patient identifier and source type only."""
+        event, _ = normalize_impilo_payload(make_patient_payload())
+        assert "enrollment_status" not in event.payload
+        assert set(event.payload) == {"patient_id", "source_patient_type"}
+
 
 class TestDeviceEvents:
     def test_device_inactive_produces_signal_missing(self) -> None:

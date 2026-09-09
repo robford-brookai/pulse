@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import sqlite3
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
+
+sqlite3.register_adapter(datetime, lambda d: d.astimezone(UTC).isoformat())
 
 
 @pytest.fixture
@@ -12,6 +16,66 @@ def mock_session():
     session = AsyncMock()
     session.execute = AsyncMock(return_value=None)
     return session
+
+
+# --- an alert for an unknown patient, against a real (sqlite) connection ----------------------
+#
+# The mock-session tests above prove *no SQL statement* touches `patients`; this one proves the
+# consequence against an actual table: applying `alert.created` for a patient the ledger has never
+# minted leaves `patients` empty. Only `handlers/patient_state.py` mints or updates that table
+# (spec: "Only the ledger projection mints or updates a patient row").
+
+_CREATE_TABLES = """
+CREATE TABLE patients (
+    patient_id        TEXT PRIMARY KEY,
+    clinic_id         TEXT NOT NULL,
+    enrollment_status TEXT NOT NULL,
+    updated_at        TEXT NOT NULL,
+    ledger_seq        INTEGER
+);
+CREATE TABLE alerts (
+    alert_id       TEXT PRIMARY KEY,
+    patient_id     TEXT NOT NULL,
+    alert_type     TEXT NOT NULL,
+    severity       TEXT NOT NULL,
+    status         TEXT NOT NULL,
+    source_system  TEXT NOT NULL,
+    created_at     TEXT NOT NULL,
+    updated_at     TEXT NOT NULL,
+    correlation_id TEXT NOT NULL,
+    last_event_id  TEXT
+);
+CREATE TABLE audit_log (
+    audit_id      TEXT PRIMARY KEY,
+    event_id      TEXT NOT NULL,
+    action_type   TEXT NOT NULL,
+    actor_id      TEXT NOT NULL,
+    source_system TEXT NOT NULL,
+    entity_type   TEXT NOT NULL,
+    entity_id     TEXT NOT NULL,
+    timestamp     TEXT NOT NULL,
+    detail        TEXT NOT NULL
+);
+"""
+
+
+class _SqliteSession:
+    """Just enough of an async SQLAlchemy session to run a `sa.text()` clause on SQLite —
+    the same offline stand-in `test_patient_state.py` uses."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self._conn = conn
+
+    async def execute(self, clause, params=None):
+        self._conn.execute(clause.text, params or {})
+
+
+@pytest.fixture
+def sqlite_conn():
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(_CREATE_TABLES)
+    yield conn
+    conn.close()
 
 
 def make_alert_event(alert_id="a1", patient_id="p1", clinic_id="c1"):
@@ -33,16 +97,33 @@ def make_alert_event(alert_id="a1", patient_id="p1", clinic_id="c1"):
 
 
 @pytest.mark.asyncio
+async def test_alert_for_an_unknown_patient_mints_no_patients_row(sqlite_conn):
+    """Spec scenario "An alert for an unknown patient mints nothing": the alert row lands, no
+    `patients` row is created."""
+    from src.handlers.alerts import handle_alert_created
+
+    session = _SqliteSession(sqlite_conn)
+    await handle_alert_created(make_alert_event(patient_id="pt-unknown"), session)
+
+    assert sqlite_conn.execute("SELECT * FROM patients").fetchall() == []
+    alert_rows = sqlite_conn.execute("SELECT alert_id, patient_id FROM alerts").fetchall()
+    assert alert_rows == [("a1", "pt-unknown")]
+
+
+@pytest.mark.asyncio
 async def test_handle_alert_created_maps_fields(mock_session):
-    """handle_alert_created calls session.execute with patients bootstrap + alerts upsert + audit_log."""
+    """handle_alert_created calls session.execute with alerts upsert + audit_log only — no
+    `patients` write. `patients` is minted only by the patient-state projection handler
+    (spec: "Only the ledger projection mints or updates a patient row")."""
     from src.handlers.alerts import handle_alert_created
 
     await handle_alert_created(make_alert_event(), mock_session)
-    assert mock_session.execute.call_count == 3  # patients bootstrap + alerts upsert + audit_log
+    assert mock_session.execute.call_count == 2  # alerts upsert + audit_log
 
     all_calls_str = str(mock_session.execute.call_args_list)
     assert "p1" in all_calls_str
     assert "a1" in all_calls_str
+    assert "INSERT INTO patients" not in all_calls_str
 
 
 @pytest.mark.asyncio
@@ -54,7 +135,7 @@ async def test_handle_alert_created_idempotent(mock_session):
     await handle_alert_created(event, mock_session)
     await handle_alert_created(event, mock_session)
     # Both calls complete without error; DB-level idempotency via ON CONFLICT DO UPDATE
-    assert mock_session.execute.call_count == 6  # 3 per call x 2
+    assert mock_session.execute.call_count == 4  # 2 per call x 2
 
 
 @pytest.mark.asyncio
