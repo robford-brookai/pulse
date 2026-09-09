@@ -185,6 +185,59 @@ class TestEventStoreSubscribesToEveryLiveDomain:
         assert "patient-state" in pattern["detail-type"]
 
 
+class TestGraphProjectionTakesPatientState:
+    """Task 1.4: route `patient-state` to graph-projection (design D11).
+
+    The ledger relay addresses patient-state events as `("ocean", "patient-state")`
+    (decision 11); graph-projection's rule must match that pair so the patient-state
+    projection handler (task 1.1) actually receives events. Every other consumer's
+    pattern is asserted byte-for-byte unchanged — this task edits one entry only.
+    """
+
+    #: `consumer_rule_patterns`, transcribed from the tfvars committed before this
+    #: task, for the six consumers this task must not touch.
+    _UNCHANGED_PATTERNS = {
+        "event-store": '{"detail-type":["ai-ops","alerts","audit","interactions","logistics","ops",'
+        '"outcomes","patient-state","signals","tasks","tickets"],"source":["ocean"]}',
+        "agent-worker": '{"detail-type":["tasks"],"source":["ocean"]}',
+        "call-simulator": '{"detail-type":["ai-ops"],"source":["ocean"]}',
+        "control-plane": '{"detail-type":["alerts","interactions","logistics","ops","tasks","tickets"],'
+        '"source":["ocean"]}',
+        "slack-bot": '{"detail-type":["ai-ops","interactions","ops","tasks","tickets"],"source":["ocean"]}',
+        "warehouse-sync": '{"detail-type":["ai-ops","alerts","audit","interactions","logistics","ops",'
+        '"outcomes","patient-state","signals","tasks","tickets"],"source":["ocean"]}',
+    }
+
+    def test_graph_projection_domain_set_includes_patient_state(self):
+        assert "patient-state" in CONSUMER_DOMAINS["graph-projection"]
+
+    def test_graph_projection_rule_matches_the_ledger_relay_address(self):
+        pattern = consumer_rule_pattern("graph-projection")
+
+        assert pattern_matches(pattern, EVENT_SOURCE, "patient-state")
+
+    def test_other_consumer_domain_sets_are_untouched(self):
+        for consumer, encoded in self._UNCHANGED_PATTERNS.items():
+            assert json.dumps(consumer_rule_pattern(consumer), separators=(",", ":"), sort_keys=True) == encoded
+
+    def test_committed_tfvars_carries_the_new_pattern(self):
+        """Round-trip: the committed artifact, not just the in-memory table."""
+        committed = json.loads(tfvars_path().read_text())
+        pattern = json.loads(committed["consumer_rule_patterns"]["graph-projection"])
+
+        assert pattern == consumer_rule_pattern("graph-projection")
+        assert "patient-state" in pattern["detail-type"]
+
+    def test_committed_tfvars_other_patterns_are_byte_for_byte_unchanged(self):
+        committed = json.loads(tfvars_path().read_text())
+
+        for consumer, encoded in self._UNCHANGED_PATTERNS.items():
+            committed_encoded = json.dumps(
+                json.loads(committed["consumer_rule_patterns"][consumer]), separators=(",", ":"), sort_keys=True
+            )
+            assert committed_encoded == encoded
+
+
 class TestGeneratedTerraformInput:
     """The consumer patterns reach Terraform through the same generated artifact."""
 

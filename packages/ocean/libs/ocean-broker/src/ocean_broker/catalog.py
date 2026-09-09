@@ -99,6 +99,7 @@ CONSUMER_DOMAINS: Mapping[ConsumerName, tuple[DomainName, ...]] = {
         "tasks",
         "interactions",
         "outcomes",
+        "patient-state",
         "tickets",
         "logistics",
         "ai-ops",
