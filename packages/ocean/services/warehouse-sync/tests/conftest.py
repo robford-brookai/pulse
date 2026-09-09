@@ -35,6 +35,11 @@ import json
 from typing import Any
 
 import pytest
+from snowflake.connector import errors as snowflake_errors
+
+# The connector's errno for "Authentication token has expired" — the one Snowflake failure the
+# consume loop is allowed to recover from by reconnecting (DNA-1259, DNA-1305).
+TOKEN_EXPIRED_ERRNO = 390114
 
 # --------------------------------------------------------------------------
 # Stage registry — the ordered MECE taxonomy. test_warehouse_sync.py states
@@ -49,6 +54,7 @@ STAGES: list[tuple[str, str, str]] = [
     ("S5-redrive", "redrive", "failed batches redeliver and converge"),
     ("S6-cursor", "cursor", "receipt-handle (cursor) handling on the failure path"),
     ("S7-shutdown", "shutdown", "shutdown with a partial batch"),
+    ("S8-liveness", "liveness", "token expiry, reconnect, and the health heartbeat"),
 ]
 
 _MARKER_TO_STAGE = {marker: stage_id for stage_id, marker, _ in STAGES}
@@ -208,6 +214,13 @@ class FakeCursor:
     def execute(self, sql: str, params: list[str]) -> None:
         conn = self._conn
         conn.merge_attempts += 1
+        if conn.fail_next_merges_token_expired > 0:
+            conn.fail_next_merges_token_expired -= 1
+            conn.call_log.append(("token_expired", len(params) // 2))
+            raise snowflake_errors.DatabaseError(
+                msg="Authentication token has expired. The user must authenticate again.",
+                errno=TOKEN_EXPIRED_ERRNO,
+            )
         assert "MERGE INTO" in sql and "WHEN NOT MATCHED THEN INSERT" in sql, (
             "warehouse-sync no longer issues a MERGE...WHEN NOT MATCHED INSERT; "
             "this fake (and the duplicate-safety property) emulate that exact statement"
@@ -241,12 +254,22 @@ class FakeSnowflakeConnection:
         self.call_log: list[Any] = call_log if call_log is not None else []
         self.merge_attempts = 0
         self.fail_next_merges = 0
+        # Each of these makes the next N merges raise the connector's 390114 DatabaseError —
+        # a session token that lapsed on an otherwise-open connection.
+        self.fail_next_merges_token_expired = 0
         self.closed = False
+        self.close_attempts = 0
+        # A connection whose token has expired can throw from close() too; the loop must not
+        # let that replace the error it was already reporting.
+        self.close_raises = False
 
     def cursor(self) -> FakeCursor:
         return FakeCursor(self)
 
     def close(self) -> None:
+        self.close_attempts += 1
+        if self.close_raises:
+            raise RuntimeError("synthetic snowflake close failure")
         self.closed = True
 
 
@@ -254,9 +277,11 @@ class ScriptedSqsClient:
     """Plays back scripted receive_message results and records deletions.
 
     Each script step is a dict: ``messages`` (list of SQS message dicts),
-    ``advance`` (seconds to move the fake clock before returning). When the
-    script is exhausted the next receive raises CancelledError — the same
-    signal a real shutdown delivers to the loop's await.
+    ``advance`` (seconds to move the fake clock before returning), and
+    ``error`` (an exception instance the receive raises instead of returning,
+    for the transient-vs-bug distinction in S8). When the script is exhausted
+    the next receive raises CancelledError — the same signal a real shutdown
+    delivers to the loop's await.
     """
 
     def __init__(
@@ -279,6 +304,10 @@ class ScriptedSqsClient:
             raise asyncio.CancelledError
         step = self.script.pop(0)
         self.clock.advance(step.get("advance", 0.0))
+        error = step.get("error")
+        if error is not None:
+            self.call_log.append(("receive_error", type(error).__name__))
+            raise error
         self.call_log.append(("receive", len(step.get("messages", []))))
         return {"Messages": step.get("messages", [])}
 
@@ -329,31 +358,71 @@ def clock() -> FakeClock:
     return FakeClock()
 
 
+@pytest.fixture(autouse=True)
+def _reset_liveness_state():
+    """The heartbeat and consumer-task handles are module globals ``/health`` reads.
+
+    Left over from one test they would decide another's verdict, so every test starts from a
+    process that has not consumed anything yet.
+    """
+    import src.main as main
+
+    main._heartbeat.reset()
+    main._consumer_task = None
+    yield
+    main._heartbeat.reset()
+    main._consumer_task = None
+
+
 @pytest.fixture
 def harness(monkeypatch: pytest.MonkeyPatch, clock: FakeClock):
     """Wire the fakes into src.main and return a factory for consume-loop runs."""
     import src.main as main
 
     call_log: list[Any] = []
-    sf = FakeSnowflakeConnection(call_log)
-    monkeypatch.setattr(main, "_connect_snowflake", lambda: sf)
-    monkeypatch.setattr(main.time, "monotonic", clock.monotonic)
+    connections: list[FakeSnowflakeConnection] = [FakeSnowflakeConnection(call_log)]
 
     class Harness:
         def __init__(self) -> None:
             self.main = main
-            self.sf = sf
             self.call_log = call_log
             self.clock = clock
+            self.connections = connections
+            self.connect_calls = 0
+
+        @property
+        def sf(self) -> FakeSnowflakeConnection:
+            """The first connection — the one every pre-reconnect test means by "Snowflake"."""
+            return self.connections[0]
+
+        def queue_connection(self) -> FakeSnowflakeConnection:
+            """Pre-seed the connection a reconnect will hand back, so a test can arm it."""
+            conn = FakeSnowflakeConnection(call_log)
+            self.connections.append(conn)
+            return conn
+
+        def connect(self) -> FakeSnowflakeConnection:
+            """Stand-in for _connect_snowflake: a fresh connection per reconnect."""
+            self.connect_calls += 1
+            if self.connect_calls > len(self.connections):
+                self.queue_connection()
+            return self.connections[self.connect_calls - 1]
 
         def client(self, script: list[dict[str, Any]]) -> ScriptedSqsClient:
             return ScriptedSqsClient(script, clock, call_log)
 
         async def run(self, client: ScriptedSqsClient) -> None:
+            # A run is a consumer lifetime: it starts from the first connection again, the way
+            # a restarted pod reconnects to the same warehouse. Only a mid-run reconnect
+            # advances to the next one.
+            self.connect_calls = 0
             await main._consume_loop("https://sqs.test/000000000000/warehouse-sync", sqs_client=client)
 
         async def run_to_shutdown(self, client: ScriptedSqsClient) -> None:
             with pytest.raises(asyncio.CancelledError):
                 await self.run(client)
 
-    return Harness()
+    harness = Harness()
+    monkeypatch.setattr(main, "_connect_snowflake", harness.connect)
+    monkeypatch.setattr(main.time, "monotonic", clock.monotonic)
+    return harness

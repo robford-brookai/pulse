@@ -11,8 +11,10 @@ from typing import Any
 import snowflake.connector
 import structlog
 import uvicorn
+from botocore.exceptions import BotoCoreError, ClientError
 from cryptography.hazmat.primitives import serialization
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
+from snowflake.connector.errors import DatabaseError as SnowflakeDatabaseError
 
 log = structlog.get_logger()
 
@@ -21,12 +23,109 @@ BATCH_TIMEOUT_S = 10.0
 SQS_MAX_MESSAGES = 10
 SQS_WAIT_TIME_S = 5
 SQS_DELETE_CHUNK = 10
+
+# Snowflake session tokens expire on a connection that is otherwise open and healthy. The
+# connector reports that as errno 390114 ("Authentication token has expired"); on dev it killed
+# the consumer outright and left a Running pod behind a backing-up queue (DNA-1259, DNA-1305).
+TOKEN_EXPIRED_ERRNO = 390114
+
+# Blocking-call bounds. Every Snowflake call here is synchronous and runs via asyncio.to_thread;
+# without a timeout one can hang forever, and the consume loop then wedges without the task ever
+# completing — the failure mode _log_consumer_exit cannot see.
+SNOWFLAKE_LOGIN_TIMEOUT_S = int(os.environ.get("SNOWFLAKE_LOGIN_TIMEOUT_S", "30"))
+SNOWFLAKE_NETWORK_TIMEOUT_S = int(os.environ.get("SNOWFLAKE_NETWORK_TIMEOUT_S", "120"))
+
+# How stale the consume loop's heartbeat may get before /health reports 503. The loop beats every
+# iteration, including idle ones, so the normal ceiling is one long poll (SQS_WAIT_TIME_S = 5s)
+# plus a flush. 30s is six poll cycles — far above any healthy iteration, and well under the
+# liveness probe's own failure window (periodSeconds 10 x failureThreshold 6 = 60s), so a wedge
+# is restarted inside ~90s instead of never.
+HEALTH_STALE_AFTER_S = float(os.environ.get("HEALTH_STALE_AFTER_S", "30"))
+
 app = FastAPI(title="warehouse-sync", version="0.1.0")
 
 
+class _Heartbeat:
+    """Monotonic liveness state: stamped by the consume loop, read by ``/health``.
+
+    ``last_beat`` advances on every loop iteration — a poll that returns nothing counts, because
+    an idle queue is a healthy state and must not read as death. ``last_flush`` advances only on
+    a committed MERGE and is reported for diagnosis, but liveness does not turn on it: a queue
+    with nothing in it never flushes.
+    """
+
+    def __init__(self) -> None:
+        self.last_beat: float | None = None
+        self.last_flush: float | None = None
+
+    def beat(self, *, flushed: bool = False) -> None:
+        now = time.monotonic()
+        self.last_beat = now
+        if flushed:
+            self.last_flush = now
+
+    def reset(self) -> None:
+        self.last_beat = None
+        self.last_flush = None
+
+    def age(self) -> float | None:
+        if self.last_beat is None:
+            return None
+        return time.monotonic() - self.last_beat
+
+    def flush_age(self) -> float | None:
+        if self.last_flush is None:
+            return None
+        return time.monotonic() - self.last_flush
+
+
+_heartbeat = _Heartbeat()
+_consumer_task: asyncio.Task | None = None
+
+
 @app.get("/health")
-async def health() -> dict:
-    return {"status": "ok", "service": "warehouse-sync", "version": "0.1.0"}
+async def health(response: Response) -> dict:
+    """Liveness *and* readiness for this service.
+
+    Before DNA-1259 this returned a static ok, so uvicorn advertised a healthy service over a
+    dead consumer. It now answers the only question worth asking of this pod: is the consume
+    loop still turning? A stale heartbeat, or a consumer task that has finished, is a 503 with a
+    short reason.
+
+    Readiness shares this endpoint rather than getting a simpler consumer-alive check of its own:
+    the service takes no ingress (no LB, one replica), so readiness only gates rollout
+    completion, and a pod that is up but not consuming should not be reported ready either. One
+    endpoint, one definition of healthy, nothing to drift apart.
+    """
+    body: dict[str, Any] = {"status": "ok", "service": "warehouse-sync", "version": "0.1.0"}
+
+    task = _consumer_task
+    if task is not None and task.done():
+        log.warning("health_stale", reason="consumer_stopped")
+        response.status_code = 503
+        return {**body, "status": "unhealthy", "reason": "consumer_stopped"}
+
+    age = _heartbeat.age()
+    if age is None:
+        # No poll has completed yet. The probe's initialDelaySeconds covers this window; a
+        # consumer that dies inside it is caught by the task check above.
+        return {**body, "status": "starting"}
+
+    if age > HEALTH_STALE_AFTER_S:
+        log.warning("health_stale", heartbeat_age_s=round(age, 1), threshold_s=HEALTH_STALE_AFTER_S)
+        response.status_code = 503
+        return {
+            **body,
+            "status": "unhealthy",
+            "reason": "heartbeat_stale",
+            "heartbeat_age_s": round(age, 1),
+            "threshold_s": HEALTH_STALE_AFTER_S,
+        }
+
+    flush_age = _heartbeat.flush_age()
+    body["heartbeat_age_s"] = round(age, 1)
+    body["last_flush_age_s"] = None if flush_age is None else round(flush_age, 1)
+    return body
 
 
 def _connect_snowflake() -> snowflake.connector.SnowflakeConnection:
@@ -45,6 +144,10 @@ def _connect_snowflake() -> snowflake.connector.SnowflakeConnection:
         warehouse="OCEAN_WH",
         database="STREAMLINE",
         schema="OCEAN_RAW",
+        # Renew the session token in the background rather than let it lapse (DNA-1259).
+        client_session_keep_alive=True,
+        login_timeout=SNOWFLAKE_LOGIN_TIMEOUT_S,
+        network_timeout=SNOWFLAKE_NETWORK_TIMEOUT_S,
     )
 
 
@@ -69,6 +172,16 @@ def _parse_message(msg: dict[str, Any]) -> tuple[str, str, str] | None:
     return json.dumps(detail), domain, receipt
 
 
+def _is_token_expired(exc: BaseException) -> bool:
+    """True for the one Snowflake failure a reconnect can fix: an expired session token.
+
+    ``ProgrammingError`` subclasses ``DatabaseError``, so both arrive here. Every other
+    Snowflake error keeps the existing exit-nonzero path — retrying it would only wedge the
+    loop against a real fault.
+    """
+    return isinstance(exc, SnowflakeDatabaseError) and getattr(exc, "errno", None) == TOKEN_EXPIRED_ERRNO
+
+
 async def _flush_batch(
     sf_conn: snowflake.connector.SnowflakeConnection,
     batch: list[tuple[str, str]],
@@ -78,6 +191,9 @@ async def _flush_batch(
     A row whose event_id already exists is skipped, never updated — so a message
     redelivered after a lost delete cannot produce a duplicate row. Raises on
     failure: the caller must leave the messages undeleted so they are redelivered.
+
+    The connector is synchronous, so both the execute and the cursor close run on a worker
+    thread; a blocking call here would otherwise pin the event loop uvicorn serves on.
     """
     if not batch:
         return
@@ -95,10 +211,47 @@ async def _flush_batch(
         params: list[str] = []
         for data, domain in batch:
             params.extend([data, domain])
-        cur.execute(sql, params)
+        await asyncio.to_thread(cur.execute, sql, params)
     finally:
-        cur.close()
+        await asyncio.to_thread(cur.close)
     log.info("batch_merged", count=len(batch))
+
+
+async def _close_snowflake(sf_conn: snowflake.connector.SnowflakeConnection) -> None:
+    """Close a connection without letting the close itself become the reported failure.
+
+    An expired token can make ``close()`` raise. Inside a ``finally`` that swaps the real cause
+    for a connector teardown error, and ``consumer_exited`` then reports the wrong thing.
+    """
+    try:
+        await asyncio.to_thread(sf_conn.close)
+    except Exception:
+        log.warning("snowflake_close_failed", exc_info=True)
+
+
+async def _flush_with_reconnect(
+    sf_conn: snowflake.connector.SnowflakeConnection,
+    batch: list[tuple[str, str]],
+) -> snowflake.connector.SnowflakeConnection:
+    """Flush the batch; on an expired session token reconnect once and retry it.
+
+    Returns the connection to keep using — the same one normally, a fresh one after a reconnect.
+    A second consecutive 390114 is not retried again: it propagates, and the consumer takes the
+    process down so the platform restarts it with a fresh session.
+    """
+    try:
+        await _flush_batch(sf_conn, batch)
+        return sf_conn
+    except Exception as exc:
+        if not _is_token_expired(exc):
+            raise
+        log.warning("snowflake_token_expired", errno=TOKEN_EXPIRED_ERRNO, count=len(batch))
+
+    await _close_snowflake(sf_conn)
+    fresh = await asyncio.to_thread(_connect_snowflake)
+    log.info("snowflake_reconnected")
+    await _flush_batch(fresh, batch)
+    return fresh
 
 
 async def _delete_messages(sqs_client: Any, queue_url: str, receipts: list[str]) -> None:
@@ -123,8 +276,13 @@ async def _consume_loop(queue_url: str, *, sqs_client: Any = None) -> None:
     At-least-once, delete-after-success: a failed flush raises, the messages stay
     on the queue past their visibility timeout, and repeated failure reaches the
     queue's redrive threshold and its DLQ (task 7.2).
+
+    Every iteration stamps the heartbeat ``/health`` reads, idle ones included. That is what
+    distinguishes the two ways this loop stops serving: a task that *dies* is caught by
+    ``_log_consumer_exit``; a task that *wedges* — blocked forever inside a connector call —
+    never completes, so only a stalling heartbeat can surface it (DNA-1305).
     """
-    sf_conn = _connect_snowflake()
+    sf_conn = await asyncio.to_thread(_connect_snowflake)
     owns_client = sqs_client is None
     if owns_client:
         import aioboto3
@@ -132,6 +290,7 @@ async def _consume_loop(queue_url: str, *, sqs_client: Any = None) -> None:
         session = aioboto3.Session()
         sqs_client = await session.client("sqs").__aenter__()
     log.info("consumer_started", queue_url=queue_url)
+    _heartbeat.beat()
 
     batch: list[tuple[str, str]] = []
     receipts: list[str] = []
@@ -147,10 +306,16 @@ async def _consume_loop(queue_url: str, *, sqs_client: Any = None) -> None:
                 )
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except (BotoCoreError, ClientError):
+                # Transport and API faults are what this arm exists for: transient, and the next
+                # poll retries them. Anything else is a bug in this process and must propagate —
+                # swallowing it is how a broken loop spins forever without consuming (DNA-1305).
                 log.exception("sqs_receive_failed", queue_url=queue_url)
+                _heartbeat.beat()
                 await asyncio.sleep(SQS_WAIT_TIME_S)
                 continue
+
+            _heartbeat.beat()
 
             for msg in response.get("Messages", []):
                 parsed = _parse_message(msg)
@@ -163,7 +328,7 @@ async def _consume_loop(queue_url: str, *, sqs_client: Any = None) -> None:
             elapsed = time.monotonic() - last_flush
             if len(batch) >= BATCH_SIZE or (batch and elapsed >= BATCH_TIMEOUT_S):
                 try:
-                    await _flush_batch(sf_conn, batch)
+                    sf_conn = await _flush_with_reconnect(sf_conn, batch)
                 except Exception:
                     # Nothing to fall back to. Stop without deleting: the batch is
                     # redelivered, and repeated failure reaches the queue's redrive
@@ -174,10 +339,12 @@ async def _consume_loop(queue_url: str, *, sqs_client: Any = None) -> None:
                 batch.clear()
                 receipts.clear()
                 last_flush = time.monotonic()
+                _heartbeat.beat(flushed=True)
     finally:
         if owns_client:
             await sqs_client.__aexit__(None, None, None)
-        sf_conn.close()
+        await _close_snowflake(sf_conn)
+        _heartbeat.reset()
         log.info("consumer_closed")
 
 
@@ -194,6 +361,9 @@ def _log_consumer_exit(task: asyncio.Task) -> None:
     Running pod (DNA-1259). Exiting nonzero makes the platform restart the pod, which
     re-authenticates fresh — a Running pod is a consuming pod again. Orderly cancellation
     (shutdown) is not a death and exits nothing.
+
+    This covers a task that *completes*. A task that wedges never reaches here at all; the
+    heartbeat behind ``/health`` and the liveness probe cover that half (DNA-1305).
     """
     if task.cancelled():
         return
@@ -205,10 +375,12 @@ def _log_consumer_exit(task: asyncio.Task) -> None:
 
 @app.on_event("startup")
 async def startup() -> None:
+    global _consumer_task
     queue_url = os.environ["SQS_QUEUE_URL"]
     log.info("starting_consumer", queue_url=queue_url)
     task = asyncio.create_task(_consume_loop(queue_url))
     task.add_done_callback(_log_consumer_exit)
+    _consumer_task = task
 
 
 if __name__ == "__main__":

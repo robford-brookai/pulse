@@ -41,6 +41,10 @@ MODULE_DISTS: dict[str, set[str]] = {
     "httpx": {"httpx", "anthropic"},
     "snowflake": {"snowflake-connector-python"},
     "boto3": {"boto3", "aioboto3"},
+    # botocore is the exception layer of the same client aioboto3 wraps — a service that
+    # catches ClientError/BotoCoreError to narrow a receive loop (warehouse-sync, DNA-1305)
+    # cannot have one installed without the other.
+    "botocore": {"botocore", "boto3", "aioboto3"},
 }
 
 OCEAN_LIBS = {"ocean-events", "ocean-broker", "ocean-connector-mcp"}

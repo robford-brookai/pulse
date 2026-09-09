@@ -24,6 +24,16 @@ there applies here).
   `src/main.py` by design — the MERGE target is the published contract, not configuration.
 - No LB config: the service serves only its own `/health` on 8008 in-cluster; the consumer is
   a background task started by the app's startup hook.
+- **`livenessProbe` and `readinessProbe` on `/health`:8008**, the command-api shapes. `/health`
+  is not a static ok — it reports the consume loop's heartbeat and returns 503 when that
+  heartbeat is older than `HEALTH_STALE_AFTER_S` (default 30s, six long-poll cycles) or when
+  the consumer task has finished. Liveness tolerates 6 failures at 10s (a 60s window), so a
+  wedged pod restarts inside roughly 90s instead of sitting `1/1 Running` behind a backing-up
+  queue (DNA-1259, DNA-1305). Readiness shares the same endpoint deliberately: the service
+  takes no ingress, so readiness only gates rollout completion, and a pod that is up but not
+  consuming should not read as ready either. Raising `HEALTH_STALE_AFTER_S` above the liveness
+  window (`periodSeconds x failureThreshold`) re-opens the blind spot — a test asserts it stays
+  under.
 - **Create-time quirk** (same as the relay): `duploctl service apply` on a not-yet-existing
   service rejects an object-valued `OtherDockerConfig` — render with
   `jq '.OtherDockerConfig |= tojson'` for the create; updates accept the object form.
