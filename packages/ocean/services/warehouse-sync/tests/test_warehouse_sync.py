@@ -38,6 +38,13 @@ S7-shutdown      shutdown      Cancellation with a partial batch: the batch is
                                neither flushed nor deleted (it redelivers), the
                                Snowflake connection closes, an injected SQS client
                                is not closed by the loop.
+S8-liveness      liveness      Staying alive rather than dying cleanly: an expired
+                               Snowflake session token (390114) reconnects once and
+                               lands the batch, a second consecutive one exits, a
+                               non-transport receive error propagates instead of
+                               spinning, a close() that throws does not replace the
+                               error being reported, and /health turns 503 on a
+                               stale heartbeat (DNA-1259, DNA-1305).
 ===============  ============  =====================================================
 
 Deliberately empty cells (stated so a future reader knows they are empty on
@@ -47,9 +54,10 @@ purpose, not by omission):
   aioboto3 client. aioboto3 is a service-image dependency, not a workspace
   test dependency; the injected-client seam is the tested contract, matching
   every other converted service.
-- *HTTP surface* (``/health``, startup wiring) — not consume-loop behaviour;
-  one process-level smoke belongs to the compose/deploy layer
-  (``task warehouse:smoke``), not this taxonomy.
+- *HTTP surface* beyond ``/health``'s verdict — startup wiring and the served
+  socket. ``/health`` itself is now in scope (S8): it reports the consume
+  loop's heartbeat, so it is consume-loop behaviour read through a different
+  door. Serving it over a real socket stays a process-level smoke.
 - *Snowflake connectivity* (``_connect_snowflake``) — exercises the vendor
   driver and key loading, meaningless against a fake; covered by the same
   smoke path.
@@ -70,8 +78,12 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from botocore.exceptions import EndpointConnectionError
+from fastapi import Response
+from fastapi.testclient import TestClient
+from snowflake.connector import errors as snowflake_errors
 
-from .conftest import FakeSnowflakeConnection, make_message
+from .conftest import TOKEN_EXPIRED_ERRNO, FakeSnowflakeConnection, make_message
 
 # ---------------------------------------------------------------------------
 # S1-ordering — receive/flush/delete ordering
@@ -484,6 +496,177 @@ async def test_shutdown_after_clean_flush_leaves_nothing_pending(harness, stage_
     assert sorted(harness.sf.table) == ["evt-510"]
     assert client.deleted == ["rh-evt-510-d0"]
     stage_log.observe(table_rows=sorted(harness.sf.table), pending_batch=0)
+
+
+# ---------------------------------------------------------------------------
+# S8-liveness — token expiry, reconnect, and the health heartbeat
+#
+# S5 covers the consumer *dying*, which _log_consumer_exit turns into a restart.
+# This stage covers the two things that death handler cannot see: a failure the
+# loop should survive rather than die of (an expired session token), and a loop
+# that stops turning without ever completing its task (DNA-1259, DNA-1305).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.liveness
+async def test_expired_token_reconnects_once_and_the_batch_lands(harness, stage_log):
+    """The dev outage in one test: the session token lapses mid-flush, and the batch must
+    still land. One reconnect, one retry, no lost messages, no dead consumer."""
+    harness.sf.fail_next_merges_token_expired = 1
+    client = harness.client([{"messages": [make_message("evt-700")], "advance": 11.0}])
+
+    await harness.run_to_shutdown(client)
+
+    assert harness.connect_calls == 2, "exactly one reconnect — not a redial per flush"
+    assert sorted(harness.connections[1].table) == ["evt-700"], "the retry landed on the new connection"
+    assert harness.sf.table == {}, "nothing landed on the expired one"
+    assert harness.sf.close_attempts == 1, "the expired connection is closed, not leaked"
+    assert client.deleted == ["rh-evt-700-d0"], "delete still follows a committed MERGE"
+    stage_log.observe(
+        connect_calls=harness.connect_calls,
+        table_rows=sorted(harness.connections[1].table),
+        deleted_receipts=client.deleted,
+    )
+
+
+@pytest.mark.liveness
+async def test_second_consecutive_token_expiry_exits_nonzero(harness, monkeypatch, stage_log):
+    """The retry is not retried. A fresh connection that expires immediately is not a token
+    problem any more, so the loop takes the process down and lets the platform restart it."""
+    harness.sf.fail_next_merges_token_expired = 1
+    harness.queue_connection().fail_next_merges_token_expired = 1
+
+    terminated: list[bool] = []
+    monkeypatch.setattr(harness.main, "_terminate_process", lambda: terminated.append(True))
+    client = harness.client([{"messages": [make_message("evt-701")], "advance": 11.0}])
+
+    task = asyncio.get_running_loop().create_task(harness.run(client))
+    with pytest.raises(snowflake_errors.DatabaseError) as caught:
+        await task
+    harness.main._log_consumer_exit(task)
+
+    assert caught.value.errno == TOKEN_EXPIRED_ERRNO
+    assert harness.connect_calls == 2, "one reconnect only; the second expiry is not retried"
+    assert terminated == [True], "a consumer that cannot re-authenticate must exit nonzero"
+    assert client.deleted == [], "an unflushed batch is never acknowledged"
+    stage_log.observe(connect_calls=harness.connect_calls, deleted_receipts=[], terminated=True)
+
+
+@pytest.mark.liveness
+async def test_transient_receive_error_is_retried(harness, monkeypatch, stage_log):
+    """The narrow except around receive_message exists for transport faults: a botocore error
+    is logged, slept off, and retried, and the next poll flows normally."""
+    monkeypatch.setattr(harness.main, "SQS_WAIT_TIME_S", 0)
+    client = harness.client([
+        {"error": EndpointConnectionError(endpoint_url="https://sqs.test/queue"), "advance": 0.0},
+        {"messages": [make_message("evt-710")], "advance": 11.0},
+    ])
+
+    await harness.run_to_shutdown(client)
+
+    assert sorted(harness.sf.table) == ["evt-710"], "the loop survived the transport fault"
+    stage_log.observe(table_rows=sorted(harness.sf.table), call_order=[op for op, _ in harness.call_log])
+
+
+@pytest.mark.liveness
+async def test_non_botocore_receive_error_propagates(harness, stage_log):
+    """A bug in this process is not a transport fault. Before DNA-1305 the bare `except
+    Exception` swallowed it and re-polled forever: a pod Running, logging, consuming nothing.
+    It must now leave the loop, so _log_consumer_exit can take the process down."""
+    client = harness.client([{"error": TypeError("receive_message() got an unexpected keyword"), "advance": 0.0}])
+
+    with pytest.raises(TypeError):
+        await harness.run(client)
+
+    assert harness.sf.closed is True, "the connection is still released on the way out"
+    stage_log.observe(propagated="TypeError", snowflake_closed=True)
+
+
+@pytest.mark.liveness
+async def test_close_failure_does_not_mask_the_original_error(harness, stage_log):
+    """An expired connection can throw from close() too. If the `finally` lets that escape, the
+    consumer_exited log names a teardown error and the real cause is gone."""
+    harness.sf.fail_next_merges = 1
+    harness.sf.close_raises = True
+    client = harness.client([{"messages": [make_message("evt-720")], "advance": 11.0}])
+
+    with pytest.raises(RuntimeError, match="synthetic snowflake failure"):
+        await harness.run(client)
+
+    assert harness.sf.close_attempts == 1, "close was attempted, and its failure absorbed"
+    stage_log.observe(reported_error="synthetic snowflake failure", close_attempts=1)
+
+
+@pytest.mark.liveness
+def test_health_turns_503_when_the_heartbeat_goes_stale(harness, stage_log):
+    """The probe surface. A heartbeat inside the window is 200; one older than
+    HEALTH_STALE_AFTER_S is 503 with a reason, which is what makes the liveness probe able to
+    restart a wedged pod instead of watching it stay 1/1 Running."""
+    main = harness.main
+    main._heartbeat.beat()
+    http = TestClient(main.app)
+
+    harness.clock.advance(5.0)
+    fresh = http.get("/health")
+    assert fresh.status_code == 200
+    assert fresh.json()["status"] == "ok"
+
+    harness.clock.advance(main.HEALTH_STALE_AFTER_S + 1.0)
+    stale = http.get("/health")
+    assert stale.status_code == 503
+    assert stale.json()["reason"] == "heartbeat_stale"
+    stage_log.observe(fresh_status=fresh.status_code, stale_status=stale.status_code)
+
+
+@pytest.mark.liveness
+async def test_health_turns_503_when_the_consumer_task_has_finished(harness, stage_log):
+    """A heartbeat can look fresh for a moment after the consumer stops. The task's own state
+    settles it: a finished consumer is never healthy, whatever the clock says."""
+    main = harness.main
+    main._heartbeat.beat()
+
+    async def _stopped() -> None:
+        return None
+
+    task = asyncio.get_running_loop().create_task(_stopped())
+    await task
+    main._consumer_task = task
+
+    response = Response()
+    body = await main.health(response)
+
+    assert response.status_code == 503
+    assert body["reason"] == "consumer_stopped"
+    stage_log.observe(status=response.status_code, reason=body["reason"])
+
+
+@pytest.mark.liveness
+async def test_idle_polls_keep_the_heartbeat_fresh(harness, monkeypatch, stage_log):
+    """The gap that hid the outage: with an empty queue nothing flushes, so a heartbeat derived
+    from flushes would age into a false 503 on a perfectly healthy idle service. The beat is per
+    poll — every iteration, including the ones that return nothing."""
+    beats: list[float] = []
+    real_beat = harness.main._heartbeat.beat
+
+    def _spy(**kwargs: Any) -> None:
+        real_beat(**kwargs)
+        beats.append(harness.clock.now)
+
+    monkeypatch.setattr(harness.main._heartbeat, "beat", _spy)
+
+    client = harness.client([
+        {"messages": [], "advance": 20.0},
+        {"messages": [], "advance": 20.0},
+    ])
+    await harness.run_to_shutdown(client)
+
+    assert harness.sf.merge_attempts == 0, "an idle queue never touches Snowflake"
+    assert beats == [0.0, 20.0, 40.0], "one beat at start, one per idle poll"
+    gaps = [b - a for a, b in itertools.pairwise(beats)]
+    assert max(gaps) <= harness.main.HEALTH_STALE_AFTER_S, (
+        "an idle loop must beat faster than /health goes stale, or idling reads as wedged"
+    )
+    stage_log.observe(merge_attempts=0, idle_polls=2, heartbeat_gaps=gaps)
 
 
 # ---------------------------------------------------------------------------

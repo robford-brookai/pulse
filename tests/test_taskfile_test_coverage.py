@@ -69,7 +69,8 @@ def test_services_without_tests_are_the_known_one():
     """Only mongodb-connector ships no tests (stated exclusion).
 
     It has no suite to run — that is a gap in the service, not in the runner
-    (flagged in DNA-781's handoff; warehouse-sync left this list at task 5.9).
+    (flagged in DNA-781's handoff; warehouse-sync left this list at task 5.9,
+    and DNA-1305 corrected the Taskfile comment that still named it).
     A second name appearing here means a new or converted service shipped
     untested; add tests, don't extend this list.
     """
