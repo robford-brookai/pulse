@@ -36,7 +36,7 @@ never a worktree.
       Opus because the handler decides which ledger events create patients; a wrong rule mints
       the wrong subjects for every clinic.
 
-- [ ] 1.2 Schema: an Alembic migration under `packages/ocean/infra/postgres/versions/` that drops
+- [x] 1.2 Schema: an Alembic migration under `packages/ocean/infra/postgres/versions/` that drops
       `enrollment_status`'s server default, adds `ledger_seq BIGINT NULL`, and drops and recreates
       `patient_graph_summary` with `ledger_seq` in the select and group-by plus its unique index;
       `models.py` loses `default="pending"` and gains `ledger_seq` (design.md decisions 3, 7).
