@@ -107,7 +107,7 @@ def test_chain_applies_from_base_to_head(applied_head):
     """Every migration, in order, against a real Postgres."""
     with applied_head.connect() as conn:
         version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
-    assert version == "0019"
+    assert version == "0021"
 
 
 def test_chain_downgrades_back_to_base(alembic_config, applied_head, migration_db):
@@ -156,6 +156,76 @@ def test_append_only_outcomes_has_no_guard_column(applied_head):
             {"column": GUARD_COLUMN},
         ).one_or_none()
     assert found is None
+
+
+# --- 0021: patients.ledger_seq, the patient-state projection's citation ----
+
+
+def test_enrollment_status_has_no_default(applied_head):
+    """The projection always supplies a value; a default is a trap for the next writer."""
+    with applied_head.connect() as conn:
+        column_default = conn.execute(
+            sa.text(
+                "SELECT column_default FROM information_schema.columns "
+                "WHERE table_name = 'patients' AND column_name = 'enrollment_status'"
+            )
+        ).scalar_one()
+    assert column_default is None
+
+
+def test_ledger_seq_present_and_nullable(applied_head):
+    with applied_head.connect() as conn:
+        row = conn.execute(
+            sa.text(
+                "SELECT is_nullable, data_type FROM information_schema.columns "
+                "WHERE table_name = 'patients' AND column_name = 'ledger_seq'"
+            )
+        ).one_or_none()
+    assert row is not None, "patients.ledger_seq is missing — the projection's citation column"
+    is_nullable, data_type = row
+    assert is_nullable == "YES", "A legacy row carries no citation — null must be allowed"
+    assert data_type == "bigint"
+
+
+def test_legacy_row_keeps_its_status_and_reads_ledger_seq_null(applied_head):
+    """A row written before 0021 (no ledger_seq to supply) is untouched by the migration."""
+    with applied_head.connect() as conn:
+        conn.execute(
+            sa.text(
+                "INSERT INTO patients (patient_id, clinic_id, enrollment_status, updated_at) "
+                "VALUES ('legacy-1', 'clinic-1', 'pending', now())"
+            )
+        )
+        conn.commit()
+        status, ledger_seq = conn.execute(
+            sa.text("SELECT enrollment_status, ledger_seq FROM patients WHERE patient_id = 'legacy-1'")
+        ).one()
+    assert status == "pending"
+    assert ledger_seq is None
+
+
+def test_patient_graph_summary_exposes_ledger_seq(applied_head):
+    """information_schema.columns does not list materialized view columns; read pg_attribute."""
+    with applied_head.connect() as conn:
+        found = conn.execute(
+            sa.text(
+                "SELECT 1 FROM pg_attribute "
+                "WHERE attrelid = 'patient_graph_summary'::regclass "
+                "AND attname = 'ledger_seq' AND attnum > 0 AND NOT attisdropped"
+            )
+        ).one_or_none()
+    assert found is not None, "patient_graph_summary must expose ledger_seq per patient"
+
+
+def test_patient_graph_summary_unique_index_survives_recreate(applied_head):
+    with applied_head.connect() as conn:
+        found = conn.execute(
+            sa.text(
+                "SELECT 1 FROM pg_indexes WHERE tablename = 'patient_graph_summary' "
+                "AND indexname = 'idx_patient_graph_summary_pk'"
+            )
+        ).one_or_none()
+    assert found is not None
 
 
 def test_guard_column_is_not_indexed(applied_head):
