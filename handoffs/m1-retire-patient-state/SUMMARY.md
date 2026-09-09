@@ -1,10 +1,10 @@
 # Handoff Summary: m1-retire-patient-state
 
-Collected 3 handoff(s).
+Collected 6 handoff(s).
 
 ## m1-retire-patient-state-task-001
 
-### Spec Updates (proposed; doc-updater owns the files)
+## Spec Updates
 
 1. **design.md decision 2 addendum — `clinic_id` source on mint.** `patients.clinic_id` is
    `TEXT NOT NULL` with no default (`0003_graph_tables.py:25`) and the ledger does not assert it,
@@ -37,17 +37,6 @@ Collected 3 handoff(s).
 4. **Not projected, unchanged.** `enrolled_at` stays null-or-legacy (design.md Open Questions —
    whether to project it from the `active` transition's `effective_at` changes no spec here).
 
-### PHI posture
-
-`to_state` reaches a log line because it is the projected fact and the receipt is about state.
-Nothing else from the payload does — not the clinic value, not a field the handler does not read.
-Every log line and receipt is built from envelope identifiers, the state name, sequences and
-counts. The tripwire test plants sentinel values in `clinic_id`, `note` and `date_of_birth`,
-captures structlog output across a rebuild that mints, skips and parks, and asserts none of them
-appears in the logs or in `RebuildReceipt.render()` — while proving the clinic value did reach the
-database column it belongs in. `Parked.reason` is a field path or a fixed token by construction.
-All fixtures synthetic.
-
 ## m1-retire-patient-state-task-002
 
 ## Spec Updates
@@ -78,9 +67,105 @@ index. `models.py`'s `Patient` loses `default="pending"` and gains `ledger_seq`.
 
 None.
 
+## m1-retire-patient-state-task-003
+
+## Spec Updates
+
+No spec updates needed. This task (1.3) implements the two spec clauses exactly as stated:
+"Only the ledger projection mints or updates a patient row" and "No asserted enrollment state
+travels the bus from a producer."
+
+### Added Requirements
+
+None.
+
+### Modified Requirements
+
+None.
+
+### Removed Requirements
+
+None.
+
+## Design Drift
+
+None. `packages/ocean/services/graph-projection/src/handlers/alerts.py` drops the STEP 1
+`patients` bootstrap insert `handle_alert_created` carried; the handler now writes only `alerts`
+and `audit_log`. `packages/ocean/services/impilo-connector/src/normalizer.py`'s `patient.*` payload
+branch drops the `enrollment_status` key, leaving `patient_id` and `source_patient_type`.
+
+## New Scenarios
+
+None. Both scenarios below were already in the spec; this task is what makes them true.
+
+- "An alert for an unknown patient mints nothing": covered by a new sqlite-backed test,
+  `test_alert_for_an_unknown_patient_mints_no_patients_row`.
+- "The normalizer emits no status": covered by a new test,
+  `test_patient_payload_carries_no_enrollment_status`.
+
 ## m1-retire-patient-state-task-005
 
 _No spec-relevant updates recorded._
+
+## m1-retire-patient-state-task-006
+
+## Spec Updates
+
+No spec updates needed. This task (3.1 Registry) implemented the flip to citable exactly as
+spec "The projection is a citable consumer" and design.md decision 9 describe.
+
+### Added Requirements
+
+None.
+
+### Modified Requirements
+
+None.
+
+### Removed Requirements
+
+None.
+
+## Design Drift
+
+None. `schedules.consumer_registry.build_consumers` now registers `graph-projection-patients`
+with `cite_field="ledger_seq"` and `owning_change=None` (was `cite_field=None`,
+`owning_change="m1-retire-patient-state"`, `reconciliation-sweeps`'s day-one entry), reading
+through the new `schedules.sweep_readers.PatientsReader` — `(patient_id, enrollment_status,
+ledger_seq)` rows, `ledger_seq` nullable for a legacy row, over the same `FamilyRowSource` seam
+`LandingReader` already uses. The now-unused `PATIENTS_OWNING_CHANGE` constant was removed rather
+than left dead, per design.md decision 9 ("owning_change=None").
+
+## New Scenarios
+
+None. The existing spec scenarios ("A projected row agrees with the ledger", legacy-row handling)
+are exercised end to end in `tests/test_consumer_registry.py`
+(`TestGraphProjectionPatientsIsCompared`) via the registered consumer, and per-reader in
+`tests/test_sweep_readers.py`.
+
+## m1-retire-patient-state-task-1-4
+
+### Added Requirements
+
+None.
+
+### Modified Requirements
+
+None.
+
+### Removed Requirements
+
+None.
+
+## Design Drift
+
+None. Implementation matches design.md decision 11 exactly: `patient-state` added to
+`CONSUMER_DOMAINS["graph-projection"]` in `packages/ocean/libs/ocean-broker/src/ocean_broker/catalog.py`,
+regenerated into `packages/ocean/infra/terraform/generated/event_catalog.auto.tfvars.json`.
+
+## New Scenarios
+
+None.
 
 ## Doc-Updater Instructions
 

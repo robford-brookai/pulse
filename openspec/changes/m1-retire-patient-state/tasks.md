@@ -44,7 +44,7 @@ never a worktree.
       rows keep their status and read `ledger_seq IS NULL`; the view exposes the new column.
       `[model: sonnet | deps: — | lane: repo_change | wave: 0 | serial: Alembic versions directory, one head]`
 
-- [ ] 1.3 Delete the bootstrap insert (`alerts.py` STEP 1) and the normalizer's asserted status
+- [x] 1.3 Delete the bootstrap insert (`alerts.py` STEP 1) and the normalizer's asserted status
       (`impilo-connector/src/normalizer.py` `patient.*` payload) (spec: "Only the ledger projection
       mints", "No asserted enrollment state travels the bus"; design.md decisions 6, 8).
       Tests: an alert for an unknown patient lands with no `patients` row created; the normalizer's
@@ -53,7 +53,7 @@ never a worktree.
       fixture instead).
       `[model: sonnet | deps: 1.1 | lane: repo_change | wave: 0]`
 
-- [ ] 1.4 Route the feed: add `patient-state` to `CONSUMER_DOMAINS["graph-projection"]` in
+- [x] 1.4 Route the feed: add `patient-state` to `CONSUMER_DOMAINS["graph-projection"]` in
       `packages/ocean/libs/ocean-broker/src/ocean_broker/catalog.py` and regenerate
       `packages/ocean/infra/terraform/generated/event_catalog.auto.tfvars.json` with
       `packages/ocean/scripts/generate_event_catalog.py`, so graph-projection's EventBridge rule
@@ -83,7 +83,7 @@ never a worktree.
 
 ## 3. Wave 2 — the sweep and the record
 
-- [ ] 3.1 Registry: `packages/schedules/src/schedules/sweep_registry.py` (or its consumer
+- [x] 3.1 Registry: `packages/schedules/src/schedules/sweep_registry.py` (or its consumer
       registration module) moves `graph-projection-patients` to `cite_field="ledger_seq"`, family
       `enrollment`, `owning_change=None`, with a `PatientsReader` that returns
       `(patient_id, enrollment_status, ledger_seq)` rows (spec: "The projection is a citable
