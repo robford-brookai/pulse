@@ -236,9 +236,11 @@ def normalize_impilo_payload(raw: dict) -> tuple[BaseEvent, str]:
             "reading_type": event_type_str,
         }
     elif prefix == "patient":
+        # No asserted enrollment status travels the bus: only the ledger projection mints or
+        # updates enrollment state (spec: "No asserted enrollment state travels the bus from a
+        # producer"). The payload carries the patient identifier and source type only.
         payload = {
             "patient_id": hashed_patient_id,
-            "enrollment_status": "enrolled",
             "source_patient_type": event_type_str,
         }
     elif prefix == "device":
