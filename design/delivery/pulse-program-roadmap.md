@@ -172,7 +172,7 @@ Gate: Phase 2 exit; Twenty dev instance from `environment-matrix`.
 | `survey-engine-ingress` | PX survey responses become attributed commands/facts on the ledger's single write path — actor is the survey engine's service identity, message-level provenance, same shape as `customerio-consent-ingress`; born compliant with the `producer-ingress-policy` CI gate | Phase 2 exit + PX schema validation |
 | `reconciliation-sweeps` | per-family referee sweeps generalizing S1.3's consent sweep; corrections actor `reconciliation` (the legacy-inference drift sentinel, legacy-harvest #4, is dropped — decision 9, superseded by P6) | `snowflake-projection` |
 | `projection-rebuild-drill` | ADR §4.6 authoritative rebuild as a drill; folded into `pulse-demo-closeout` as Demo 5's stage 6, closing the roadmap's original Demo 3 promise | `twenty-projection` |
-| `m1-retire-patient-state` | ADR §6.2: `patients` rows only from ledger projection; three read surfaces cut over; `enrollment_status` read-only; `alerts.py` bootstrap insert deleted | `twenty-projection` |
+| `m1-retire-patient-state` | ADR §6.2: `patients` rows only from ledger projection; three read surfaces cut over; `enrollment_status` read-only; `alerts.py` bootstrap insert deleted | `twenty-projection` ✅ — M1 retired in code 2026-09-09 (#440, #439, #446, #445); task 4.1's attended dev run (migration, `terraform apply`, rebuild, Hasura apply) still open |
 | `billing-cutover` | the billing connector's reconciliation window (one full billing month on dev, connector vs mart, empty-or-explained sweep) and the cutover that retires the relay's Snowflake mart read; seeded 2026-09-08 in `design/delivery/billing-cutover-seed.md` from `billing-connector` decision 11 | seed gates: dbt spike files committed in `data-platform` (seed gate 3) + a cutover decision (none planned as of 2026-09-08) + serial-lane coordination with `reconciliation-sweeps` on the schedule catalog |
 
 Why `survey-engine-ingress` sits here and not mid-Phase 2: it is an ingress producer, so it
@@ -295,7 +295,7 @@ number should say which one just became true, not which OpenSpec change happened
 | v1.2–v1.4 | pre-Phase-0 | legacy feature line (Sim Realism, Ticketing, Warehouse Sync) | shipped |
 | **v1.5** | 1 — Record | `pulse-ledger-core` archived, 16/16 tasks | **shipped 2026-08-04** |
 | **v2.0** | 2 — Ingress | "Zero direct emits of catalog-state events, checked in CI" + all four sanctioned command sources live (kanban webhook, Customer.io ingress, identity service, verdict relay) + Demo 2 receipt | **shipped 2026-08-08** |
-| v3.0 | 3 — Projections | Reconciliation clean over one full cycle; projections rebuild from ledger in a drill; M1 retired (no consumer writes `patients.enrollment_status`) | queued |
+| v3.0 | 3 — Projections | Reconciliation clean over one full cycle; projections rebuild from ledger in a drill; M1 retired (no consumer writes `patients.enrollment_status`) | queued — M1 clause met in code 2026-09-09; reconciliation-clean-cycle and rebuild-drill clauses still open |
 | v4.0 | 4 — Retirement | No warehouse model answers patient status by inference; funnel counts read the ledger + verdict chain | queued |
 | v5.0 | Genesis + cutover | Phase 4 exit + genesis acceptance (genesis §4 a–d) + cutover P3 exit (zero POCAR writes 30 days) — **Program done** | longterm objective |
 

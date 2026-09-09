@@ -32,9 +32,12 @@ runbook checklist and the eight receipt lines it collects. Before running:
    is designed to catch, and the fix there is reviving the feed, not rebuilding a projection that
    was never behind.
 
-`enrollment` is expected to report its `graph-projection-patients` consumer as `uncitable` with a
-row count (owning change `m1-retire-patient-state`) — that is the documented steady state until M1
-retires the `patients` table, never a divergence to chase.
+`enrollment` reports two consumers: `twenty-board` and, as of `m1-retire-patient-state` task 3.1,
+`graph-projection-patients` — citable now (`cite_field="ledger_seq"`), compared per subject like
+any other consumer. A legacy row (null `ledger_seq`, pre-migration) still reports `uncitable` per
+row, not as a whole-consumer class — that is the documented steady state until genesis adopts it,
+never a divergence to chase. See `docs/runbooks/m1-patients-projection.md` for the attended run
+that makes this citable in dev.
 
 ## Reading a receipt
 
