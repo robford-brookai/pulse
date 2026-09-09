@@ -15,7 +15,9 @@ What the distribution spec asks for, and where each part lives:
   leave the claim index, so one poison row does not block its subject forever *and* does not get
   rescanned forever. Redrive is an operator clearing the marker — never automatic.
 - **Lag.** `outbox_lag_seconds` is the age of the oldest row still waiting, which is the quantity
-  the p99 < 30 s SLO is stated over. `dead_letter_depth` is what the monitor alarms on at >= 1.
+  the p99 < 30 s figure is stated over — a sub-budget of the projection-freshness SLO (ledger →
+  Twenty, p99 < 60 s, design/delivery/pulse-runtime-readiness.md §1.5): this hop is one leg of that
+  path, not a fourth SLO of its own. `dead_letter_depth` is what the monitor alarms on at >= 1.
 
 Two relays can run at once. Each subject is guarded by a session-level advisory lock taken in the
 two-int namespace, which is a different lock space from the single-bigint one `commit.py` uses —
@@ -318,8 +320,10 @@ def dead_letter_depth(conn: psycopg.Connection) -> int:
 def outbox_lag_seconds(conn: psycopg.Connection, *, now: datetime | None = None) -> float | None:
     """Age of the oldest row still waiting to reach the bus, or None when the outbox is drained.
 
-    The quantity the p99 < 30 s outbox-to-backbone SLO is stated over. Dead-lettered rows are
-    excluded: they are an alarm of their own and would otherwise peg this gauge forever.
+    The quantity the p99 < 30 s outbox-to-backbone figure is stated over — a sub-budget of the
+    projection-freshness SLO (ledger → Twenty, p99 < 60 s), not a separate SLO of its own. Dead-
+    lettered rows are excluded: they are an alarm of their own and would otherwise peg this gauge
+    forever.
     """
     row = conn.execute(
         "SELECT min(created_at) FROM ledger.outbox WHERE published_at IS NULL AND dead_lettered_at IS NULL"

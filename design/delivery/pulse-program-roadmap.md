@@ -240,7 +240,7 @@ byte-identical.
 | `d14-spcs-latency-spike` | one-day webhook-latency spike (operational_discovery; report, not diff). **Highest-leverage unblock** | none |
 | `pulse-spcs-deployment` | service spec, Snowflake Secrets, ingress, image pinning (thin wrapper, never a fork — AGPL §13) | D14 |
 | `environment-matrix` | dev/staging/prod per runtime-readiness §2.1; staging regen consumes `synthea-seed`; gates Demo 3's staging leg and cutover P0. Seed drafted 2026-09-08: `design/delivery/environment-matrix-seed.md` | `synthea-seed` |
-| `observability` | Datadog monitor set + three SLOs per §1.5; S1.2/S1.3 ship their own runbooks — this wires monitors and paging | before P1; paging before P2 |
+| `observability` | Datadog monitor set + three SLOs per §1.5; S1.2/S1.3 ship their own runbooks — this wires monitors and paging. 2026-09-08: liveness/readiness probes, the `service:<name>` + `project:pulse` tagging split, and the outbox-to-backbone sub-budget note landed (cheap half, owner decision); the monitor set, dashboards, and paging stay queued until cutover planning resumes | before P1; paging before P2 |
 | Roles / on-call / enablement | exec-session register rows, not changes | — |
 
 ## Positions taken (doc conflicts; edits deferred)
