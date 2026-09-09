@@ -165,6 +165,7 @@ The tree it renders:
 
 ```text
 packages/my-connector/
+├── README.md                       # the next steps the scaffold prints, for the reader who missed them
 ├── pyproject.toml                 # name, workspace deps, pytest + pyright config
 ├── src/my_connector/
 │   ├── __init__.py
