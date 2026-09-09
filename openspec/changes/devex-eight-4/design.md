@@ -9,7 +9,8 @@ connector coverage asserted that a task target exists rather than that it works.
 
 ## Goals / Non-Goals
 
-**Goals**: return the connector golden path to green and make the gate's zero mean it. **Non-Goals**:
+**Goals**: return the connector golden path to green, make the gate's count mean it, then
+pause the loop (decision 7). **Non-Goals**:
 no rubric or protocol edits (frozen, CHECKSUMS); no attempt on the single-author Community
 constraint; nothing from the audit's below-the-cut list.
 
@@ -55,3 +56,14 @@ constraint; nothing from the audit's below-the-cut list.
    `scripts/devex/check.py`'s `read_timings()` follows them there. The finding test reads the
    destination path out of `scripts/devex/timing.py` and asserts git does not track it, so the
    assertion cannot be satisfied by renaming alone.
+7. **The loop pauses after audit 5.** Rob's call 2026-09-08. This change keeps the three fixes
+   that return the golden path to green and make the gate mean it (1.1, 1.2, 2.1), runs one more
+   audit (3.1), and hands off (3.2). Former tasks 1.3, 1.4, 1.5, 1.6, 2.2, 2.3 and 2.4 leave the
+   change; their finding tests stay in `tests/scaffold/cat10_devex.py` as strict xfails, so
+   `task devex:check` reports the paused count (7) rather than a zero nobody earned, and the
+   handoff document (3.2) carries their task text verbatim. No `devex-eight-5`; resuming is a new
+   change seeded from the handoff. Why now: audits 2 to 4 moved the score 5.9 → 6.5 → 6.0 inside
+   a ±1 scorer-noise band while the Community dimension is capped near 4 by single authorship, so
+   the mean needs two other dimensions at 9 to clear 8.0, and the three changes cost about fifty
+   PRs across three days. Audit 5 therefore runs with seven findings open by design, which the
+   protocol's "run at 0" loop rule did not anticipate; the ledger row records the count.
