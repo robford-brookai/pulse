@@ -41,7 +41,7 @@ Task 4.1 is live execution (GitHub issue + runbook PR + attended run per WORKFLO
       stand-in used by `snowflake-projection`'s tests.
       `[model: sonnet | deps: — | lane: repo_change | wave: 0 | serial: pulse-owned warehouse SQL beside stg_events_events.sql, one published surface]`
 
-- [ ] 1.3 Read-only readers: `LedgerStateReader` (command API per-subject read, snapshot head),
+- [x] 1.3 Read-only readers: `LedgerStateReader` (command API per-subject read, snapshot head),
       `BoardReader` (the Twenty projection's read surface, projected fields plus `ledger_seq`,
       paginated per family), `LandingReader` (the fold view), `RowCountReader` (uncitable
       consumers), `FixtureReader`; socket-blocked tests; no writer credential anywhere.

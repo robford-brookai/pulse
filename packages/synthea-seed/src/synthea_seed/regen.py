@@ -15,9 +15,12 @@ import hashlib
 import shutil
 import subprocess
 import sys
+import time
+import urllib.error
 import urllib.request
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import IO
 
 from .manifest import build_manifest, read_manifest, verify_tree, write_manifest
 from .pin import PinConfig, Profile, load_pin
@@ -27,6 +30,20 @@ PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 
 Runner = Callable[[Sequence[str]], int]
 Downloader = Callable[[str, Path], None]
+Opener = Callable[[str, float], IO[bytes]]
+
+#: A stalled socket must fail the run, not hang the job until the six-hour runner limit.
+DOWNLOAD_TIMEOUT_SECONDS = 120.0
+#: Three attempts covers the transient GitHub-release 5xx that ended a whole 40-minute run.
+DOWNLOAD_ATTEMPTS = 3
+DOWNLOAD_BACKOFF_SECONDS = 5.0
+
+#: Above this population Synthea outgrows the JVM's default heap (a quarter of RAM) on a
+#: standard runner and dies mid-generation. Staging (50k) is the profile that needs it.
+LARGE_POPULATION_THRESHOLD = 10_000
+#: 6 GB of a 16 GB runner: enough headroom for the FHIR exporter, not so much that the OS
+#: reaper takes the process instead.
+LARGE_POPULATION_HEAP = "-Xmx6g"
 
 
 class RegenError(RuntimeError):
@@ -45,6 +62,10 @@ class ManifestMissingError(RegenError):
     """No committed manifest for the profile — re-pin is explicit, never implied."""
 
 
+class JarDownloadError(RegenError):
+    """The pinned JAR could not be fetched — network failure, not a pin or output failure."""
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -53,16 +74,45 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _urllib_download(url: str, dest: Path) -> None:  # pragma: no cover — live-network path
-    with urllib.request.urlopen(url) as response, dest.open("wb") as out:  # noqa: S310 — pin validates https
-        shutil.copyfileobj(response, out)
+def _open_url(url: str, timeout: float) -> IO[bytes]:  # pragma: no cover — live-network path
+    return urllib.request.urlopen(url, timeout=timeout)  # noqa: S310 — pin validates https
+
+
+def download_jar(
+    url: str,
+    dest: Path,
+    *,
+    attempts: int = DOWNLOAD_ATTEMPTS,
+    opener: Opener | None = None,
+    sleep: Callable[[float], None] = time.sleep,
+) -> None:
+    """Fetch `url` to `dest`, retrying transient network failures with a linear backoff.
+
+    Every attempt is bounded by DOWNLOAD_TIMEOUT_SECONDS, and a URL error that survives the
+    last attempt becomes a JarDownloadError so `main()` reports it instead of a traceback.
+    The checksum in `ensure_jar` is what proves the bytes; this only gets them there.
+    """
+    open_url = opener if opener is not None else _open_url
+    last_error: OSError | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            with open_url(url, DOWNLOAD_TIMEOUT_SECONDS) as response, dest.open("wb") as out:
+                shutil.copyfileobj(response, out)
+        except (urllib.error.URLError, TimeoutError) as error:
+            last_error = error
+            if attempt < attempts:
+                sleep(DOWNLOAD_BACKOFF_SECONDS * attempt)
+        else:
+            return
+    msg = f"could not download the pinned JAR from {url} after {attempts} attempts: {last_error}"
+    raise JarDownloadError(msg) from last_error
 
 
 def _subprocess_runner(command: Sequence[str]) -> int:  # pragma: no cover — spawns Java
     return subprocess.run(list(command), check=False).returncode  # noqa: S603 — argv built from the validated pin
 
 
-def ensure_jar(pin: PinConfig, cache_dir: Path, downloader: Downloader = _urllib_download) -> Path:
+def ensure_jar(pin: PinConfig, cache_dir: Path, downloader: Downloader = download_jar) -> Path:
     """The pinned JAR, downloaded if absent and checksum-verified on every call."""
     cache_dir.mkdir(parents=True, exist_ok=True)
     jar = cache_dir / f"synthea-{pin.jar.version}.jar"
@@ -88,9 +138,16 @@ def write_properties(pin: PinConfig, output_dir: Path, dest: Path) -> Path:
 
 
 def generation_command(jar: Path, pin: PinConfig, profile: Profile, properties_file: Path) -> list[str]:
-    """The exact argv for a deterministic run: seeds, reference date, population, config, state."""
+    """The exact argv for a deterministic run: seeds, reference date, population, config, state.
+
+    Large profiles carry an explicit `-Xmx`: the JVM default heap is a fraction of host RAM, so
+    the same command that succeeds on a 64 GB workstation dies part-way through a 50k run on a
+    standard CI runner. Sizing the heap by population keeps the argv a function of the pin.
+    """
+    heap = [LARGE_POPULATION_HEAP] if profile.population >= LARGE_POPULATION_THRESHOLD else []
     return [
         "java",
+        *heap,
         "-jar",
         str(jar),
         "-s",
@@ -126,7 +183,7 @@ def regenerate(
     """
     root = package_root if package_root is not None else PACKAGE_ROOT
     run = runner if runner is not None else _subprocess_runner
-    download = downloader if downloader is not None else _urllib_download
+    download = downloader if downloader is not None else download_jar
     resolved_pin = pin if pin is not None else load_pin()
     profile = resolved_pin.profile(profile_name)
 

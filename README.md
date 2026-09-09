@@ -238,7 +238,10 @@ command, grouped by area, in the order you reach them as you work. `task check` 
 Java (17+) is a prerequisite only of `task synthea:regen PROFILE=<p>`, the deterministic
 synthetic-population regeneration in `packages/synthea-seed`, which shells out to a
 checksum-pinned Synthea JAR and verifies the output against a committed manifest. A local
-divergence names the files in its diff; `REPIN=1` re-pins as a reviewed change.
+divergence names the files in its diff. The manifest itself is authored on the CI runner, not
+locally — JVM determinism does not carry across machines — by dispatching the Synthea regen
+workflow with `repin=true` and committing the artifact it uploads. `docs/runbooks/synthea-regen.md`
+is the procedure.
 
 ### Task areas
 
