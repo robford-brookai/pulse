@@ -28,6 +28,19 @@ def test_get_schema_returns_tables_and_relationships():
     assert "patient_graph_summary" in table_names
 
 
+def test_patients_description_marks_enrollment_status_projected_and_read_only():
+    """patients description states enrollment_status is projected from the ledger and read-only.
+
+    Per m1-retire-patient-state: the projection handler is the only writer, so the schema
+    RAG training data must not describe enrollment_status as a plain writable column.
+    """
+    patients = next(t for t in _SCHEMA_SUMMARY["tables"] if t["table"] == "patients")
+    description = patients["description"].lower()
+    assert "enrollment_status" in description
+    assert "projected" in description
+    assert "read-only" in description or "read only" in description
+
+
 def test_get_schema_tables_have_description():
     """Each table in schema has a description field."""
     for table in _SCHEMA_SUMMARY["tables"]:
