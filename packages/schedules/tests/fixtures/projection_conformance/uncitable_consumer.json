@@ -1,0 +1,19 @@
+{
+  "scenario": "The patients table is reported, not compared (spec projection-conformance)",
+  "family": "enrollment",
+  "as_of": "2026-09-08T12:00:00+00:00",
+  "consumer": {
+    "name": "graph-projection-patients",
+    "cite_field": null,
+    "freshness_budget_s": 900,
+    "owning_change": "m1-retire-patient-state"
+  },
+  "row_count": 1284,
+  "expected_uncitable_consumer": {
+    "consumer": "graph-projection-patients",
+    "family": "enrollment",
+    "row_count": 1284,
+    "owning_change": "m1-retire-patient-state"
+  },
+  "expected": []
+}
