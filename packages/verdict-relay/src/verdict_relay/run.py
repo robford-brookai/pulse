@@ -37,6 +37,13 @@ from verdict_relay.mart_reader import MartContractError, MartReader, MartRow
 #: The Datadog service tag on every log record and in the summary line.
 SERVICE = "verdict-relay"
 
+#: The shared tag every pulse service carries alongside its own `service` tag — monitors route on
+#: this one, `service` stays the per-service tag Datadog APM keys on
+#: (design/delivery/pulse-runtime-readiness.md §1.5, decision 2026-09-08). Additive to the JSON
+#: record only: the summary line's form is spec-pinned (`verdict-relay-run` "exactly this form")
+#: and stays untouched.
+PROJECT = "pulse"
+
 #: The package logger every module here logs under; `configure_logging` attaches the handler once.
 _PACKAGE_LOGGER = "verdict_relay"
 
@@ -53,6 +60,7 @@ class ServiceJsonFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
             "service": SERVICE,
+            "project": PROJECT,
         })
 
 

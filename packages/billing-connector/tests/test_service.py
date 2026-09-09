@@ -501,8 +501,8 @@ class TestEveryRunEndsInACountedReceipt:
 
         receipt_lines = [message for message in caplog.messages if message.startswith("service=billing-connector")]
         assert receipt_lines == [
-            "service=billing-connector committed=1 replayed=0 rejected=0 evaluated=1 deferred=0",
-            "service=billing-connector committed=1 replayed=0 rejected=0 evaluated=1 deferred=0",
+            "service=billing-connector project=pulse committed=1 replayed=0 rejected=0 evaluated=1 deferred=0",
+            "service=billing-connector project=pulse committed=1 replayed=0 rejected=0 evaluated=1 deferred=0",
         ]
         assert receipt.format_line() == receipt_lines[-1]
 
