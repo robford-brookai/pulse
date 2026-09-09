@@ -92,7 +92,7 @@ Task 4.1 is live execution (GitHub issue + runbook PR + attended run per WORKFLO
       `no_consumers` path.
       `[model: sonnet | deps: 1.3, 2.1 | lane: repo_change | wave: 2]`
 
-- [ ] 3.3 Docs via `HANDOFF.md` where a spec or contract is touched: `publishes.md` receipt line
+- [x] 3.3 Docs via `HANDOFF.md` where a spec or contract is touched: `publishes.md` receipt line
       and fold-view rows; `consumes.md` STG_EVENTS floor dependency; roadmap row updated and the
       legacy-inference sentinel recorded as dropped (design.md decision 9);
       `docs/runbooks/reconciliation-sweeps.md` (attended first run, reading a receipt, computing
