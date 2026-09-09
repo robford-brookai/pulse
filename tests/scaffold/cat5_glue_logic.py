@@ -8,7 +8,9 @@ Usage: uv run pytest tests/scaffold/cat5_glue_logic.py -v
 
 import io
 import json
+import shutil
 import subprocess
+import sys
 import urllib.error
 from datetime import date
 from pathlib import Path
@@ -410,6 +412,82 @@ def test_summary_check_outside_a_repo_is_not_an_error(tmp_path: Path) -> None:
     summary = tmp_path / "handoffs" / "c" / "SUMMARY.md"
     summary.parent.mkdir(parents=True)
     assert not collect.summary_is_ignored(summary)
+
+
+def test_collect_summary_survives_a_worktree_disappearing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The regression this fixes: worktrees are removed once their task lands, so a later collect
+    run that no longer sees an earlier worktree must still carry that task's receipt in
+    SUMMARY.md — not overwrite it with only what this run copied."""
+    monkeypatch.chdir(tmp_path)
+    wt_root = tmp_path / "worktrees"
+    task_001 = _worktree(wt_root, "task-001", "# HANDOFF\n\n## Design Drift\n\nFirst task drift.\n")
+    _worktree(wt_root, "task-002", "# HANDOFF\n\n## Design Drift\n\nSecond task drift.\n")
+
+    monkeypatch.setattr(sys, "argv", ["collect_handoffs.py", "--change", "c", "--worktrees-dir", str(wt_root)])
+    collect.main()
+
+    summary_path = tmp_path / "handoffs/c/SUMMARY.md"
+    first_run = summary_path.read_text()
+    assert "task-001" in first_run
+    assert "task-002" in first_run
+
+    # task-001's worktree lands and is removed; only task-002 is still around to collect.
+    shutil.rmtree(task_001)
+
+    monkeypatch.setattr(sys, "argv", ["collect_handoffs.py", "--change", "c", "--worktrees-dir", str(wt_root)])
+    collect.main()
+
+    second_run = summary_path.read_text()
+    assert "task-001" in second_run, "task-001's receipt must survive even though its worktree is gone"
+    assert "First task drift." in second_run
+    assert "task-002" in second_run
+    assert "Second task drift." in second_run
+
+
+def test_unrecognized_headings_flags_a_heading_the_template_does_not_declare() -> None:
+    text = "# HANDOFF\n\n## Random Notes\n\nSomething happened.\n"
+    assert collect.unrecognized_headings(text) == ["Random Notes"]
+
+
+def test_unrecognized_headings_ignores_template_headings() -> None:
+    text = (
+        "# HANDOFF\n\n## Spec Updates\n\n### Added Requirements\n\nx\n\n"
+        "## Design Drift\n\ny\n\n## New Scenarios\n\nz\n\n## Notes for Doc-Updater\n\nw\n"
+    )
+    assert collect.unrecognized_headings(text) == []
+
+
+def test_warn_on_unrecognized_headings_fires_for_a_non_template_heading(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """A HANDOFF with no recognised receipt section but a heading the template does not declare —
+    content that would otherwise vanish from SUMMARY.md without a trace."""
+    p = tmp_path / "task-001.md"
+    p.write_text("# HANDOFF\n\n## Random Notes\n\nSomething happened.\n")
+    collect.warn_on_unrecognized_headings([p])
+    err = capsys.readouterr().err
+    assert "task-001.md" in err
+    assert "Random Notes" in err
+
+
+def test_warn_on_unrecognized_headings_silent_for_a_template_conformant_handoff(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    p = tmp_path / "task-001.md"
+    p.write_text("# HANDOFF\n\n## Spec Updates\n\n### Added Requirements\n\nSubjects key on canonical id.\n")
+    collect.warn_on_unrecognized_headings([p])
+    assert capsys.readouterr().err == ""
+
+
+def test_warn_on_unrecognized_headings_silent_when_only_notes_section_present(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Notes for Doc-Updater with nothing else is template-conformant, not a sign of a placeholder
+    masking real content — it must not warn."""
+    p = tmp_path / "task-001.md"
+    p.write_text("# HANDOFF\n\n## Notes for Doc-Updater\n\nDo not touch the connector package.\n")
+    collect.warn_on_unrecognized_headings([p])
+    assert capsys.readouterr().err == ""
 
 
 # --- workflow.py: WORKFLOW.md's block is the source of truth, so something must read it --------

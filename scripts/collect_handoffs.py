@@ -167,6 +167,48 @@ def extract_receipt_sections(handoff_text: str) -> str:
     return "\n".join(kept).strip()
 
 
+#: Headings templates/HANDOFF.md declares beyond the receipt-bearing ones — operational, not a
+#: receipt, but still part of the template's own contract, so their presence alone is not a sign
+#: of a hand-written or malformed HANDOFF.
+_KNOWN_HEADINGS = _RECEIPT_HEADINGS | {"notes for doc-updater"}
+
+
+def unrecognized_headings(handoff_text: str) -> list[str]:
+    """`##`/`###` headings in a HANDOFF that templates/HANDOFF.md does not declare.
+
+    A HANDOFF with no receipt-bearing content reads as "nothing happened here" once
+    extract_receipt_sections is done with it. That is indistinguishable from a HANDOFF that
+    actually recorded something under a heading the template does not name — a typo, a
+    hand-rolled section — which would otherwise vanish from SUMMARY.md without a trace. This
+    does not widen extract_receipt_sections' matcher; it only flags the discrepancy for a human.
+    """
+    found = []
+    for heading, _ in _sections(handoff_text):
+        if heading is None or not heading.lstrip().startswith("##"):
+            continue
+        title = heading.lstrip("#").strip()
+        if title.lower() not in _KNOWN_HEADINGS:
+            found.append(title)
+    return found
+
+
+def warn_on_unrecognized_headings(handoffs: list[Path]) -> None:
+    """Print a stderr warning for each HANDOFF with no receipt-bearing section but a heading the
+    template does not declare — see `unrecognized_headings`."""
+    for h in handoffs:
+        text = h.read_text()
+        if extract_receipt_sections(text):
+            continue
+        bad = unrecognized_headings(text)
+        if bad:
+            print(
+                f"Warning: {h.name} has no recognised receipt section but has unrecognised "
+                f"heading(s): {', '.join(bad)}. Check whether it belongs under one of "
+                "templates/HANDOFF.md's own sections.",
+                file=sys.stderr,
+            )
+
+
 def summarize_handoffs(handoffs: list[Path], change: str) -> str:
     """Produce a summary for the doc-updater agent.
 
@@ -289,10 +331,17 @@ def main():
         sys.exit(1)
 
     output_dir = Path(args.output) / args.change
-    handoffs = collect_handoffs(worktrees, args.change, output_dir)
+    collect_handoffs(worktrees, args.change, output_dir)
 
-    if handoffs:
-        summary = summarize_handoffs(handoffs, args.change)
+    # Every collected HANDOFF still on disk, not just the ones copied on this run — worktrees are
+    # removed once their task lands, so a run that collects nothing new must still resummarize
+    # what earlier runs already collected, or SUMMARY.md loses every task but the latest.
+    all_handoffs = sorted(p for p in output_dir.glob("*.md") if p.name != "SUMMARY.md") if output_dir.exists() else []
+
+    warn_on_unrecognized_headings(all_handoffs)
+
+    if all_handoffs:
+        summary = summarize_handoffs(all_handoffs, args.change)
         summary_path = Path(args.output) / args.change / "SUMMARY.md"
         offenders = find_ignored_links(summary, summary_path.parent)
         if offenders:
@@ -334,7 +383,7 @@ def main():
         if not args.allow_missing_handoff:
             sys.exit(1)
 
-    if handoffs:
+    if all_handoffs:
         print(f"\nNext step: task sync-docs CHANGE={args.change}")
 
 
