@@ -31,7 +31,7 @@ Task 4.1 is live execution (GitHub issue + runbook PR + attended run per WORKFLO
       `cite_field=None` is uncitable.
       `[model: sonnet | deps: — | lane: repo_change | wave: 0]`
 
-- [ ] 1.2 Warehouse fold as pulse-committed SQL: `packages/ocean/infra/snowflake/subject_current_state.sql`
+- [x] 1.2 Warehouse fold as pulse-committed SQL: `packages/ocean/infra/snowflake/subject_current_state.sql`
       defines `STREAMLINE.STG_EVENTS.SUBJECT_CURRENT_STATE` (latest landed event per
       `(subject_type, subject_key)` by `seq`, carrying `_loaded_at`, bounded below by
       `min_complete_from`), in the style of `stg_events_events.sql`; proposed `publishes.md` row
