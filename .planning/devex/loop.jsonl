@@ -71,3 +71,11 @@
 {"date": "2026-09-08", "kind": "timing", "target": "workflow:lint", "seconds": 0.184, "rc": 0}
 {"date": "2026-09-08", "kind": "timing", "target": "docs:lock-guard", "seconds": 0.151, "rc": 0}
 {"date": "2026-09-08", "kind": "timing", "target": "docs:build", "seconds": 1.702, "rc": 0}
+{"date": "2026-09-08", "kind": "timing", "target": "lint", "seconds": 0.444, "rc": 0}
+{"date": "2026-09-08", "kind": "timing", "target": "typecheck", "seconds": 10.227, "rc": 0}
+{"date": "2026-09-08", "kind": "timing", "target": "test", "seconds": 119.058, "rc": 0}
+{"date": "2026-09-08", "kind": "timing", "target": "twenty:validate", "seconds": 0.161, "rc": 0}
+{"date": "2026-09-08", "kind": "timing", "target": "twenty:test", "seconds": 3.036, "rc": 0}
+{"date": "2026-09-08", "kind": "timing", "target": "workflow:lint", "seconds": 0.123, "rc": 0}
+{"date": "2026-09-08", "kind": "timing", "target": "docs:lock-guard", "seconds": 0.079, "rc": 0}
+{"date": "2026-09-08", "kind": "timing", "target": "docs:build", "seconds": 4.825, "rc": 0}

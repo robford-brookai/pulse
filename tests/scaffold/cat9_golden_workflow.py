@@ -143,7 +143,7 @@ def test_collect_ordering_is_deterministic(tmp_path_factory: pytest.TempPathFact
     layout = {"task-003": "# HANDOFF\n", "task-001": "# HANDOFF\n", "task-002": "# HANDOFF\n"}
     a = run_collect(tmp_path_factory.mktemp("collect_a"), layout)
     b = run_collect(tmp_path_factory.mktemp("collect_b"), layout)
-    listing = [line for line in a.read_text().splitlines() if line.startswith("- [")]
+    listing = [line for line in a.read_text().splitlines() if line.startswith("## task-")]
     assert listing == sorted(listing), f"SUMMARY listing is not sorted: {listing}"
     assert normalize(a.read_text(), a.parents[2]) == normalize(b.read_text(), b.parents[2])
 

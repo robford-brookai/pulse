@@ -311,21 +311,77 @@ def test_collect_handoffs_names_files_after_the_worktree(tmp_path: Path) -> None
     assert dest.read_text() == "# HANDOFF\ncontent\n"
 
 
-def test_summarize_handoffs_references_every_file(tmp_path: Path) -> None:
-    paths = []
-    for name in ("a", "b", "c"):
-        p = tmp_path / f"{name}.md"
-        p.write_text("x")
-        paths.append(p)
-    summary = collect.summarize_handoffs(paths, "add-auth")
-    assert "Collected 3 handoff(s)." in summary
-    for p in paths:
-        assert p.name in summary
+def test_summarize_handoffs_inlines_spec_updates_per_task(tmp_path: Path) -> None:
+    p = tmp_path / "task-001.md"
+    p.write_text(
+        "# HANDOFF\n\n**Task ID**: task-001\n\n## Spec Updates\n\n### Added Requirements\n\nSubjects key on canonical id.\n"
+    )
+    summary = collect.summarize_handoffs([p], "add-auth")
+    assert "Collected 1 handoff(s)." in summary
+    assert "## task-001" in summary
+    assert "### Added Requirements" in summary
+    assert "Subjects key on canonical id." in summary
     assert "openspec/changes/add-auth/specs/" in summary
+
+
+def test_summarize_handoffs_never_links_to_the_per_task_file(tmp_path: Path) -> None:
+    """The regression this fixes: the old summary linked `[name.md](handoffs/<change>/name.md)`,
+    and only SUMMARY.md survives .gitignore, so every one of those links was dangling in a fresh
+    clone."""
+    p = tmp_path / "task-001.md"
+    p.write_text("# HANDOFF\n\n## Design Drift\n\nSpec omits clock skew.\n")
+    summary = collect.summarize_handoffs([p], "add-auth")
+    assert "](" not in summary
+    assert "task-001.md" not in summary
+
+
+def test_summarize_handoffs_skips_empty_sections(tmp_path: Path) -> None:
+    """A section holding only the template's own placeholder comment is not a receipt."""
+    p = tmp_path / "task-001.md"
+    p.write_text(
+        "# HANDOFF\n\n"
+        "## Spec Updates\n\n<!-- List any requirements that need adding, modifying, or removing. -->\n\n"
+        "## Notes for Doc-Updater\n\nDo not touch the connector package.\n"
+    )
+    summary = collect.summarize_handoffs([p], "add-auth")
+    assert "_No spec-relevant updates recorded._" in summary
+    # Notes for Doc-Updater is operational guidance, not a receipt — left out of the inline.
+    assert "Do not touch the connector package." not in summary
 
 
 def test_summarize_handoffs_documents_the_empty_case() -> None:
     assert collect.summarize_handoffs([], "add-auth") == ("No HANDOFF.md files found for change 'add-auth'.")
+
+
+def test_extract_receipt_sections_keeps_design_drift_and_new_scenarios() -> None:
+    text = (
+        "# HANDOFF\n\n## Design Drift\n\nThe spec omits clock skew.\n\n"
+        "## New Scenarios\n\nGiven a late event, When replayed, Then order holds.\n"
+    )
+    extracted = collect.extract_receipt_sections(text)
+    assert "The spec omits clock skew." in extracted
+    assert "Given a late event" in extracted
+
+
+def test_extract_receipt_sections_drops_metadata_and_notes() -> None:
+    text = "# HANDOFF\n\n**Task ID**: task-001\n\n## Notes for Doc-Updater\n\nSome operational aside.\n"
+    assert collect.extract_receipt_sections(text) == ""
+
+
+def test_find_ignored_links_flags_a_gitignored_target(tmp_path: Path) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)  # noqa: S603, S607
+    (tmp_path / ".gitignore").write_text("handoffs/**\n!handoffs/*/\n!handoffs/*/SUMMARY.md\n")
+    (tmp_path / "handoffs" / "c").mkdir(parents=True)
+    text = "See [receipt](handoffs/c/task-001.md) for detail."
+    assert collect.find_ignored_links(text, tmp_path) == ["handoffs/c/task-001.md"]
+
+
+def test_find_ignored_links_allows_a_trackable_target(tmp_path: Path) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)  # noqa: S603, S607
+    (tmp_path / ".gitignore").write_text("handoffs/**\n!handoffs/*/\n!handoffs/*/SUMMARY.md\n")
+    (tmp_path / "handoffs" / "c").mkdir(parents=True)
+    text = "See [summary](handoffs/c/SUMMARY.md) for detail."
+    assert collect.find_ignored_links(text, tmp_path) == []
 
 
 def _git_repo_with_ignore(tmp_path: Path, pattern: str) -> Path:
