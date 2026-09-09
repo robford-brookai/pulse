@@ -41,6 +41,17 @@ connector).
    Legacy rows keyed by other identifiers are not re-keyed; they wait for genesis to adopt them
    (decision 5). Alternative rejected: minting on `referral` or `person` events, which would create
    rows for patients with no enrollment, the very thing the old bootstrap did with alerts.
+   **Addendum (task 1.1).** `clinic_id` on mint takes `payload["clinic_id"]` when it is a
+   non-empty string, else the sentinel `"unknown"` (named constant `UNSCOPED_CLINIC_ID`) — the
+   same value the retired bootstrap insert wrote, so projected and legacy rows share one marker
+   for "no clinic scope known." Never derived from `program` (patient × program is not a clinic
+   relationship). Never touched on adopt or update. `clinic_id` stays a legacy, uncitable column
+   until the table retires; the spec's "a hardcoded default never appears" scenario is scoped to
+   `enrollment_status` only. The `enrollment_status` catalog-family clause is guaranteed upstream
+   by ledger write-path validation against the catalog — the projection does not re-encode the
+   family — matching the parallel note now in the spec. The canonical-id lookup is implemented as
+   an injectable `CanonicalIdResolver`, defaulting to `resolve_canonical_patient_id`: it is the
+   one seam where the projection decides which id a `patients` row is keyed by.
 3. **The column keeps its name and gains a citation.** `enrollment_status` stays (three surfaces
    and Hasura know it), loses both defaults (model and DDL), and is joined by `ledger_seq BIGINT
    NULL`. NOT NULL stays because every projected write supplies a value and legacy rows already
