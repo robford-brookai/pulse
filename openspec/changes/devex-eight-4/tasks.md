@@ -64,7 +64,7 @@ non-Taskfile tasks alongside a serial one when they share no files.
       Tests: ledger row present with `kind: audit`; the three dated reports exist.
       `[model: opus | deps: 1.1, 1.2, 2.1 | lane: repo_change | wave: 3]`
 
-- [ ] 3.2 Handoff package: `.planning/reports/<date>-devex-handoff.md` carrying the five-audit
+- [x] 3.2 Handoff package: `.planning/reports/<date>-devex-handoff.md` carrying the five-audit
       history (scores and refs from `.planning/devex/loop.jsonl`), what each of the four changes
       closed, the seven findings still encoded as strict xfails with their original task text
       copied verbatim from this file at `origin/main` before this replan (former 1.3, 1.4, 1.5,

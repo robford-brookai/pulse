@@ -375,3 +375,10 @@ directly.
   `exceptions.H4` entry in `.orca/hardening-receipt.json`, never a silent toggle. If worktree
   agents stall on permission prompts, the fix is project-scoped `permissions.allow` rules, not
   bypass.
+- The DevEx loop pauses after audit 5 (Rob's call, 2026-09-08; `openspec/changes/devex-eight-4/design.md`
+  decision 7). Five audits and four changes moved overall/connector 3.8/2.4 → 6.4/6.6 without
+  clearing the 8.0/8.0 exit gate; the seven findings still open stay encoded as strict xfails in
+  `tests/scaffold/cat10_devex.py` (`task devex:check` reports 7). No `devex-eight-5` exists yet —
+  resuming is a new change seeded from `.planning/reports/2026-09-09-devex-handoff.md`, which
+  carries the full audit history, what each of the four changes closed, the seven findings'
+  original task text, and the exact resume commands.
