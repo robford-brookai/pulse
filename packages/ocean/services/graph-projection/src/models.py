@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Column,
     DateTime,
@@ -21,10 +22,14 @@ class Patient(Base):
 
     patient_id = Column(Text, primary_key=True)
     clinic_id = Column(Text, nullable=False)
-    enrollment_status = Column(Text, nullable=False, default="pending")
+    enrollment_status = Column(Text, nullable=False)
     enrolled_at = Column(DateTime(timezone=True), nullable=True)
     updated_at = Column(DateTime(timezone=True), nullable=False)
     last_event_id = Column(Text, nullable=True)
+    # Ledger sequence this row's enrollment_status was set from — the citation for the
+    # conformance sweep. Null on a legacy row the retired bootstrap insert minted; set by
+    # every write the patient-state projection makes (design.md decisions 3, 5).
+    ledger_seq = Column(BigInteger, nullable=True)
 
 
 class Signal(Base):
