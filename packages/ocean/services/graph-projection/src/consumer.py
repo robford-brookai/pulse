@@ -29,6 +29,7 @@ from src.handlers.logistics import (
 )
 from src.handlers.ops import handle_connector_heartbeat, handle_scenario_completed
 from src.handlers.outcomes import handle_call_completed, handle_call_missed, handle_outcome_recorded
+from src.handlers.patient_state import ENROLLMENT_SUBJECT_TYPE, handle_patient_state
 from src.handlers.signals import (
     handle_signal_anomalous,
     handle_signal_missing,
@@ -83,8 +84,17 @@ EVENT_HANDLERS: dict = {
 async def dispatch(event_data: dict, session: AsyncSession) -> None:
     """Dispatch an event to the appropriate handler.
 
+    Ledger events on the `patient-state` feed are routed by `subject_type`, not `event_type`:
+    the patient-state projection renders the `enrollment` subject whatever the ledger names the
+    event that moved it, and no OCEAN event carries a `subject_type` at all. Every other subject
+    on the feed falls through to the event-type table below and is skipped there.
+
     Unknown event types are silently skipped (forward compatible).
     """
+    if event_data.get("subject_type") == ENROLLMENT_SUBJECT_TYPE:
+        await handle_patient_state(event_data, session)
+        return
+
     event_type = event_data.get("event_type", "")
     handler = EVENT_HANDLERS.get(event_type)
     if handler is None:
