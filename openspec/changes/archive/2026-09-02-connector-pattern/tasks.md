@@ -80,7 +80,7 @@ reconciliation window, and cutover (formerly 3.4, 3.5, 4.1, 4.2, 5.1, 5.2) move 
       Tests: the gate itself, red against a planted violation fixture, green on the tree.
       `[model: sonnet | deps: 2.1, 2.2, 2.3 | lane: repo_change | wave: 1]`
 
-- [ ] 2.5 Wave-1 regression receipt: demos 1–4 run green on the refactored tree (1 and 2
+- [x] 2.5 Wave-1 regression receipt: demos 1–4 run green on the refactored tree (1 and 2
       offline here; 3 and 4 in the next attended session, receipts to the tracking issue).
       Tests: demo1/demo2 exit 0 in CI-shaped local run; receipt committed under
       `handoffs/connector-pattern/`.
