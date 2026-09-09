@@ -28,11 +28,16 @@ vars:
   # top-level `src` package and imports itself as `from src.X`, and one interpreter cannot hold
   # sixteen different `src` packages in sys.modules. graph-projection moved from this list into
   # the loop with the rest. tests/test_taskfile_test_coverage.py pins this arrangement.
-  # The one explicit file at the end is `packages/ocean/tests/unit`'s only entry: ADR-0002 keeps
-  # that cross-service tree out of CI (~60 pre-existing failures), but this single test
-  # (snowflake-projection task 1.1) is a self-contained SQL/emitter-comparison check with none
-  # of that tree's fixtures, so it is named directly rather than pulling the whole directory in.
-  TESTED_PATHS: tests packages/archaeology/tests packages/pulse-ledger/tests packages/pulse-core/tests packages/verdict-relay/tests packages/schedules/tests packages/identity/tests packages/consent-ingress/tests packages/synthea-seed/tests packages/twenty-projection/tests packages/billing/tests packages/billing-connector/tests packages/ocean/libs packages/ocean/tests/unit/test_stg_events_sql.py
+  # The explicit files at the end are `packages/ocean/tests/unit` and `tests/gates`'s only
+  # entries: ADR-0002 keeps that cross-service tree out of CI (~60 pre-existing failures), but
+  # each of these is a self-contained check with none of that tree's fixtures, so it is named
+  # directly rather than pulling the whole directory in. test_stg_events_sql.py
+  # (snowflake-projection task 1.1) is a SQL/emitter-comparison check; test_apply_metadata.py and
+  # test_patients_read_only.py (m1-retire-patient-state task 2.1) are the patients read-only gate
+  # (source scan) and its Hasura select-permission builder test — spec clause "a repository gate
+  # SHALL fail when any code outside the projection handler issues an INSERT into or UPDATE
+  # against patients" is only enforced while these run under `task check`.
+  TESTED_PATHS: tests packages/archaeology/tests packages/pulse-ledger/tests packages/pulse-core/tests packages/verdict-relay/tests packages/schedules/tests packages/identity/tests packages/consent-ingress/tests packages/synthea-seed/tests packages/twenty-projection/tests packages/billing/tests packages/billing-connector/tests packages/ocean/libs packages/ocean/tests/unit/test_stg_events_sql.py packages/ocean/tests/unit/test_apply_metadata.py packages/ocean/tests/gates/test_patients_read_only.py
   # Coverage covers ocean-events because it is the envelope every consumer depends on, and it is
   # at 100%. ocean-broker joins it at task 2.2: the reason it was excluded — that 2.2 would throw
   # its tests away — expired when 2.2 landed EventBridgePublisher and the event catalog, which are
