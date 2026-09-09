@@ -57,7 +57,7 @@ non-Taskfile tasks alongside a serial one when they share no files.
 
 ## 3. Close-out
 
-- [ ] 3.1 Run `/devex-audit` once 1.1, 1.2 and 2.1 are merged and `task devex:check` reports
+- [x] 3.1 Run `/devex-audit` once 1.1, 1.2 and 2.1 are merged and `task devex:check` reports
       exactly the seven paused findings (design.md decision 7); append the ledger row; report the
       scores against the exit gate (overall >= 8.0 and connector >= 8.0). Whatever the result,
       no `devex-eight-5`: the loop pauses.
