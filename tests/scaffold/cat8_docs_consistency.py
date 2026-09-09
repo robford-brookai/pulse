@@ -685,6 +685,7 @@ NUMBER_WORDS = {
     "fourteen": 14,
     "twenty": 20,
     "twenty-two": 22,
+    "twenty-three": 23,
 }
 
 

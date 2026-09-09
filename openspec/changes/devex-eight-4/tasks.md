@@ -16,7 +16,7 @@ non-Taskfile tasks alongside a serial one when they share no files.
 
 ## 0. Wave 0 — findings encoded (one PR, coordinator session)
 
-- [ ] 0.1 Ten audit-4 findings as `xfail(strict=True)` tests in `tests/scaffold/cat10_devex.py`,
+- [x] 0.1 Ten audit-4 findings as `xfail(strict=True)` tests in `tests/scaffold/cat10_devex.py`,
       each asserting the behaviour its fix produces against a rendered tree or the repo's own
       output, plus the `slow` render-and-gate control; change artifacts;
       `task replan CHANGE=devex-eight-4` green.

@@ -7,6 +7,11 @@ Cross-repo integration happens through this document — a published Snowflake o
 a released package. **Never integrate by cloning another repo into this one.** A side-clone
 couples you to someone else's implementation details and to their refactors.
 
+Warehouse modeling ownership splits by producer, not by warehouse — pulse commits SQL over the
+surfaces it produces, data-platform's dbt owns marts computed from business logic
+([ADR-0006](../adr/ADR-0006-warehouse-modeling-ownership.md)); each row below states which side of
+that rule it is on.
+
 Record each entry with enough detail that a consumer can depend on it without reading the code:
 
 | Surface | Kind | Stability | Notes |
