@@ -310,6 +310,21 @@ per §4.3, and the `alerts.py` bootstrap insert is deleted. Until then the colum
 the C1 gate, M1 is re-scoped as a blocker rather than carried, since a non-authoritative status
 column surviving into PHI-scoped production is exactly the ambiguity this ADR exists to end.
 
+**Retired in code, 2026-09-09.** The four clauses above are met, each in the `m1-retire-patient-state`
+PR that shipped it: `patients` rows mint only from the ledger projection (`patient_state.py`,
+task 1.1, #440); the three read surfaces — `patient_graph_summary`, stacte-bridge `crud_api.py`,
+slack-bot `slash_commands.py` — cut over to the projected `enrollment_status`/`ledger_seq` pair
+(task 2.2, #439); the column is read-only, enforced twice, by a repository gate and a Hasura
+select-only grant (task 2.1, #446); and the `alerts.py` bootstrap insert is deleted, along with
+the normalizer's asserted status (task 1.3, #445). Supporting infrastructure landed alongside:
+the `ledger_seq` schema migration (task 1.2, #438), the EventBridge routing that lets
+graph-projection receive `patient-state` events (task 1.4, #443), and the sweep registry's flip to
+citable (task 3.1, #444). Code-complete is not yet operational on dev — the migration,
+`terraform apply`, and rebuild happen in task 4.1's attended run
+(`docs/runbooks/m1-patients-projection.md`); until then the routing decision 11 added is inert
+there, the documented safe failure. This closes M1 at the code level; the Phase 3 / v3.0 exit
+table entry (`design/delivery/pulse-program-roadmap.md`) closes once 4.1's receipt posts.
+
 ---
 
 ## 7. The OCEAN paper supersession notice — final commit to the source repo
@@ -389,3 +404,7 @@ Two local checkouts of `robford-brookai/ocean` exist and they are not equivalent
 5. [ ] Fold §4 (contract + registry + producer policy) into `DNA-SPEC-DECLARED-STATE-PRM` at the PRD merge, adjacent to the object-model section
 6. [x] **Spike moot** 2026-08-02 — V5 and V6 are both resolved, and the inventory the spike would have produced already exists: wave 2b of `ocean-eventbridge-migration` (DNA-744–756) enumerated every publish site and converted all thirteen to the shared `EventBridgePublisher`. No separate Linear work order needed
 7. [ ] Strike `ocean` from the org-transfer remediation batch — it exits by absorption
+8. [x] **M1 retired in code** 2026-09-09 (§6.2) — all four clauses shipped in
+   `m1-retire-patient-state` (#440, #439, #446, #445); the terraform apply, rebuild, and Hasura
+   apply that make it operational on dev are task 4.1's attended run, tracked on its own GitHub
+   issue, not this ADR

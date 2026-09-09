@@ -58,6 +58,21 @@ pulse-committed view beside `STG_EVENTS.EVENTS`, per ADR-0006 (design.md decisio
 | `STREAMLINE.STG_EVENTS.SUBJECT_CURRENT_STATE` | Snowflake view | beta | grain: one row per `(subject_type, subject_key)`, latest landed event by `seq` (the ledger's own commit order, never `effective_at`/`recorded_at`); `state` is that row's `payload:to_state`, `NULL` when the winner carries none; columns: `subject_type`, `subject_key`, `seq`, `state`, `event_id`, `event_type`, `effective_at`, `occurred_at`, `recorded_at`, `_loaded_at`; floored on `_loaded_at >= min_complete_from` (`2026-08-26`, same floor as the `STG_EVENTS.EVENTS` row above — a subject whose whole history is pre-floor is absent from this view, read by the sweep as `pre_floor`, never a warehouse divergence); committed at `packages/ocean/infra/snowflake/subject_current_state.sql`, applied idempotently by `task snowflake:subject-current-state` |
 | Reconciliation sweep receipt | operator-visible contract, one JSON line per family per run (`schedules.receipt.Receipt`) | beta | fields: `date`, `family`, `kind`, `floor`, `snapshot_head`, `no_consumers`, per-consumer `agreements`/`divergences` by kind (`state`, `lag`, `missing`, `orphan`)/`uncitable`/`in_flight`/`malformed`/`pre_floor`, `subject_keys` by outcome capped at 200 with the true total beside the cap; tags `project:pulse`, `service:schedules`, `family:<name>`; never a payload value, payer identifier, or demographic. Emitted by `reconcile-sweep --family <name> [--dry-run]` (`schedules.cli`), exit 0 when rows were compared (a divergence is a receipt, not a failure) or when a family has `no_consumers`, exit 2 when nothing could be compared; ten consecutive clean daily receipts for a family are the P0 streak (`schedules.receipt.compute_streak`) — same line, whichever sweep kind produced it, is what is posted on the attended-run tracking issue (design.md decision 7) |
 
+### Patients projection (`m1-retire-patient-state`, ADR §6.2)
+
+`packages/ocean`'s `patients` table (graph Postgres) is now a ledger consumer of the `patient-state`
+domain, not a self-minting one: `services/graph-projection/src/handlers/patient_state.py` mints
+and updates a row only from the `enrollment` family's committed events, keyed by the canonical
+patient id, monotonic on `ledger_seq` (design.md decisions 1-2). `enrollment_status` is read-only
+(repository gate + Hasura select-only grant) and carries no default; a legacy row (pre-migration)
+is marked by a null `ledger_seq` rather than migrated. It registers with the reconciliation sweep
+as `graph-projection-patients`, citable (`cite_field="ledger_seq"`), per `packages/schedules`'
+consumer registry.
+
+| Surface | Kind | Stability | Notes |
+|---|---|---|---|
+| `patients` (graph-projection-patients consumer) | Postgres table, reconciliation-citable | beta | grain: one row per canonical patient id; `enrollment_status TEXT NOT NULL` ∈ catalog `enrollment` states for projected rows, any legacy value otherwise; `ledger_seq BIGINT NULL` — set for every projected row, null marks a legacy row awaiting genesis adoption; read-only for every consumer but the handler itself; operational on dev after task 4.1's attended run (`docs/runbooks/m1-patients-projection.md`) |
+
 ### Ledger command and read surfaces (`pulse-ledger-core`, DNA-784)
 
 The ledger's write path is one HTTP command API (`packages/pulse-ledger`), consumed through the
