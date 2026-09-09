@@ -100,15 +100,34 @@ never a worktree.
       Tests: `mkdocs build -s`; cat8 docs gates; `task check` green.
       `[model: haiku | deps: 1.4, 2.1, 2.2 | lane: repo_change | wave: 2]`
 
+- [ ] 3.3 Rebuild CLI: `packages/ocean/services/graph-projection/src/rebuild_patients.py` runs
+      `patient_state.rebuild` as an operator command, mirroring `twenty_projection.rebuild`
+      (`task projection:rebuild`): a `JournalReader` that reads each subject's committed
+      `enrollment` events over HTTP through `pulse_core.client.PulseCoreClient.subject_history`
+      with the `pulse_core.replay` credential (no ledger DSN, no database driver); scope is every
+      `patient_id` in `patients` (legacy rows to adopt) plus an optional `--subject` list, because
+      the ledger's read surface is per subject; per-subject order suffices because the monotonic
+      guard is per `patient_id`; a `task projection:rebuild-patients TARGET=dev OPERATOR=<who>`
+      target; receipt is `RebuildReceipt.render()` (counts only). `pulse-core` becomes a
+      graph-projection dependency for this module only; the live handler still imports nothing
+      from it (design.md decision 12). Update `docs/runbooks/m1-patients-projection.md` step 3 to
+      the committed command.
+      Tests: fixture journal replays through the CLI path and the receipt counts match; a subject
+      with no history is a counted park, not a failure; the reader pages `after_seq` to the end;
+      no payload field beyond the state name reaches a log or the receipt; the §4.4 producer gate
+      and the 2.1 read-only gate stay green (the CLI writes through `handle_patient_state` only).
+      `[model: opus | deps: 1.1, 3.2 | lane: repo_change | wave: 3]`
+      Opus because the scope rule decides which legacy rows get adopted on dev.
+
 ## 4. Wave 3 — attended run
 
 - [ ] 4.1 Live execution on dev: GitHub tracking issue; apply the migration on dev's graph
       Postgres; `terraform apply` the `eventbridge-ocean` module so graph-projection's rule includes
-      `patient-state`, and confirm the rule pattern from the CLI; run `patient_state.rebuild` over the journal for `enrollment` subjects; apply Hasura
+      `patient-state`, and confirm the rule pattern from the CLI; run `task projection:rebuild-patients TARGET=dev OPERATOR=<who>` (task 3.3) over the journal for `enrollment` subjects; apply Hasura
       metadata; run the `enrollment` conformance sweep once and post its receipt (counts and subject
       keys only): projected rows agree, legacy rows counted as uncitable, no `patients` write from
       any other path during the run.
       Tests (runbook assertions): the consumer rule pattern lists `patient-state`; zero
       `INSERT INTO patients` from graph-projection logs outside the handler; view returns `ledger_seq` for projected rows; sweep receipt shows the consumer as
       citable.
-      `[model: sonnet | deps: 1.4, 3.1, 3.2 | lane: operational_discovery | wave: 3]`
+      `[model: sonnet | deps: 1.4, 3.1, 3.2, 3.3 | lane: operational_discovery | wave: 4]`
