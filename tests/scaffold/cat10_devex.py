@@ -678,7 +678,6 @@ def _render(dest_root: Path, name: str, direction: str) -> Path:
     return dest
 
 
-@open_finding
 def test_rendered_connector_suites_run_under_the_repos_import_mode(tmp_path: Path):
     """Fix 1: `task connector:new` renders a suite that `task test` can actually run.
 

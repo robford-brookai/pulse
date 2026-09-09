@@ -173,12 +173,18 @@ packages/my-connector/
 │   ├── receipts.py                # DeclareCounts + your own counts
 │   └── py.typed
 └── tests/
-    ├── __init__.py
     ├── conftest.py                # the socket block — see step 5
     ├── factories.py               # fakes at the httpx boundary
     ├── test_config.py
+    ├── test_receipts.py
     └── test_service.py            # the declare, the deferred event, the replay
 ```
+
+No `tests/__init__.py`, and the fixtures are imported relatively — `from .factories import ...`.
+Both halves are load-bearing under the repo's combined `pytest --import-mode=importlib` run:
+`packages/billing-connector/tests` is already a top-level `tests` package, so a second one
+collides inside pytest's plugin manager the moment both are in `TESTED_PATHS`, and an absolute
+`from factories import ...` has no `sys.path` entry to resolve against under that import mode.
 
 Both directions render a green `tests/test_service.py`; `DIRECTION=inbound` replaces it with the
 reader's own — per-row validation, the durable cursor, resume, and the same declare and replay
