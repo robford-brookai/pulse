@@ -304,6 +304,15 @@ tasks:
     cmds:
       - uv run python scripts/apply_snowflake_view.py infra/snowflake/stg_events_events.sql
 
+  snowflake:subject-current-state:
+    desc: Apply the STG_EVENTS.SUBJECT_CURRENT_STATE view DDL to Snowflake (idempotent CREATE OR REPLACE; needs Snowflake credentials)
+    # reconciliation-sweeps task 1.2: the warehouse fold the reconciliation sweep's LandingReader
+    # reads (packages/ocean/infra/snowflake/subject_current_state.sql); this target just replays
+    # it, same posture as snowflake:stg-events above. Never reached from `check`.
+    dir: packages/ocean
+    cmds:
+      - uv run python scripts/apply_snowflake_view.py infra/snowflake/subject_current_state.sql
+
   synthea:regen:
     desc: Regenerate the PROFILE synthetic population from the pinned JAR and verify its manifest (Java required; REPIN=1 re-pins)
     # Deterministic generation receipted by checksum manifest (synthea-seed change). Java is a
