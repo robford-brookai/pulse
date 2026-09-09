@@ -48,7 +48,13 @@ S1.1 delivers schema. This section covers the service around it.
 | Command commit latency | p99 < 500 ms | Kanban heal-back and webhook timeouts both hang off this |
 | Projection freshness (ledger → Twenty) | p99 < 60 s | The "heals back within seconds" promise, measured |
 
-**Monitor set (launch):** command API error rate and latency (APM), outbox lag and DLQ depth, projection freshness per consumer (Twenty, Customer.io, Snowflake), verdict relay run success and staleness (no successful declare-back in > 26 h fires — the daily verdict cycle plus slack), month-open job success on the 1st (a missed month-open is a billing incident, page severity), reconciliation sweep drift count trend, quarantine queue depth and age. All monitors tag `service:pulse` and route to the on-call rotation (§3.3).
+Decision 2026-09-08: `pulse_ledger.relay`'s p99 < 30 s outbox-to-backbone figure (`relay.py`'s
+`outbox_lag_seconds`) is not a fourth SLO — it is a sub-budget of the third: the ledger →
+EventBridge hop is one leg of the ledger → Twenty path this row measures end to end, so 30 s of the
+60 s budget is spent before the event even reaches the backbone. The two documents agree because
+the relay's docstrings say "sub-budget" rather than "the SLO".
+
+**Monitor set (launch):** command API error rate and latency (APM), outbox lag and DLQ depth, projection freshness per consumer (Twenty, Customer.io, Snowflake), verdict relay run success and staleness (no successful declare-back in > 26 h fires — the daily verdict cycle plus slack), month-open job success on the 1st (a missed month-open is a billing incident, page severity), reconciliation sweep drift count trend, quarantine queue depth and age. Decision 2026-09-08: the per-service `service:<name>` tag stays on each emitter — it is what Datadog APM keys on (`verdict_relay.run`'s `service:verdict-relay`, `billing_connector.receipts`' `service:billing-connector`, and so on) — and every pulse service also carries a shared `project:pulse` tag; monitors route on `project:pulse` and route to the on-call rotation (§3.3).
 
 **Instrumentation:** every command carries a trace id propagated to the outbox event and projection writes, so one trace spans webhook → command → ledger → projection. This is the debugging story for "my card moved itself" tickets.
 

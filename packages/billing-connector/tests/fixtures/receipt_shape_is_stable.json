@@ -17,6 +17,6 @@
     "committed": 3,
     "replayed": 1,
     "rejected": 0,
-    "line": "service=billing-connector committed=3 replayed=1 rejected=0 evaluated=4 deferred=2"
+    "line": "service=billing-connector project=pulse committed=3 replayed=1 rejected=0 evaluated=4 deferred=2"
   }
 }

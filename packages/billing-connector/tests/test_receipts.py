@@ -12,7 +12,7 @@ from pulse_core.connector import DeclareCounts
 
 #: The golden line for an all-zero receipt — the shape every run's line matches byte for byte
 #: apart from the counts (spec scenario: "The receipt shape is stable").
-_GOLDEN_ZERO_LINE = "service=billing-connector committed=0 replayed=0 rejected=0 evaluated=0 deferred=0"
+_GOLDEN_ZERO_LINE = "service=billing-connector project=pulse committed=0 replayed=0 rejected=0 evaluated=0 deferred=0"
 
 
 class TestReceiptExtendsTheKitsCountedReceipt:
@@ -44,8 +44,19 @@ class TestFormatLineGolden:
 
         line = receipt.format_line()
 
-        assert line == "service=billing-connector committed=3 replayed=1 rejected=0 evaluated=4 deferred=2"
+        assert (
+            line == "service=billing-connector project=pulse committed=3 replayed=1 rejected=0 evaluated=4 deferred=2"
+        )
         # Same key order, same key set, as the golden — only the values differ.
         golden_keys = [pair.split("=", 1)[0] for pair in _GOLDEN_ZERO_LINE.split(" ")]
         line_keys = [pair.split("=", 1)[0] for pair in line.split(" ")]
         assert line_keys == golden_keys
+
+    def test_the_line_carries_the_shared_project_tag_alongside_its_own_service_tag(self) -> None:
+        """Datadog monitors route on `project:pulse`; the per-service tag stays for APM
+        (design/delivery/pulse-runtime-readiness.md §1.5, decision 2026-09-08)."""
+        line = Receipt().format_line()
+
+        assert "service=billing-connector" in line
+        assert "project=pulse" in line
+        assert line.index("project=pulse") > line.index("service=billing-connector")

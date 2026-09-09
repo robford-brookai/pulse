@@ -7,8 +7,9 @@
    nothing to publish.
 
 Plus the surrounding promises: at-least-once redelivery carries the same `event_id`, the lag gauge
-the p99 < 30 s SLO is stated over, backoff is durable across passes, two relays do not both take
-one subject, and redrive is the operator's action.
+the p99 < 30 s figure (a sub-budget of the projection-freshness SLO) is stated over, backoff is
+durable across passes, two relays do not both take one subject, and redrive is the operator's
+action.
 
 The publisher is a fake satisfying `relay.Publisher`. That is the point of the protocol: ordering
 and dead-lettering are decisions this module makes, and asserting them needs a bus that fails on
@@ -307,7 +308,8 @@ def test_redrive_is_the_operators_action(ledger_db: psycopg.Connection) -> None:
 
 
 def test_lag_is_the_age_of_the_oldest_waiting_row(ledger_db: psycopg.Connection) -> None:
-    """The gauge the p99 < 30 s outbox-to-backbone SLO is stated over."""
+    """The gauge the p99 < 30 s outbox-to-backbone figure — a sub-budget of the
+    projection-freshness SLO — is stated over."""
     assert outbox_lag_seconds(ledger_db) is None
 
     _commit_history(ledger_db, "ref-lag", count=1)
