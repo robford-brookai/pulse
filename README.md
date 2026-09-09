@@ -25,9 +25,10 @@ whatever the statement says right now.
 ## Status
 
 Phases 0 through 2 are complete and shipped as v2.0 on 2026-08-08. Phase 3 (projections) is
-active. Twenty-three changes have been archived, most recently `devex-eight`, `devex-eight-2`
-and `devex-eight-3` (the connector-author developer-experience loop, audits 1 to 3) on
-2026-09-08. `devex-eight-4` and `billing-connector` are the changes currently in flight.
+active. Twenty-four changes have been archived, most recently `billing-connector` (the first
+connector on the kit, cut at the reconciliation seam) and the three DevEx changes `devex-eight`,
+`devex-eight-2` and `devex-eight-3`, all on 2026-09-08. `devex-eight-4` is the change currently
+in flight.
 
 - Program status: [`.planning/reports/2026-09-08-program-status.md`](.planning/reports/2026-09-08-program-status.md)
 - Roadmap and phase table: [`design/delivery/pulse-program-roadmap.md`](design/delivery/pulse-program-roadmap.md)

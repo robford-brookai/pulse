@@ -31,8 +31,13 @@ class Receipt(DeclareCounts):
         counts first in `DeclareCounts` field order, then this connector's own two (spec: "The
         receipt shape is stable" — every run's line matches this shape byte for byte apart from
         the counts).
+
+        `project=pulse` sits alongside `service=billing-connector` — the per-service tag Datadog
+        APM keys on stays, and every pulse service also carries the shared tag monitors route on
+        (design/delivery/pulse-runtime-readiness.md §1.5, decision 2026-09-08).
         """
         return (
-            f"service=billing-connector committed={self.committed} replayed={self.replayed} "
-            f"rejected={self.rejected} evaluated={self.evaluated} deferred={self.deferred}"
+            f"service=billing-connector project=pulse committed={self.committed} "
+            f"replayed={self.replayed} rejected={self.rejected} evaluated={self.evaluated} "
+            f"deferred={self.deferred}"
         )

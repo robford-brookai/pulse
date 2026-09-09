@@ -1,6 +1,6 @@
 # connector-kit
 
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: The scaffold renders a package that passes the repo's own gate
 `task connector:new` SHALL render, in both directions, a package whose test suite runs under

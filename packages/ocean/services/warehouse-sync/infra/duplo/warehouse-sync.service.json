@@ -43,6 +43,30 @@
         "cpu": "500m",
         "memory": "500Mi"
       }
+    },
+    "readinessProbe": {
+      "initialDelaySeconds": 15,
+      "periodSeconds": 10,
+      "timeoutSeconds": 3,
+      "successThreshold": 1,
+      "failureThreshold": 3,
+      "httpGet": {
+        "path": "/health",
+        "port": 8008,
+        "scheme": "HTTP"
+      }
+    },
+    "livenessProbe": {
+      "initialDelaySeconds": 30,
+      "periodSeconds": 10,
+      "timeoutSeconds": 3,
+      "successThreshold": 1,
+      "failureThreshold": 6,
+      "httpGet": {
+        "path": "/health",
+        "port": 8008,
+        "scheme": "HTTP"
+      }
     }
   }
 }

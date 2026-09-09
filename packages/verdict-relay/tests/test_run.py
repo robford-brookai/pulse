@@ -216,6 +216,17 @@ class TestMixedBatchScenario:
             assert record["service"] == SERVICE
             assert {"timestamp", "level", "logger", "message"} <= set(record)
 
+    def test_every_record_also_carries_the_shared_project_tag(self, log_stream: io.StringIO) -> None:
+        """`project=pulse` is what monitors route on; `service` stays the per-service APM tag
+        (design/delivery/pulse-runtime-readiness.md §1.5, decision 2026-09-08). Additive to the
+        JSON record only — the pinned summary line's form is untouched."""
+        self.run_mixed_batch()
+
+        records = log_records(log_stream)
+        assert records
+        for record in records:
+            assert record["project"] == "pulse"
+
     def test_the_run_commits_page_position_and_watermarks_once_per_page(self, log_stream: io.StringIO) -> None:
         api = ScriptedApi(MIXED_RESPONSES)
         store = MemoryCursorStore()

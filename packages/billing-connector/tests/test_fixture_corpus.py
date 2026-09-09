@@ -24,16 +24,10 @@ from typing import cast
 import pytest
 from billing_connector.receipts import Receipt
 
+from tests.spec_path import spec_path
+
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
-_SPEC_PATH = (
-    Path(__file__).resolve().parents[3]
-    / "openspec"
-    / "changes"
-    / "billing-connector"
-    / "specs"
-    / "billing-connector"
-    / "spec.md"
-)
+_SPEC_PATH = spec_path()
 _SCENARIO_HEADING = re.compile(r"^#### Scenario: (.+)$", re.MULTILINE)
 
 #: Common counted fields every recording's `expected` block carries, whether or not the
