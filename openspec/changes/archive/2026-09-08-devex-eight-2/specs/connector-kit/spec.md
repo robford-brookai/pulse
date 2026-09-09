@@ -1,6 +1,6 @@
 # connector-kit
 
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: The kit's public surface is complete and versioned
 The package root `pulse_core.connector` SHALL export every primitive the connector authoring guide

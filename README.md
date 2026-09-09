@@ -25,11 +25,11 @@ whatever the statement says right now.
 ## Status
 
 Phases 0 through 2 are complete and shipped as v2.0 on 2026-08-08. Phase 3 (projections) is
-active. Twenty changes have been archived, most recently `connector-pattern` (the shared
-connector kit) and `pulse-demo-closeout` (the end-to-end demonstration and the projection
-rebuild drill), both on 2026-09-02. `billing-connector` is the change currently in flight.
+active. Twenty-three changes have been archived, most recently `devex-eight`, `devex-eight-2`
+and `devex-eight-3` (the connector-author developer-experience loop, audits 1 to 3) on
+2026-09-08. `devex-eight-4` and `billing-connector` are the changes currently in flight.
 
-- Program status: [`.planning/reports/2026-08-30-program-status.md`](.planning/reports/2026-08-30-program-status.md)
+- Program status: [`.planning/reports/2026-09-08-program-status.md`](.planning/reports/2026-09-08-program-status.md)
 - Roadmap and phase table: [`design/delivery/pulse-program-roadmap.md`](design/delivery/pulse-program-roadmap.md)
 
 ## How PULSE works
