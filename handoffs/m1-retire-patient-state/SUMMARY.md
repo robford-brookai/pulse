@@ -1,6 +1,6 @@
 # Handoff Summary: m1-retire-patient-state
 
-Collected 7 handoff(s).
+Collected 8 handoff(s).
 
 ## m1-retire-patient-state-task-001
 
@@ -196,6 +196,40 @@ differ, `SERVICE_ROLES` is the one place to reconcile them.
 
 None — the two scenarios under "Only the ledger projection mints or updates a patient row" were
 implemented as written.
+
+## m1-retire-patient-state-task-3-2
+
+## Spec Updates
+
+None. This task is docs-only, no spec-relevant behavior changed.
+
+### Added Requirements
+
+None.
+
+### Modified Requirements
+
+None.
+
+### Removed Requirements
+
+None.
+
+## Design Drift
+
+None from this task's own scope. One gap surfaced while writing the runbook, worth flagging for
+whoever scopes task 4.1: `graph_projection.handlers.patient_state.rebuild()` has no committed
+production `JournalReader` implementation or CLI wrapper — unlike the board projection's
+`task projection:rebuild` (`twenty_projection.rebuild`), this package only ships the `Protocol`
+and a test fixture. Task 4.1's tasks.md entry says "run `patient_state.rebuild` over the journal"
+as if the plumbing exists; it doesn't yet. Documented as a runbook step that needs an
+operator-written adapter for that run rather than a committed target — see
+`docs/runbooks/m1-patients-projection.md` step 3 — but if 4.1 wants a committed CLI, that is
+additional scope not currently sized anywhere.
+
+## New Scenarios
+
+None.
 
 ## Doc-Updater Instructions
 

@@ -92,7 +92,7 @@ never a worktree.
       as uncitable, a missing citation is `uncitable` not `state`.
       `[model: sonnet | deps: 1.1, 1.2 | lane: repo_change | wave: 2]`
 
-- [ ] 3.2 Docs via `HANDOFF.md`: ADR §6.2 retirement note (dated, naming the four clauses and the
+- [x] 3.2 Docs via `HANDOFF.md`: ADR §6.2 retirement note (dated, naming the four clauses and the
       PRs), roadmap Phase 3 row and v3.0 exit table (M1 clause met), `publishes.md` row for the
       projection as a `patient-state` consumer, runbook `docs/runbooks/m1-patients-projection.md`
       (attended migration, `terraform apply` of the `eventbridge-ocean` consumer rule, rebuild,
