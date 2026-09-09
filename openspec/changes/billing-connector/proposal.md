@@ -28,9 +28,10 @@ proposed now as a deliberate second change in flight alongside `pulse-demo-close
   extends the receipt line with `evaluated=N`. Staleness comes from the consume-loop watermark.
 - **Deploy artifacts** (the moved 3.5): Duplo service JSON, queue/DLQ/rule provisioning,
   runbook. Never reachable from `task check`.
-- **Reconciliation window and cutover** (the moved 4.1, 4.2, 5.1, 5.2) exactly as seeded:
-  scheduled sweep, one full billing month, empty-or-explained diff, then the relay's Snowflake
-  read retires. **BREAKING** for the verdict write path at cutover, recorded by ADR.
+- **Reconciliation window and cutover** (the moved 4.1, 4.2, 5.1, 5.2): moved out again on
+  2026-09-08 to the queued `billing-cutover` change (design.md decision 11). No production
+  billing cutover is planned at this time. The relay's mart read keeps running, and this change
+  ends with the connector deploy-ready on dev.
 - **Scope narrowed on entry**: the connector evaluates the verdict types the rules package
   registers (today one, `billing_eligibility`), and its first triggers are episode-subject and
   coverage-subject events. Consent and enrollment fan-out to episodes is gated on a catalog
@@ -45,14 +46,10 @@ the pinned scope; gate 1 in the seed); any warehouse read on the write path; oth
 - `billing-connector`: the connector's behavior contract — event-driven evaluation with
   bounded latency, attributed and versioned verdict pairs, staleness from the watermark, one
   credential and no ledger internals, receipts, and the amount-free boundary at its seam.
-- `verdict-reconciliation`: the parallel-run comparison between connector verdicts and mart
-  verdicts — window, per-subject diff, empty-or-explained gate, receipt. Moved whole from the
-  seed.
 
-### Modified Capabilities
-- `verdict-mart-read`: gains its retirement contract — after the reconciliation gate passes,
-  the mart read is decommissioned and the mart is no longer a write-path dependency. Moved
-  whole from the seed.
+Moved to `billing-cutover` on 2026-09-08 (design.md decision 11): `verdict-reconciliation`
+(new) and the `verdict-mart-read` retirement requirement (modified). Their text is carried in
+`design/delivery/billing-cutover-seed.md` §4.
 
 ## Impact
 
@@ -60,11 +57,11 @@ the pinned scope; gate 1 in the seed); any warehouse read on the write path; oth
   modules if it lacks one (additive); workspace `pyproject.toml` and `Taskfile.yml` lint,
   typecheck, and test lists; the credential-posture gate discovers the new package.
 - **Contracts**: `publishes.md` (billing-connector as producer on `patient-state`),
-  `consumes.md` (mart row demotes at cutover), `producer-registry.md` (engine row already
+  `consumes.md` (mart row unchanged; its demotion moves with the cutover), `producer-registry.md` (engine row already
   present from 1.1 of connector-pattern), `billing-boundary.md` (seam moves with the logic);
-  new ADR at cutover.
+  the write-path ADR moves with the cutover.
 - **Runtime**: one new bus consumer (rule, queue, DLQ), one new writer credential
-  `billing-connector`. Dev deploy first; the window runs on dev.
+  `billing-connector`. Dev deploy only; the window and cutover moved to `billing-cutover`.
 - **Workflow**: two changes in flight until `pulse-demo-closeout` archives. `task` commands
   take `CHANGE=` explicitly, and state resolution is per change, so tooling is unaffected; the
   `<id>` convention in CLAUDE.md is the one place the assumption is written.
@@ -72,6 +69,5 @@ the pinned scope; gate 1 in the seed); any warehouse read on the write path; oth
 ## Rollback
 
 Scaffold PRs are additive and removable package by package. Before cutover, rollback is "stop
-the connector consumer" with the relay declaring exactly as today. After cutover, rollback is
-re-enabling the relay's poll target from config; the read path is removed only after a full
-month of green parallel receipts.
+the connector consumer" with the relay declaring exactly as today. Cutover, and its rollback, live in
+`billing-cutover` (decision 11).

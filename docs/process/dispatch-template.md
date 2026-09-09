@@ -94,6 +94,8 @@ The Phase 2 MECE check extends by three assertions: every task declares or defau
 
 **`lane` is enforced, not advisory.** `scripts/dispatch_tasks.py` writes no work-order file for a task marked `destructive_ops` or `operational_discovery` — such a task is tracked as a GitHub issue and run attended after its runbook PR merges, per WORKFLOW.md `live_execution`. This is the one annotation whose absence is dangerous rather than merely untidy: a `destructive_ops` task without its lane declared becomes an ordinary work order, and an Orca agent will pick up a production teardown. Declare the lane on anything that has no reviewable diff.
 
+**A live-execution task's receipt has exactly two homes: the GitHub tracking issue** (posted as a comment, per WORKFLOW.md `live_execution`) **and `handoffs/<change>/SUMMARY.md`** (inlined there by `task collect`, per §5 below). It never becomes its own file under `handoffs/<change>/` — that directory is gitignored except for `SUMMARY.md`, so a task description that instructs "commit the receipt as `handoffs/<change>/<task>-receipt.md`" produces a file that can never enter the repo and a link to it that is dangling from the first fresh clone onward. Word live-execution task bodies and issue templates against the two real homes, never a third file path.
+
 **`wave` is a label, and the graph is the truth.** Dispatch derives release order from `deps` alone. A declared `wave` is cross-checked for one property — nothing may sit in a wave earlier than something it depends on — and is otherwise documentation. It is deliberately coarser than dependency depth: one wave may contain an ordered chain, and `2a`/`2b`/`2c` split a single depth into human-sized releases.
 
 ## 3. Routing rubric — verifier strength, not task prestige

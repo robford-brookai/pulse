@@ -14,10 +14,11 @@ changes to `HANDOFF.md`, never edit `openspec/specs/`.
 **Entry conditions.** Second change in flight alongside `pulse-demo-closeout` (design.md
 decision 9): tasks touching workspace roots or `Taskfile.yml` are serial-lane and the
 coordinator releases them only when the other change has none in flight. Wave 0 lands four
-scaffold PRs in order, each additive, each with a test, none changing behavior. Task 4.1 waits
-on the dbt spike files landing in `data-platform` (seed gate 3). Tasks 4.2 and 5.1 are live
-execution — GitHub issue + runbook PR + attended run per WORKFLOW v2.2.0 `live_execution` —
-never a worktree.
+scaffold PRs in order, each additive, each with a test, none changing behavior. **Cut at 3.2 on
+2026-09-08 (design.md decision 11):** the reconciliation window and the cutover, former tasks
+4.1, 4.2, 5.1 and 5.2, moved to the queued `billing-cutover` change, seeded in
+`design/delivery/billing-cutover-seed.md`. This change ends with the connector built, tested,
+and deploy-ready on dev. The relay's mart read keeps running.
 
 ---
 
@@ -122,35 +123,3 @@ never a worktree.
       decision 9). Via `HANDOFF.md` where a spec is touched.
       Tests: contract-doc gates; cat8 docs consistency; `task check` green.
       `[model: sonnet | deps: 3.1 | lane: repo_change | wave: 2]`
-
-## 4. Wave 3 — reconciliation window
-
-- [ ] 4.1 [DNA-1281] `verdict-reconcile` schedules entry: per-(subject, verdict_type)
-      comparison of `evaluations` vs mart rows over matching fact windows; diff report with
-      counts and subject keys only; empty-or-explained state machine for entries (spec:
-      verdict-reconciliation, all three requirements). Blocked until the dbt spike files land
-      in `data-platform` (seed gate 3) — the fixture mart is built from that commit.
-      Tests: fixture mart + fixture evaluations produce the golden diff shapes — agree,
-      timing-artifact, genuine divergence; PHI tripwire on report output.
-      `[model: sonnet | deps: 3.1 | lane: repo_change | wave: 3]`
-
-- [ ] 4.2 Open the window (live execution): GitHub tracking issue + runbook PR; attended start
-      of the connector service on dev; both writers live; sweep scheduled; first sweep receipt
-      on the issue. Window runs one full billing month.
-      Tests (runbook assertions): connector declares on a live episode event without a
-      scheduled run; sweep receipt posts; both writers' receipts attributable.
-      `[model: sonnet | deps: 3.2, 4.1 | lane: operational_discovery | wave: 3]`
-
-## 5. Wave 4 — cutover (gated on the 4.2 window closing empty-or-explained)
-
-- [ ] 5.1 Cutover runbook PR + attended run: stop the relay poll, retire its Snowflake
-      credential, closing sweep report committed as the receipt (spec: verdict-mart-read
-      retirement requirement).
-      Tests (runbook assertions): no Snowflake credential on the write path; connector-only
-      verdicts continue; rollback rehearsed (re-enable poll from config).
-      `[model: sonnet | deps: 4.2 | lane: destructive_ops | wave: 4]`
-
-- [ ] 5.2 [DNA-1282] Docs close-out via `HANDOFF.md`: ADR for the write-path supersession,
-      `consumes.md` mart row demoted, fonzie dependency-spec gap 1 note updated.
-      Tests: `mkdocs build -s`; contract-doc gates; `task check` green.
-      `[model: sonnet | deps: 5.1 | lane: repo_change | wave: 4]`

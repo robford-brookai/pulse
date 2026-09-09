@@ -15,10 +15,25 @@ Environment:
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+#: Section names templates/HANDOFF.md declares for spec-relevant content — the receipt this
+#: script inlines into SUMMARY.md. Metadata fields (Worktree/Change/Task ID/Date) and "Notes for
+#: Doc-Updater" are operational, not a receipt of what happened, and stay out of the summary.
+_RECEIPT_HEADINGS = {
+    "spec updates",
+    "added requirements",
+    "modified requirements",
+    "removed requirements",
+    "design drift",
+    "new scenarios",
+}
+
+_LINK_RE = re.compile(r"\]\(([^)\s]+)\)")
 
 
 def find_worktrees() -> list[Path]:
@@ -108,8 +123,58 @@ def collect_handoffs(worktrees: list[Path], change: str, output_dir: Path) -> li
     return collected
 
 
+def _strip_comments(text: str) -> str:
+    """Drop HTML comments (the template's placeholder prose) so an untouched section reads as
+    empty rather than as content."""
+    return re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
+
+
+def _sections(text: str) -> list[tuple[str | None, list[str]]]:
+    """Split a HANDOFF body into (heading_line, body_lines) pairs, in document order. Content
+    before the first heading is one section keyed on `None`."""
+    result: list[tuple[str | None, list[str]]] = []
+    heading: str | None = None
+    body: list[str] = []
+    for line in text.splitlines():
+        if line.lstrip().startswith("#"):
+            result.append((heading, body))
+            heading, body = line, []
+        else:
+            body.append(line)
+    result.append((heading, body))
+    return result
+
+
+def extract_receipt_sections(handoff_text: str) -> str:
+    """Pull the receipt-bearing sections out of one HANDOFF: Spec Updates (and its Added/
+    Modified/Removed Requirements subsections), Design Drift, and New Scenarios — the section
+    names templates/HANDOFF.md declares for spec-relevant content. Everything else (the metadata
+    fields, Notes for Doc-Updater) is operational rather than a receipt of what happened, and is
+    left out. A kept section whose body is empty once the template's own placeholder comment is
+    stripped is omitted too, rather than emitted as a heading with nothing under it.
+    """
+    kept: list[str] = []
+    for heading, body in _sections(handoff_text):
+        if heading is None:
+            continue
+        title = heading.lstrip("#").strip().lower()
+        if title not in _RECEIPT_HEADINGS:
+            continue
+        if not _strip_comments("\n".join(body)).strip():
+            continue
+        kept.append(heading)
+        kept.extend(body)
+    return "\n".join(kept).strip()
+
+
 def summarize_handoffs(handoffs: list[Path], change: str) -> str:
-    """Produce a summary for the doc-updater agent."""
+    """Produce a summary for the doc-updater agent.
+
+    Inlines each collected HANDOFF's receipt-bearing sections under a heading per task, rather
+    than linking to the per-task file — that file lives under handoffs/<change>/ which .gitignore
+    excludes everything but SUMMARY.md from, so a link to it is dangling in every fresh clone.
+    SUMMARY.md is the only thing that survives; it has to carry the content itself.
+    """
     if not handoffs:
         return f"No HANDOFF.md files found for change '{change}'."
 
@@ -118,27 +183,53 @@ def summarize_handoffs(handoffs: list[Path], change: str) -> str:
         "",
         f"Collected {len(handoffs)} handoff(s).",
         "",
-        "## Files",
-        "",
     ]
     for h in handoffs:
-        lines.append(f"- [{h.name}]({h})")
+        lines.append(f"## {h.stem}")
+        lines.append("")
+        content = extract_receipt_sections(h.read_text())
+        lines.append(content if content else "_No spec-relevant updates recorded._")
+        lines.append("")
 
     lines += [
-        "",
         "## Doc-Updater Instructions",
         "",
-        "1. Read each handoff file above.",
-        "2. For each spec-relevant update, edit the corresponding file in:",
+        "1. For each spec-relevant update inlined above, edit the corresponding file in:",
         f"   `openspec/changes/{change}/specs/`",
-        "3. Run `openspec validate " + change + "` to check format.",
-        "4. Run `openlore drift` to check for new drift.",
-        "5. Ignore implementation details — only apply plan-relevant changes.",
-        "6. If a handoff contains `## Design Drift`, flag for human review.",
+        "2. Run `openspec validate " + change + "` to check format.",
+        "3. Run `openlore drift` to check for new drift.",
+        "4. Ignore implementation details — only apply plan-relevant changes.",
+        "5. A `## Design Drift` section above means flag for human review.",
         "",
     ]
 
     return "\n".join(lines)
+
+
+def find_ignored_links(text: str, base_dir: Path) -> list[str]:
+    """Markdown link targets in `text` that git would refuse to track from `base_dir`.
+
+    This is the dangling-receipt bug in a new outfit: a link into a gitignored path reads fine on
+    the workstation that wrote it and breaks for anyone who clones fresh. summarize_handoffs no
+    longer emits such links, but this is a backstop against a future regression reintroducing one
+    — never emit a link this cannot vouch for.
+    """
+    offenders = []
+    for target in _LINK_RE.findall(text):
+        if "://" in target or target.startswith("mailto:"):
+            continue
+        candidate = Path(target) if Path(target).is_absolute() else base_dir / target
+        try:
+            result = subprocess.run(  # noqa: S603
+                ["git", "-C", str(candidate.parent), "check-ignore", "--quiet", candidate.name],  # noqa: S607
+                capture_output=True,
+                check=False,
+            )
+        except OSError:
+            continue
+        if result.returncode == 0:
+            offenders.append(target)
+    return offenders
 
 
 def summary_is_ignored(summary_path: Path) -> bool:
@@ -203,6 +294,15 @@ def main():
     if handoffs:
         summary = summarize_handoffs(handoffs, args.change)
         summary_path = Path(args.output) / args.change / "SUMMARY.md"
+        offenders = find_ignored_links(summary, summary_path.parent)
+        if offenders:
+            print(
+                f"\nError: the summary links to gitignored path(s): {', '.join(offenders)}. "
+                "Inline the receipt content instead of linking to a file that will never be "
+                "committed.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
         summary_path.write_text(summary)
         print(f"\nSummary written to {summary_path}")
         if summary_is_ignored(summary_path):
