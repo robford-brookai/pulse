@@ -18,30 +18,24 @@ def _parse_ts(ts_str: str) -> datetime:
 
 
 async def handle_alert_created(event_data: dict, session) -> None:
-    """Project alert.created into patients (bootstrap) + alerts + audit_log.
+    """Project alert.created into alerts + audit_log.
 
-    Three operations within a single transaction:
-    1. Patient bootstrap — INSERT ... ON CONFLICT DO NOTHING (prevents FK violation)
-    2. Alert upsert — INSERT ... ON CONFLICT DO UPDATE SET ... WHERE updated_at guard
-    3. Audit log write — AUDIT-01 compliance
+    Two operations within a single transaction:
+    1. Alert upsert — INSERT ... ON CONFLICT DO UPDATE SET ... WHERE updated_at guard
+    2. Audit log write — AUDIT-01 compliance
+
+    `patients` is never touched here: only the patient-state projection handler
+    (`handlers/patient_state.py`) mints or updates that table (spec: "Only the ledger projection
+    mints or updates a patient row"). An alert for a patient the ledger has not minted yet lands as
+    an orphan — no FK enforces the reference (`0016_relax_task_fks.py`) — and stays visible to the
+    conformance sweep until the projection catches up.
     """
     payload = event_data.get("payload", {})
     patient_id = payload.get("patient_id", event_data.get("entity_id", ""))
-    clinic_id = payload.get("clinic_id", "unknown")
     ts = _parse_ts(event_data["timestamp"])
     now = datetime.now(tz=UTC)
 
-    # STEP 1: Patient bootstrap — ensure FK constraint is satisfied
-    await session.execute(
-        sa.text(
-            "INSERT INTO patients (patient_id, clinic_id, enrollment_status, updated_at) "
-            "VALUES (:patient_id, :clinic_id, 'pending', :ts) "
-            "ON CONFLICT (patient_id) DO NOTHING"
-        ),
-        {"patient_id": patient_id, "clinic_id": clinic_id, "ts": ts},
-    )
-
-    # STEP 2: Alert upsert with updated_at guard for idempotency
+    # STEP 1: Alert upsert with updated_at guard for idempotency
     alert_id = event_data.get("entity_id", payload.get("alert_id", ""))
     await session.execute(
         sa.text(
@@ -70,7 +64,7 @@ async def handle_alert_created(event_data: dict, session) -> None:
         },
     )
 
-    # STEP 3: Audit log write (AUDIT-01 compliance)
+    # STEP 2: Audit log write (AUDIT-01 compliance)
     await session.execute(
         sa.text(
             "INSERT INTO audit_log "
