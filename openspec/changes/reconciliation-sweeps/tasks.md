@@ -77,7 +77,7 @@ Task 4.1 is live execution (GitHub issue + runbook PR + attended run per WORKFLO
 
 ## 3. Wave 2 — wiring and docs
 
-- [ ] 3.1 Schedule catalog: seven `reconcile-sweep-<family>` entries (`rate(1 day)`,
+- [x] 3.1 Schedule catalog: seven `reconcile-sweep-<family>` entries (`rate(1 day)`,
       `target_subcommand: reconcile-sweep`, family argument) in the generated catalog and their
       Terraform module instances; `test_infra_schedules.py` extended to assert one entry per
       ledger family and none for the recorded one (design.md decision 8).
