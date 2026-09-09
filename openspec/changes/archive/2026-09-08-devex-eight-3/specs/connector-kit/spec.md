@@ -1,6 +1,6 @@
 # connector-kit
 
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: The scaffold renders a working declare and registers its own typecheck posture
 `task connector:new` SHALL render a `handle_page` that declares through `submit_with_retry` with a
