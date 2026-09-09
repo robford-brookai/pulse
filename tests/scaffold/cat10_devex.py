@@ -60,12 +60,6 @@ def _nav_pages(node) -> set[str]:
 # --- Fix 10 (L): scaffold and authoring guide ------------------------------------------------
 
 
-def test_connector_scaffold_command_exists():
-    """`task connector:new NAME=x` exists and a template tree backs it."""
-    assert "connector:new" in TARGETS
-    assert (ROOT / "templates/connector").is_dir()
-
-
 def test_connector_authoring_guide_exists_and_is_in_nav():
     guide = DOCS / "connectors/authoring.md"
     assert guide.is_file()
@@ -678,6 +672,31 @@ def _render(dest_root: Path, name: str, direction: str) -> Path:
     return dest
 
 
+def _diagrammed_paths() -> set[str]:
+    """File paths from the guide's rendered-tree fence, relative to the package directory.
+
+    Depth comes from the four-character indent each level of the box-drawing tree adds, so a
+    directory entry (trailing `/`) pushes onto the stack and its children hang off it. Trailing
+    `  # ...` annotations are stripped; the root line has no connector and is skipped.
+    """
+    fence = re.search(r"```text\n(.*?)\n```", (ROOT / GUIDE).read_text(), re.S)
+    assert fence, "guide has no ```text rendered-tree fence"
+    stack: list[str] = []
+    files: set[str] = set()
+    for raw in fence.group(1).splitlines():
+        line = re.sub(r"\s{2,}#.*$", "", raw).rstrip()
+        m = re.match(r"^([\s\u2502]*)(?:\u251c\u2500\u2500 |\u2514\u2500\u2500 )(.*)$", line)
+        if not m:
+            continue
+        del stack[len(m.group(1)) // 4 :]
+        entry = m.group(2)
+        if entry.endswith("/"):
+            stack.append(entry.rstrip("/"))
+        else:
+            files.add("/".join([*stack, entry]))
+    return files
+
+
 def test_rendered_connector_suites_run_under_the_repos_import_mode(tmp_path: Path):
     """Fix 1: `task connector:new` renders a suite that `task test` can actually run.
 
@@ -784,7 +803,6 @@ def test_readme_names_the_owner_and_the_channel_above_the_fold():
     assert channel, "README's first 40 lines name no place to ask"
 
 
-@open_finding
 def test_the_gate_measures_the_golden_path_not_the_command_listing():
     """Fix 5: `devex_open_findings` is a claim about the connector path, not about a task target.
 
@@ -793,12 +811,15 @@ def test_the_gate_measures_the_golden_path_not_the_command_listing():
     package that failed the repo's own gate in both directions, and this gate still read zero.
     The claim is replaced by the slow control below, which renders and gates; this test is the
     non-slow twin that keeps the replacement from being quietly dropped.
+
+    The two names are assembled rather than written out, so neither assertion can be satisfied by
+    the line that makes it: a literal `def <name>(` here is itself part of this file's source.
     """
     source = Path(__file__).read_text()
-    assert "def test_connector_scaffold_command_exists(" not in source, (
-        "the command-listing claim is still the gate's connector coverage"
-    )
-    assert "def test_rendered_connectors_pass_the_real_gate(" in source, "no render-and-gate control in this gate"
+    listing_claim = "def " + "test_connector_scaffold_command_exists("
+    control = "def " + "test_rendered_connectors_pass_the_real_gate("
+    assert listing_claim not in source, "the command-listing claim is still the gate's connector coverage"
+    assert control in source, "no render-and-gate control in this gate"
 
 
 @pytest.mark.slow
@@ -811,12 +832,19 @@ def test_rendered_connectors_pass_the_real_gate(tmp_path: Path):
     (`docs/contracts/consumes.md`); the two defects this control exists to catch are a lint
     failure and a collection error.
 
+    It also carries the audit's below-the-cut tree-diagram item: the guide's rendered-tree fence
+    is compared to the file set the scaffold actually produces, as a set equality in both
+    directions, so a file the guide diagrams but the scaffold stopped rendering fails here too.
+    `test_template_ships_the_tests_the_guide_diagrams` checks the template against a regex over
+    three filename shapes; this checks the rendered tree, whole.
+
     Marked `slow`, so it is deselected from the default run and does not enter the open-finding
     count — the non-slow twin above carries that. When fixes 1 and 2 land, this marker comes off
     with the second of them (tasks.md task 1.2), before wave 2 touches the twin.
     """
     (tmp_path / "pyproject.toml").write_text((ROOT / "pyproject.toml").read_text())
     (tmp_path / "Taskfile.yml").write_text(TASKFILE_TEXT)
+    diagrammed = _diagrammed_paths()
     packages = []
     for name, direction in (("aaachk", "outbound"), ("zzzchk", "inbound")):
         dest = tmp_path / "packages" / name
@@ -843,6 +871,12 @@ def test_rendered_connectors_pass_the_real_gate(tmp_path: Path):
             check=False,
         )
         assert register.returncode == 0, register.stdout + register.stderr
+        rendered = {str(f.relative_to(dest)) for f in dest.rglob("*") if f.is_file()}
+        expected = {path.replace("my_connector", name) for path in diagrammed}
+        assert rendered == expected, (
+            f"{direction}: guide diagram and rendered tree disagree; "
+            f"only rendered {sorted(rendered - expected)}, only diagrammed {sorted(expected - rendered)}"
+        )
     ruff = shutil.which("ruff") or str(Path(sys.executable).with_name("ruff"))
     for args in (["format", "--check"], ["check", "--no-fix"]):
         r = subprocess.run(  # noqa: S603
