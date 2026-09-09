@@ -73,6 +73,15 @@ connector).
     handler's rebuild path over the journal for `enrollment` subjects so projected rows exist before
     anyone reads them, apply Hasura metadata, then run the conformance sweep once and post the
     receipt. Never a worktree.
+11. **The feed reaches graph-projection through the event catalog, not a new queue.**
+    graph-projection's EventBridge rule is generated from `CONSUMER_DOMAINS` in
+    `ocean_broker/catalog.py`; at proposal time it listed ten domains and not `patient-state`, so
+    the handler in decision 1 would never receive an event (event-store and warehouse-sync already
+    subscribe to the domain). Adding the domain to the existing consumer keeps one queue and one
+    consumer loop; the alternative, a dedicated queue and rule for the projection, is the fourth
+    deployable decision 1 rejected. Until the regenerated rule is applied on dev (task 4.1) the
+    handler is inert there, which is the safe failure. Found 2026-09-09 reviewing task 1.1's PR;
+    added as task 1.4.
 
 ## Data model and API surface
 
@@ -92,6 +101,8 @@ connector).
   subjects appear in the handler's receipt and never block the consumer.
 - [The materialized view recreate locks readers briefly on dev] → run in the attended window;
   `REFRESH ... CONCURRENTLY` afterwards as today.
+- [The consumer rule is applied before the migration] → the handler's INSERT names `ledger_seq`
+  and fails on the missing column; the runbook orders migration, then `terraform apply`, then rebuild.
 - [Hasura permission change breaks a writer nobody knew about] → the gate test runs first and
   would have named it; the attended run watches graph-projection logs for permission errors.
 - [Legacy rows dominate the uncitable count for months] → expected until genesis; the receipt
