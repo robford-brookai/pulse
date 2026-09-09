@@ -526,6 +526,28 @@ tasks:
     cmds:
       - uv run python -m twenty_projection.rebuild --target {{.TARGET}} --scope {{.SCOPE}} --operator {{.OPERATOR}}
 
+  projection:rebuild-patients:
+    desc: Replay the ledger's committed enrollment events into TARGET's patients projection (dev|staging|prod; needs that target's credentials)
+    # The `patients` half of the same drill (m1-retire-patient-state design decision 12), and the
+    # step 3 the cutover runbook calls: reads each subject's committed events through the ledger's
+    # replay route over HTTP and folds them through `handle_patient_state`, the same handler the
+    # live consumer applies, so the monotonic guard makes a rerun a counted run of skips rather
+    # than a second write path to trust separately.
+    # Scope is every `patient_id` already in `patients` — the legacy rows adoption exists for —
+    # plus any `SUBJECT` the operator names for a subject with no row yet (repeat by passing a
+    # space-separated list; each becomes one --subject).
+    # Credentialed on both sides — the graph database's DATABASE_URL and the kit's replay pair
+    # (PULSE_CORE_BASE_URL, PULSE_CORE_REPLAY_TOKEN) — so it is never reached from `check`, the
+    # same posture as projection:rebuild. TARGET names whose credentials are loaded; the variable
+    # names themselves are target-agnostic, as relay:run's are.
+    # Run from the service directory because every ocean service imports itself as `from src.X`;
+    # --project keeps the repo's uv environment, which is where pulse-core resolves.
+    dir: packages/ocean/services/graph-projection
+    requires:
+      vars: [TARGET, OPERATOR]
+    cmds:
+      - uv run --project ../../../.. python -m src.rebuild_patients --target {{.TARGET}} --operator {{.OPERATOR}}{{range $s := splitArgs (default "" .SUBJECT)}} --subject {{$s}}{{end}}
+
   relay:run:
     desc: Run one verdict-relay poll against TARGET's mart and ledger (dev|staging|prod; needs that target's credentials)
     # The operator-facing invocation of the relay's production wiring (billing-state task 3.2,
