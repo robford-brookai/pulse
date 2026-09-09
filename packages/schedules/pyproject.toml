@@ -14,12 +14,17 @@ dependencies = [
     # poll entry (task 3.1) is a thin schedules-native wrapper over the existing relay, never a
     # second implementation of its read-declare loop.
     "verdict-relay",
+    # `twenty_projection.apply.ProjectionRestClient` — the reconciliation sweep's `BoardReader`
+    # (task 1.3) reads the Twenty board through the projection's own paginated GET, never a
+    # second REST client against the same surface.
+    "twenty-projection",
 ]
 
 [tool.uv.sources]
 pulse-core = { workspace = true }
 pulse-ledger = { workspace = true }
 verdict-relay = { workspace = true }
+twenty-projection = { workspace = true }
 
 [dependency-groups]
 dev = [
