@@ -25,7 +25,7 @@ non-Taskfile tasks alongside a serial one when they share no files.
 
 ## 1. Wave 1 — the S fixes
 
-- [ ] 1.1 The rendered test suites import their fixtures under `--import-mode=importlib` in the
+- [x] 1.1 The rendered test suites import their fixtures under `--import-mode=importlib` in the
       repo's combined run. Do **not** copy `packages/billing-connector`'s `tests/__init__.py`
       wholesale: verified in a scratch tree, a second top-level `tests` package collides with it
       inside pytest's plugin manager as soon as both are in `TESTED_PATHS`. The measured shape is
