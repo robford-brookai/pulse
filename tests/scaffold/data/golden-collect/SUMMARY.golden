@@ -2,17 +2,23 @@
 
 Collected 2 handoff(s).
 
-## Files
+## task-001
 
-- [task-001.md](handoffs/fixture-change/task-001.md)
-- [task-002.md](handoffs/fixture-change/task-002.md)
+## Spec Updates
+
+None.
+
+## task-002
+
+## Design Drift
+
+The spec omits clock skew.
 
 ## Doc-Updater Instructions
 
-1. Read each handoff file above.
-2. For each spec-relevant update, edit the corresponding file in:
+1. For each spec-relevant update inlined above, edit the corresponding file in:
    `openspec/changes/fixture-change/specs/`
-3. Run `openspec validate fixture-change` to check format.
-4. Run `openlore drift` to check for new drift.
-5. Ignore implementation details — only apply plan-relevant changes.
-6. If a handoff contains `## Design Drift`, flag for human review.
+2. Run `openspec validate fixture-change` to check format.
+3. Run `openlore drift` to check for new drift.
+4. Ignore implementation details — only apply plan-relevant changes.
+5. A `## Design Drift` section above means flag for human review.
