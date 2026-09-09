@@ -22,7 +22,7 @@ Task 4.1 is live execution (GitHub issue + runbook PR + attended run per WORKFLO
 
 ## 1. Wave 0 — registry and readers
 
-- [ ] 1.1 Sweep registry derived from the catalog: `packages/schedules/src/schedules/sweep_registry.py`
+- [x] 1.1 Sweep registry derived from the catalog: `packages/schedules/src/schedules/sweep_registry.py`
       loads the released `catalog/state_catalog.yaml`, maps `ownership: recorded` →
       `export_diff` and `ownership: ledger` → `projection_conformance`, refuses any other value
       naming the family, and exposes `Family`/`Consumer` types (design.md decisions 1 and 6).
