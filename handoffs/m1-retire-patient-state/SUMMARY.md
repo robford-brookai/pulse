@@ -1,6 +1,6 @@
 # Handoff Summary: m1-retire-patient-state
 
-Collected 8 handoff(s).
+Collected 9 handoff(s).
 
 ## m1-retire-patient-state-task-001
 
@@ -230,6 +230,55 @@ additional scope not currently sized anywhere.
 ## New Scenarios
 
 None.
+
+## m1-retire-patient-state-task-3-3
+
+### Added Requirements
+
+None. Task 3.3 committed the operator invocation of an already-specified behaviour — the rebuild
+itself is spec'd by "Apply is monotonic on the ledger sequence" and "Legacy rows are marked, never
+overwritten", both of which the CLI reaches only through `handle_patient_state`.
+
+Worth considering for the baseline, because it is a property no current requirement states: the
+rebuild's scope is enumerated from `patients`, not from the ledger. The ledger's read surface is
+per subject, so a subject the ledger has minted events for but `patients` has no row for is
+invisible to a rebuild unless an operator names it. Today that set is empty by construction (the
+projection is the only minter and the rule is applied before the rebuild runs), which is why this
+is a note rather than a proposed requirement.
+
+### Modified Requirements
+
+None.
+
+### Removed Requirements
+
+None.
+
+## Design Drift
+
+None against decision 12. Two things it did not settle, resolved here and worth recording:
+
+1. **A subject the ledger has no history for is counted as a park.** Decision 12 says the receipt
+   is `RebuildReceipt.render()` (counts only), and that receipt has no field for "subject with no
+   events". The CLI folds those subjects into `parked`, which is the disposition they share with
+   an event the handler applied nothing for: counted, logged, nothing written, not a failure. The
+   ordinary case before genesis is a legacy row whose subject the ledger has never minted, so this
+   count is expected to be non-zero on the dev run and the runbook now says so.
+
+2. **The image's build context widened to the repo root.** `pulse-core` is a workspace package —
+   it exists on no index, so an image can only install it from its build context, and every ocean
+   service builds from `packages/ocean`. `tests/test_ocean_bus_dependencies.py` correctly failed:
+   a `src/` importing `pulse_core` with no install is an image that cannot start. Fixed on the
+   packaging side rather than by exempting the module — graph-projection's compose entry now names
+   the repo root, the Dockerfile installs `packages/pulse-core`, and the gate learned that a
+   repo-local package can live outside `packages/ocean`. The consumer path still imports nothing
+   from `pulse_core`, so decision 12's import boundary holds.
+
+## New Scenarios
+
+Nothing that belongs in the spec: the behaviours the CLI's tests assert are the existing
+requirements' scenarios reached by a second entry point, plus configuration handling, which is
+operator surface rather than projection contract.
 
 ## Doc-Updater Instructions
 

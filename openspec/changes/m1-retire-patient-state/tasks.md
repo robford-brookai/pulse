@@ -100,7 +100,7 @@ never a worktree.
       Tests: `mkdocs build -s`; cat8 docs gates; `task check` green.
       `[model: haiku | deps: 1.4, 2.1, 2.2 | lane: repo_change | wave: 2]`
 
-- [ ] 3.3 Rebuild CLI: `packages/ocean/services/graph-projection/src/rebuild_patients.py` runs
+- [x] 3.3 Rebuild CLI: `packages/ocean/services/graph-projection/src/rebuild_patients.py` runs
       `patient_state.rebuild` as an operator command, mirroring `twenty_projection.rebuild`
       (`task projection:rebuild`): a `JournalReader` that reads each subject's committed
       `enrollment` events over HTTP through `pulse_core.client.PulseCoreClient.subject_history`
