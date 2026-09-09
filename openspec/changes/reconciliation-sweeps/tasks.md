@@ -52,7 +52,7 @@ Task 4.1 is live execution (GitHub issue + runbook PR + attended run per WORKFLO
 
 ## 2. Wave 1 — the check
 
-- [ ] 2.1 Projection conformance core: `packages/schedules/src/schedules/projection_conformance.py`
+- [x] 2.1 Projection conformance core: `packages/schedules/src/schedules/projection_conformance.py`
       takes a snapshot, compares per `(subject_type, subject_key)`, classifies every pair as
       `agreement | state | lag | missing | orphan | uncitable | in_flight | pre_floor | malformed`,
       names differing fields never values, applies per-consumer freshness budgets and the pinned
