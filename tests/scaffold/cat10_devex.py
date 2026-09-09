@@ -718,7 +718,6 @@ def test_rendered_connector_suites_run_under_the_repos_import_mode(tmp_path: Pat
     assert r.returncode == 0, (r.stdout + r.stderr)[-3000:]
 
 
-@open_finding
 def test_rendered_connector_is_a_ruff_format_fixed_point(tmp_path: Path):
     """Fix 2: every file the scaffold renders is already formatted the way `task lint` wants.
 
@@ -803,7 +802,6 @@ def test_the_gate_measures_the_golden_path_not_the_command_listing():
 
 
 @pytest.mark.slow
-@open_finding
 def test_rendered_connectors_pass_the_real_gate(tmp_path: Path):
     """Fix 5, the control: render both directions, register them, run the repo's own gate.
 
@@ -821,7 +819,8 @@ def test_rendered_connectors_pass_the_real_gate(tmp_path: Path):
     (tmp_path / "Taskfile.yml").write_text(TASKFILE_TEXT)
     packages = []
     for name, direction in (("aaachk", "outbound"), ("zzzchk", "inbound")):
-        packages.append(_render(tmp_path, name, direction))
+        dest = tmp_path / "packages" / name
+        packages.append(dest)
         register = subprocess.run(  # noqa: S603
             [
                 sys.executable,
@@ -833,7 +832,7 @@ def test_rendered_connectors_pass_the_real_gate(tmp_path: Path):
                 "--template",
                 str(CONNECTOR_TEMPLATE),
                 "--dest",
-                str(tmp_path / "packages" / name),
+                str(dest),
                 "--root",
                 str(tmp_path),
                 "--apply-registrations",
