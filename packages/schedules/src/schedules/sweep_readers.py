@@ -23,12 +23,20 @@ Four production readers, one shared fixture:
   repo yet, so both stand on the same small `FamilyRowSource` / `FamilyCountSource` seam a live
   Snowflake adapter fills in later (`verdict_relay.production.SnowflakeRowSource` is the shape
   that adapter will take) — never on this reader's own DB connection or credential.
+- **`PatientsReader`** (task 3.1) — `graph-projection-patients`' read surface once the projection
+  is live: `patients` rows keyed by `patient_id`, carrying `enrollment_status` and `ledger_seq`
+  (design.md decision 9). It reads the same `FamilyRowSource` seam as `LandingReader` rather than
+  a new protocol, since the shape of "read one family's rows from somewhere" does not change —
+  only the column names do. `ledger_seq` is nullable *by design*, never malformed: a legacy row
+  (design.md decision 5, "Legacy rows are marked, never overwritten") parses cleanly with
+  `cited_seq=None`, which `projection_conformance` turns into `uncitable` for that one row, never
+  `state` and never dropped.
 - **`FixtureReader`** — the one seam implementation this task ships: an in-memory
   `FamilyRowSource`/`FamilyCountSource` over recorded rows, which is every `LandingReader` /
-  `RowCountReader` test's fixture today and stays the offline `--dry-run` path once live wiring
-  lands, the same posture `consent_sweep.load_ledger_state_fixture` already established.
-  `LedgerStateReader` and `BoardReader` need no fixture double of their own: both already test
-  against `httpx.MockTransport`, this package's and the wider repo's own convention.
+  `RowCountReader` / `PatientsReader` test's fixture today and stays the offline `--dry-run` path
+  once live wiring lands, the same posture `consent_sweep.load_ledger_state_fixture` already
+  established. `LedgerStateReader` and `BoardReader` need no fixture double of their own: both
+  already test against `httpx.MockTransport`, this package's and the wider repo's own convention.
 
 Every reader answers a malformed row by counting it, never by raising past it (spec:
 "Malformed rows are counted and attached") — a `MalformedRow` names a row's position and what was
@@ -59,6 +67,7 @@ __all__ = [
     "LedgerStateReader",
     "MalformedEnvelopeError",
     "MalformedRow",
+    "PatientsReader",
     "RowCountReader",
     "SubjectHistorySource",
     "SubjectRead",
@@ -338,6 +347,37 @@ class LandingReader:
                 malformed.append(MalformedRow(position=subject_key, detail="'seq' is not an int"))
                 continue
             rows.append(SweptRow(subject_key=subject_key, fields={"state": state}, cited_seq=seq))
+        return FamilyRead(rows=rows, malformed=malformed)
+
+
+class PatientsReader:
+    """`graph-projection-patients`' read surface (task 3.1, design.md decision 9): one row per
+    `patients` row, the state it projects and the ledger sequence it cites — nullable, since a
+    legacy row (design.md decision 5) has none.
+    """
+
+    def __init__(self, source: FamilyRowSource) -> None:
+        self._source = source
+
+    def read_family(self, family: str) -> FamilyRead:
+        rows: list[SweptRow] = []
+        malformed: list[MalformedRow] = []
+        for index, raw in enumerate(self._source.fetch_family(family)):
+            patient_id = raw.get("patient_id")
+            if not isinstance(patient_id, str) or not patient_id:
+                malformed.append(MalformedRow(position=f"[offset {index}]", detail="missing or empty 'patient_id'"))
+                continue
+            enrollment_status = raw.get("enrollment_status")
+            if not isinstance(enrollment_status, str) or not enrollment_status:
+                malformed.append(MalformedRow(position=patient_id, detail="missing or empty 'enrollment_status'"))
+                continue
+            ledger_seq = raw.get("ledger_seq")
+            if ledger_seq is not None and not isinstance(ledger_seq, int):
+                # `None` is a legacy row, never malformed (design.md decision 5); anything else
+                # that is not an int is an unreadable citation.
+                malformed.append(MalformedRow(position=patient_id, detail="'ledger_seq' is not an int or null"))
+                continue
+            rows.append(SweptRow(subject_key=patient_id, fields={"state": enrollment_status}, cited_seq=ledger_seq))
         return FamilyRead(rows=rows, malformed=malformed)
 
 

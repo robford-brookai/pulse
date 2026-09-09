@@ -50,13 +50,16 @@ class TestEveryCatalogFamilyHasExactlyOneSweepKind:
 
 class TestAConsumerWithNoCiteFieldIsUncitable:
     def test_cite_field_none_marks_uncitable(self) -> None:
+        # A generic example, not `graph-projection-patients` itself: that consumer is citable as
+        # of m1-retire-patient-state task 3.1 (design.md decision 9). This test only covers the
+        # `Consumer.uncitable` dataclass invariant, for whichever consumer has no `cite_field`.
         consumer = Consumer(
-            name="graph-projection-patients",
+            name="some-future-uncitable-consumer",
             families=("enrollment",),
             reader=object(),
             cite_field=None,
             freshness_budget_s=900,
-            owning_change="m1-retire-patient-state",
+            owning_change="some-change",
         )
 
         assert consumer.uncitable is True

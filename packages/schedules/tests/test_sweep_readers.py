@@ -5,9 +5,9 @@
 own convention), and once against a small in-memory `SubjectHistorySource` fake for the folding
 and malformed-event scenarios, which need no HTTP shape at all. `BoardReader` is exercised against
 a real `ProjectionRestClient` over `httpx.MockTransport`, mirroring `twenty-projection`'s own test
-style for the same client. `LandingReader` and `RowCountReader` are exercised against
-`FixtureReader`, their only implementation in this task. `conftest.py` blocks sockets for every
-test in this package regardless.
+style for the same client. `LandingReader`, `RowCountReader`, and `PatientsReader` (task 3.1) are
+exercised against `FixtureReader`, their only implementation in this task. `conftest.py` blocks
+sockets for every test in this package regardless.
 """
 
 from __future__ import annotations
@@ -24,7 +24,9 @@ from schedules.sweep_readers import (
     FixtureReader,
     LandingReader,
     LedgerStateReader,
+    PatientsReader,
     RowCountReader,
+    SweptRow,
 )
 from twenty_projection.apply import BoardTarget, ProjectionRestClient
 
@@ -337,6 +339,61 @@ def test_row_count_reader_counts_an_uncitable_consumer() -> None:
 
     assert reader.read_family("enrollment") == 2
     assert reader.read_family("communication_consent") == 0
+
+
+# --- PatientsReader (task 3.1, design.md decision 9) -------------------------------------------
+
+
+def test_patients_reader_parses_a_projected_row() -> None:
+    """spec projection-conformance: 'The projection is a citable consumer' — a row citing
+    `ledger_seq` reads exactly like the board's, `state` keyed from `enrollment_status`."""
+    fixture = FixtureReader(
+        rows_by_family={"enrollment": [{"patient_id": "pat-1", "enrollment_status": "active", "ledger_seq": 50}]}
+    )
+    reader = PatientsReader(fixture)
+
+    result = reader.read_family("enrollment")
+
+    assert result.malformed == []
+    assert result.rows == [
+        SweptRow(subject_key="pat-1", fields={"state": "active"}, cited_seq=50),
+    ]
+
+
+def test_patients_reader_a_legacy_row_parses_as_uncitable_not_malformed() -> None:
+    """spec: 'Legacy rows are marked, never overwritten' — a null `ledger_seq` is a clean row
+    with `cited_seq=None`, which `projection_conformance` classifies `uncitable`, never
+    `malformed` and never `state`."""
+    fixture = FixtureReader(
+        rows_by_family={"enrollment": [{"patient_id": "pat-2", "enrollment_status": "pending", "ledger_seq": None}]}
+    )
+    reader = PatientsReader(fixture)
+
+    result = reader.read_family("enrollment")
+
+    assert result.malformed == []
+    assert result.rows == [
+        SweptRow(subject_key="pat-2", fields={"state": "pending"}, cited_seq=None),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("row", "expected_position"),
+    [
+        ({"enrollment_status": "active", "ledger_seq": 5}, "[offset 0]"),
+        ({"patient_id": "pat-1", "ledger_seq": 5}, "pat-1"),
+        ({"patient_id": "pat-1", "enrollment_status": "active", "ledger_seq": "fifty"}, "pat-1"),
+    ],
+)
+def test_patients_reader_counts_a_malformed_row_never_raises(row: dict[str, object], expected_position: str) -> None:
+    fixture = FixtureReader(rows_by_family={"enrollment": [row]})
+    reader = PatientsReader(fixture)
+
+    result = reader.read_family("enrollment")
+
+    assert result.rows == []
+    assert len(result.malformed) == 1
+    assert result.malformed[0].position == expected_position
 
 
 def test_fixture_reader_serves_both_protocols_from_the_same_data() -> None:

@@ -12,10 +12,14 @@ Three entries, none of them hand-listing families beyond what their own source a
   through the fold view (task 1.2's `SUBJECT_CURRENT_STATE`). Citable (`cite_field="seq"`, the
   fold view's own column name), 15-minute freshness budget by default, configurable per design
   decision 6.
-- **`graph-projection-patients`** — `enrollment` only, uncitable (`cite_field=None`): reported as
-  a class with its row count and `owning_change` set to `m1-retire-patient-state`, the change that
-  retires it, never compared row by row (spec projection-conformance: "Consumers that cannot cite
-  at all are reported as a class").
+- **`graph-projection-patients`** — `enrollment` only, citable (`cite_field="ledger_seq"`) as of
+  `m1-retire-patient-state` task 3.1 (design.md decision 9: "The sweep registry flips to citable
+  in this change, not in `reconciliation-sweeps`" — that change shipped the uncitable entry as its
+  own 3.2; this one earns the flip once the projection is live). Read through `PatientsReader`
+  (task 3.1's, over the `patients` table), compared per subject exactly like the board: a
+  projected row's `ledger_seq` citation is checked against the ledger head, and a legacy row
+  (null citation) is `uncitable` per row rather than the whole consumer being reported as a class.
+  `owning_change=None` — a citable consumer is compared, not retired.
 
 `build_consumers` takes readers as the caller's own (task 1.3's production readers, or a
 `FixtureReader` in tests) — this module only decides which families each consumer is registered
@@ -37,7 +41,6 @@ __all__ = [
     "BOARD_FRESHNESS_BUDGET_S",
     "BOARD_TARGETS",
     "DEFAULT_LANDING_FRESHNESS_BUDGET_S",
-    "PATIENTS_OWNING_CHANGE",
     "board_families",
     "build_consumers",
     "consumers_by_family",
@@ -56,10 +59,6 @@ BOARD_FRESHNESS_BUDGET_S = 60
 #: The landing's freshness budget: 15 minutes, configurable per family or per run (design
 #: decision 4 and 6).
 DEFAULT_LANDING_FRESHNESS_BUDGET_S = 15 * 60
-
-#: The change that owns retiring graph-projection's `patients` table (design decision 6;
-#: proposal.md "Cross-change").
-PATIENTS_OWNING_CHANGE = "m1-retire-patient-state"
 
 
 def board_families() -> tuple[str, ...]:
@@ -109,9 +108,9 @@ def build_consumers(
             name="graph-projection-patients",
             families=("enrollment",),
             reader=patients_reader,
-            cite_field=None,
+            cite_field="ledger_seq",
             freshness_budget_s=landing_freshness_budget_s,
-            owning_change=PATIENTS_OWNING_CHANGE,
+            owning_change=None,
         ),
     )
 
