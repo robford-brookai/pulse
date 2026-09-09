@@ -93,6 +93,18 @@ connector).
     deployable decision 1 rejected. Until the regenerated rule is applied on dev (task 4.1) the
     handler is inert there, which is the safe failure. Found 2026-09-09 reviewing task 1.1's PR;
     added as task 1.4.
+12. **The rebuild is an operator command, not an adapter written on the day.** `patient_state.rebuild`
+    shipped (task 1.1) with a `JournalReader` Protocol and a test fixture only; the runbook (task
+    3.2) found nothing committed to invoke on dev. Task 3.3 adds `rebuild_patients.py` and
+    `task projection:rebuild-patients`, mirroring `twenty_projection.rebuild`: history over HTTP
+    through `pulse_core.client.PulseCoreClient.subject_history` with the `pulse_core.replay`
+    credential, never a ledger DSN. The ledger's read surface is per subject, so scope is every
+    `patient_id` already in `patients` plus an optional operator list; subjects the ledger mints
+    after the rule is applied arrive live. Per-subject order is enough because the monotonic guard
+    is per `patient_id`. `pulse-core` becomes a graph-projection dependency for this module only;
+    the live handler keeps importing nothing from it (decision 2's validation note stands).
+    Alternative rejected: an operator-written adapter at run time, which is untested code touching
+    dev data. Found 2026-09-09 reviewing task 3.2's PR.
 
 ## Data model and API surface
 
@@ -114,6 +126,8 @@ connector).
   `REFRESH ... CONCURRENTLY` afterwards as today.
 - [The consumer rule is applied before the migration] → the handler's INSERT names `ledger_seq`
   and fails on the missing column; the runbook orders migration, then `terraform apply`, then rebuild.
+- [A legacy `patients` row has no ledger history yet] → the rebuild counts it as parked and leaves
+  it uncitable; genesis (BF-4) adopts it later. The receipt names the count, never the row.
 - [Hasura permission change breaks a writer nobody knew about] → the gate test runs first and
   would have named it; the attended run watches graph-projection logs for permission errors.
 - [Legacy rows dominate the uncitable count for months] → expected until genesis; the receipt
