@@ -173,6 +173,7 @@ Gate: Phase 2 exit; Twenty dev instance from `environment-matrix`.
 | `reconciliation-sweeps` | per-family referee sweeps generalizing S1.3's consent sweep; corrections actor `reconciliation`; optional legacy-inference drift sentinel (legacy-harvest #4) | `snowflake-projection` |
 | `projection-rebuild-drill` | ADR §4.6 authoritative rebuild as a drill; folded into `pulse-demo-closeout` as Demo 5's stage 6, closing the roadmap's original Demo 3 promise | `twenty-projection` |
 | `m1-retire-patient-state` | ADR §6.2: `patients` rows only from ledger projection; three read surfaces cut over; `enrollment_status` read-only; `alerts.py` bootstrap insert deleted | `twenty-projection` |
+| `billing-cutover` | the billing connector's reconciliation window (one full billing month on dev, connector vs mart, empty-or-explained sweep) and the cutover that retires the relay's Snowflake mart read; seeded 2026-09-08 in `design/delivery/billing-cutover-seed.md` from `billing-connector` decision 11 | seed gates: dbt spike files committed in `data-platform` (seed gate 3) + a cutover decision (none planned as of 2026-09-08) + serial-lane coordination with `reconciliation-sweeps` on the schedule catalog |
 
 Why `survey-engine-ingress` sits here and not mid-Phase 2: it is an ingress producer, so it
 enters after the producer rules exist (`producer-ingress-policy`) — no grandfathering, and
@@ -181,10 +182,11 @@ Phase 2's pinned ADR §6 exit criteria stay untouched. PX's identity-resolution 
 first-class state" is a state-catalog modeling question that lands via `catalog-authority` (D18);
 its 24h-queryable warehouse metric is the `snowflake-projection` STG_EVENTS contract — hence the
 early-Phase-3 slot alongside it. The gate's "PX schema validation" half is PX's own milestone:
-schema validated against pulse, NPS, and CHF surveys before build. **Caution:** PX's stated June–July delivery target has already
-passed (it is Aug 2026) — re-verify the timeline with Max Pengilly before sequencing anything
-against it. Survey responses are patient-reported data: the adapter inherits the full PHI
-boundary rules (no demographics to logs, synthetic fixtures only).
+schema validated against pulse, NPS, and CHF surveys before build. **Caution (2026-09-08):** PX's stated June–July delivery target has already
+passed — re-verify note drafted 2026-09-08, awaiting reply (`.planning/reports/2026-09-08-carry-over-drafts.md`)
+— do not sequence anything against the old target until Max Pengilly responds. Survey responses
+are patient-reported data: the adapter inherits the full PHI boundary rules (no demographics to
+logs, synthetic fixtures only).
 
 **Done means (ADR §6):** "Reconciliation clean over one full cycle. Projections rebuild from
 ledger in a drill. M1 retired — no consumer writes `patients.enrollment_status`."
@@ -237,7 +239,7 @@ byte-identical.
 |---|---|---|
 | `d14-spcs-latency-spike` | one-day webhook-latency spike (operational_discovery; report, not diff). **Highest-leverage unblock** | none |
 | `pulse-spcs-deployment` | service spec, Snowflake Secrets, ingress, image pinning (thin wrapper, never a fork — AGPL §13) | D14 |
-| `environment-matrix` | dev/staging/prod per runtime-readiness §2.1; staging regen consumes `synthea-seed`; gates Demo 3's staging leg and cutover P0 | `synthea-seed` |
+| `environment-matrix` | dev/staging/prod per runtime-readiness §2.1; staging regen consumes `synthea-seed`; gates Demo 3's staging leg and cutover P0. Seed drafted 2026-09-08: `design/delivery/environment-matrix-seed.md` | `synthea-seed` |
 | `observability` | Datadog monitor set + three SLOs per §1.5; S1.2/S1.3 ship their own runbooks — this wires monitors and paging | before P1; paging before P2 |
 | Roles / on-call / enablement | exec-session register rows, not changes | — |
 

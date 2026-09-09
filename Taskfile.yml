@@ -182,8 +182,8 @@ tasks:
     # One process per service because each ships a top-level `src` package imported as
     # `from src.X` — the suites cannot share an interpreter (see TESTED_PATHS note). Services
     # stay outside the coverage floor (DNA-779). Every failing suite is reported, not just the
-    # first. mongodb-connector and warehouse-sync have no tests directory to run — a gap in
-    # those services, tracked by tests/test_taskfile_test_coverage.py.
+    # first. mongodb-connector is the one service with no tests directory to run — a gap in that
+    # service, tracked by tests/test_taskfile_test_coverage.py.
     cmds:
       - |
         failed=""

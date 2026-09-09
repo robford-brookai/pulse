@@ -59,6 +59,7 @@ nav:
           - ADR-0003 ledger core write path: adr/ADR-0003-ledger-core-write-path.md
           - ADR-0004 runtime readiness decisions: adr/ADR-0004-runtime-readiness-decisions.md
           - ADR-0005 Customer.io consent on the governed path: adr/ADR-0005-customerio-consent-on-the-governed-path.md
+          - ADR-0006 warehouse modeling ownership: adr/ADR-0006-warehouse-modeling-ownership.md
 plugins:
   - search
   - mkdocstrings:

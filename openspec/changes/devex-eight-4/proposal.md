@@ -25,16 +25,17 @@ reports zero while the golden path is red is worse than no metric, because it is
   rendered tree or the repo's own output, so `task devex:check` reports
   `devex_open_findings=10`. A `slow` control renders both directions, registers them and runs the
   gate's own lint, format and test constituents.
-- **Wave 1, the S fixes.** Revert #403's two defects first — the rendered suites must import
-  under `importlib` alongside `packages/billing-connector/tests`, and the rendered tree must be a
-  `ruff format` fixed point. Then `task lore:init` inside `task install`; an owner-and-channel
-  block above the fold in `README.md`; the kit's error types in the authoring guide's paste
-  block; a connector variable block and the `PULSE_TWENTY_DEV_*` pair in `.env.example`.
-- **Wave 2, the M items.** Replace `test_connector_scaffold_command_exists` with the render-and-
-  gate control; make `task lint` and the missing-npm-global failures name the repo's own targets;
-  move the timing ledger out of the tracked tree and print its rows as the gate's last screenful;
-  redefine the TTHW test as clone to a green `task check` in both cache arms.
-- **Loop rule unchanged.** At 0 open findings, run `/devex-audit` (audit 5).
+- **Wave 1, the S fixes.** Revert #403's two defects — the rendered suites must import under
+  `importlib` alongside `packages/billing-connector/tests`, and the rendered tree must be a
+  `ruff format` fixed point. The other four S fixes (`task lore:init` inside `task install`, the
+  README owner block, the kit's error types in the guide's paste block, the `.env.example`
+  variables) left this change on 2026-09-08 (design.md decision 7); their findings stay encoded.
+- **Wave 2.** Replace `test_connector_scaffold_command_exists` with the render-and-gate control.
+  The other three M items (lint and npm-global messages, the timing ledger move, the TTHW
+  redefinition) left with decision 7; their findings stay encoded.
+- **Loop paused (decision 7, 2026-09-08).** Audit 5 runs once the three fixes merge, with seven
+  findings still open by design; its scores are recorded and the loop pauses with a handoff
+  package. No `devex-eight-5`.
 
 Out of scope: the frozen protocol files (`docs/process/devex-audit/*`, CHECKSUMS); the Community
 dimension's single-author constraint, which no PR can close; the items below the audit's cut.
@@ -48,7 +49,7 @@ dimension's single-author constraint, which no PR can close; the items below the
 
 ## Impact
 
-- **Code**: `tests/scaffold/cat10_devex.py`, `templates/connector/**`, `Taskfile.yml` (`install`,
-  `lint`, `check`), `scripts/devex/timing.py` and a summary step, `.gitignore`.
-- **Docs**: `README.md`, `docs/connectors/authoring.md`, `.env.example`.
+- **Code**: `tests/scaffold/cat10_devex.py`, `templates/connector/**`.
+- **Docs**: `docs/connectors/authoring.md` (rendered-tree fence), the handoff report under
+  `.planning/reports/`, `design/delivery/pulse-program-roadmap.md` (the pause).
 - **Rollback**: every fix is its own PR; reverting one restores its xfail marker.

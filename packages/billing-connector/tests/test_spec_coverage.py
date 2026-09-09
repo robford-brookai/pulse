@@ -13,8 +13,11 @@ import ast
 import re
 from pathlib import Path
 
+from tests.spec_path import spec_path
+
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-_SPEC_PATH = _REPO_ROOT / "openspec" / "changes" / "billing-connector" / "specs" / "billing-connector" / "spec.md"
+
+_SPEC_PATH = spec_path()
 _SRC_ROOT = Path(__file__).resolve().parents[1] / "src" / "billing_connector"
 
 _REQUIREMENT_HEADING = re.compile(r"^### Requirement: (.+)$", re.MULTILINE)
