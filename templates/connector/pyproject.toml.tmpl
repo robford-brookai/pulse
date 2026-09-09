@@ -36,6 +36,13 @@ packages = ["src/{{NAME}}"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# The repo runs every package's suite in one process under `--import-mode=importlib`
+# (`Taskfile.yml`'s TESTED_PATHS), so this package's tests are written for that mode: no
+# `tests/__init__.py` — a second top-level `tests` package collides with
+# `packages/billing-connector/tests` inside pytest's plugin manager — and `from .factories
+# import ...` resolves inside the dotted name importlib mode derives from the path. Pinning the
+# mode here keeps a standalone `pytest` in this directory running the tests the same way.
+addopts = "--import-mode=importlib"
 
 [tool.pyright]
 include = ["src", "tests"]
