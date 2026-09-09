@@ -53,6 +53,16 @@ never a worktree.
       fixture instead).
       `[model: sonnet | deps: 1.1 | lane: repo_change | wave: 0]`
 
+- [ ] 1.4 Route the feed: add `patient-state` to `CONSUMER_DOMAINS["graph-projection"]` in
+      `packages/ocean/libs/ocean-broker/src/ocean_broker/catalog.py` and regenerate
+      `packages/ocean/infra/terraform/generated/event_catalog.auto.tfvars.json` with
+      `packages/ocean/scripts/generate_event_catalog.py`, so graph-projection's EventBridge rule
+      matches the ledger relay's `("ocean", "patient-state")` address (design.md decision 11).
+      Tests: `consumer_rule_pattern("graph-projection")` matches source `ocean`, detail-type
+      `patient-state`; the committed tfvars carries that pattern; every other consumer's pattern is
+      byte-for-byte unchanged; the ocean-broker and SYNC_04 suites stay green.
+      `[model: sonnet | deps: — | lane: repo_change | wave: 0 | serial: generated terraform surface, one regen]`
+
 ## 2. Wave 1 — read-only, and the surfaces cut over
 
 - [ ] 2.1 Read-only enforcement: `packages/ocean/tests/gates/test_patients_read_only.py` fails on
@@ -85,18 +95,20 @@ never a worktree.
 - [ ] 3.2 Docs via `HANDOFF.md`: ADR §6.2 retirement note (dated, naming the four clauses and the
       PRs), roadmap Phase 3 row and v3.0 exit table (M1 clause met), `publishes.md` row for the
       projection as a `patient-state` consumer, runbook `docs/runbooks/m1-patients-projection.md`
-      (attended migration, rebuild, Hasura apply, first sweep), mkdocs nav.
+      (attended migration, `terraform apply` of the `eventbridge-ocean` consumer rule, rebuild,
+      Hasura apply, first sweep), mkdocs nav.
       Tests: `mkdocs build -s`; cat8 docs gates; `task check` green.
-      `[model: haiku | deps: 2.1, 2.2 | lane: repo_change | wave: 2]`
+      `[model: haiku | deps: 1.4, 2.1, 2.2 | lane: repo_change | wave: 2]`
 
 ## 4. Wave 3 — attended run
 
 - [ ] 4.1 Live execution on dev: GitHub tracking issue; apply the migration on dev's graph
-      Postgres; run `patient_state.rebuild` over the journal for `enrollment` subjects; apply Hasura
+      Postgres; `terraform apply` the `eventbridge-ocean` module so graph-projection's rule includes
+      `patient-state`, and confirm the rule pattern from the CLI; run `patient_state.rebuild` over the journal for `enrollment` subjects; apply Hasura
       metadata; run the `enrollment` conformance sweep once and post its receipt (counts and subject
       keys only): projected rows agree, legacy rows counted as uncitable, no `patients` write from
       any other path during the run.
-      Tests (runbook assertions): zero `INSERT INTO patients` from graph-projection logs outside the
-      handler; view returns `ledger_seq` for projected rows; sweep receipt shows the consumer as
+      Tests (runbook assertions): the consumer rule pattern lists `patient-state`; zero
+      `INSERT INTO patients` from graph-projection logs outside the handler; view returns `ledger_seq` for projected rows; sweep receipt shows the consumer as
       citable.
-      `[model: sonnet | deps: 3.1, 3.2 | lane: operational_discovery | wave: 3]`
+      `[model: sonnet | deps: 1.4, 3.1, 3.2 | lane: operational_discovery | wave: 3]`
