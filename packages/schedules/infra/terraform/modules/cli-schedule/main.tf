@@ -60,11 +60,17 @@ resource "aws_scheduler_schedule" "job" {
     # The CLI runner's container override: `python -m schedules.cli <subcommand>`
     # (spec: "each trigger targets the corresponding CLI subcommand"). No
     # `--dry-run` here — that flag is the offline path task 4.2 exercises
-    # against fixtures, never the scheduled one.
+    # against fixtures, never the scheduled one. `target_argument` carries
+    # `reconcile-sweep`'s family name (task 3.1, design decision 8: one entry
+    # per ledger family) and is appended as `--family <value>`; entries with
+    # no argument (month-open, consent-sweep) get the bare subcommand.
     input = jsonencode({
       containerOverrides = [
         {
-          command = ["python", "-m", "schedules.cli", each.value.target_subcommand]
+          command = concat(
+            ["python", "-m", "schedules.cli", each.value.target_subcommand],
+            each.value.target_argument == null ? [] : ["--family", each.value.target_argument]
+          )
         }
       ]
     })

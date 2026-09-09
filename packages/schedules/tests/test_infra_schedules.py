@@ -18,6 +18,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from schedules.sweep_registry import build_registry
 
 #: `packages/schedules`, from `packages/schedules/tests/`.
 _REPO_SCHEDULES = Path(__file__).resolve().parents[1]
@@ -40,12 +41,19 @@ def _catalog() -> dict[str, dict[str, object]]:
     return json.loads(_CATALOG_PATH.read_text())["schedules"]
 
 
+#: The seven ledger-owned families reconcile-sweep schedules exist for (task 3.1, design decision
+#: 8) — derived from the registry, never hand-listed, so this test file cannot drift from the
+#: catalog the same way the production registry cannot (design decision 1).
+def _ledger_families() -> set[str]:
+    return {name for name, family in build_registry().items() if family.sweep_kind == "projection_conformance"}
+
+
 class TestScheduleCatalog:
     """The generated tfvars is the one place cadences and targets are declared — the test that
     parses the definitions and checks both cadences and their targets (spec scenario)."""
 
     def test_both_jobs_have_a_schedule(self):
-        assert set(_catalog()) == {"month-open", "consent-sweep"}
+        assert {"month-open", "consent-sweep"} <= set(_catalog())
 
     def test_month_open_is_00_30_on_the_1st(self):
         assert _catalog()["month-open"]["cron_expression"] == "cron(30 0 1 * ? *)"
@@ -64,6 +72,38 @@ class TestScheduleCatalog:
     @pytest.mark.parametrize(("name", "subcommand"), [("month-open", "month-open"), ("consent-sweep", "consent-sweep")])
     def test_each_schedule_targets_its_own_cli_subcommand(self, name: str, subcommand: str):
         assert _catalog()[name]["target_subcommand"] == subcommand
+
+
+class TestReconcileSweepCatalogEntries:
+    """One `reconcile-sweep-<family>` entry per ledger family, none for the recorded one (design
+    decision 8, spec: "Sweeps run on a schedule"). Parity against the registry means a catalog
+    release that adds or drops a ledger family is caught here, not discovered at deploy time."""
+
+    def test_one_entry_per_ledger_family_and_none_for_the_recorded_one(self):
+        catalog = _catalog()
+        reconcile_entries = {name for name in catalog if name.startswith("reconcile-sweep-")}
+
+        assert reconcile_entries == {f"reconcile-sweep-{family}" for family in _ledger_families()}
+        assert "reconcile-sweep-communication_consent" not in catalog
+
+    @pytest.mark.parametrize("family", sorted(_ledger_families()))
+    def test_each_entry_is_daily(self, family: str):
+        assert _catalog()[f"reconcile-sweep-{family}"]["cron_expression"] == "rate(1 day)"
+
+    @pytest.mark.parametrize("family", sorted(_ledger_families()))
+    def test_each_entry_targets_the_reconcile_sweep_subcommand(self, family: str):
+        assert _catalog()[f"reconcile-sweep-{family}"]["target_subcommand"] == "reconcile-sweep"
+
+    @pytest.mark.parametrize("family", sorted(_ledger_families()))
+    def test_each_entry_names_its_own_family_as_the_argument(self, family: str):
+        assert _catalog()[f"reconcile-sweep-{family}"]["target_argument"] == family
+
+    @pytest.mark.parametrize("family", sorted(_ledger_families()))
+    def test_each_entry_has_a_same_day_retry_window(self, family: str):
+        window_seconds = _catalog()[f"reconcile-sweep-{family}"]["maximum_event_age_in_seconds"]
+
+        assert isinstance(window_seconds, int)
+        assert 0 < window_seconds <= 86400
 
 
 class TestModuleShape:
@@ -86,6 +126,16 @@ class TestModuleShape:
         assert "each.value.target_subcommand" in main
         assert '"month-open"' not in main
         assert '"consent-sweep"' not in main
+
+    def test_target_argument_derives_from_the_catalog_and_no_family_is_hand_written(self):
+        """`reconcile-sweep-<family>` entries carry their family as `target_argument`
+        (task 3.1); the module must read it from `each.value`, never a hand-written family
+        literal — the same drift guard `target_subcommand` gets."""
+        main = _code_only(_tf_text("main.tf"))
+
+        assert "each.value.target_argument" in main
+        for family in _ledger_families():
+            assert f'"{family}"' not in main
 
     def test_retry_policy_reads_from_the_catalog(self):
         main = _tf_text("main.tf")
