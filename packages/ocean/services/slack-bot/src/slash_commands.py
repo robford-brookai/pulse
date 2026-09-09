@@ -191,7 +191,7 @@ async def build_patient_response(patient_id: str) -> list[dict]:
         result = await _hasura_query(
             """query GetPatientTimeline($pid: String!) {
                 patients(where: {patient_id: {_eq: $pid}}) {
-                    patient_id enrollment_status
+                    patient_id enrollment_status ledger_seq
                 }
                 patient_timeline(
                     where: {patient_id: {_eq: $pid}}
@@ -242,8 +242,14 @@ async def build_patient_response(patient_id: str) -> list[dict]:
             li = interaction_entries[0]
             last_interaction_text = f"*Last Interaction:* {li.get('summary', 'n/a')} at {li.get('created_at', '')}"
 
+        status_value = patient.get("enrollment_status", "unknown")
+        if patient.get("ledger_seq") is None:
+            status_line = f"*Status:* {status_value} _(legacy, unverified against the ledger)_"
+        else:
+            status_line = f"*Status:* {status_value}"
+
         summary_lines = [
-            f"*Status:* {patient.get('enrollment_status', 'unknown')}",
+            status_line,
             f"*Open Alerts:* {open_alerts}",
             f"*Active Tasks:* {active_tasks}",
             f"*Open Tickets:* {open_tickets}",

@@ -23,7 +23,9 @@ _SCHEMA_SUMMARY = {
     "tables": [
         {
             "table": "patients",
-            "description": "Root entity. patient_id (PK), clinic_id, enrollment_status, enrolled_at, updated_at",
+            "description": "Root entity. patient_id (PK), clinic_id, "
+            "enrollment_status (projected from the ledger, read-only; ledger_seq null means "
+            "legacy and uncitable), enrolled_at, updated_at",
         },
         {
             "table": "signals",
@@ -51,7 +53,10 @@ _SCHEMA_SUMMARY = {
         },
         {
             "table": "patient_graph_summary",
-            "description": "Materialized view. patient_id (PK), enrollment_status, alert_count, task_count, interaction_count, outcome_count, last_alert_at, last_call_at, alert_types[], outcome_types[]",
+            "description": "Materialized view. patient_id (PK), enrollment_status, ledger_seq "
+            "(citation for enrollment_status; null means legacy and uncitable), alert_count, "
+            "task_count, interaction_count, outcome_count, last_alert_at, last_call_at, "
+            "alert_types[], outcome_types[]",
         },
     ],
     "relationships": [

@@ -63,7 +63,7 @@ never a worktree.
       metadata builder emits select-only permissions for `patients` and unchanged relationships.
       `[model: sonnet | deps: 1.2, 1.3 | lane: repo_change | wave: 1]`
 
-- [ ] 2.2 Read surfaces: stacte-bridge `crud_api.py` descriptions say `enrollment_status` is
+- [x] 2.2 Read surfaces: stacte-bridge `crud_api.py` descriptions say `enrollment_status` is
       projected from the ledger, read-only, cited by `ledger_seq`; slack-bot's Hasura query selects
       `ledger_seq` and the `*Status:*` line renders the catalog state, marking a null citation as
       legacy and unverified (spec: "The read surfaces present the projected state and its
