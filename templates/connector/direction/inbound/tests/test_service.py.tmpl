@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING
 
 import httpx
 import pytest
-from factories import FakeCommandTransport
 from pulse_core.connector import FixtureRowSource, TransientExhaustedError
 
 from {{NAME}}.config import Config
@@ -30,6 +29,8 @@ from {{NAME}}.service import (
     handle_page,
     run,
 )
+
+from .factories import FakeCommandTransport
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

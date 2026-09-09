@@ -1,0 +1,29 @@
+{
+  "scenario": "A pre-watermark subject is excluded, not flagged (spec reconciliation-sweeps)",
+  "family": "enrollment",
+  "as_of": "2026-09-08T12:00:00+00:00",
+  "consumer": {
+    "name": "warehouse-landing",
+    "cite_field": "seq",
+    "freshness_budget_s": 900
+  },
+  "snapshot": [
+    {
+      "subject_key": "enr-old",
+      "head_seq": 2,
+      "head_recorded_at": "2026-08-20T00:00:00+00:00",
+      "fields": {
+        "state": "active"
+      }
+    }
+  ],
+  "rows": [],
+  "malformed": [],
+  "expected": [
+    {
+      "subject_key": "enr-old",
+      "outcome": "pre_floor",
+      "fields": []
+    }
+  ]
+}

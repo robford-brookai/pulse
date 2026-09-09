@@ -32,6 +32,7 @@ nav:
       - Warehouse-sync-revival: runbooks/warehouse-sync-revival.md
       - Billing-connector: runbooks/billing-connector.md
       - Verdict-relay: runbooks/verdict-relay.md
+      - Synthea-regen: runbooks/synthea-regen.md
   - Connectors:
       - Authoring: connectors/authoring.md
   - Process:

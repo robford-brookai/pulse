@@ -132,9 +132,7 @@ def handle_event(event: Mapping[str, object], *, tally: Receipt, client: PulseCo
     return replace(tally.record(response.classification), handled=tally.handled + 1)
 
 
-def run(
-    config: Config, *, client: PulseCoreClient, sqs_client: Any = None, iterations: int | None = None
-) -> Receipt:
+def run(config: Config, *, client: PulseCoreClient, sqs_client: Any = None, iterations: int | None = None) -> Receipt:
     """Drive the consume loop, accumulating one receipt across every pass, and log it once.
 
     `client` is the writer seam every test uses: pass one built on `tests/factories.py`'s

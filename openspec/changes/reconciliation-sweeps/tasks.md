@@ -31,7 +31,7 @@ Task 4.1 is live execution (GitHub issue + runbook PR + attended run per WORKFLO
       `cite_field=None` is uncitable.
       `[model: sonnet | deps: — | lane: repo_change | wave: 0]`
 
-- [ ] 1.2 Warehouse fold as pulse-committed SQL: `packages/ocean/infra/snowflake/subject_current_state.sql`
+- [x] 1.2 Warehouse fold as pulse-committed SQL: `packages/ocean/infra/snowflake/subject_current_state.sql`
       defines `STREAMLINE.STG_EVENTS.SUBJECT_CURRENT_STATE` (latest landed event per
       `(subject_type, subject_key)` by `seq`, carrying `_loaded_at`, bounded below by
       `min_complete_from`), in the style of `stg_events_events.sql`; proposed `publishes.md` row
@@ -41,7 +41,7 @@ Task 4.1 is live execution (GitHub issue + runbook PR + attended run per WORKFLO
       stand-in used by `snowflake-projection`'s tests.
       `[model: sonnet | deps: — | lane: repo_change | wave: 0 | serial: pulse-owned warehouse SQL beside stg_events_events.sql, one published surface]`
 
-- [ ] 1.3 Read-only readers: `LedgerStateReader` (command API per-subject read, snapshot head),
+- [x] 1.3 Read-only readers: `LedgerStateReader` (command API per-subject read, snapshot head),
       `BoardReader` (the Twenty projection's read surface, projected fields plus `ledger_seq`,
       paginated per family), `LandingReader` (the fold view), `RowCountReader` (uncitable
       consumers), `FixtureReader`; socket-blocked tests; no writer credential anywhere.
@@ -52,7 +52,7 @@ Task 4.1 is live execution (GitHub issue + runbook PR + attended run per WORKFLO
 
 ## 2. Wave 1 — the check
 
-- [ ] 2.1 Projection conformance core: `packages/schedules/src/schedules/projection_conformance.py`
+- [x] 2.1 Projection conformance core: `packages/schedules/src/schedules/projection_conformance.py`
       takes a snapshot, compares per `(subject_type, subject_key)`, classifies every pair as
       `agreement | state | lag | missing | orphan | uncitable | in_flight | pre_floor | malformed`,
       names differing fields never values, applies per-consumer freshness budgets and the pinned

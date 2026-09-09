@@ -25,7 +25,7 @@ non-Taskfile tasks alongside a serial one when they share no files.
 
 ## 1. Wave 1 — the S fixes
 
-- [ ] 1.1 The rendered test suites import their fixtures under `--import-mode=importlib` in the
+- [x] 1.1 The rendered test suites import their fixtures under `--import-mode=importlib` in the
       repo's combined run. Do **not** copy `packages/billing-connector`'s `tests/__init__.py`
       wholesale: verified in a scratch tree, a second top-level `tests` package collides with it
       inside pytest's plugin manager as soon as both are in `TESTED_PATHS`. The measured shape is
@@ -37,7 +37,7 @@ non-Taskfile tasks alongside a serial one when they share no files.
       cat9 goldens regenerated with REGEN=1 and reviewed.
       `[model: opus | deps: — | lane: repo_change | wave: 1]`
 
-- [ ] 1.2 The rendered tree is a `ruff format` fixed point in both directions: split the outbound
+- [x] 1.2 The rendered tree is a `ruff format` fixed point in both directions: split the outbound
       `def run(` signature (118 characters against `line-length = 120`) so the formatter leaves it
       alone, and check the whole rendered tree rather than that one line. Then remove the `slow`
       control's xfail marker too — with 1.1 landed it passes, and a strict xfail that starts
