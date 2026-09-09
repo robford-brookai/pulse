@@ -65,7 +65,7 @@ never a worktree.
 
 ## 2. Wave 1 — read-only, and the surfaces cut over
 
-- [ ] 2.1 Read-only enforcement: `packages/ocean/tests/gates/test_patients_read_only.py` fails on
+- [x] 2.1 Read-only enforcement: `packages/ocean/tests/gates/test_patients_read_only.py` fails on
       any `INSERT INTO patients` or `UPDATE patients` outside `handlers/patient_state.py`;
       `infra/hasura/apply_metadata.py` grants select-only on `patients` for every service role
       (design.md decision 4).

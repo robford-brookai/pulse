@@ -1,6 +1,6 @@
 # Handoff Summary: m1-retire-patient-state
 
-Collected 6 handoff(s).
+Collected 7 handoff(s).
 
 ## m1-retire-patient-state-task-001
 
@@ -166,6 +166,36 @@ regenerated into `packages/ocean/infra/terraform/generated/event_catalog.auto.tf
 ## New Scenarios
 
 None.
+
+## m1-retire-patient-state-task-2-1
+
+### Added Requirements
+
+None.
+
+### Modified Requirements
+
+None.
+
+### Removed Requirements
+
+None.
+
+## Design Drift
+
+None. Implemented as decision 4 describes: a repository gate plus a Hasura select-only grant.
+One addition beyond decision 4's text, not a drift from it: `apply_metadata.py` had no per-role
+permission machinery before this task (it only tracked tables and relationships), so this task
+introduced `SERVICE_ROLES` and `PATIENTS_SELECT_COLUMNS` as the first per-role grant in that file.
+The role list (`graph-projection`, `control-plane`, `slack-bot`, `impilo-connector`,
+`stacte-bridge`, `sim-driver`) is every ocean service in `infra/docker-compose.yml` besides
+`hasura`/`localstack`/connector-kit infra services; if a deployment's actual Hasura role names
+differ, `SERVICE_ROLES` is the one place to reconcile them.
+
+## New Scenarios
+
+None — the two scenarios under "Only the ledger projection mints or updates a patient row" were
+implemented as written.
 
 ## Doc-Updater Instructions
 
