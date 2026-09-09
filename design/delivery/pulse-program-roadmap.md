@@ -173,6 +173,7 @@ Gate: Phase 2 exit; Twenty dev instance from `environment-matrix`.
 | `reconciliation-sweeps` | per-family referee sweeps generalizing S1.3's consent sweep; corrections actor `reconciliation`; optional legacy-inference drift sentinel (legacy-harvest #4) | `snowflake-projection` |
 | `projection-rebuild-drill` | ADR §4.6 authoritative rebuild as a drill; folded into `pulse-demo-closeout` as Demo 5's stage 6, closing the roadmap's original Demo 3 promise | `twenty-projection` |
 | `m1-retire-patient-state` | ADR §6.2: `patients` rows only from ledger projection; three read surfaces cut over; `enrollment_status` read-only; `alerts.py` bootstrap insert deleted | `twenty-projection` |
+| `billing-cutover` | the billing connector's reconciliation window (one full billing month on dev, connector vs mart, empty-or-explained sweep) and the cutover that retires the relay's Snowflake mart read; seeded 2026-09-08 in `design/delivery/billing-cutover-seed.md` from `billing-connector` decision 11 | seed gates: dbt spike files committed in `data-platform` (seed gate 3) + a cutover decision (none planned as of 2026-09-08) + serial-lane coordination with `reconciliation-sweeps` on the schedule catalog |
 
 Why `survey-engine-ingress` sits here and not mid-Phase 2: it is an ingress producer, so it
 enters after the producer rules exist (`producer-ingress-policy`) — no grandfathering, and

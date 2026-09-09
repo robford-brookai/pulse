@@ -172,11 +172,12 @@ only for now (task 3.1); deploy and operations: [`docs/runbooks/billing-connecto
 | Declared verdict + paired transition events (via command API) | EventBridge events (published), same `patient-state` domain as the "Coverage and billing state" row above — no new domain | beta | producer credential name `BILLING_CONNECTOR_TOKEN`, held in config only, never a value, and no ledger database connection string; registered verdict types are read live from `billing.rules.registry`, and the connector refuses to start on a registry/rule-module mismatch; no monetary value ever appears in a payload, state, log line, or receipt |
 | Connector receipt | operator-visible counted line, `billing_connector.receipts.Receipt` | beta | extends the kit's `committed`/`replayed`/`rejected` with `evaluated`/`deferred` — `deferred` is every `consent`/`enrollment` event folded into facts with no catalog fact yet linking it to an episode subject (design.md decision 4) |
 
-Reconciliation and cutover: during the parallel-run window both this connector and the mart relay
-above declare against the same subjects; a per-subject sweep must close empty-or-explained before
-the relay's mart read is retired
-(`openspec/changes/billing-connector/specs/verdict-reconciliation/spec.md`). Until that cutover,
-this row and "Coverage and billing state" above both stand.
+Reconciliation and cutover: the parallel-run window (both this connector and the mart relay
+above declaring against the same subjects, a per-subject sweep closing empty-or-explained) and the
+cutover that retires the relay's mart read moved to the queued `billing-cutover` change on
+2026-09-08 (`design/delivery/billing-cutover-seed.md` §4 carries the spec text). No production
+cutover is planned at this time. Until one is, this row and "Coverage and billing state" above
+both stand.
 
 ### Offered to PX survey engine (discovery stage, `survey-engine-ingress` planned)
 
