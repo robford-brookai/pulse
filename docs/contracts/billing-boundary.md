@@ -56,10 +56,10 @@ vocabulary only if a percent-of-collections contract makes claim-outcome ingesti
 is D6, resolved: PULSE stops at reported because what happens to the claim afterwards is the
 clinic's and the payer's, and PULSE would be recording someone else's ledger.
 
-**Open, and deliberately so:** whether `Contract.terms.economics_model` stays in PULSE as contract
-configuration or moves out with the pricing engine is undecided. It is open question 1 of the
-`billing-source-boundary` design and it is what D6 hinges on. Nothing on this page forecloses
-either answer, and no code should assume one.
+**Closed 2026-09-08:** `Contract.terms.economics_model` stays in PULSE as contract configuration.
+D6 stands as resolved above — PULSE ships `reported`, with `billed → reconciled` reserved behind
+config. The only trigger that reopens D6 is a percent-of-collections contract; none exists or is
+anticipated, so nothing on this page should be read as forecasting one.
 
 ## Money in evidence, never in state
 
