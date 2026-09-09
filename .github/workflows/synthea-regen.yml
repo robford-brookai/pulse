@@ -8,6 +8,11 @@ name: Synthea regen
 
 on:
   workflow_dispatch:
+    inputs:
+      repin:
+        description: "Author the manifest from this run instead of verifying it (bootstrap or reviewed re-pin)"
+        type: boolean
+        default: false
   schedule:
     # Weekly, Monday 06:00 UTC — refreshed per release cadence, cheap to re-dispatch on demand.
     - cron: "0 6 * * 1"
@@ -15,6 +20,9 @@ on:
 jobs:
   regen-staging:
     runs-on: ubuntu-latest
+    # A 50k generation runs ~40 minutes; the six-hour default would burn most of a runner-day
+    # on a hung download rather than failing.
+    timeout-minutes: 120
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -36,11 +44,32 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      # The pinned JAR is ~500 MB and gitignored, so every weekly run re-downloaded it from
+      # GitHub releases. Keyed on the pin file: editing the pin — the only way the JAR changes —
+      # misses the cache by construction, and `ensure_jar` re-verifies the sha256 either way,
+      # so a poisoned cache cannot generate.
+      - name: Cache the pinned Synthea JAR
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+        with:
+          path: packages/synthea-seed/.jars
+          key: synthea-jar-${{ hashFiles('packages/synthea-seed/src/synthea_seed/config/synthea-pin.yaml') }}
+
       # cat4: the run step resolves to a Taskfile target. Verifies the output against the
-      # committed staging manifest and fails naming diverging files; re-pinning is a reviewed
-      # change through REPIN=1 locally, never something this workflow does.
+      # committed staging manifest and fails naming diverging files. This runner is the
+      # manifest-authoring platform of record (synthea-pin.yaml header — JVM determinism does
+      # not carry across machines), so re-pinning happens here, through the `repin` dispatch
+      # input: never on a schedule, and never implicitly. The manifest it writes is uploaded as
+      # its own artifact for review and commit; nothing is written back to the branch.
       - name: Regenerate and verify the staging population
-        run: task synthea:regen PROFILE=staging
+        run: task synthea:regen PROFILE=staging ${{ inputs.repin && 'REPIN=1' || '' }}
+
+      - name: Upload the re-pinned staging manifest
+        if: ${{ inputs.repin }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: synthea-staging-manifest
+          path: packages/synthea-seed/manifests/staging.manifest.json
+          if-no-files-found: error
 
       - name: Upload the staging population artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
