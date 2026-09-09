@@ -84,7 +84,7 @@ Task 4.1 is live execution (GitHub issue + runbook PR + attended run per WORKFLO
       Tests: catalog ↔ registry parity test; Terraform render test as the existing entries have.
       `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 2 | serial: schedule_catalog.auto.tfvars.json is a generated surface shared with queued billing-cutover]`
 
-- [ ] 3.2 Consumer registration: `twenty-board` (the families the app projects, budget 60 s),
+- [x] 3.2 Consumer registration: `twenty-board` (the families the app projects, budget 60 s),
       `warehouse-landing` (all families, budget 15 min, configurable), `graph-projection-patients`
       (`enrollment`, uncitable, owning change `m1-retire-patient-state`); a ledger family with no
       consumers receipts `no_consumers` and passes (design.md decision 6).
