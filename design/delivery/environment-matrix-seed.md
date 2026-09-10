@@ -1,5 +1,11 @@
 # Environment Matrix — proposal seed
 
+> **2026-09-10 proposed update:** `openspec/changes/environment-matrix/` carries a queued
+> proposal under the owner's request to file the improvement plans. The reviewable planning
+> exception moves §5's checks to pre-dispatch holds for this proposal only; neither is cleared.
+> Runtime wiring also requires the D14 receipt. See
+> `design/delivery/reliability-and-contribution-plan.md` for sequencing and evidence.
+
 **Status:** Seed, not a proposal · 2026-09-08 · **Source decision:**
 `design/delivery/pulse-runtime-readiness.md` §2.1–§2.3 · **Inherits:** the shipped dev-only
 posture in `packages/pulse-ledger/infra/duplo/*.json` and `packages/billing-connector/infra/duplo/*.json`
