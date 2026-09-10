@@ -12,7 +12,7 @@ from __future__ import annotations
 import io
 import json
 import uuid
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import date, datetime
 from pathlib import Path
 
@@ -20,9 +20,18 @@ import httpx
 import pytest
 from pulse_core.client import PulseCoreClient
 from pulse_ledger.reads import SubjectState
-from schedules import cli
+from schedules import cli, sweep_production
 from schedules.consent_sweep import RECONCILIATION_WRITER_ID
 from schedules.month_open import FixtureEnrollmentSource, billing_episode_subject_key, load_enrollment_fixture
+from schedules.projection_conformance import Comparison, ConsumerConformance, conform_family
+from schedules.sweep_readers import (
+    BoardReader,
+    FixtureReader,
+    LandingReader,
+    LedgerStateReader,
+    PatientsReader,
+)
+from twenty_projection.apply import ProjectionRestClient
 
 MONTH_OPEN_FIXTURES = Path(__file__).parent / "fixtures"
 CONSENT_SWEEP_FIXTURES = Path(__file__).parent / "fixtures" / "consent_sweep"
@@ -566,16 +575,91 @@ class TestReconcileSweepExportDiffDryRunJob:
         assert receipt["failed_declarations"] == 0
 
 
+#: A resolved environment for the ledger-family dispatch tests. Values are placeholders: every
+#: source is faked below, so nothing here is ever connected (`conftest.py` blocks sockets anyway).
+_SWEEP_ENVIRONMENT = sweep_production.SweepEnvironment(
+    pulse_core_base_url="https://pulse-core.example",
+    pulse_core_token="a-read-token",  # noqa: S106 — a fixture value, not a secret
+)
+
+
+class _FixtureHistory:
+    """A `SubjectHistorySource` over one synthetic `enrollment` subject."""
+
+    def subject_history(self, subject_type: str, subject_key: str) -> list[Mapping[str, object]]:
+        return [
+            {
+                "event_id": "11111111-1111-1111-1111-111111111111",
+                "subject_type": subject_type,
+                "subject_key": subject_key,
+                "seq": 7,
+                "effective_at": "2026-09-01T00:00:00+00:00",
+                "recorded_at": "2026-09-01T00:00:05+00:00",
+                "reverses_event_id": None,
+                "payload": {"to_state": "active"},
+            }
+        ]
+
+
+def _board_reader() -> BoardReader:
+    """A real `BoardReader` over a mocked transport: one board row for `enr-1`, stored the way the
+    projection stores it (`encode_option_value("active")`), so this dispatch exercises the same
+    vocabulary translation a live board read does."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "data": {
+                    "patientPrograms": [
+                        {"canonicalPatientId": "enr-1", "lifecycleStatus": "ACTIVE", "projectionSeq": 7}
+                    ]
+                }
+            },
+        )
+
+    client = ProjectionRestClient(
+        "https://twenty.example",
+        token="a-twenty-token",  # noqa: S106 — a fixture value, not a secret
+        transport=httpx.MockTransport(handler),
+    )
+    return BoardReader(client)
+
+
+def _fixture_readers(*, patients: bool = True) -> Callable[..., sweep_production.SweepReaders]:
+    """`build_sweep_readers`'s stand-in: same signature, fixture-backed readers."""
+
+    def build(environment: sweep_production.SweepEnvironment, **kwargs: object) -> sweep_production.SweepReaders:
+        del environment, kwargs
+        return _sweep_readers(patients=patients)
+
+    return build
+
+
+def _sweep_readers(*, patients: bool = True) -> sweep_production.SweepReaders:
+    """This environment's readers, all fixture-backed. `patients=False` is dev01: no OCEAN graph
+    database, so that consumer has no reader at all."""
+    rows = {"enrollment": [{"subject_key": "enr-1", "state": "active", "seq": 7}]}
+    patient_rows = {"enrollment": [{"patient_id": "enr-1", "enrollment_status": "active", "ledger_seq": 7}]}
+    return sweep_production.SweepReaders(
+        ledger=LedgerStateReader(_FixtureHistory()),
+        board=_board_reader(),
+        landing=LandingReader(FixtureReader(rows_by_family=rows)),
+        patients=PatientsReader(FixtureReader(rows_by_family=patient_rows)) if patients else None,
+    )
+
+
 class TestReconcileSweepProjectionConformanceJob:
-    """`reconcile-sweep --family <ledger family>`: today's registry (task 3.2 registers the first
-    consumers in wave 2) has none, so every run passes with `no_consumers` (design.md decision 6)
-    rather than exiting 2 — there being nothing registered yet is not "no rows could be compared"."""
+    """`reconcile-sweep --family <ledger family>`'s receipt and exit code, over an already-built
+    `FamilyConformance` (task 3.4 moved the reading itself into `sweep_production`)."""
 
     def test_no_registered_consumers_passes_with_no_consumers_and_exits_zero(self) -> None:
         stream = io.StringIO()
 
         exit_code = cli.run_reconcile_projection_conformance_job(
-            family="enrollment", run_date=date(2026, 9, 8), stream=stream
+            conform_family(family="enrollment", snapshot={}, consumers=()),
+            run_date=date(2026, 9, 8),
+            stream=stream,
         )
 
         assert exit_code == 0
@@ -584,13 +668,14 @@ class TestReconcileSweepProjectionConformanceJob:
         assert receipt["no_consumers"] is True
 
     def test_a_family_with_zero_classified_comparisons_and_registered_consumers_exits_two(self) -> None:
-        from schedules.projection_conformance import ConsumerConformance
-
         stream = io.StringIO()
 
         exit_code = cli.run_reconcile_projection_conformance_job(
-            family="enrollment",
-            consumers=[ConsumerConformance(consumer="twenty-board", family="enrollment", comparisons=())],
+            conform_family(
+                family="enrollment",
+                snapshot={},
+                consumers=[ConsumerConformance(consumer="twenty-board", family="enrollment", comparisons=())],
+            ),
             run_date=date(2026, 9, 8),
             stream=stream,
         )
@@ -598,24 +683,54 @@ class TestReconcileSweepProjectionConformanceJob:
         assert exit_code == 2
 
     def test_at_least_one_classified_comparison_exits_zero(self) -> None:
-        from schedules.projection_conformance import Comparison, ConsumerConformance
-
         stream = io.StringIO()
 
         exit_code = cli.run_reconcile_projection_conformance_job(
-            family="enrollment",
-            consumers=[
-                ConsumerConformance(
-                    consumer="twenty-board",
-                    family="enrollment",
-                    comparisons=(Comparison(subject_key="enr-1", consumer="twenty-board", outcome="agreement"),),
-                )
-            ],
+            conform_family(
+                family="enrollment",
+                snapshot={},
+                consumers=[
+                    ConsumerConformance(
+                        consumer="twenty-board",
+                        family="enrollment",
+                        comparisons=(Comparison(subject_key="enr-1", consumer="twenty-board", outcome="agreement"),),
+                    )
+                ],
+            ),
             run_date=date(2026, 9, 8),
             stream=stream,
         )
 
         assert exit_code == 0
+
+    def test_an_unconfigured_consumer_is_named_in_the_receipt_and_is_not_a_divergence(self) -> None:
+        """Design.md decision 11: skipped, named, exit unaffected — the other consumer's one
+        comparison is what the exit code is about."""
+        stream = io.StringIO()
+
+        exit_code = cli.run_reconcile_projection_conformance_job(
+            conform_family(
+                family="enrollment",
+                snapshot={},
+                consumers=[
+                    ConsumerConformance(
+                        consumer="twenty-board",
+                        family="enrollment",
+                        comparisons=(Comparison(subject_key="enr-1", consumer="twenty-board", outcome="agreement"),),
+                    ),
+                    ConsumerConformance(consumer="graph-projection-patients", family="enrollment", unconfigured=True),
+                ],
+            ),
+            run_date=date(2026, 9, 8),
+            stream=stream,
+        )
+
+        assert exit_code == 0
+        receipt = json.loads(stream.getvalue())
+        assert receipt["no_consumers"] is False
+        skipped = next(c for c in receipt["consumers"] if c["consumer"] == "graph-projection-patients")
+        assert skipped["unconfigured"] is True
+        assert skipped["divergences"] == {}
 
 
 class TestMainDispatchReconcileSweep:
@@ -664,22 +779,63 @@ class TestMainDispatchReconcileSweep:
         assert exc_info.value.code == 2
         assert "usage" in capsys.readouterr().err.lower()
 
-    def test_a_ledger_family_dispatches_projection_conformance_and_never_touches_the_ledger_env(
+    def test_a_ledger_family_builds_the_registrys_consumers_from_this_environments_readers(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
+        """Task 3.4: the ledger-family path builds this run's consumers from the registry, so the
+        receipt names all three — never wave 1's empty tuple, which reported `no_consumers` on
+        every real run."""
+
         def _forbidden(*args: object, **kwargs: object) -> None:
             msg = "reconcile-sweep for a ledger family must not touch consent-sweep env wiring"
             raise AssertionError(msg)
 
         monkeypatch.setattr(cli, "_ledger_connection_from_env", _forbidden)
         monkeypatch.setattr(cli, "_pulse_core_client_from_env", _forbidden)
+        monkeypatch.setattr(cli, "resolve_sweep_environment", lambda: _SWEEP_ENVIRONMENT)
+        monkeypatch.setattr(cli, "build_sweep_readers", _fixture_readers())
 
         exit_code = cli.main(["reconcile-sweep", "--family", "enrollment"])
 
         assert exit_code == 0
         receipt = json.loads(capsys.readouterr().out)
         assert receipt["kind"] == "projection_conformance"
-        assert receipt["no_consumers"] is True
+        assert receipt["no_consumers"] is False
+        assert [consumer["consumer"] for consumer in receipt["consumers"]] == [
+            "twenty-board",
+            "warehouse-landing",
+            "graph-projection-patients",
+        ]
+
+    def test_a_ledger_family_names_an_unconfigured_consumer_and_still_compares_the_others(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """dev01-brook hosts no OCEAN graph database (design.md decision 11)."""
+        monkeypatch.setattr(cli, "resolve_sweep_environment", lambda: _SWEEP_ENVIRONMENT)
+        monkeypatch.setattr(cli, "build_sweep_readers", _fixture_readers(patients=False))
+
+        exit_code = cli.main(["reconcile-sweep", "--family", "enrollment"])
+
+        assert exit_code == 0
+        receipt = json.loads(capsys.readouterr().out)
+        assert receipt["no_consumers"] is False
+        by_name = {consumer["consumer"]: consumer for consumer in receipt["consumers"]}
+        assert by_name["graph-projection-patients"]["unconfigured"] is True
+        assert by_name["twenty-board"]["agreements"] == 1
+        assert by_name["warehouse-landing"]["agreements"] == 1
+
+    def test_a_missing_variable_fails_by_name_before_any_source_is_built(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def _forbidden(*args: object, **kwargs: object) -> None:
+            msg = "a source was built before the environment resolved"
+            raise AssertionError(msg)
+
+        monkeypatch.delenv(sweep_production.PULSE_CORE_BASE_URL_ENV_VAR, raising=False)
+        monkeypatch.setattr(cli, "build_sweep_readers", _forbidden)
+
+        with pytest.raises(sweep_production.MissingSweepVariableError) as exc_info:
+            cli.main(["reconcile-sweep", "--family", "enrollment"])
+
+        assert exc_info.value.name == sweep_production.PULSE_CORE_BASE_URL_ENV_VAR
 
     def test_an_unknown_family_exits_nonzero_with_usage_help(self, capsys: pytest.CaptureFixture[str]) -> None:
         with pytest.raises(SystemExit) as exc_info:

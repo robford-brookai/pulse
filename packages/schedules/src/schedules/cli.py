@@ -48,7 +48,7 @@ import os
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TextIO
 
@@ -84,14 +84,19 @@ from schedules.month_open import (
     load_enrollment_fixture,
     run_month_open,
 )
-from schedules.projection_conformance import MIN_COMPLETE_FROM, ConsumerConformance, SubjectSnapshot, conform_family
+from schedules.projection_conformance import MIN_COMPLETE_FROM, FamilyConformance
 from schedules.receipt import (
     build_export_diff_receipt,
     build_projection_conformance_receipt,
     receipt_payload,
     rows_compared,
 )
-from schedules.sweep_registry import UnknownOwnershipError, build_registry
+from schedules.sweep_production import (
+    build_sweep_readers,
+    resolve_sweep_environment,
+    run_projection_conformance_sweep,
+)
+from schedules.sweep_registry import Family, UnknownOwnershipError, build_registry
 from schedules.verdict_relay_poll import run_verdict_relay_poll_job
 
 #: This job's own D15 credential name (mirrors `consent_sweep.RECONCILIATION_WRITER_ID`) — the
@@ -305,31 +310,25 @@ def run_reconcile_export_diff_dry_run_job(
 
 
 def run_reconcile_projection_conformance_job(
+    conformance: FamilyConformance,
     *,
-    family: str,
-    consumers: Sequence[ConsumerConformance] = (),
-    snapshot: Mapping[str, SubjectSnapshot] | None = None,
     run_date: date,
-    floor: date = MIN_COMPLETE_FROM,
     stream: TextIO | None = None,
 ) -> int:
-    """`reconcile-sweep --family <ledger family>`'s path: build this run's `FamilyConformance`
-    (task 2.1) from already-read consumer comparisons and snapshot, print its `Receipt`, and return
-    the exit code decision 10 pins.
+    """`reconcile-sweep --family <ledger family>`'s receipt and exit code: print one run's
+    `FamilyConformance` (task 2.1) as decision 7's `Receipt`, and return the status decision 10
+    pins.
 
-    A family with no registered consumers (`consumers=()`, today's registry for every ledger
-    family — task 3.2 registers the first ones) passes with `no_consumers` and exits 0 (design.md
-    decision 6: "passes ... not a divergence"), never 2: there being nothing to compare yet is the
-    documented steady state before wave 2 lands, not "no rows could be compared" the way an empty
-    read or a connectivity failure is. Once consumers are registered, exit 2 fires only when every
-    one of them produced zero classified comparisons.
+    The classification itself is already done by the time this is called — `sweep_production
+    .run_projection_conformance_sweep` reads the consumers and pins the snapshot — so this function
+    only reshapes and decides the exit status, the same division `run_month_open_job` has.
+
+    A family with no registered consumers passes with `no_consumers` and exits 0 (design.md
+    decision 6: "passes ... not a divergence"), never 2: nothing being registered against a family
+    is not "no rows could be compared" the way an empty read or a connectivity failure is. With
+    consumers registered, exit 2 fires only when every one of them produced zero classified
+    comparisons — which includes the environment that configures none of their sources at all.
     """
-    conformance = conform_family(
-        family=family,
-        snapshot=snapshot or {},
-        consumers=consumers,
-        floor=floor,
-    )
     receipt = build_projection_conformance_receipt(conformance, run_date=run_date)
     _emit(receipt_payload(receipt), stream=stream if stream is not None else sys.stdout)
     if conformance.no_consumers:
@@ -553,13 +552,25 @@ def _dispatch_reconcile_export_diff(args: argparse.Namespace, parser: argparse.A
     )
 
 
-def _dispatch_reconcile_projection_conformance(family: str) -> int:
-    """`reconcile-sweep --family <ledger family>`'s one path today: no consumer is registered for
-    any ledger family yet (task 3.2, wave 2), so every run reports `no_consumers` and exits 0
-    (design.md decision 6) — the honest state of wave 1's wiring. This is the seam wave 2 replaces
-    with a real per-family consumer/reader lookup and a real snapshot read; nothing about
-    `run_reconcile_projection_conformance_job`'s own signature has to change for that."""
-    return run_reconcile_projection_conformance_job(family=family, run_date=date.today())
+def _dispatch_reconcile_projection_conformance(registry: Mapping[str, Family], *, family: str) -> int:
+    """`reconcile-sweep --family <ledger family>`'s real-wiring path (task 3.4, design.md decision
+    11): the registry's consumers, read through this environment's production sources.
+
+    Every variable is resolved before any source connects, so a missing one fails startup naming it
+    (`sweep_production.resolve_sweep_environment`); a consumer whose source this environment does
+    not host is named `unconfigured` in the receipt and skipped, and the rest of the run compares.
+    `no_consumers` stays what it always was — the registry's answer for a family nothing is
+    registered against, never an unconfigured environment's.
+    """
+    environment = resolve_sweep_environment()
+    readers = build_sweep_readers(environment)
+    conformance = run_projection_conformance_sweep(
+        family=family,
+        registry=registry,
+        readers=readers,
+        as_of=datetime.now(UTC),
+    )
+    return run_reconcile_projection_conformance_job(conformance, run_date=date.today())
 
 
 def _dispatch_reconcile_sweep(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
@@ -575,7 +586,7 @@ def _dispatch_reconcile_sweep(args: argparse.Namespace, parser: argparse.Argumen
         parser.error(f"reconcile-sweep --family {args.family!r} is not a catalog family")
     if family.sweep_kind == "export_diff":
         return _dispatch_reconcile_export_diff(args, parser, family=family.name)
-    return _dispatch_reconcile_projection_conformance(family.name)
+    return _dispatch_reconcile_projection_conformance(registry, family=family.name)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
