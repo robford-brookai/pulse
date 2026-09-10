@@ -100,12 +100,33 @@ Task 4.1 is live execution (GitHub issue + runbook PR + attended run per WORKFLO
       Tests: `mkdocs build -s`; cat8 docs gates; `task check` green.
       `[model: haiku | deps: 2.2 | lane: repo_change | wave: 2]`
 
+- [ ] 3.4 CLI wiring: `reconcile-sweep --family <ledger family>` builds this run's consumers from
+      the registry (`consumer_registry.build_consumers`) with production readers instead of the
+      empty tuple the wave-1 seam still passes: `BoardReader` over `ProjectionRestClient` (the
+      projection's own read client and `PULSE_TWENTY_<TARGET>_TOKEN`), `LandingReader` over a
+      read-only Snowflake `FamilyRowSource` on the fold view (the warehouse credential posture),
+      `PatientsReader` over a read-only Postgres `FamilyRowSource` on the OCEAN graph database
+      (`SCHEDULES_GRAPH_DATABASE_URL`), and the per-subject snapshot through `LedgerStateReader`
+      on `PulseCoreClient`. A missing variable fails startup by name. A consumer whose source is
+      not configured for this environment is skipped and named in the receipt as `unconfigured`
+      (never a divergence, never `no_consumers`), so the `enrollment` sweep runs on dev01, which
+      hosts no OCEAN graph database (design.md decision 11). The receipt-shape change is a spec
+      delta: write it to `HANDOFF.md` for the doc-updater.
+      Tests: the CLI passes the three registered consumers for a ledger family; a missing variable
+      fails by name before any connection; an unconfigured consumer receipts `unconfigured` and the
+      other consumers still compare; `no_consumers` only when the registry has none for the family;
+      no reader holds a write method; `task check` green.
+      `[model: opus | deps: 3.2 | lane: repo_change | wave: 3]`
+      Opus because the three readers meet three credential postures in one process.
+
 ## 4. Wave 3 — first run
 
 - [ ] 4.1 First attended run on dev (live execution): GitHub tracking issue; each ledger family's
       sweep run once against dev with read-only credentials; the eight receipt lines posted on the
       issue (subject keys and counts only); the P0 streak clock noted as started; any `missing`
       spike cross-checked against the warehouse-sync liveness probe (#413).
-      Tests (runbook assertions): every family produces exactly one receipt; `patients` is
-      reported as uncitable with a count; no command reaches the command API during the run.
-      `[model: sonnet | deps: 3.1, 3.2, 3.3 | lane: operational_discovery | wave: 3]`
+      Tests (runbook assertions): every family produces exactly one receipt; on dev01
+      `graph-projection-patients` is reported `unconfigured` (no OCEAN graph database there) and
+      `twenty-board` and `warehouse-landing` compare rows; no command reaches the command API
+      during the run.
+      `[model: sonnet | deps: 3.1, 3.2, 3.3, 3.4 | lane: operational_discovery | wave: 4]`

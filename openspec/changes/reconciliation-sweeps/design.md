@@ -80,6 +80,17 @@ inference sentinel (dropped, decision 9).
     when no rows could be compared (configuration, connectivity, an empty read), matching the
     failed-declaration semantics s13 pinned.
 
+11. **The CLI builds consumers from the registry with production readers; an unconfigured
+    consumer is named, not faked.** Task 3.2 registered the three consumers and their readers,
+    but `build_consumers` was never called from `cli.py`: the ledger-family path kept wave 1's
+    empty tuple, so every real run reported `no_consumers`. Found 2026-09-10 while preparing the
+    first attended run. Task 3.4 wires the registry in with the readers' production sources (Twenty
+    read client, read-only Snowflake fold view, read-only graph Postgres, command-API history).
+    dev01-brook hosts no OCEAN graph database, so a consumer whose source is not configured for the
+    environment is reported as `unconfigured` in the receipt and skipped; the other consumers still
+    compare. Alternative rejected: letting the enrollment sweep fail on dev until a graph database
+    exists there, which would block the first run of every other consumer on one missing source.
+
 ## Data model and API surface
 
 - Registry: `Family(name, ownership, sweep_kind)`; `Consumer` as in decision 6.
