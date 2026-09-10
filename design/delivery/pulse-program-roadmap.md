@@ -5,6 +5,17 @@
 > the two-change execution limit and existing reconciliation/M1 ownership remain. It also records
 > the environment seed's proposed planning exception with all execution holds retained.
 
+## Queued Engineering demo — 2026-09-10
+
+`engineering-demo` proposes POCAR first and PAP second, API create/read and immutable
+history demonstrations, Twenty state/event modeling, reusable batch seed/history,
+operations views, projection rebuild and demo-only reset/reload. Source discovery
+starts from Fonzie's shared Brook Data MCP and system aliases. Before dispatch,
+reconcile bounded shared slices with `pocar-relay`, `genesis-adjudication-rules` and
+`genesis-seed-run`; record a single task/PR owner for each and keep the two-active-change
+limit. This proposal does not start production cutover or mark any implementation done.
+
+
 Status: provisional · 2026-08-04 — Phase 1 archived, v1.5 shipped, release ladder added
 
 The dispatchable truth for the active change is
@@ -387,3 +398,7 @@ directly.
   resuming is a new change seeded from `.planning/reports/2026-09-09-devex-handoff.md`, which
   carries the full audit history, what each of the four changes closed, the seven findings'
   original task text, and the exact resume commands.
+
+## Connector and company-readiness sequencing — 2026-09-10
+
+Queue `connector-source-contracts` before engineering-demo source mapping. It owns reusable source guarantees and conformance tests; engineering-demo owns POCAR/PAP adapters and presentation. Queue `company-readiness` for accurate documentation and sharing evidence, consuming connector-first-contribution from PR #452 rather than repeating the DevEx audit. Visibility readiness and demo readiness are separate outcomes. Filing these plans dispatches no implementation and does not increase the two-active-change limit.
