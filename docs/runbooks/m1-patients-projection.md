@@ -1,130 +1,98 @@
-# Runbook — M1 patients projection cutover (m1-retire-patient-state task 4.1)
+# Runbook — M1 patients projection receipt run (m1-retire-patient-state task 4.1)
 
-Attended, one-time dev run that makes the `patients` projection live: apply the schema
-migration, route the `patient-state` feed to graph-projection, replay the ledger's `enrollment`
-history into `patients`, grant Hasura's read-only surface, and prove the sweep sees the consumer
-as citable. Design.md decision 10: one attended run, never a worktree — tracked on its own
-GitHub issue, not as a file under `handoffs/`.
-
-**Order matters.** The migration must land before the feed is routed (the handler's `INSERT`
-names `ledger_seq`, absent until the migration runs) and the feed must be routed and rebuilt
-before Hasura is opened for reads (an empty or half-replayed table read as authoritative is worse
-than the table not being readable yet).
+The attended run that proves the retired patient-state derivation is replaced end to end:
+migration 0021, the ledger-fed rebuild of `patients`, and the read-only Hasura grant. It runs on
+the OCEAN compose stack, because the dev01-brook tenant hosts no graph-projection, Hasura or OCEAN
+graph Postgres (design.md decision 13). The rebuild still reads the dev ledger's replay route over
+HTTP, so the receipt exercises the real journal. Receipts go on the tracking issue (#450), counts
+and subject keys only, never a file under `handoffs/`.
 
 ## Prerequisites
 
-- Dev graph Postgres credential (`DATABASE_URL` for `packages/ocean`'s graph database — the
-  service holding `patients`, not the ledger's own Postgres).
-- AWS credential for dev (`AWS_PROFILE=duplo-dev01`, per the `warehouse-sync-revival` pattern) —
-  needed to apply the `eventbridge-ocean` Terraform module and to confirm the rule with the CLI.
-- The kit's replay credential for the ledger read in step 3 — `PULSE_CORE_BASE_URL` and
-  `PULSE_CORE_REPLAY_TOKEN` (`pulse_core.replay`), the same pair `task projection:rebuild` uses
-  for the board projection. A read over HTTP; never a ledger DSN.
-- Hasura admin secret for dev (`HASURA_URL`, `HASURA_GRAPHQL_ADMIN_SECRET`).
+- Docker running, and `packages/ocean/infra/docker-compose.yml` at a main checkout that includes
+  #440, #445 and #451 (the compose `graph-projection` entry builds from the repo root).
+- The kit's replay credential for the ledger read in step 3: `PULSE_CORE_BASE_URL` (the dev
+  command API) and `PULSE_CORE_REPLAY_TOKEN` (`pulse_core.replay`), the same pair
+  `task projection:rebuild` uses for the board projection. A read over HTTP; never a ledger DSN.
+  Retrieval: `docs/process/env-vars-retreival.md` §3, key `PULSE_CORE_REPLAY_TOKEN` in the Duplo
+  secret `pulse-ledger-api-secret` (dev01-brook).
+- No dev graph database credential exists; the compose Postgres is the target. Its DSN, from the
+  compose file's defaults, is `postgresql+asyncpg://ocean:changeme@localhost:5433/ocean` and the
+  compose Hasura listens on `http://localhost:8090` with admin secret `changeme_admin_secret`.
+  Override both with `POSTGRES_PASSWORD` and `HASURA_GRAPHQL_ADMIN_SECRET` if you change them.
 
 ## Steps
 
-1. **Apply migration 0021.** `packages/ocean/infra/postgres/versions/0021_patients_ledger_seq.py`
-   drops `enrollment_status`'s server default, adds `ledger_seq BIGINT NULL`, and recreates
-   `patient_graph_summary` with `ledger_seq` in the select and group-by (design.md decisions 3, 7):
-
+1. **Bring up the graph stack and apply migration 0021.** The compose `migrate` service runs the
+   Alembic chain, which now ends at 0021 (drops `enrollment_status`'s server default, adds
+   `ledger_seq BIGINT NULL`, recreates `patient_graph_summary` with `ledger_seq`; design.md
+   decisions 3, 7):
    ```bash
-   cd packages/ocean/infra/postgres
-   DATABASE_URL=<dev graph postgres> uv run --project ../.. alembic upgrade head
+   cd packages/ocean/infra
+   docker compose up -d postgres migrate hasura hasura-init graph-projection
+   docker compose logs migrate | tail -5
    ```
-
-   PASS: `alembic upgrade head` exits 0 and `alembic current` shows `0021_patients_ledger_seq` as
-   the head revision. Legacy rows keep their status and read `ledger_seq IS NULL` — do not touch
-   them (design.md decision 5).
-
-2. **`terraform apply` the `eventbridge-ocean` module** so graph-projection's rule includes
-   `patient-state` (design.md decision 11; `packages/ocean/infra/terraform/modules/eventbridge-ocean`,
-   generated pattern in `packages/ocean/infra/terraform/generated/event_catalog.auto.tfvars.json`).
-   This is the `destructive_ops` lane step (WORKFLOW.md), run against dev's Terraform state, not
-   from this worktree.
-
-   PASS, confirmed from the CLI, not assumed from the plan:
-
+   PASS: the `migrate` log ends at `0021_patients_ledger_seq` and
+   `DATABASE_URL=postgresql://ocean:changeme@localhost:5433/ocean uv run --project ../.. alembic -c postgres/alembic.ini current`
+   (run from `packages/ocean/infra`) prints `0021_patients_ledger_seq (head)`. A legacy row, if you
+   seed one, keeps its status and reads `ledger_seq IS NULL` (design.md decision 5).
+2. **Consumer rule: deferred.** In the environment that hosts graph-projection, the
+   `eventbridge-ocean` module's `terraform apply` adds `patient-state` to graph-projection's rule
+   (design.md decision 11) and the confirmation is
+   `aws events describe-rule --name <bus>-graph-projection --event-bus-name <bus> --query EventPattern --output text`
+   listing `"patient-state"`. dev01-brook has no such consumer running, so this step is recorded on
+   the tracking issue as deferred to `environment-matrix` (design.md decision 13), not run here.
+   Until it runs somewhere, the live handler is inert there, the documented safe failure.
+3. **Rebuild:** replay every committed `enrollment` event into the compose `patients` from the dev
+   ledger (design.md decisions 10 and 12):
    ```bash
-   aws events describe-rule --name duploservices-dev01-brook-ocean-graph-projection \
-     --event-bus-name duploservices-dev01-brook-ocean --query EventPattern --output text
-   ```
-
-   prints an `EventPattern` whose `detail-type` list now includes `"patient-state"` alongside
-   graph-projection's existing domains. Cross-check it agrees with
-   `ocean_broker.catalog.consumer_rule_pattern("graph-projection")` computed from the tree at the
-   applied commit — the same assertion `test_terraform_consumers.py` makes offline, reconfirmed
-   against the real rule. Until this step lands, the handler from step 3 is inert on dev — the
-   documented safe failure, not a defect (design.md decision 11).
-
-3. **Rebuild:** replay every committed `enrollment` event into `patients` before anyone reads
-   the projected rows (design.md decisions 10 and 12):
-
-   ```bash
-   DATABASE_URL=<dev graph postgres> \
+   DATABASE_URL=postgresql+asyncpg://ocean:changeme@localhost:5433/ocean \
    PULSE_CORE_BASE_URL=<dev command api> PULSE_CORE_REPLAY_TOKEN=<dev replay token> \
      task projection:rebuild-patients TARGET=dev OPERATOR=<who>
    ```
-
-   The CLI is `packages/ocean/services/graph-projection/src/rebuild_patients.py` (task 3.3). It
-   reads each subject's committed events through the ledger's replay route over HTTP
-   (`PulseCoreClient.subject_history`, paged to exhaustion) and folds them through the same
-   `handle_patient_state` the live consumer applies, so this is a real assertion of monotonicity,
-   not a second implementation to trust separately. Scope is every `patient_id` already in
-   `patients` — the legacy rows adoption exists for — plus any subject with no row yet, named as
-   `SUBJECT="pt-a pt-b"`. Safe to rerun: a second pass with no intervening events writes nothing
-   and counts every event as a skip.
-
-   PASS: the printed `RebuildReceipt` (counts only — events read, subjects, rows written, skipped
-   stale, parked) shows rows written for the subjects the ledger has minted `enrollment` events
-   for, and exit 0. Parked is expected and counted, never a failure: it is subjects the ledger has
-   no history for yet (legacy rows awaiting genesis, which keep their status and null `ledger_seq`)
-   plus any event that resolved to no canonical patient id. Exit 2 means a variable is unset and
-   nothing was read or written; the message names every missing one.
-
-4. **Apply Hasura metadata** — select-only grant on `patients` for every service role, columns
-   including `ledger_seq` (design.md decision 4; `packages/ocean/infra/hasura/apply_metadata.py`):
-
+   Scope is every `patient_id` already in `patients` plus any subject named as
+   `SUBJECT="pt-a pt-b"`; on a fresh compose Postgres the table is empty, so name the subjects
+   the dev ledger has minted `enrollment` events for (the sweep receipts on #435 or
+   `pulse_core.client.PulseCoreClient.subject_history` list them). Safe to rerun: a second pass with
+   no intervening events writes nothing and counts every event as a skip.
+   PASS: the printed `RebuildReceipt` (events read, subjects, rows written, skipped stale, parked)
+   shows rows written for the named subjects and exit 0; a rerun shows rows written 0. Parked is
+   counted, never a failure: subjects the ledger has no history for. Exit 2 means a variable is
+   unset; the message names every missing one.
+4. **Apply Hasura metadata** to the compose Hasura — select-only on `patients` for every service
+   role, columns including `ledger_seq` (design.md decision 4):
    ```bash
-   HASURA_URL=<dev hasura> HASURA_GRAPHQL_ADMIN_SECRET=<dev admin secret> \
+   HASURA_URL=http://localhost:8090 HASURA_GRAPHQL_ADMIN_SECRET=changeme_admin_secret \
      uv run python packages/ocean/infra/hasura/apply_metadata.py
    ```
-
-   PASS: `Summary: N succeeded, 0 failed` and the `patients` select permission is present for
-   every role in `SERVICE_ROLES` — no role gets `INSERT`/`UPDATE`, matching the gate
-   (`packages/ocean/tests/gates/test_patients_read_only.py`).
-
-5. **Run the `enrollment` conformance sweep once**, now that the registry has flipped it citable
-   (task 3.1; design.md decision 9):
-
+   PASS: `Summary: N succeeded, 0 failed`, and the `patients` select permission is present for every
+   role in `SERVICE_ROLES` with `ledger_seq` in its column list; no role gets `INSERT`/`UPDATE`,
+   matching the gate (`packages/ocean/tests/gates/test_patients_read_only.py`).
+5. **Run the `enrollment` conformance sweep once** (reconciliation-sweeps; design.md decision 9):
    ```bash
    schedules reconcile-sweep --family enrollment
    ```
-
-   PASS: the receipt line's `graph-projection-patients` entry reports `agreements`/`divergences`
-   per subject — no longer the `uncitable` class report task 3.1 retired. Legacy rows (null
-   `ledger_seq`) still count `uncitable` per row; that is expected until genesis adopts them
-   (design.md decision 5), not a sweep defect.
-
-6. **Post the receipt** on the tracking GitHub issue — subject keys (capped at 200, true total
-   beside the cap) and counts only, from steps 3 and 5, never a payload value or a payer
-   identifier. Never a file under `handoffs/`.
+   Before reconciliation-sweeps task 3.4 lands, the CLI reports `no_consumers` for every ledger
+   family; record that line as the step's receipt. After 3.4, the receipt names
+   `graph-projection-patients` as `unconfigured` on dev01 (no graph database there) unless
+   `SCHEDULES_GRAPH_DATABASE_URL` points at the compose Postgres, in which case projected rows
+   compare per subject and legacy rows count `uncitable`.
+6. **Post the receipt** on the tracking issue: the `migrate` tail, the `RebuildReceipt` from the
+   first and second pass, the Hasura summary, the sweep line, and the deferred note for step 2.
+   Subject keys (capped at 200, true total beside the cap) and counts only, never a payload value.
 
 ## Verification the runbook itself asserts (task 4.1's stated tests)
 
-- The consumer rule pattern lists `patient-state` (step 2).
-- Zero `INSERT INTO patients` from graph-projection logs outside the handler during the run —
-  watch the service logs through steps 3-5; the gate test already proves this statically, the
-  attended run reconfirms it live.
-- `patient_graph_summary` returns `ledger_seq` for projected rows (step 1, spot-checked after
-  step 3).
-- The sweep receipt shows the consumer as citable (step 5).
+- `alembic current` is 0021 and `patient_graph_summary` returns `ledger_seq` for projected rows
+  (step 1, spot-checked after step 3).
+- Zero `INSERT INTO patients` from the compose graph-projection logs outside the handler during
+  steps 3–5 (`docker compose logs graph-projection | grep -i 'insert into patients'` is empty);
+  the gate proves this statically, the run reconfirms it live.
+- The rebuild receipt shows rows written on the first pass and none on the second (step 3).
+- The Hasura select permission lists `ledger_seq` for every service role (step 4).
 
 ## Rollback
 
-Downgrade the migration (`alembic downgrade -1` from `packages/ocean/infra/postgres`, restoring
-the default, dropping `ledger_seq`, recreating the pre-0021 view); revert the `terraform apply` by
-re-applying the module from the pre-change commit so `patient-state` drops out of
-graph-projection's rule; the handler is not separately "unregistered" — with the rule reverted it
-simply stops receiving events. Legacy rows were never modified by any of this, so there is nothing
-to unwind on the data side (design.md Migration Plan).
+The stack is local: `docker compose down -v` from `packages/ocean/infra` discards it. Nothing in
+this run touches dev01 or production; the deferred consumer rule is applied, and rolled back, in
+the environment that hosts graph-projection.

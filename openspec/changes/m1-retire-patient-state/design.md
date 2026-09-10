@@ -105,6 +105,19 @@ connector).
     the live handler keeps importing nothing from it (decision 2's validation note stands).
     Alternative rejected: an operator-written adapter at run time, which is untested code touching
     dev data. Found 2026-09-09 reviewing task 3.2's PR.
+13. **4.1's receipt is local; the dev apply is deferred with the environment.** Decision 10 assumed
+    a dev instance of the OCEAN graph stack. There is none: the dev01-brook tenant hosts the ledger
+    API, the relay, warehouse-sync and Twenty, and no graph-projection, Hasura or OCEAN graph
+    Postgres (Duplo service and secret listings, 2026-09-10); graph-projection runs in OCEAN's
+    production, outside this repo's tenants (adaptation plan V7). The only reachable graph stack is
+    the compose stack in `packages/ocean/infra/docker-compose.yml`. So 4.1 applies the migration,
+    the rebuild and the Hasura metadata there, with the rebuild reading the dev ledger's replay
+    route over HTTP so the receipt exercises the real journal. The consumer-rule `terraform apply`
+    and the graph-projection deploy move to the environment that hosts the graph stack
+    (`environment-matrix`, proposed in #452) and are recorded on the tracking issue as deferred.
+    Alternatives rejected: running against OCEAN's production (prod-touching, ruled out for now);
+    standing up the graph stack on dev01 inside this change (environment work, not a projection
+    change). Decided by Rob 2026-09-10.
 
 ## Data model and API surface
 
@@ -128,6 +141,9 @@ connector).
   and fails on the missing column; the runbook orders migration, then `terraform apply`, then rebuild.
 - [A legacy `patients` row has no ledger history yet] → the rebuild counts it as parked and leaves
   it uncitable; genesis (BF-4) adopts it later. The receipt names the count, never the row.
+- [The local receipt does not prove live consumption from the bus] → true and stated: the compose
+  run proves migration, rebuild and read-only; live consumption is proven when the consumer rule is
+  applied in the environment that hosts graph-projection, tracked on #450 as deferred.
 - [Hasura permission change breaks a writer nobody knew about] → the gate test runs first and
   would have named it; the attended run watches graph-projection logs for permission errors.
 - [Legacy rows dominate the uncitable count for months] → expected until genesis; the receipt
