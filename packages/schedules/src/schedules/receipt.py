@@ -5,7 +5,9 @@ report their runs in two different native shapes — a `FamilyConformance` of pe
 `Comparison`s, and a `DriftReceipt` tally over `Correction`s. This module is the one place both
 fold into the receipt design.md decision 7 pins: `date`, `family`, `kind`, `floor`, `snapshot_head`,
 and — per consumer — `agreements`, `divergences` by kind, `uncitable`, `in_flight`, `malformed`,
-`pre_floor`, plus `subject_keys` by kind capped at 200 with the total count beside the cap; tagged
+`pre_floor`, `unconfigured` (design.md decision 11: a registered consumer whose source this
+environment does not host — named, skipped, never a divergence), plus `subject_keys` by kind
+capped at 200 with the total count beside the cap; tagged
 `project:pulse`, `service:schedules`, `family:<name>`. "The same line is the receipt posted on the
 tracking issue after an attended run" — one shape, whichever sweep kind produced it, is what makes
 that possible.
@@ -13,7 +15,8 @@ that possible.
 `build_projection_conformance_receipt` reads a `FamilyConformance` straight off its own
 `counts()`/`subject_keys()`, one `ConsumerReceipt` per registered consumer (an uncitable consumer's
 own class report becomes a `ConsumerReceipt` whose only non-zero field is `uncitable`, so uncitable
-consumers and compared ones print through the same shape without a receipt-level special case).
+consumers and compared ones print through the same shape without a receipt-level special case;
+an unconfigured consumer prints the same way, with `unconfigured` true and every count zero).
 `build_export_diff_receipt` has no registered consumer to iterate — the export itself is the
 lone side being reconciled against the ledger — so it reports one fixed `ConsumerReceipt` named
 `EXPORT_DIFF_CONSUMER`, mapping every declared correction to a `state` divergence (D9: the export's
@@ -100,12 +103,15 @@ class ConsumerReceipt:
     malformed: int = 0
     pre_floor: int = 0
     subject_keys: Mapping[str, SubjectKeyTally] = field(default_factory=dict[str, SubjectKeyTally])
+    unconfigured: bool = False
 
     @property
     def is_clean(self) -> bool:
         """No divergence of any kind — the streak predicate (spec: "zero divergences"). Agreement,
         uncitable, in_flight, malformed and pre_floor counts do not affect a streak: they are not
-        divergences by design.md decision 7's own grouping."""
+        divergences by design.md decision 7's own grouping. Neither does `unconfigured`: a consumer
+        whose source this environment does not host read nothing, and nothing read is nothing to
+        diverge from (design.md decision 11)."""
         return not any(self.divergences.values())
 
 
@@ -150,6 +156,12 @@ def build_projection_conformance_receipt(conformance: FamilyConformance, *, run_
     """
     consumers: list[ConsumerReceipt] = []
     for consumer in conformance.consumers:
+        if consumer.unconfigured:
+            # No source here, so no row was read: every count stays zero and the flag is the whole
+            # statement (design.md decision 11). It is a registered consumer of this family all the
+            # same, so the receipt is not `no_consumers`.
+            consumers.append(ConsumerReceipt(consumer=consumer.consumer, unconfigured=True))
+            continue
         if consumer.uncitable_consumer is not None:
             consumers.append(
                 ConsumerReceipt(consumer=consumer.consumer, uncitable=consumer.uncitable_consumer.row_count)
@@ -289,6 +301,7 @@ def _consumer_payload(consumer: ConsumerReceipt) -> dict[str, object]:
         "in_flight": consumer.in_flight,
         "malformed": consumer.malformed,
         "pre_floor": consumer.pre_floor,
+        "unconfigured": consumer.unconfigured,
         "subject_keys": {
             outcome: _subject_key_tally_payload(tally) for outcome, tally in consumer.subject_keys.items()
         },

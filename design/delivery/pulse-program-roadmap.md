@@ -1,5 +1,10 @@
 # PULSE program roadmap — waves, phases, stages
 
+> **Proposed queue, 2026-09-10:** `design/delivery/reliability-and-contribution-plan.md` maps six
+> owner-requested OpenSpec proposals to evidence and dependencies. They are queued, not dispatched;
+> the two-change execution limit and existing reconciliation/M1 ownership remain. It also records
+> the environment seed's proposed planning exception with all execution holds retained.
+
 ## Queued Engineering demo — 2026-09-10
 
 `engineering-demo` proposes POCAR first and PAP second, API create/read and immutable

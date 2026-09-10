@@ -121,13 +121,20 @@ never a worktree.
 
 ## 4. Wave 3 — attended run
 
-- [ ] 4.1 Live execution on dev: GitHub tracking issue; apply the migration on dev's graph
-      Postgres; `terraform apply` the `eventbridge-ocean` module so graph-projection's rule includes
-      `patient-state`, and confirm the rule pattern from the CLI; run `task projection:rebuild-patients TARGET=dev OPERATOR=<who>` (task 3.3) over the journal for `enrollment` subjects; apply Hasura
-      metadata; run the `enrollment` conformance sweep once and post its receipt (counts and subject
-      keys only): projected rows agree, legacy rows counted as uncitable, no `patients` write from
-      any other path during the run.
-      Tests (runbook assertions): the consumer rule pattern lists `patient-state`; zero
-      `INSERT INTO patients` from graph-projection logs outside the handler; view returns `ledger_seq` for projected rows; sweep receipt shows the consumer as
-      citable.
+- [ ] 4.1 Live execution, local receipt (design.md decision 13): GitHub tracking issue #450; bring
+      up the OCEAN compose stack (`packages/ocean/infra/docker-compose.yml`: `postgres`, `migrate`,
+      `hasura`, `hasura-init`, `graph-projection`) so migration 0021 is applied on the compose
+      Postgres; run `task projection:rebuild-patients TARGET=dev OPERATOR=<who>` (task 3.3) against
+      the compose Postgres with the dev ledger's replay route over HTTP, so the receipt exercises
+      the real journal; apply Hasura metadata to the compose Hasura; run the `enrollment`
+      conformance sweep once (after reconciliation-sweeps 3.4; before it, record the step as
+      `no_consumers`); post the receipt (counts and subject keys only). The `terraform apply` of
+      graph-projection's consumer rule and the graph-projection deploy are deferred to the
+      environment that hosts the OCEAN graph stack (`environment-matrix`), recorded on the issue,
+      and are not part of this change's exit.
+      Tests (runbook assertions): `alembic current` on the compose Postgres is 0021 and the view
+      returns `ledger_seq` for projected rows; the rebuild receipt shows rows written and exit 0,
+      and a rerun writes nothing; zero `INSERT INTO patients` from the compose graph-projection logs
+      outside the handler during the run; the Hasura select-only permission on `patients` lists
+      `ledger_seq` for every service role.
       `[model: sonnet | deps: 1.4, 3.1, 3.2, 3.3 | lane: operational_discovery | wave: 4]`

@@ -60,9 +60,12 @@ Registering the consent sweep in the registry SHALL change none of its observabl
 Each registered family SHALL have a scheduled daily run. Every run SHALL end in exactly one
 machine-parsable receipt line per family carrying the run date, the family, the sweep kind, the
 lower bound swept from, and counts of agreements, divergences by kind, uncitable rows, malformed
-rows, and pre-floor subjects. Receipts SHALL carry subject keys and counts only, never payload
-values, payer identifiers, or demographics, and SHALL be tagged so the observability plan's drift
-trend can read them.
+rows, pre-floor subjects, and unconfigured consumers. A registered consumer whose source this
+environment does not host SHALL be marked `unconfigured` (boolean, default false) in its
+per-consumer receipt entry, with every other per-consumer field zero, so the receipt still
+accounts for every registered consumer of the family without inventing a count no row backs.
+Receipts SHALL carry subject keys and counts only, never payload values, payer identifiers, or
+demographics, and SHALL be tagged so the observability plan's drift trend can read them.
 
 #### Scenario: A clean run leaves a countable receipt
 - **GIVEN** a family whose projections all agree with the ledger
@@ -80,6 +83,31 @@ trend can read them.
 - **GIVEN** ten consecutive business days of receipts for one family with zero divergences
 - **WHEN** an operator reads the receipt stream
 - **THEN** the streak is computable from the receipt lines alone, without payload access
+
+### Requirement: A consumer whose source this environment does not host is named, not faked
+A `projection_conformance` sweep SHALL resolve every environment variable its consumers' sources
+need before opening any connection, and SHALL fail startup naming the first required variable that
+is unset. A consumer registered for the family whose source group is absent from the environment
+entirely SHALL be reported in the receipt as `unconfigured` and skipped: it SHALL NOT count as a
+divergence of any kind, SHALL NOT make the family `no_consumers`, and SHALL NOT prevent the
+family's other consumers from comparing. A source group that is only partly configured SHALL fail
+startup by name rather than be reported `unconfigured`.
+
+#### Scenario: A missing variable fails startup by name
+- **GIVEN** a required variable for the sweep's ledger read is unset
+- **WHEN** the sweep starts
+- **THEN** it fails naming that variable, before any source is connected, and names no value
+
+#### Scenario: An environment without the graph database still sweeps enrollment
+- **GIVEN** an environment that hosts no OCEAN graph database
+- **WHEN** the `enrollment` sweep runs
+- **THEN** `graph-projection-patients` is reported `unconfigured`, `twenty-board` and
+  `warehouse-landing` compare their rows, and the receipt is not `no_consumers`
+
+#### Scenario: A half-configured source is a fault, not an absence
+- **GIVEN** a source group with some but not all of its variables set
+- **WHEN** the sweep starts
+- **THEN** it fails naming the missing variable rather than skipping that consumer
 
 ### Requirement: No sweep asserts divergence below the history floor
 A sweep SHALL exclude from comparison any subject whose ledger history lies entirely before the

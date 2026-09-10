@@ -32,12 +32,15 @@ runbook checklist and the eight receipt lines it collects. Before running:
    is designed to catch, and the fix there is reviving the feed, not rebuilding a projection that
    was never behind.
 
-`enrollment` reports two consumers: `twenty-board` and, as of `m1-retire-patient-state` task 3.1,
-`graph-projection-patients` — citable now (`cite_field="ledger_seq"`), compared per subject like
-any other consumer. A legacy row (null `ledger_seq`, pre-migration) still reports `uncitable` per
-row, not as a whole-consumer class — that is the documented steady state until genesis adopts it,
-never a divergence to chase. See `docs/runbooks/m1-patients-projection.md` for the attended run
-that makes this citable in dev.
+`enrollment` registers two consumers: `twenty-board` and, as of `m1-retire-patient-state` task 3.1,
+`graph-projection-patients` (`cite_field="ledger_seq"`). Until reconciliation-sweeps task 3.4
+lands, the CLI does not build consumers from the registry and every ledger-family run reports
+`no_consumers` (design.md decision 11). After 3.4, a consumer whose source is not configured for
+the environment is reported `unconfigured` and skipped: dev01-brook hosts no OCEAN graph database,
+so `graph-projection-patients` reads `unconfigured` there. Where a graph database exists, a legacy
+row (null `ledger_seq`) reports `uncitable` per row, not as a whole-consumer class — the documented
+steady state until genesis adopts it, never a divergence to chase. See
+`docs/runbooks/m1-patients-projection.md` for the projection's own receipt run.
 
 ## Reading a receipt
 
@@ -49,7 +52,8 @@ Every run emits one `Receipt` (`schedules.receipt.receipt_payload`) as a JSON li
 | `no_consumers` | `true` when the family has zero registered consumers — passes, not a divergence (design decision 6). Expected for any ledger family before it is registered against a consumer. |
 | `consumers[].agreements` | Rows that matched across the snapshot — no divergence. |
 | `consumers[].divergences` | Counted by kind: `state` (fields differ, never values — the receipt names which fields, never what they held), `lag` (the cited `ledger_seq` is older than the head by more than the consumer's freshness budget — 60 s for `twenty-board`, 15 minutes by default for `warehouse-landing`), `missing` (ledger has the subject, the consumer does not), `orphan` (the consumer has the subject, the ledger does not). |
-| `consumers[].uncitable` | Rows from a consumer with `cite_field=None` (today, `graph-projection-patients`) — reported as a class with a count, never compared row by row. |
+| `consumers[].uncitable` | Rows whose citation is null (a legacy `patients` row before genesis adopts it) — counted, never compared row by row. |
+| `consumers[].unconfigured` | A registered consumer whose read source is not configured in this environment (after task 3.4; `graph-projection-patients` on dev01) — named and skipped, never a divergence. |
 | `consumers[].in_flight` | Changed after the run's snapshot — never counted as divergence. |
 | `consumers[].malformed` | Unparseable rows, counted and never silently dropped. |
 | `consumers[].pre_floor` | The subject's whole history is before `min_complete_from` — absent from the warehouse fold view by design, not evidence of loss. |

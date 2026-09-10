@@ -1,0 +1,73 @@
+{
+  "change": "idempotency-integrity",
+  "baseline": "2ed0552928ec8aee8cdfcdce8df2fa51d8346055",
+  "scenarios": {
+    "command-api/Retry after timeout is a replay": [
+      "2.1",
+      "3.2",
+      "4.1"
+    ],
+    "command-api/Distinct facts never share a key": [
+      "1.1",
+      "3.2"
+    ],
+    "command-api/Mismatched key reuse is rejected": [
+      "2.1",
+      "3.1",
+      "4.1"
+    ],
+    "command-api/Canonical exact retry remains compatible": [
+      "1.1",
+      "3.2"
+    ],
+    "command-api/Concurrent binding claim is atomic": [
+      "1.2",
+      "2.1"
+    ],
+    "command-api/Original result survives later corrections": [
+      "2.1"
+    ],
+    "command-api/Batch and Twenty conflicts do not cause transient retries": [
+      "3.1",
+      "3.2",
+      "4.1"
+    ],
+    "command-api/Provable legacy retry is bound safely": [
+      "1.2",
+      "2.2",
+      "4.1"
+    ],
+    "command-api/Unverifiable legacy retry blocks unsafe rollout": [
+      "2.2",
+      "3.2"
+    ],
+    "command-api/Fingerprint versions and telemetry preserve integrity": [
+      "1.1",
+      "3.1",
+      "3.2"
+    ]
+  },
+  "external_holds": [
+    {
+      "tasks": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "4.1"
+      ],
+      "evidence_required": "Coordinator verifies a free slot within the two-change limit and serial-file coordination before dispatch."
+    },
+    {
+      "tasks": [
+        "4.1"
+      ],
+      "evidence_required": "Reviewed D16 amendment, legacy retry inventory with compatibility path, merged attended runbook."
+    }
+  ],
+  "live_tasks": {
+    "4.1": "github_issue_after_runbook_merge"
+  }
+}

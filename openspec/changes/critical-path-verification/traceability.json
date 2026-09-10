@@ -1,0 +1,50 @@
+{
+  "change": "critical-path-verification",
+  "baseline": "2ed0552928ec8aee8cdfcdce8df2fa51d8346055",
+  "scenarios": {
+    "critical-path-gates/Missing database prerequisite fails required mode": [
+      "1.1",
+      "1.2"
+    ],
+    "critical-path-gates/Empty or skipped critical collection fails": [
+      "1.1",
+      "1.2"
+    ],
+    "critical-path-gates/Real database invariants produce evidence": [
+      "1.2",
+      "3.1"
+    ],
+    "critical-path-gates/Transport check runs without live credentials": [
+      "2.1"
+    ],
+    "critical-path-gates/Required check activation has a receipt": [
+      "3.1"
+    ],
+    "critical-path-gates/One package cannot hide another package coverage failure": [
+      "1.2"
+    ],
+    "critical-path-gates/Reachable security suppression is accounted for": [
+      "2.2"
+    ],
+    "critical-path-gates/Gate receipt distinguishes tested from skipped": [
+      "1.2",
+      "2.1",
+      "3.1"
+    ]
+  },
+  "external_holds": [
+    {
+      "tasks": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "3.1"
+      ],
+      "evidence_required": "Coordinator verifies a free slot within the two-change limit and serial-file coordination before dispatch."
+    }
+  ],
+  "live_tasks": {
+    "3.1": "github_issue_after_runbook_merge"
+  }
+}
