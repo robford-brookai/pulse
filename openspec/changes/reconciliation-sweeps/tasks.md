@@ -100,7 +100,7 @@ Task 4.1 is live execution (GitHub issue + runbook PR + attended run per WORKFLO
       Tests: `mkdocs build -s`; cat8 docs gates; `task check` green.
       `[model: haiku | deps: 2.2 | lane: repo_change | wave: 2]`
 
-- [ ] 3.4 CLI wiring: `reconcile-sweep --family <ledger family>` builds this run's consumers from
+- [x] 3.4 CLI wiring: `reconcile-sweep --family <ledger family>` builds this run's consumers from
       the registry (`consumer_registry.build_consumers`) with production readers instead of the
       empty tuple the wave-1 seam still passes: `BoardReader` over `ProjectionRestClient` (the
       projection's own read client and `PULSE_TWENTY_<TARGET>_TOKEN`), `LandingReader` over a
