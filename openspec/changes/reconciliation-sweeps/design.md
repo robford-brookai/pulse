@@ -44,6 +44,13 @@ inference sentinel (dropped, decision 9).
    Snowflake needs ledger state in Snowflake, which only arrives through the landing under test
    (circular); a dbt model in data-platform puts pulse-produced logic in the other repo, which
    ADR-0006 rules out.
+   Addendum (task 3.4, flagged for human review): the board is compared in the ledger's
+   vocabulary, not Twenty's. The projection stores a catalog state as `encode_option_value(state)`
+   (UPPER_SNAKE); the ledger's fold carries the catalog vocabulary itself. The board read is
+   translated back through the catalog's own state set for the family before comparison —
+   comparing the two forms verbatim would report every board row as `state` drift.
+   `encode_option_value` is not injective, so the translation is a lookup over the catalog, never
+   a lowercasing. This was forced by the wiring and was not previously stated here.
 4. **One snapshot per run.** The run pins the ledger head per subject at start (the command API's
    per-subject read); changes after the snapshot count as `in_flight`, never as divergence. Each
    consumer carries a freshness budget: 60 s for the board (the §1.5 projection-freshness SLO),
@@ -60,12 +67,23 @@ inference sentinel (dropped, decision 9).
    projection's own read surface), `warehouse-landing` (all families, through the fold view),
    `graph-projection-patients` (`enrollment`, uncitable). A ledger family with zero consumers
    passes with `no_consumers` in its receipt; it is not a divergence.
+   Addendum (task 3.4, flagged for human review): the subject universe a run compares is the
+   union of the consumers' rows, not a ledger enumeration. The command API exposes no bulk ledger
+   read (decision 2 keeps the sweep off any direct ledger connection), so the snapshot is pinned
+   per subject over the keys the consumers returned. A subject the ledger holds that no consumer
+   projects at all is therefore not visible to this sweep. This was forced by the wiring and was
+   not previously stated here.
 7. **Receipt shape.** One JSON line per family per run: `date`, `family`, `kind`, `floor`,
    `snapshot_head`, per consumer `agreements`, `divergences` by kind (`state`, `lag`, `missing`,
-   `orphan`), `uncitable`, `in_flight`, `malformed`, `pre_floor`, and `subject_keys` by kind
-   capped at 200 with the total count beside the cap; tags `project:pulse`,
+   `orphan`), `uncitable`, `in_flight`, `malformed`, `pre_floor`, `unconfigured`, and
+   `subject_keys` by kind capped at 200 with the total count beside the cap; tags `project:pulse`,
    `service:schedules`, `family:<name>`. Never a payload value, payer identifier, or demographic.
    The same line is the receipt posted on the tracking issue after an attended run.
+   Addendum (task 3.4): `unconfigured` is a per-consumer boolean, default false, true when a
+   registered consumer's source group is absent from the environment; every other per-consumer
+   field on that entry is zero, so the receipt still accounts for the consumer without inventing a
+   count no row backs. See spec `reconciliation-sweeps`, requirement "A consumer whose source this
+   environment does not host is named, not faked".
 8. **Scheduling: one catalog entry per ledger family, daily.** Seven new entries beside
    `consent-sweep`, each `rate(1 day)`, `target_subcommand: reconcile-sweep`, an argument naming
    the family, so a failure or a streak is per family, which is how the P0 exit is written. The
