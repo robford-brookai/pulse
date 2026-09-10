@@ -1,0 +1,61 @@
+{
+  "Source mapping is established before implementation": [
+    "1.1",
+    "1.2"
+  ],
+  "POCAR creation and read round trip": [
+    "2.1",
+    "2.3",
+    "2.4"
+  ],
+  "PAP creation and read round trip": [
+    "2.2",
+    "2.3",
+    "2.4"
+  ],
+  "Transition preserves the original event": [
+    "2.4"
+  ],
+  "Retry and conflicting key are distinguishable": [
+    "2.4"
+  ],
+  "Twenty displays state and event lineage": [
+    "4.1",
+    "4.2"
+  ],
+  "Current seed and history remain distinguishable": [
+    "3.2"
+  ],
+  "Ambiguous records are quarantined": [
+    "2.1",
+    "2.2",
+    "3.2"
+  ],
+  "Interrupted batch resumes without duplicate events": [
+    "3.1"
+  ],
+  "Record drilldown and cohort operations share evidence": [
+    "6.1"
+  ],
+  "Demonstration failure is visible and reproducible": [
+    "5.3",
+    "6.3"
+  ],
+  "Projection rebuild recovers equivalent state": [
+    "4.2"
+  ],
+  "Reset refuses an unsafe target": [
+    "5.1",
+    "5.2"
+  ],
+  "Reset reaches zero and permits clean reload": [
+    "5.2",
+    "5.3",
+    "7.2"
+  ],
+  "Rehearsal uses the same verified integration path": [
+    "6.2",
+    "6.3",
+    "7.1"
+  ]
+}
