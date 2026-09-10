@@ -112,11 +112,19 @@ class FamilyRead:
 @dataclass(frozen=True)
 class SubjectRead:
     """One subject's ledger read: its folded state (`None` — no state row, never an error, for a
-    subject the ledger has never seen) and any individual event that failed to parse out of its
-    history."""
+    subject the ledger has never seen), any individual event that failed to parse out of its
+    history, and when the head was committed.
+
+    `head_recorded_at` is the `recorded_at` of the event the head sequence belongs to — the same
+    history read the fold already walked, kept rather than re-derived, because it is what the
+    freshness budget and the completeness floor are measured against (design.md decisions 4 and 5).
+    `None` when no event carried a readable one; the classifier then grants no freshness grace and
+    applies no floor exclusion.
+    """
 
     row: SweptRow | None
     malformed: list[MalformedRow]
+    head_recorded_at: datetime | None = None
 
 
 # --- LedgerStateReader ---------------------------------------------------------------------
@@ -203,6 +211,16 @@ def _head_seq(envelope: Mapping[str, object]) -> int | None:
     return seq if isinstance(seq, int) else None
 
 
+def _recorded_at(envelope: Mapping[str, object]) -> datetime | None:
+    """One envelope's commit time, or `None` when it carries none this reader can read. Read
+    leniently on purpose: an unparseable `recorded_at` on the head costs the subject its freshness
+    grace, which is the conservative outcome, and never fails the read."""
+    try:
+        return _required_instant(envelope, "recorded_at")
+    except MalformedEnvelopeError:
+        return None
+
+
 class LedgerStateReader:
     """One subject's current ledger state and its snapshot head — the command API's per-subject
     history read, folded, never a direct ledger connection (design.md decision 2: no ledger
@@ -225,10 +243,12 @@ class LedgerStateReader:
         folded_events: list[FoldedEvent] = []
         malformed: list[MalformedRow] = []
         head_seq: int | None = None
+        head_recorded_at: datetime | None = None
         for index, envelope in enumerate(envelopes):
             seq = _head_seq(envelope)
             if seq is not None and (head_seq is None or seq > head_seq):
                 head_seq = seq
+                head_recorded_at = _recorded_at(envelope)
             try:
                 folded = _folded_event_or_none(envelope)
             except MalformedEnvelopeError as exc:
@@ -243,7 +263,7 @@ class LedgerStateReader:
             if state is None
             else SweptRow(subject_key=subject_key, fields={"state": state.state}, cited_seq=head_seq)
         )
-        return SubjectRead(row=row, malformed=malformed)
+        return SubjectRead(row=row, malformed=malformed, head_recorded_at=head_recorded_at)
 
 
 # --- BoardReader ----------------------------------------------------------------------------
