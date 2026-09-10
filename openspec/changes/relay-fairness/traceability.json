@@ -1,0 +1,51 @@
+{
+  "change": "relay-fairness",
+  "baseline": "2ed0552928ec8aee8cdfcdce8df2fa51d8346055",
+  "scenarios": {
+    "ledger-distribution/Redelivery is deduplicable": [
+      "2.1",
+      "2.2"
+    ],
+    "ledger-distribution/Per-subject order holds across retries": [
+      "1.2",
+      "2.1"
+    ],
+    "ledger-distribution/Transport reorder and late redrive preserve projection correctness": [
+      "2.2"
+    ],
+    "ledger-distribution/Skewed backlog cannot starve an independent subject": [
+      "1.1",
+      "1.2"
+    ],
+    "ledger-distribution/Locked and backing-off heads do not monopolize scans": [
+      "1.1",
+      "2.1"
+    ],
+    "ledger-distribution/Restart preserves pending work": [
+      "2.1"
+    ],
+    "ledger-distribution/Synthetic load receipt measures the finite scan bound": [
+      "3.1"
+    ],
+    "ledger-distribution/Concurrent relays recheck completed rows": [
+      "1.2",
+      "2.1"
+    ],
+    "ledger-distribution/Poison head retains existing retry policy": [
+      "2.1"
+    ]
+  },
+  "external_holds": [
+    {
+      "tasks": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "3.1"
+      ],
+      "evidence_required": "Coordinator verifies a free slot within the two-change limit and serial-file coordination before dispatch."
+    }
+  ],
+  "live_tasks": {}
+}

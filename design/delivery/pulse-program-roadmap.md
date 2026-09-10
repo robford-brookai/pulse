@@ -1,5 +1,10 @@
 # PULSE program roadmap — waves, phases, stages
 
+> **Proposed queue, 2026-09-10:** `design/delivery/reliability-and-contribution-plan.md` maps six
+> owner-requested OpenSpec proposals to evidence and dependencies. They are queued, not dispatched;
+> the two-change execution limit and existing reconciliation/M1 ownership remain. It also records
+> the environment seed's proposed planning exception with all execution holds retained.
+
 Status: provisional · 2026-08-04 — Phase 1 archived, v1.5 shipped, release ladder added
 
 The dispatchable truth for the active change is
