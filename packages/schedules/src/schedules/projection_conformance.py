@@ -63,6 +63,7 @@ __all__ = [
     "compare_family",
     "conform_family",
     "report_uncitable_consumer",
+    "report_unconfigured_consumer",
     "snapshot_from_read",
 ]
 
@@ -136,13 +137,20 @@ class UncitableConsumer:
 
 @dataclass(frozen=True)
 class ConsumerConformance:
-    """One consumer's whole result for one family: either per-subject comparisons, or — for an
-    uncitable consumer — the class report and no comparisons at all."""
+    """One consumer's whole result for one family: per-subject comparisons, or — for an uncitable
+    consumer — the class report and no comparisons at all, or — for a consumer whose source this
+    environment does not configure — neither.
+
+    `unconfigured` is the third of those (design.md decision 11): the consumer is registered for
+    this family but its source is absent here, so it was skipped and is named in the receipt. It is
+    never a divergence and never `no_consumers`; the run's other consumers still compare.
+    """
 
     consumer: str
     family: str
     comparisons: tuple[Comparison, ...] = ()
     uncitable_consumer: UncitableConsumer | None = None
+    unconfigured: bool = False
 
     def counts(self) -> dict[Outcome, int]:
         """Comparisons tallied by outcome. Kinds with no comparisons are absent, not zero —
@@ -232,6 +240,17 @@ def report_uncitable_consumer(*, family: str, consumer: Consumer, row_count: int
             owning_change=consumer.owning_change,
         ),
     )
+
+
+def report_unconfigured_consumer(*, family: str, consumer: Consumer) -> ConsumerConformance:
+    """A registered consumer whose source is not configured for this environment (design.md
+    decision 11): named, skipped, and carrying no comparisons at all.
+
+    No comparison is the point — an unconfigured consumer read nothing, so inventing an outcome for
+    it would put a count in the receipt that no row backs. `dev01-brook` hosts no OCEAN graph
+    database, which is what this reports for `graph-projection-patients` there.
+    """
+    return ConsumerConformance(consumer=consumer.name, family=family, unconfigured=True)
 
 
 def compare_family(
