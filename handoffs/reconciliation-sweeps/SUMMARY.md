@@ -1,6 +1,6 @@
 # Handoff Summary: reconciliation-sweeps
 
-Collected 2 handoff(s).
+Collected 3 handoff(s).
 
 ## reconciliation-sweeps-task-006
 
@@ -64,6 +64,72 @@ in from tasks 1.2/2.1/3.1/3.2 on the docs front.
 ## New Scenarios
 
 None.
+
+## reconciliation-sweeps-task-3-4
+
+### Added Requirements
+
+Spec: `openspec/changes/reconciliation-sweeps/specs/reconciliation-sweeps/spec.md`
+
+> ### Requirement: A consumer whose source this environment does not host is named, not faked
+> A `projection_conformance` sweep SHALL resolve every environment variable its consumers' sources
+> need before opening any connection, and SHALL fail startup naming the first required variable that
+> is unset. A consumer registered for the family whose source group is absent from the environment
+> entirely SHALL be reported in the receipt as `unconfigured` and skipped: it SHALL NOT count as a
+> divergence of any kind, SHALL NOT make the family `no_consumers`, and SHALL NOT prevent the
+> family's other consumers from comparing. A source group that is only partly configured SHALL fail
+> startup by name rather than be reported `unconfigured`.
+>
+> #### Scenario: A missing variable fails startup by name
+> - **GIVEN** a required variable for the sweep's ledger read is unset
+> - **WHEN** the sweep starts
+> - **THEN** it fails naming that variable, before any source is connected, and names no value
+>
+> #### Scenario: An environment without the graph database still sweeps enrollment
+> - **GIVEN** an environment that hosts no OCEAN graph database
+> - **WHEN** the `enrollment` sweep runs
+> - **THEN** `graph-projection-patients` is reported `unconfigured`, `twenty-board` and
+>   `warehouse-landing` compare their rows, and the receipt is not `no_consumers`
+>
+> #### Scenario: A half-configured source is a fault, not an absence
+> - **GIVEN** a source group with some but not all of its variables set
+> - **WHEN** the sweep starts
+> - **THEN** it fails naming the missing variable rather than skipping that consumer
+
+### Modified Requirements
+
+Spec: `.../specs/reconciliation-sweeps/spec.md`, requirement **"Sweeps run on a schedule and every
+run ends in a receipt"** — the receipt's per-consumer shape (design.md decision 7) gains one field:
+`unconfigured` (boolean, default false), true for a registered consumer whose source this
+environment does not host. Every other per-consumer field is zero on such an entry, so the receipt
+still accounts for every registered consumer of the family without inventing a count no row backs.
+
+Design doc: `design.md` decision 7's receipt list should name `unconfigured` alongside `uncitable`,
+`in_flight`, `malformed`, `pre_floor`.
+
+### Removed Requirements
+
+None.
+
+## Design Drift
+
+None. Decision 11's text and this implementation agree. Two facts the design does not state, both
+forced by the wiring and worth recording where the design is read:
+
+- **The board is compared in the ledger's vocabulary, not Twenty's.** The projection stores a
+  catalog state as `encode_option_value(state)` (UPPER_SNAKE); the ledger's fold carries the catalog
+  vocabulary itself. The board read is translated back through the catalog's own state set for the
+  family before comparison — comparing the two forms verbatim would report every board row as
+  `state` drift. `encode_option_value` is not injective, so the translation is a lookup over the
+  catalog, never a lowercasing.
+- **The subject universe is the union of the consumers' rows.** The command API exposes no bulk
+  ledger enumeration (decision 2 keeps the sweep off any direct ledger connection), so the snapshot
+  is pinned per subject over the keys the consumers returned. A subject the ledger holds that no
+  consumer projects at all is therefore not visible to this sweep.
+
+## New Scenarios
+
+Covered by the Added Requirements above.
 
 ## Doc-Updater Instructions
 
