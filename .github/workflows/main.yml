@@ -22,6 +22,17 @@ jobs:
       - name: Set up the environment
         uses: ./.github/actions/setup-python-env
 
+      # Provisioned and pinned explicitly rather than relying on whatever Postgres the runner
+      # image happens to ship (design.md decision 1, critical-path-verification task 1.2): the
+      # critical gate's required mode (scripts/critical_pg_gate.py) reads PULSE_PG_BINDIR to find
+      # the server and scripts/critical_gate_evidence.py records the actual version it ran
+      # against in evidence, rather than trusting the package name.
+      - name: Provision Postgres 16
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-16
+          echo "PULSE_PG_BINDIR=/usr/lib/postgresql/16/bin" >> "$GITHUB_ENV"
+
       # go-task is not preinstalled on runners. Pinned to a commit SHA with the version in a
       # comment; verified `runs.using: node24` (current LTS) on 2026-07-31.
       - name: Install go-task
@@ -46,8 +57,21 @@ jobs:
       # Must stay `task check` — tests/scaffold/cat4_ci_contract.py asserts every command in
       # this file resolves to a defined Taskfile target or a known tool. This step previously
       # ran `make check` against a repo with no Makefile, and every run failed for a week.
+      # PULSE_CRITICAL_PG_MODE=required makes the critical gate fail closed here — a missing
+      # prerequisite, zero critical collection, or a skipped mandatory case fails this job
+      # rather than passing quietly; unset locally, `task test:critical` defaults to optional.
       - name: Run checks
+        env:
+          PULSE_CRITICAL_PG_MODE: required
         run: task check
+
+      - name: Upload critical-gate evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: critical-gate-evidence
+          path: .planning/evidence/
+          if-no-files-found: warn
 
   tests-and-type-check:
     runs-on: ubuntu-latest

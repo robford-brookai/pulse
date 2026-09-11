@@ -17,7 +17,7 @@ No task is dispatched by filing or validating this proposal.
       Tests: `tests/test_critical_postgres_gate.py`.
       `[model: sonnet | deps: — | lane: repo_change | wave: 0]`
 
-- [ ] 1.2 Provision/pin the database prerequisite in CI; run required mode through the existing quality contract. Emit JUnit/JSON suite and tool-version evidence and ledger/core independent coverage floors from the same coverage result. Check collection/skip summaries in the evidence validator.
+- [x] 1.2 Provision/pin the database prerequisite in CI; run required mode through the existing quality contract. Emit JUnit/JSON suite and tool-version evidence and ledger/core independent coverage floors from the same coverage result. Check collection/skip summaries in the evidence validator.
       Tests: `tests/test_critical_gate_evidence.py`.
       `[model: sonnet | deps: 1.1 | lane: repo_change | wave: 1 | serial: Taskfile.yml, pyproject.toml and main CI setup are shared roots]`
 

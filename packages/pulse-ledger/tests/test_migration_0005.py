@@ -110,6 +110,7 @@ def test_the_0004_vocabulary_is_unaffected(database_url: str, db: psycopg.Connec
         _insert_event(db, "spaceship", "ss-1")
 
 
+@pytest.mark.critical
 def test_downgrade_restores_the_0004_vocabulary(database_url: str, db: psycopg.Connection) -> None:
     _upgrade(database_url)
     # Downgrade to 0004, the coverage-admitting migration — a single-step round trip.

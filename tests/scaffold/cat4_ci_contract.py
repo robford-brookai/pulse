@@ -44,6 +44,7 @@ KNOWN_TOOLS = {
     "ls",
     "cat",
     "curl",
+    "sudo",  # Postgres provisioning step (main.yml quality job, critical-path-verification 1.2)
     "test",
     "true",
 }

@@ -172,6 +172,16 @@ def evaluate_junit(xml_path: Path, mode: Mode) -> GateResult:
     )
 
 
+#: A pytest plugin registering `marker` via `addinivalue_line`, written to a temp dir and loaded
+#: with `-p`. Additive rather than `-o markers=...`, which *replaces* the whole ini option and
+#: would silently un-register every other marker a real target directory's own pyproject.toml
+#: declares (task 1.2 hit this running against packages that also use `@pytest.mark.integration`).
+_MARKER_PLUGIN_TEMPLATE = """
+def pytest_configure(config):
+    config.addinivalue_line("markers", {marker!r} + ": mandatory Postgres-backed invariant test")
+"""
+
+
 def run_critical_suite(
     paths: Sequence[str | Path],
     mode: Mode,
@@ -179,18 +189,30 @@ def run_critical_suite(
     marker: str = "critical",
     env: Mapping[str, str] | None = None,
     python: str = sys.executable,
+    junit_out: Path | None = None,
+    extra_args: Sequence[str] = (),
 ) -> GateResult:
     """Run the marked suite as its own pytest subprocess and apply the required-mode rules to it.
 
     A separate subprocess (rather than an in-process `pytest.main`) so a required-mode setup
     failure or an interpreter-level crash in the suite under test can never be mistaken for one
-    in the process doing the enforcing. The marker is registered inline (`-o markers=...`) so
-    this gate needs no `pyproject.toml` change to be exercised.
+    in the process doing the enforcing. The marker is registered by an inline plugin (see
+    `_MARKER_PLUGIN_TEMPLATE`) so this gate needs no `pyproject.toml` change to be exercised, and
+    so it never clobbers markers a real target's own ini config already declares.
+
+    `junit_out`, if given, is a durable copy of the JUnit evidence (task 1.2's evidence surface) —
+    the file under `tmp_dir` is deleted with it once this function returns. `extra_args` is
+    forwarded to pytest verbatim, after every flag this function sets itself (e.g.
+    `--import-mode=importlib`, needed when the target paths include same-named test modules
+    across packages).
     """
     run_env = dict(os.environ if env is None else env)
     run_env[MODE_ENV_VAR] = mode.value
     with tempfile.TemporaryDirectory() as tmp_dir:
         junit_path = Path(tmp_dir) / "critical-suite.xml"
+        plugin_name = "_critical_marker_plugin"
+        (Path(tmp_dir) / f"{plugin_name}.py").write_text(_MARKER_PLUGIN_TEMPLATE.format(marker=marker))
+        run_env["PYTHONPATH"] = os.pathsep.join(p for p in (tmp_dir, run_env.get("PYTHONPATH")) if p)
         cmd = [
             python,
             "-m",
@@ -199,10 +221,11 @@ def run_critical_suite(
             "-m",
             marker,
             "--strict-markers",
-            "-o",
-            f"markers={marker}: mandatory Postgres-backed invariant test",
+            "-p",
+            plugin_name,
             f"--junitxml={junit_path}",
             "-q",
+            *extra_args,
         ]
         completed = subprocess.run(cmd, env=run_env, capture_output=True, text=True, check=False)  # noqa: S603
         if not junit_path.exists():
@@ -217,6 +240,9 @@ def run_critical_suite(
                 errors=0,
                 message=f"critical suite produced no evidence (exit {completed.returncode}): {detail}",
             )
+        if junit_out is not None:
+            junit_out.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(junit_path, junit_out)
         return evaluate_junit(junit_path, mode)
 
 
