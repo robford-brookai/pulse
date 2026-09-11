@@ -121,7 +121,7 @@ Task 4.1 is live execution (GitHub issue + runbook PR + attended run per WORKFLO
 
 ## 4. Wave 3 — first run
 
-- [ ] 4.1 First attended run on dev (live execution): GitHub tracking issue; each ledger family's
+- [x] 4.1 First attended run on dev (live execution): GitHub tracking issue; each ledger family's
       sweep run once against dev with read-only credentials; the eight receipt lines posted on the
       issue (subject keys and counts only); the P0 streak clock noted as started; any `missing`
       spike cross-checked against the warehouse-sync liveness probe (#413).
