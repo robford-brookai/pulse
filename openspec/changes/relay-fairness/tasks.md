@@ -13,7 +13,7 @@ No task is dispatched by filing or validating this proposal.
 
 ## 1. Foundations
 
-- [ ] 1.1 Introduce the candidate-subject scan and explicit reusable scheduling state. First reproduce a subject filling the old LIMIT; advance across backed-off and locked subjects and wrap at end. Assert finite-set scan-cycle progress with bounded examination.
+- [x] 1.1 Introduce the candidate-subject scan and explicit reusable scheduling state. First reproduce a subject filling the old LIMIT; advance across backed-off and locked subjects and wrap at end. Assert finite-set scan-cycle progress with bounded examination.
       Tests: `packages/pulse-ledger/tests/test_relay_fairness.py`.
       `[model: sonnet | deps: — | lane: repo_change | wave: 0]`
 
