@@ -17,13 +17,13 @@ No task is dispatched by filing or validating this proposal.
       Tests: `packages/pulse-ledger/tests/test_relay_fairness.py`.
       `[model: sonnet | deps: — | lane: repo_change | wave: 0]`
 
-- [ ] 1.2 Wire fair selection into relay_worker with a per-subject row budget. Acquire the subject lock before rereading its pending head; test that an old pre-lock snapshot is never treated as current after another relay publishes.
+- [x] 1.2 Wire fair selection into relay_worker with a per-subject row budget. Acquire the subject lock before rereading its pending head; test that an old pre-lock snapshot is never treated as current after another relay publishes.
       Tests: `packages/pulse-ledger/tests/test_relay_fairness.py`.
       `[model: sonnet | deps: 1.1 | lane: repo_change | wave: 1]`
 
 ## 2. Implementation and regression evidence
 
-- [ ] 2.1 Preserve retry/DLQ/manual-redrive semantics and prove two concurrent relays, ambiguous publishes, worker restart, continuous hot-subject traffic and a backoff head. Use two real Postgres connections and controlled scheduling, not sleep-based race tests.
+- [x] 2.1 Preserve retry/DLQ/manual-redrive semantics and prove two concurrent relays, ambiguous publishes, worker restart, continuous hot-subject traffic and a backoff head. Use two real Postgres connections and controlled scheduling, not sleep-based race tests.
       Tests: `packages/pulse-ledger/tests/test_relay_fairness_concurrency.py`.
       `[model: opus | deps: 1.2 | lane: repo_change | wave: 2]`
 
