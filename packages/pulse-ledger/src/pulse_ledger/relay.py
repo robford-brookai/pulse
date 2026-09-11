@@ -310,6 +310,124 @@ async def relay_once(
     return result
 
 
+#: The finite candidate set: every subject with at least one row still pending delivery.
+_SELECT_CANDIDATE_SUBJECTS_SQL = """
+    SELECT DISTINCT subject_type, subject_key
+      FROM ledger.outbox
+     WHERE published_at IS NULL AND dead_lettered_at IS NULL
+     ORDER BY subject_type, subject_key
+"""
+
+
+def candidate_subjects(conn: psycopg.Connection) -> list[tuple[str, str]]:
+    """The fixed, finite, deterministically ordered set the fairness scan walks this pass.
+
+    Distinct subjects with pending work — the same population `pending_rows` draws its `LIMIT`
+    from, just without the truncation that lets one subject's backlog crowd the rest out.
+    """
+    cursor = conn.execute(_SELECT_CANDIDATE_SUBJECTS_SQL)
+    return [(row[0], row[1]) for row in cursor.fetchall()]
+
+
+def _head_next_attempt_at(conn: psycopg.Connection, subject_type: str, subject_key: str) -> datetime | None:
+    """The backoff clock on this subject's earliest pending row, or None if it isn't backing off."""
+    row = conn.execute(
+        "SELECT next_attempt_at FROM ledger.outbox"
+        " WHERE subject_type = %s AND subject_key = %s"
+        "   AND published_at IS NULL AND dead_lettered_at IS NULL"
+        " ORDER BY seq LIMIT 1",
+        (subject_type, subject_key),
+    ).fetchone()
+    return row[0] if row else None
+
+
+@dataclass(frozen=True)
+class ScanState:
+    """Where the candidate-subject scan resumes on its next pass.
+
+    Explicit and reusable: the caller holds this between passes and hands it back in, rather than
+    the scan hiding a cursor of its own — which is what lets scheduling progress survive successive
+    passes within a running worker while staying nothing more than in-memory position. A restart
+    losing it costs only where the ring resumes, never durable outbox state (`ledger.outbox` is
+    what makes a row pending, published, or dead-lettered).
+    """
+
+    cursor: tuple[str, str] | None = None
+
+
+@dataclass(frozen=True)
+class SubjectStatus:
+    """What one candidate-subject examination found, in fairness-scenario terms."""
+
+    subject: tuple[str, str]
+    eligible: bool
+    #: Set only when `eligible` is False: "locked" (another relay holds it) or "backing_off" (its
+    #: head is inside its retry window).
+    reason: str | None = None
+
+
+@dataclass(frozen=True)
+class ScanResult:
+    """One pass's bounded examination, plus the state the next pass resumes from."""
+
+    examined: list[SubjectStatus]
+    state: ScanState
+
+
+def _examine_subject(conn: psycopg.Connection, subject: tuple[str, str], *, now: datetime) -> SubjectStatus:
+    """Probe one subject's availability: locked, then backing off, else eligible.
+
+    The lock is taken and released within this call — a probe, not a claim. The actual publish
+    path (task 1.2) acquires and holds its own lock for the work it does under it; this only
+    answers "is this subject worth selecting right now," which is a question the scan can answer
+    without blocking on, or interfering with, that later acquisition.
+    """
+    subject_type, subject_key = subject
+    with _subject_lock(conn, subject_type, subject_key) as acquired:
+        if not acquired:
+            return SubjectStatus(subject=subject, eligible=False, reason="locked")
+        next_attempt_at = _head_next_attempt_at(conn, subject_type, subject_key)
+        if next_attempt_at is not None and next_attempt_at > now:
+            return SubjectStatus(subject=subject, eligible=False, reason="backing_off")
+        return SubjectStatus(subject=subject, eligible=True)
+
+
+def scan_pass(
+    conn: psycopg.Connection,
+    subjects: Sequence[tuple[str, str]],
+    state: ScanState,
+    *,
+    budget: int,
+    now: datetime | None = None,
+) -> ScanResult:
+    """Examine up to `budget` candidate subjects, resuming after `state.cursor` and wrapping at the
+    end of `subjects` back to the front.
+
+    Bounded per-pass examination is what keeps one pass cheap regardless of how large the
+    candidate set is; the wrap is what turns repeated bounded passes into a complete scan cycle —
+    over `ceil(len(subjects) / budget)` passes every subject is examined, locked and backing-off
+    ones included, so neither can consume every future selection opportunity by sitting at the
+    front of the set forever.
+    """
+    at = now or _now()
+    if not subjects or budget <= 0:
+        return ScanResult(examined=[], state=state)
+
+    total = len(subjects)
+    start = 0
+    if state.cursor is not None and state.cursor in subjects:
+        start = (subjects.index(state.cursor) + 1) % total
+
+    examined: list[SubjectStatus] = []
+    cursor = state.cursor
+    for offset in range(min(budget, total)):
+        subject = subjects[(start + offset) % total]
+        cursor = subject
+        examined.append(_examine_subject(conn, subject, now=at))
+
+    return ScanResult(examined=examined, state=ScanState(cursor=cursor))
+
+
 def dead_letter_depth(conn: psycopg.Connection) -> int:
     """Rows that exhausted their attempts and await a manual redrive. The monitor alarms at >= 1."""
     return int(
