@@ -23,7 +23,7 @@ No task is dispatched by filing or validating this proposal.
 
 ## 2. Implementation and regression evidence
 
-- [ ] 2.1 Preserve retry/DLQ/manual-redrive semantics and prove two concurrent relays, ambiguous publishes, worker restart, continuous hot-subject traffic and a backoff head. Use two real Postgres connections and controlled scheduling, not sleep-based race tests.
+- [x] 2.1 Preserve retry/DLQ/manual-redrive semantics and prove two concurrent relays, ambiguous publishes, worker restart, continuous hot-subject traffic and a backoff head. Use two real Postgres connections and controlled scheduling, not sleep-based race tests.
       Tests: `packages/pulse-ledger/tests/test_relay_fairness_concurrency.py`.
       `[model: opus | deps: 1.2 | lane: repo_change | wave: 2]`
 
