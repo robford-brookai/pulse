@@ -190,6 +190,7 @@ def test_the_phi_bearing_fields_stay_out_of_the_declarations_repr() -> None:
     assert "referral" in rendered
 
 
+@pytest.mark.critical
 def test_the_commit_path_runs_as_the_service_role(ledger_db: psycopg.Connection) -> None:
     """The role that cannot UPDATE or DELETE events still has everything the commit path needs."""
     ledger_db.execute(f"SET ROLE {SERVICE_ROLE}")
@@ -204,6 +205,7 @@ def test_the_commit_path_runs_as_the_service_role(ledger_db: psycopg.Connection)
 # --- atomicity -------------------------------------------------------------------------------
 
 
+@pytest.mark.critical
 def test_an_injected_failure_after_the_event_leaves_no_partial_write(
     ledger_db: psycopg.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -513,6 +515,7 @@ def test_interpolated_backfill_carries_its_bounds(ledger_db: psycopg.Connection)
 # --- correction by reversal -------------------------------------------------------------------
 
 
+@pytest.mark.critical
 def test_a_reversal_references_the_voided_event_preserves_history_and_folds_state_back(
     ledger_db: psycopg.Connection,
 ) -> None:

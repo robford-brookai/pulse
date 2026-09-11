@@ -122,6 +122,7 @@ testpaths = ["tests"]
 markers = [
     "slow: sandbox and fresh-clone gates, excluded from the default run",
     "integration: needs Docker, excluded from the default run",
+    "critical: mandatory Postgres-backed invariant test enforced by the required-mode gate (task 1.2, critical-path-verification)",
 ]
 addopts = '-m "not slow and not integration"'
 # The scaffold gates are named cat1_structure.py .. cat10_devex.py so the filename
