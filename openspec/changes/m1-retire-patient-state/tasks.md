@@ -121,7 +121,7 @@ never a worktree.
 
 ## 4. Wave 3 — attended run
 
-- [ ] 4.1 Live execution, local receipt (design.md decision 13): GitHub tracking issue #450; bring
+- [x] 4.1 Live execution, local receipt (design.md decision 13): GitHub tracking issue #450; bring
       up the OCEAN compose stack (`packages/ocean/infra/docker-compose.yml`: `postgres`, `migrate`,
       `hasura`, `hasura-init`, `graph-projection`) so migration 0021 is applied on the compose
       Postgres; run `task projection:rebuild-patients TARGET=dev OPERATOR=<who>` (task 3.3) against
