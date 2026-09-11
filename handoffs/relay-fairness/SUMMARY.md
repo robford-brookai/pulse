@@ -1,6 +1,6 @@
 # Handoff Summary: relay-fairness
 
-Collected 3 handoff(s).
+Collected 4 handoff(s).
 
 ## relay-fairness-task-001
 
@@ -113,6 +113,48 @@ relays recheck completed rows", not as gaps.
   - WHEN the first worker reaches that subject in the same pass
   - THEN it does not publish on the strength of the stale probe; the subject is deferred and the row
     is delivered exactly once
+
+## relay-fairness-task-004
+
+### Added Requirements
+
+None — no gap found. The existing "Consumers dedupe on `event_id`" and "manual redrive SHALL
+be treated as a possible late delivery by consumers" language in the MODIFIED requirement
+already covers what this task proved.
+
+### Modified Requirements
+
+None.
+
+### Removed Requirements
+
+None.
+
+## Design Drift
+
+None. `packages/twenty-projection` already implements the two-mechanism contract the spec
+requires, and no production code changed to make the new tests pass.
+
+## New Scenarios
+
+Consider promoting this task's fixture-level proof into the spec's scenario list under
+"Transport reorder and late redrive preserve projection correctness" (currently one GIVEN/WHEN/
+THEN at the requirement level, with the mechanism left implicit):
+
+- **GIVEN** a fixed reorder within one subject (a higher `seq` delivered before lower ones)
+  **WHEN** the lower-`seq` events arrive after **THEN** the record converges on the highest
+  `seq` only, and the lower-`seq` deliveries are no-ops, never overwrites.
+- **GIVEN** the same `event_id` redelivered inside one consumer run **WHEN** it is processed
+  **THEN** the in-process deduper (`pulse_core.connector.InMemoryDeduper`) is what suppresses
+  the second apply — no second write is attempted at all.
+- **GIVEN** a manually redriven dead-lettered row, carrying an `event_id` the consumer has
+  never seen, arriving after a later `seq` has already landed **WHEN** it is processed **THEN**
+  the *watermark* check (`is_watermark_stale` against the board's `projectionSeq`), not the
+  deduper, is what makes it a no-op — the deduper has no memory of a redrive's event id.
+- **GIVEN** a consumer process restart (a fresh in-process deduper, same board state) **WHEN**
+  an already-applied event is redelivered **THEN** the watermark alone (not the deduper) still
+  prevents a second write — proving the two mechanisms are independent, not one relying on
+  the other.
 
 ## Doc-Updater Instructions
 
