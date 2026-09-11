@@ -1,6 +1,6 @@
 # Handoff Summary: relay-fairness
 
-Collected 1 handoff(s).
+Collected 2 handoff(s).
 
 ## relay-fairness-task-001
 
@@ -30,6 +30,32 @@ this task; wiring the scan into selection is task 1.2.
 None beyond what `traceability.json` already maps to this task's two spec scenarios ("Skewed
 backlog cannot starve an independent subject", "Locked and backing-off heads do not monopolize
 scans").
+
+## relay-fairness-task-002
+
+### Added Requirements
+
+None — this task implements the "Publication uses current state under subject ownership" ADDED
+requirement and its "Concurrent relays recheck completed rows" scenario, already present in
+`specs/ledger-distribution/spec.md`, and wires the 1.1 fairness scan into publication.
+
+### Modified Requirements
+
+None.
+
+### Removed Requirements
+
+None.
+
+## Design Drift
+
+None. Followed design.md decision 1 (fair subject selection, per-subject row budget) and decision 2
+(lock then re-read) as written.
+
+## New Scenarios
+
+None beyond what's already in the spec; the tests added here (`test_relay_fairness.py`) exercise
+existing scenarios rather than proposing new ones.
 
 ## Doc-Updater Instructions
 

@@ -17,7 +17,7 @@ No task is dispatched by filing or validating this proposal.
       Tests: `packages/pulse-ledger/tests/test_relay_fairness.py`.
       `[model: sonnet | deps: — | lane: repo_change | wave: 0]`
 
-- [ ] 1.2 Wire fair selection into relay_worker with a per-subject row budget. Acquire the subject lock before rereading its pending head; test that an old pre-lock snapshot is never treated as current after another relay publishes.
+- [x] 1.2 Wire fair selection into relay_worker with a per-subject row budget. Acquire the subject lock before rereading its pending head; test that an old pre-lock snapshot is never treated as current after another relay publishes.
       Tests: `packages/pulse-ledger/tests/test_relay_fairness.py`.
       `[model: sonnet | deps: 1.1 | lane: repo_change | wave: 1]`
 
