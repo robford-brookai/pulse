@@ -53,6 +53,7 @@ nav:
       - Billing-boundary: contracts/billing-boundary.md
   - Reference:
       - CI and scaffold lessons: ci-lessons.md
+      - Critical-path exclusion inventory: critical-path-exclusion-inventory.md
       - MCP servers: mcp-servers.md
       - ADRs:
           - ADR-0000 template: adr/ADR-0000-template.md
