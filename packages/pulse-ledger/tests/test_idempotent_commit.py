@@ -78,6 +78,7 @@ def _keys(conn: psycopg.Connection) -> list[tuple[Any, ...]]:
 # --- scenario: retry after timeout is a replay -------------------------------------------------
 
 
+@pytest.mark.critical
 def test_a_retry_with_the_same_key_replays_the_original_commit_and_writes_no_second_event(
     ledger_db: psycopg.Connection,
 ) -> None:
@@ -332,6 +333,7 @@ def test_a_concurrent_duplicate_is_replayed_even_though_it_fails_validation_firs
     assert len(_rows(ledger_db, "events")) == 1
 
 
+@pytest.mark.critical
 def test_the_same_key_arriving_twice_at_once_still_produces_one_event(
     ledger_db: psycopg.Connection, pg_database: dict[str, str]
 ) -> None:

@@ -180,9 +180,15 @@ class TestRegenWorkflowShape:
 
 
 class TestMainWorkflowUntouched:
-    def test_main_quality_job_runs_exactly_task_check(self) -> None:
+    def test_main_quality_job_never_runs_regen(self) -> None:
+        """The quality job may gain legitimate steps of its own (critical-path-verification task
+        1.2 added Postgres provisioning), but `synthea:regen` must never be one of them — that
+        would put a Java-dependent, hours-long generation on the fast gate this module's
+        docstring says regeneration must stay off of. `task check` itself stays the actual check
+        step; the CI contract for what that resolves to is cat4_ci_contract.py's job."""
         main = yaml.safe_load((_REPO_ROOT / ".github" / "workflows" / "main.yml").read_text())
         quality_runs = [
             str(step["run"]) for step in main["jobs"]["quality"]["steps"] if isinstance(step, dict) and "run" in step
         ]
-        assert quality_runs == ["task check"]
+        assert "task check" in quality_runs
+        assert REGEN_TARGET not in "\n".join(quality_runs)

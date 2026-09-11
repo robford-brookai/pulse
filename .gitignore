@@ -243,3 +243,6 @@ handoffs/**
 
 # DevEx inner-tier run output; the ledger (loop.jsonl) is the record
 .planning/devex/*-check.json
+# critical_gate_evidence.py's JUnit/JSON receipt (critical-path-verification task 1.2) —
+# generated per run, uploaded as a CI artifact, never committed.
+.planning/evidence/

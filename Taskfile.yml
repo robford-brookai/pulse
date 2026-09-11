@@ -44,8 +44,10 @@ vars:
   # its tests away — expired when 2.2 landed EventBridgePublisher and the event catalog, which are
   # what the library now is. Its config.py is the Kafka half, low-covered and deleted by task 9.2.
   # ocean-connector-mcp is outside this migration, still at 0%, tracked in DNA-779.
-  # The pulse packages are covered from their first commit — placeholder-sized today, and the
-  # 80% floor applies as they grow rather than being retrofitted later.
+  # The pulse packages are covered from their first commit — placeholder-sized at first, now
+  # enforced independently at 80% each (critical-path-verification task 1.2, design.md decision
+  # 3: "one package cannot hide another package's coverage failure" from the same combined
+  # coverage result, no second test run).
   # verdict-relay and schedules each carry their own 85% floor (s12-verdict-relay, s13-schedules);
   # identity carries a 90% floor (s14-identity — wrong matches are the costliest bug in the
   # system); consent-ingress carries an 85% floor (S1.1 task 1.1, same tier as verdict-relay and
@@ -174,14 +176,19 @@ tasks:
     cmds:
       - uv run pytest {{.TESTED_PATHS}} --import-mode=importlib {{.COV_PATHS}} --cov-report=term-missing
       # verdict-relay's, schedules's, and consent-ingress's per-package 85% floors
-      # (s12-verdict-relay, s13-schedules, S1.1 task 1.1), and identity's 90% floor
-      # (s14-identity), read from the combined run's coverage data — no second test run. The
-      # flag overrides the global fail_under.
+      # (s12-verdict-relay, s13-schedules, S1.1 task 1.1), identity's 90% floor
+      # (s14-identity), and pulse-ledger's/pulse-core's independent 80% floors
+      # (critical-path-verification task 1.2) all read from the combined run's coverage data —
+      # no second test run. The flag overrides the global fail_under, and each package's floor
+      # is checked on its own scope so one package's surplus can never hide another's shortfall.
       - uv run coverage report --include="packages/verdict-relay/src/*" --fail-under=85
       - uv run coverage report --include="packages/schedules/src/*" --fail-under=85
       - uv run coverage report --include="packages/identity/src/*" --fail-under=90
       - uv run coverage report --include="packages/consent-ingress/src/*" --fail-under=85
+      - uv run coverage report --include="packages/pulse-ledger/src/*" --fail-under=80
+      - uv run coverage report --include="packages/pulse-core/src/*" --fail-under=80
       - task: test:services
+      - task: test:critical
 
   test:services:
     desc: Run each ocean service's tests, one pytest process per service
@@ -201,6 +208,16 @@ tasks:
           echo "FAILED service suites:$failed" >&2
           exit 1
         fi
+
+  test:critical:
+    desc: Run the mandatory Postgres-backed invariant suite through the required-mode gate (critical-path-verification task 1.2); emits JUnit/JSON evidence under .planning/evidence/
+    # PULSE_CRITICAL_PG_MODE selects required (fails closed on a missing prerequisite, zero
+    # collection, or a skipped mandatory case) versus optional (visible skip); unset locally it
+    # defaults to optional (scripts/critical_gate_evidence.py), so a dev without a local Postgres
+    # still gets a green `task check`. main.yml's quality job provisions a pinned Postgres and
+    # sets PULSE_CRITICAL_PG_MODE=required, so CI always runs it fail-closed.
+    cmds:
+      - uv run python scripts/critical_gate_evidence.py packages/pulse-ledger/tests packages/pulse-core/tests
 
   test:all:
     desc: Run tests including the slow scaffold gates
