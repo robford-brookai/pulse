@@ -27,8 +27,9 @@ whatever the statement says right now.
 Phases 0 through 2 are complete and shipped as v2.0 on 2026-08-08. Phase 3 (projections) is
 active. Twenty-seven changes have been archived, most recently `reconciliation-sweeps` and
 `m1-retire-patient-state` (both 2026-09-11): per-family referee sweeps with citable consumers, and
-`patients` as a ledger-fed projection (ADR §6.2 M1). No change is in flight; the queued Phase 3
-proposals are listed under `openspec/changes/`.
+`patients` as a ledger-fed projection (ADR §6.2 M1). `critical-path-verification` and `relay-fairness` are the two
+changes in flight (dispatched 2026-09-11 per `design/delivery/reliability-and-contribution-plan.md`);
+the other queued proposals are listed under `openspec/changes/`.
 
 - Program status: [`.planning/reports/2026-09-08-program-status.md`](.planning/reports/2026-09-08-program-status.md)
 - Roadmap and phase table: [`design/delivery/pulse-program-roadmap.md`](design/delivery/pulse-program-roadmap.md)
