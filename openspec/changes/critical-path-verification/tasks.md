@@ -13,7 +13,7 @@ No task is dispatched by filing or validating this proposal.
 
 ## 1. Foundations
 
-- [ ] 1.1 Add required-Postgres fixture mode and a critical-suite selector. Fail required mode on missing binaries, zero collection or skipped mandatory cases; preserve explicit local optional mode. Cover these failure paths in subprocess fixtures, not YAML-only checks.
+- [x] 1.1 Add required-Postgres fixture mode and a critical-suite selector. Fail required mode on missing binaries, zero collection or skipped mandatory cases; preserve explicit local optional mode. Cover these failure paths in subprocess fixtures, not YAML-only checks.
       Tests: `tests/test_critical_postgres_gate.py`.
       `[model: sonnet | deps: — | lane: repo_change | wave: 0]`
 
