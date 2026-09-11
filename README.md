@@ -25,8 +25,10 @@ whatever the statement says right now.
 ## Status
 
 Phases 0 through 2 are complete and shipped as v2.0 on 2026-08-08. Phase 3 (projections) is
-active. Twenty-six changes have been archived, most recently `m1-retire-patient-state` (2026-09-11), which
-made `patients` a ledger-fed, citable projection (ADR §6.2 M1). `reconciliation-sweeps` is the change currently in flight.
+active. Twenty-seven changes have been archived, most recently `reconciliation-sweeps` and
+`m1-retire-patient-state` (both 2026-09-11): per-family referee sweeps with citable consumers, and
+`patients` as a ledger-fed projection (ADR §6.2 M1). No change is in flight; the queued Phase 3
+proposals are listed under `openspec/changes/`.
 
 - Program status: [`.planning/reports/2026-09-08-program-status.md`](.planning/reports/2026-09-08-program-status.md)
 - Roadmap and phase table: [`design/delivery/pulse-program-roadmap.md`](design/delivery/pulse-program-roadmap.md)
