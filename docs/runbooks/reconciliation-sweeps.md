@@ -10,6 +10,33 @@ referee that holds ledger-read, projection-read and warehouse-read credentials o
 writes. A divergence it reports is a projection defect, corrected by
 `task projection:rebuild`/the landing's replay — never by this sweep.
 
+## Before the first run: apply the fold view
+
+`projection_conformance`'s `LandingReader` reads `STREAMLINE.STG_EVENTS.SUBJECT_CURRENT_STATE`
+(`task snowflake:subject-current-state`). Both `STG_EVENTS` views are `ACCOUNTADMIN`-owned, so
+neither the warehouse-sync service credential (role `OCEAN_WRITER`, grants scoped to
+`STREAMLINE.OCEAN_RAW` only) nor a reader credential (e.g. `DNA_OPS_ROLE`, read-only) can apply
+it — the first has no privilege on `STG_EVENTS`, the second can read the schema but has no
+`CREATE VIEW` there. Apply it once, before any ledger-family sweep runs, with an operator's
+personal key-pair user and `ACCOUNTADMIN`:
+
+```bash
+SNOWFLAKE_ACCOUNT=<operator's account> \
+SNOWFLAKE_USER=<operator's key-pair user> \
+SNOWFLAKE_PRIVATE_KEY_PATH=<path to that user's private key> \
+SNOWFLAKE_ROLE=ACCOUNTADMIN \
+  task snowflake:subject-current-state
+```
+
+Then grant the sweep's reader role read access, once:
+
+```sql
+GRANT SELECT ON VIEW STREAMLINE.STG_EVENTS.SUBJECT_CURRENT_STATE TO ROLE DNA_OPS_ROLE;
+```
+
+PASS: `show views in schema STREAMLINE.STG_EVENTS` run as `DNA_OPS_ROLE` lists
+`SUBJECT_CURRENT_STATE`.
+
 ## Attended first run (task 4.1, live execution)
 
 The first run against dev is attended, not scheduled — see the tracking GitHub issue for the

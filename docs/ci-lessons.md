@@ -12,6 +12,24 @@ fix applied there reaches nobody else.
 
 ---
 
+- **2026-09-11 — An apply script's runbook named the wrong credential, and the view sat
+  unapplied for a week.** Symptom: `task snowflake:subject-current-state` failed twice for the
+  operator: first with `Schema 'STREAMLINE.STG_EVENTS' does not exist or not authorized` using
+  the warehouse-sync credential (Duplo secret `pulse-warehouse-sync-secret`, role `OCEAN_WRITER`)
+  that `docs/runbooks/warehouse-sync-revival.md` step 7 named beside the script, then with a
+  `CREATE VIEW` privilege error using a personal reader credential (`DNA_OPS_ROLE`, read-only).
+  Root cause: `apply_snowflake_view.py` hardcoded `warehouse="OCEAN_WH"` and took no `role`, so
+  every documented invocation connected as whichever role's key pair was configured — and neither
+  role documented for the job owns `STREAMLINE.STG_EVENTS` (both its views are `ACCOUNTADMIN`-owned;
+  `OCEAN_WRITER`'s grants stop at `STREAMLINE.OCEAN_RAW`, `DNA_OPS_ROLE` can read but not create).
+  The script committed cleanly and the runbook read as complete, so the gap between "documents a
+  credential" and "documents the credential that owns the target object" went unnoticed until an
+  operator actually ran it. Rule baked in: a runbook step that applies DDL must name the role that
+  owns the target schema or object, not merely a role that has some credential wired up nearby;
+  the script now takes `SNOWFLAKE_ROLE` explicitly instead of a silent hardcoded identity. Not
+  gated — no offline check can compare a documented role's grants against Snowflake's live object
+  ownership.
+
 - **2026-09-08 — A scheduled workflow was archived on a smoke-parse and had never run.** Symptom:
   every scheduled run of `.github/workflows/synthea-regen.yml` since 2026-08-10 failed — five
   consecutive Mondays, identically, each after paying for a 50k-patient generation. Root cause:
