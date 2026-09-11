@@ -115,7 +115,20 @@ same PR before it merges.
    which is the point. A 503 with `reason: heartbeat_stale` means the loop has stopped turning
    and the probe is about to restart the pod; read the logs before it does.
 
-7. **Apply the STG_EVENTS view**: `task snowflake:stg-events` (the target 1.1 shipped).
+7. **Apply the STG_EVENTS view**: `task snowflake:stg-events` (the target 1.1 shipped). The
+   `STG_EVENTS.EVENTS` view is `ACCOUNTADMIN`-owned like `SUBJECT_CURRENT_STATE`
+   (`docs/runbooks/reconciliation-sweeps.md`), so the warehouse-sync secret (role `OCEAN_WRITER`,
+   scoped to `STREAMLINE.OCEAN_RAW`) is for the service's inserts, not for this DDL — run this
+   step with an operator's personal key-pair user and `ACCOUNTADMIN`:
+
+   ```bash
+   SNOWFLAKE_ACCOUNT=<operator's account> \
+   SNOWFLAKE_USER=<operator's key-pair user> \
+   SNOWFLAKE_PRIVATE_KEY_PATH=<path to that user's private key> \
+   SNOWFLAKE_ROLE=ACCOUNTADMIN \
+     task snowflake:stg-events
+   ```
+
    PASS: the target exits 0; `SELECT COUNT(*) FROM STREAMLINE.INFORMATION_SCHEMA.VIEWS WHERE
    TABLE_SCHEMA='STG_EVENTS' AND TABLE_NAME='EVENTS'` returns 1.
 

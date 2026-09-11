@@ -68,7 +68,9 @@ and subject keys only, never a file under `handoffs/`.
    PASS: `Summary: N succeeded, 0 failed`, and the `patients` select permission is present for every
    role in `SERVICE_ROLES` with `ledger_seq` in its column list; no role gets `INSERT`/`UPDATE`,
    matching the gate (`packages/ocean/tests/gates/test_patients_read_only.py`).
-5. **Run the `enrollment` conformance sweep once** (reconciliation-sweeps; design.md decision 9):
+5. **Run the `enrollment` conformance sweep once** (reconciliation-sweeps; design.md decision 9).
+   Precondition: the warehouse fold view is applied first, per
+   `docs/runbooks/reconciliation-sweeps.md`'s "Before the first run" step.
    ```bash
    schedules reconcile-sweep --family enrollment
    ```
