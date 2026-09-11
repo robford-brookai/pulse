@@ -27,7 +27,7 @@ No task is dispatched by filing or validating this proposal.
       Tests: `packages/pulse-ledger/tests/test_relay_fairness_concurrency.py`.
       `[model: opus | deps: 1.2 | lane: repo_change | wave: 2]`
 
-- [ ] 2.2 Exercise duplicated, reordered and late-redriven events at existing projection boundaries; retain watermark/dedupe invariants and document the publication-versus-arrival ordering boundary through the doc-updater. Any consumer failing its current contract gets a reproducer and focused replan before closure.
+- [x] 2.2 Exercise duplicated, reordered and late-redriven events at existing projection boundaries; retain watermark/dedupe invariants and document the publication-versus-arrival ordering boundary through the doc-updater. Any consumer failing its current contract gets a reproducer and focused replan before closure.
       Tests: `packages/twenty-projection/tests/test_relay_delivery_contract.py`.
       `[model: sonnet | deps: 2.1 | lane: repo_change | wave: 3]`
 
