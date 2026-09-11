@@ -69,6 +69,16 @@ BACKOFF_FACTOR = 2.0
 #: remainder is simply the next pass's work.
 DEFAULT_BATCH_SIZE = 100
 
+#: Candidate subjects a fairness pass examines (`scan_pass`'s `budget`). Bounds how much of the
+#: finite candidate set one pass costs; the scan cursor is what makes repeated bounded passes add
+#: up to a complete cycle regardless of how this is tuned.
+DEFAULT_SUBJECT_BUDGET = 20
+
+#: Rows published per acquired subject per pass — the "per-subject row budget" a fair pass rereads
+#: and publishes under one lock acquisition. Bounds how long one subject's lock is held; a bigger
+#: backlog than this is simply visited again on the subject's next turn.
+DEFAULT_ROW_BUDGET = 20
+
 #: First argument of the two-int advisory lock, which namespaces relay locks away from every other
 #: advisory-lock user in this database. The second is the subject's hash.
 _RELAY_LOCK_NAMESPACE = 0x5055_4C53 & 0x7FFFFFFF  # "PULS"
@@ -141,25 +151,57 @@ _SELECT_PENDING_SQL = f"""
 """  # noqa: S608 — the only interpolation is `EVENT_COLUMNS`, a module constant
 
 
+def _row_from_values(values: dict[str, Any]) -> PendingRow:
+    return PendingRow(
+        event_id=values["event_id"],
+        subject_type=values["subject_type"],
+        subject_key=values["subject_key"],
+        seq=values["seq"],
+        attempts=values["attempts"],
+        created_at=values["created_at"],
+        next_attempt_at=values["next_attempt_at"],
+        envelope=event_envelope(values),
+    )
+
+
 def pending_rows(conn: psycopg.Connection, *, batch_size: int = DEFAULT_BATCH_SIZE) -> list[PendingRow]:
     """Unpublished, un-dead-lettered rows in per-subject sequence order."""
     cursor = conn.cursor(row_factory=dict_row)
     cursor.execute(_SELECT_PENDING_SQL, {"batch_size": batch_size})
-    rows: list[PendingRow] = []
-    for values in cursor.fetchall():
-        rows.append(
-            PendingRow(
-                event_id=values["event_id"],
-                subject_type=values["subject_type"],
-                subject_key=values["subject_key"],
-                seq=values["seq"],
-                attempts=values["attempts"],
-                created_at=values["created_at"],
-                next_attempt_at=values["next_attempt_at"],
-                envelope=event_envelope(values),
-            )
-        )
-    return rows
+    return [_row_from_values(values) for values in cursor.fetchall()]
+
+
+#: One subject's current pending head, read fresh under that subject's lock — never a snapshot
+#: taken before the lock was acquired. See `_pending_rows_for_subject`.
+_SELECT_PENDING_FOR_SUBJECT_SQL = f"""
+    SELECT o.event_id, o.subject_type, o.subject_key, o.seq, o.attempts, o.created_at,
+           o.next_attempt_at,
+           {EVENT_COLUMNS}
+      FROM ledger.outbox o
+      JOIN ledger.events e USING (event_id)
+     WHERE o.subject_type = %(subject_type)s AND o.subject_key = %(subject_key)s
+       AND o.published_at IS NULL AND o.dead_lettered_at IS NULL
+     ORDER BY o.seq
+     LIMIT %(row_budget)s
+"""  # noqa: S608 — the only interpolation is `EVENT_COLUMNS`, a module constant
+
+
+def _pending_rows_for_subject(
+    conn: psycopg.Connection, subject_type: str, subject_key: str, *, row_budget: int
+) -> list[PendingRow]:
+    """This subject's current pending rows, in `seq` order, up to `row_budget` of them.
+
+    Must be called under that subject's lock, and must be a fresh read rather than a pre-lock
+    snapshot: another relay can complete this subject's rows between when a candidate is
+    identified and when this lock is acquired, and only a read taken under the lock can tell the
+    two states apart (spec: "Publication uses current state under subject ownership").
+    """
+    cursor = conn.cursor(row_factory=dict_row)
+    cursor.execute(
+        _SELECT_PENDING_FOR_SUBJECT_SQL,
+        {"subject_type": subject_type, "subject_key": subject_key, "row_budget": row_budget},
+    )
+    return [_row_from_values(values) for values in cursor.fetchall()]
 
 
 @contextmanager
@@ -299,12 +341,21 @@ async def relay_once(
     """
     at = now or _now()
     result = RelayPass()
-    for _subject, group in groupby(pending_rows(conn, batch_size=batch_size), key=lambda row: row.subject):
-        rows = list(group)
-        with _subject_lock(conn, rows[0].subject_type, rows[0].subject_key) as acquired:
+    for subject, group in groupby(pending_rows(conn, batch_size=batch_size), key=lambda row: row.subject):
+        # This snapshot only picks which subjects the pass considers and how many of its rows
+        # count toward `deferred` if the lock is unavailable. It is never what gets published —
+        # see `_pending_rows_for_subject` below.
+        stale_rows = list(group)
+        subject_type, subject_key = subject
+        with _subject_lock(conn, subject_type, subject_key) as acquired:
             if not acquired:
                 # Another relay owns this subject; its rows are that relay's work, not ours.
-                result = _merge(result, RelayPass(deferred=len(rows)))
+                result = _merge(result, RelayPass(deferred=len(stale_rows)))
+                continue
+            rows = _pending_rows_for_subject(conn, subject_type, subject_key, row_budget=len(stale_rows))
+            if not rows:
+                # The stale snapshot's rows are already published or dead-lettered by whoever held
+                # this subject before us — nothing here for this pass to do.
                 continue
             result = _merge(result, await _relay_subject(conn, publisher, rows, domain=domain, now=at))
     return result
@@ -426,6 +477,76 @@ def scan_pass(
         examined.append(_examine_subject(conn, subject, now=at))
 
     return ScanResult(examined=examined, state=ScanState(cursor=cursor))
+
+
+async def _relay_locked_subject(
+    conn: psycopg.Connection,
+    publisher: Publisher,
+    subject_type: str,
+    subject_key: str,
+    *,
+    row_budget: int,
+    domain: str,
+    now: datetime,
+) -> RelayPass:
+    """Acquire this subject's lock, then read and publish its pending head fresh under it.
+
+    Used by `relay_fair_pass` for a subject the scan already found eligible: eligibility was a
+    probe that released its own lock immediately (`_examine_subject`), so this is a fresh
+    acquisition, not a continuation of it, and a fresh read follows it for the same reason
+    `relay_once` rereads — decision 2, "lock then re-read".
+    """
+    with _subject_lock(conn, subject_type, subject_key) as acquired:
+        if not acquired:
+            # Lost the race between the scan's probe and this acquisition; one deferred slot,
+            # not a row count — this path never reads rows it doesn't hold the lock for.
+            return RelayPass(deferred=1)
+        rows = _pending_rows_for_subject(conn, subject_type, subject_key, row_budget=row_budget)
+        if not rows:
+            return RelayPass()
+        return await _relay_subject(conn, publisher, rows, domain=domain, now=now)
+
+
+async def relay_fair_pass(
+    conn: psycopg.Connection,
+    publisher: Publisher,
+    state: ScanState,
+    *,
+    subject_budget: int = DEFAULT_SUBJECT_BUDGET,
+    row_budget: int = DEFAULT_ROW_BUDGET,
+    domain: str = LEDGER_DOMAIN,
+    now: datetime | None = None,
+) -> tuple[RelayPass, ScanState]:
+    """One fairness-scheduled pass: `relay_worker`'s replacement for calling `relay_once` directly.
+
+    `candidate_subjects` and `scan_pass` pick up to `subject_budget` subjects this pass examines,
+    resuming from `state` and wrapping at the end of the set — the bounded, cursor-driven selection
+    that stops a skewed backlog from starving a due, independent subject. Each subject the scan
+    finds eligible is then locked and rereads its own current pending head, publishing up to
+    `row_budget` of its due rows in `seq` order.
+
+    `state` is the caller's to keep and hand back in — `relay_worker` holds it across passes so
+    scan progress survives them, the way `relay_once`'s existing callers keep using it unchanged.
+    """
+    at = now or _now()
+    subjects = candidate_subjects(conn)
+    scan_result = scan_pass(conn, subjects, state, budget=subject_budget, now=at)
+
+    result = RelayPass()
+    for status in scan_result.examined:
+        if not status.eligible:
+            # Locked or backing off — one deferred slot per subject the scan could not select,
+            # not the rows behind it; a fairness pass never reads a subject it isn't going to work.
+            result = _merge(result, RelayPass(deferred=1))
+            continue
+        subject_type, subject_key = status.subject
+        result = _merge(
+            result,
+            await _relay_locked_subject(
+                conn, publisher, subject_type, subject_key, row_budget=row_budget, domain=domain, now=at
+            ),
+        )
+    return result, scan_result.state
 
 
 def dead_letter_depth(conn: psycopg.Connection) -> int:

@@ -1,4 +1,5 @@
-"""Task 1.1 — the candidate-subject scan and its reusable scheduling state.
+"""Task 1.1 — the candidate-subject scan and its reusable scheduling state — and task 1.2, wiring
+that scan into publication with a per-subject row budget.
 
 The old selection query (`pending_rows`, `ORDER BY subject_type, subject_key, seq LIMIT
 batch_size`) reads whichever subjects sort first, so one subject with a backlog bigger than the
@@ -8,20 +9,32 @@ exercises the scan this task introduces to fix it: a finite candidate-subject se
 explicit cursor (`ScanState`) that a caller keeps and passes back in, advancing a bounded number of
 subjects per pass, past locked and backing-off heads alike, wrapping at the end of the set.
 
-Wiring this scan into `relay_once`'s selection is task 1.2 — nothing here changes what
-`relay_once` publishes.
+Task 1.2 wires that scan into `relay_fair_pass`, which acquires each eligible subject's lock and
+rereads its pending head fresh under it — never the scan's own probe snapshot, which releases the
+lock immediately, and never a snapshot taken before any lock at all. The second half of this file
+exercises that: the per-subject row budget bounding one pass's publication, and a pre-lock
+snapshot never treated as current once another relay has published under the same subject.
 """
 
 from __future__ import annotations
 
+import asyncio
 import math
 import uuid
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 import psycopg
 from pulse_ledger import relay as relay_module
 from pulse_ledger.commit import Declaration, commit_declaration
-from pulse_ledger.relay import ScanState, candidate_subjects, pending_rows, scan_pass
+from pulse_ledger.relay import (
+    ScanState,
+    candidate_subjects,
+    pending_rows,
+    relay_fair_pass,
+    scan_pass,
+)
 
 T0 = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
 
@@ -61,6 +74,23 @@ def _back_off(conn: psycopg.Connection, event_id: uuid.UUID, *, until: datetime)
         "UPDATE ledger.outbox SET attempts = 1, next_attempt_at = %s WHERE event_id = %s",
         (until, event_id),
     )
+
+
+def _run(coro: Any) -> Any:
+    return asyncio.run(coro)
+
+
+@dataclass
+class FakePublisher:
+    """A bus that always accepts and records what it published, in the order it arrived."""
+
+    published: list[dict[str, Any]] = field(default_factory=list)
+
+    async def publish(self, detail_type: str, event: dict[str, Any], key: str | None = None) -> None:
+        self.published.append(event)
+
+    def seqs_for(self, subject_key: str) -> list[int]:
+        return [event["seq"] for event in self.published if event["subject_key"] == subject_key]
 
 
 # --- 1. Reproduce the starvation the old LIMIT query has ---------------------------------------
@@ -202,3 +232,130 @@ def test_a_complete_scan_cycle_visits_every_candidate_within_the_bound(ledger_db
 
     assert seen == set(subjects), f"the full candidate set was not visited within {expected_passes} passes"
     assert passes == expected_passes
+
+
+# --- 7. Task 1.2 — fair selection wired into publication, with a per-subject row budget ----------
+
+
+def test_relay_fair_pass_publishes_the_starved_subject_the_old_limit_missed(
+    ledger_db: psycopg.Connection,
+) -> None:
+    """The same skew as test 1, but through `relay_fair_pass`: `ref-zzz` is not starved."""
+    _commit_history(ledger_db, "ref-aaa", count=3)
+    _commit_one(ledger_db, "ref-zzz")
+    publisher = FakePublisher()
+
+    _result, state = _run(relay_fair_pass(ledger_db, publisher, ScanState(), subject_budget=1, row_budget=10, now=T0))
+    assert publisher.seqs_for("ref-zzz") == [], "budget 1 examines ref-aaa first, in candidate order"
+
+    _result, state = _run(relay_fair_pass(ledger_db, publisher, state, subject_budget=1, row_budget=10, now=T0))
+
+    assert publisher.seqs_for("ref-zzz") == [1], "the second pass's cursor reached the starved subject"
+
+
+def test_relay_fair_pass_bounds_rows_published_per_subject_to_the_row_budget(
+    ledger_db: psycopg.Connection,
+) -> None:
+    _commit_history(ledger_db, "ref-many", count=3)
+    publisher = FakePublisher()
+
+    result, _state = _run(relay_fair_pass(ledger_db, publisher, ScanState(), subject_budget=1, row_budget=2, now=T0))
+
+    assert publisher.seqs_for("ref-many") == [1, 2], "only the row budget's worth published this pass"
+    assert result.published == 2
+
+    # The remainder is still there, waiting for a later visit — nothing was lost, just deferred.
+    remaining = pending_rows(ledger_db)
+    assert [row.seq for row in remaining] == [3]
+
+
+def test_relay_fair_pass_defers_a_locked_subject_without_publishing_its_rows(
+    ledger_db: psycopg.Connection, pg_database: dict
+) -> None:
+    _commit_one(ledger_db, "ref-locked")
+    key = "referral\x1fref-locked"
+
+    with psycopg.connect(
+        host=pg_database["host"], user=pg_database["user"], dbname=pg_database["dbname"], autocommit=True
+    ) as other:
+        held = other.execute(
+            "SELECT pg_try_advisory_lock(%s, hashtext(%s))", (relay_module._RELAY_LOCK_NAMESPACE, key)
+        ).fetchone()
+        assert held is not None and held[0] is True
+
+        publisher = FakePublisher()
+        result, _state = _run(relay_fair_pass(ledger_db, publisher, ScanState(), subject_budget=1, now=T0))
+
+    assert publisher.published == []
+    assert result.deferred == 1
+
+
+def test_relay_fair_pass_never_treats_a_pre_lock_snapshot_as_current(
+    ledger_db: psycopg.Connection, pg_database: dict
+) -> None:
+    """The scenario named by the spec's 'Publication uses current state under subject ownership'
+    requirement: two workers see the same subject as a candidate; one locks it, publishes its only
+    row and releases; the other then acquires the lock its probe found free and must reread rather
+    than act on what it saw before either lock was taken.
+    """
+    [event_id] = _commit_history(ledger_db, "ref-race", count=1)
+    subjects = candidate_subjects(ledger_db)
+    assert subjects == [("referral", "ref-race")]
+
+    # Worker A: identifies the candidate, locks it, publishes, records the head, releases.
+    publisher_a = FakePublisher()
+    result_a, _state_a = _run(relay_fair_pass(ledger_db, publisher_a, ScanState(), subject_budget=1, now=T0))
+    assert publisher_a.seqs_for("ref-race") == [1]
+    assert result_a.published == 1
+
+    # Worker B holds a pre-lock snapshot from before A published — the exact stale state decision 2
+    # exists to guard against — and only now runs its own fair pass over the same candidate set.
+    stale_snapshot = pending_rows(ledger_db)
+    assert not any(row.event_id == event_id for row in stale_snapshot), "already published; not in a fresh read"
+
+    publisher_b = FakePublisher()
+    result_b, _state_b = _run(relay_fair_pass(ledger_db, publisher_b, ScanState(), subject_budget=1, now=T0))
+
+    assert publisher_b.published == [], "worker B's reread under its own lock found nothing pending"
+    assert result_b.published == 0
+
+
+def test_relay_fair_pass_rereads_under_lock_even_when_the_scan_probe_saw_it_pending(
+    ledger_db: psycopg.Connection,
+) -> None:
+    """Between `scan_pass`'s eligibility probe (which releases its lock) and the actual publish
+    acquisition, another relay can complete the subject. `relay_fair_pass` must not publish from
+    what the probe observed — only from what its own lock's reread finds.
+    """
+    [event_id] = _commit_history(ledger_db, "ref-between", count=1)
+
+    # Simulate another relay completing the row between the probe and the real acquisition by
+    # marking it published directly — the row a stale in-memory snapshot would still call pending.
+    ledger_db.execute("UPDATE ledger.outbox SET published_at = now() WHERE event_id = %s", (event_id,))
+
+    subjects = [("referral", "ref-between")]
+    scan_result = scan_pass(ledger_db, subjects, ScanState(), budget=1, now=T0)
+    assert scan_result.examined[0].eligible is True, "the probe ran before the row was marked published"
+
+    publisher = FakePublisher()
+    result, _state = _run(relay_fair_pass(ledger_db, publisher, ScanState(), subject_budget=1, now=T0))
+
+    assert publisher.published == [], "the reread under lock found the row already published"
+    assert result.published == 0
+
+
+def test_relay_once_rereads_under_lock_too(ledger_db: psycopg.Connection) -> None:
+    """`relay_once` keeps this task's fix as well: its own pre-lock grouping is a candidate list,
+    never what gets published — a subject completed between that grouping and this call's lock
+    acquisition publishes nothing twice.
+    """
+    from pulse_ledger.relay import relay_once
+
+    [event_id] = _commit_history(ledger_db, "ref-once-race", count=1)
+    ledger_db.execute("UPDATE ledger.outbox SET published_at = now() WHERE event_id = %s", (event_id,))
+
+    publisher = FakePublisher()
+    result = _run(relay_once(ledger_db, publisher, now=T0))
+
+    assert publisher.published == []
+    assert result.published == 0
