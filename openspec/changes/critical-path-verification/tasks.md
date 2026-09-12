@@ -23,7 +23,7 @@ No task is dispatched by filing or validating this proposal.
 
 ## 2. Implementation and regression evidence
 
-- [ ] 2.1 Wire the existing LocalStack relay integration to an explicit pinned, bounded, credential-free workflow and target, including cleanup and artifacts. Verify a dropped delivery, duplicate/redrive case, startup failure and collection failure; keep live targets out of task check.
+- [x] 2.1 Wire the existing LocalStack relay integration to an explicit pinned, bounded, credential-free workflow and target, including cleanup and artifacts. Verify a dropped delivery, duplicate/redrive case, startup failure and collection failure; keep live targets out of task check.
       Tests: `tests/test_transport_gate_contract.py`.
       `[model: sonnet | deps: 1.2 | lane: repo_change | wave: 2 | serial: Taskfile.yml and integration workflow wiring]`
 
