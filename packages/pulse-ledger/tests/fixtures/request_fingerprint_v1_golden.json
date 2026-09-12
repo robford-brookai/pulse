@@ -1,0 +1,228 @@
+{
+  "fingerprint_version": "v1",
+  "note": "Golden vectors for canonical request v1 (idempotency-integrity 1.1). Synthetic data only. Regenerate with scripts/regen_request_fingerprint_golden.py, and only alongside a new fingerprint version \u2014 a changed digest here re-keys every deployed producer's retries.",
+  "vectors": [
+    {
+      "name": "baseline",
+      "principal": "bearer",
+      "covers": "utc_alias",
+      "note": "The reference request: explicit +00:00, one payload member.",
+      "request": {
+        "subject_type": "enrollment",
+        "subject_key": "enrollment-synthetic-0001",
+        "event_type": "declare_transition",
+        "to_state": "on_hold",
+        "effective_at": "2026-08-03T11:59:00+00:00",
+        "payload": {
+          "hold_reason": "awaiting_authorization"
+        }
+      },
+      "fingerprint": "v1:7c7054311e41b2f27dc9a30c26c4e5b21f4a3d60d10afd22ad1ee21ef599f4f8"
+    },
+    {
+      "name": "utc_alias_zulu",
+      "principal": "bearer",
+      "covers": "utc_alias",
+      "note": "Trailing Z is the same instant as +00:00.",
+      "request": {
+        "subject_type": "enrollment",
+        "subject_key": "enrollment-synthetic-0001",
+        "event_type": "declare_transition",
+        "to_state": "on_hold",
+        "effective_at": "2026-08-03T11:59:00Z",
+        "payload": {
+          "hold_reason": "awaiting_authorization"
+        }
+      },
+      "fingerprint": "v1:7c7054311e41b2f27dc9a30c26c4e5b21f4a3d60d10afd22ad1ee21ef599f4f8"
+    },
+    {
+      "name": "utc_alias_offset",
+      "principal": "bearer",
+      "covers": "utc_alias",
+      "note": "A +02:00 wall clock naming the same instant.",
+      "request": {
+        "subject_type": "enrollment",
+        "subject_key": "enrollment-synthetic-0001",
+        "event_type": "declare_transition",
+        "to_state": "on_hold",
+        "effective_at": "2026-08-03T13:59:00+02:00",
+        "payload": {
+          "hold_reason": "awaiting_authorization"
+        }
+      },
+      "fingerprint": "v1:7c7054311e41b2f27dc9a30c26c4e5b21f4a3d60d10afd22ad1ee21ef599f4f8"
+    },
+    {
+      "name": "key_order_declared",
+      "principal": "bearer",
+      "covers": "key_order",
+      "note": "Payload members in one order.",
+      "request": {
+        "subject_type": "enrollment",
+        "subject_key": "enrollment-synthetic-0001",
+        "event_type": "declare_transition",
+        "to_state": "on_hold",
+        "effective_at": "2026-08-03T11:59:00+00:00",
+        "payload": {
+          "hold_reason": "awaiting_authorization",
+          "note": "reordered"
+        }
+      },
+      "fingerprint": "v1:3545e16cd2f1adb69f2c654d8e467e9a37807a390c708203365e7af3f41815e7"
+    },
+    {
+      "name": "key_order_swapped",
+      "principal": "bearer",
+      "covers": "key_order",
+      "note": "The same payload members, built in the other order.",
+      "request": {
+        "subject_type": "enrollment",
+        "subject_key": "enrollment-synthetic-0001",
+        "event_type": "declare_transition",
+        "to_state": "on_hold",
+        "effective_at": "2026-08-03T11:59:00+00:00",
+        "payload": {
+          "note": "reordered",
+          "hold_reason": "awaiting_authorization"
+        }
+      },
+      "fingerprint": "v1:3545e16cd2f1adb69f2c654d8e467e9a37807a390c708203365e7af3f41815e7"
+    },
+    {
+      "name": "list_order_declared",
+      "principal": "bearer",
+      "covers": "list_order",
+      "note": "A list of codes as the writer sent them.",
+      "request": {
+        "subject_type": "enrollment",
+        "subject_key": "enrollment-synthetic-0001",
+        "event_type": "declare_transition",
+        "to_state": "on_hold",
+        "effective_at": "2026-08-03T11:59:00+00:00",
+        "payload": {
+          "codes": [
+            "A",
+            "B"
+          ]
+        }
+      },
+      "fingerprint": "v1:b6c90ddbc85a3f5f3509f06166f95b556ac978aa4d626dfb4f9255bbe88f0c2c"
+    },
+    {
+      "name": "list_order_reversed",
+      "principal": "bearer",
+      "covers": "list_order",
+      "note": "The same codes reversed \u2014 a different request.",
+      "request": {
+        "subject_type": "enrollment",
+        "subject_key": "enrollment-synthetic-0001",
+        "event_type": "declare_transition",
+        "to_state": "on_hold",
+        "effective_at": "2026-08-03T11:59:00+00:00",
+        "payload": {
+          "codes": [
+            "B",
+            "A"
+          ]
+        }
+      },
+      "fingerprint": "v1:646a3a29d3a8a1282a761f72dea22b595e4661b29acd7b1123982ad91b548373"
+    },
+    {
+      "name": "payload_value_changed",
+      "principal": "bearer",
+      "covers": "payload_change",
+      "note": "One payload value differs from the baseline.",
+      "request": {
+        "subject_type": "enrollment",
+        "subject_key": "enrollment-synthetic-0001",
+        "event_type": "declare_transition",
+        "to_state": "on_hold",
+        "effective_at": "2026-08-03T11:59:00+00:00",
+        "payload": {
+          "hold_reason": "awaiting_records"
+        }
+      },
+      "fingerprint": "v1:212501107bb0d1a8ae8cfcd3b85ead55e3f4c1161d6660fa60cbd7d044856d7f"
+    },
+    {
+      "name": "evidence_added",
+      "principal": "bearer",
+      "covers": "evidence_change",
+      "note": "The baseline request plus evidence.",
+      "request": {
+        "subject_type": "enrollment",
+        "subject_key": "enrollment-synthetic-0001",
+        "event_type": "declare_transition",
+        "to_state": "on_hold",
+        "effective_at": "2026-08-03T11:59:00+00:00",
+        "payload": {
+          "hold_reason": "awaiting_authorization"
+        },
+        "evidence": {
+          "source_document": "synthetic-fax-0001"
+        }
+      },
+      "fingerprint": "v1:bd91a345b1057d1f3ced105ee67ebee0f7302a9b4951b0e5f403e7812a570dd7"
+    },
+    {
+      "name": "evidence_bounds_widened",
+      "principal": "bearer",
+      "covers": "evidence_change",
+      "note": "Evidence bounds are part of the accepted request.",
+      "request": {
+        "subject_type": "enrollment",
+        "subject_key": "enrollment-synthetic-0001",
+        "event_type": "declare_transition",
+        "to_state": "on_hold",
+        "effective_at": "2026-08-03T11:59:00+00:00",
+        "payload": {
+          "hold_reason": "awaiting_authorization"
+        },
+        "evidence": {
+          "source_document": "synthetic-fax-0001"
+        },
+        "evidence_bounds": [
+          "2026-08-01T00:00:00+00:00",
+          "2026-08-02T00:00:00+00:00"
+        ]
+      },
+      "fingerprint": "v1:82fa66bf6b1eedb3998160553b840dfc4d038d0ac6e82b29ab16abac2f474a8f"
+    },
+    {
+      "name": "batch_principal",
+      "principal": "batch",
+      "covers": "batch_principal",
+      "note": "Baseline bytes under the batch credential: one request, another claimant.",
+      "request": {
+        "subject_type": "enrollment",
+        "subject_key": "enrollment-synthetic-0001",
+        "event_type": "declare_transition",
+        "to_state": "on_hold",
+        "effective_at": "2026-08-03T11:59:00+00:00",
+        "payload": {
+          "hold_reason": "awaiting_authorization"
+        }
+      },
+      "fingerprint": "v1:7c7054311e41b2f27dc9a30c26c4e5b21f4a3d60d10afd22ad1ee21ef599f4f8"
+    },
+    {
+      "name": "webhook_principal",
+      "principal": "webhook",
+      "covers": "webhook_principal",
+      "note": "Baseline bytes under the fixed signed-Twenty principal.",
+      "request": {
+        "subject_type": "enrollment",
+        "subject_key": "enrollment-synthetic-0001",
+        "event_type": "declare_transition",
+        "to_state": "on_hold",
+        "effective_at": "2026-08-03T11:59:00+00:00",
+        "payload": {
+          "hold_reason": "awaiting_authorization"
+        }
+      },
+      "fingerprint": "v1:7c7054311e41b2f27dc9a30c26c4e5b21f4a3d60d10afd22ad1ee21ef599f4f8"
+    }
+  ]
+}
