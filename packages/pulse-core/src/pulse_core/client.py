@@ -78,9 +78,15 @@ __all__ = [
 
 COMMANDS_PATH = "/commands"
 
-#: A writer request answered with any of these carries a catalog or auth rejection: the command
-#: never wrote anything, and retrying it unchanged will not either.
-_REJECTED_STATUS = frozenset({401, 403, 422})
+#: A writer request answered with any of these carries a catalog, auth or idempotency rejection:
+#: the command never wrote anything, and retrying it unchanged will not either.
+#:
+#: 409 is the idempotency conflict (ADR-0007, amends D16): the key is already claimed by a request
+#: this one is not a retry of. It belongs here rather than among the transient statuses precisely
+#: because time cannot change it — a key's claim is kept for the ledger's lifetime, so a client
+#: that retried a 409 would retry it forever. The answer is to derive a key for the fact actually
+#: being declared, which is a code change, not a backoff.
+_REJECTED_STATUS = frozenset({401, 403, 409, 422})
 
 #: A writer request answered with any of these failed for a reason unrelated to the command's own
 #: legality — the bus, the database, a load balancer's 429 — and is worth retrying unchanged.

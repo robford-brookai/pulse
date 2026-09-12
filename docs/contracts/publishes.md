@@ -82,10 +82,10 @@ UPDATE/DELETE on `events` and the API is the single writer.
 
 | Surface | Kind | Stability | Notes |
 |---|---|---|---|
-| `POST /commands` | REST API | beta | single command; write-time catalog legality, rejection carries reason + `catalog_version`; actor derived from the bearer credential, body actor fields rejected (D15) |
-| `POST /commands:batch` | REST API | beta | backfill mode, same validation; `backfill_genesis`/`reconstruction_gap` accepted only from the backfill actor |
+| `POST /commands` | REST API | beta | single command; write-time catalog legality, rejection carries reason + `catalog_version`; actor derived from the bearer credential, body actor fields rejected (D15); 409 `idempotency_conflict` when the key is claimed by a request this one is not a retry of (ADR-0007) |
+| `POST /commands:batch` | REST API | beta | backfill mode, same validation; `backfill_genesis`/`reconstruction_gap` accepted only from the backfill actor; an item whose key conflicts is a `{"disposition": "rejected", "reason": ...}` entry in its own position, leaving the array's 201 and its neighbours' commits intact |
 | `PUT/GET /writers/{writer_id}/cursor` | REST API | beta | durable writer cursors, opaque JSON; a credential may touch only its own `writer_id`; path template in `pulse_core.cursor` |
-| `pulse_core` (client SDK) | workspace package | beta | `PulseCoreClient.submit_command` classifies `committed \| replayed \| rejected \| transient`, retries transient only; `consume(handler)` is the SQS consumer convention (`event_id` dedupe, delete-after-success); D16 key derivation in `pulse_core.idempotency` |
+| `pulse_core` (client SDK) | workspace package | beta | `PulseCoreClient.submit_command` classifies `committed \| replayed \| rejected \| transient`, retries transient only (409 idempotency conflicts classify `rejected`); `consume(handler)` is the SQS consumer convention (`event_id` dedupe, delete-after-success); D16 key derivation in `pulse_core.idempotency` |
 | `GET /subjects/{subject_type}/{subject_key}/events` | REST API | beta | one subject's committed events in ledger sequence, as the same envelopes the relay publishes; keyset-paged on `seq`, unknown subject = empty history, unknown subject type = the catalog's 422; the replay surface a projection repaints from without holding a ledger database credential (path template in `pulse_core.history`, client `PulseCoreClient.subject_history`) |
 | `pulse_ledger.reads` / `.identity` / `.review` | library read surface | beta | in-process reads over the ledger Postgres: `enumerate_state` (co-committed `ledger.current_state`, catalog-validated states), `lookup_identifier`/`find_candidates` (identity, digests only — never demographics), `list_review_queue`/`resolve_review` (`ledger.review_queue` quarantine). The per-subject history route above is the only HTTP read route; everything else here is in-process |
 
@@ -93,6 +93,14 @@ Replay classification is end-to-end (DNA-801): `POST /commands` and `POST /comma
 an optional `idempotency_key` body field, thread it to `commit_idempotent`, and every commit
 response carries `replayed` — a repeated key returns the original event with `"replayed": true`
 and writes nothing. A keyless body still commits as a fresh event.
+
+A claimed key that this request is *not* a retry of is refused rather than replayed (ADR-0007,
+amends D16), in whichever vocabulary the ingress speaks: 409 for a single command, a rejected
+per-item entry inside the batch envelope, and 200 with a `rejected` disposition for signed Twenty
+ingress. Every one of them carries the coded reason — `idempotency_conflict`, or
+`idempotency_legacy_unverifiable` for a pre-binding key whose original event cannot prove its
+claim — and nothing about the original: no event id, no result, no fingerprint, no writer of
+record. `pulse_core.client` classifies 409 as `rejected`, so an SDK caller never retries one.
 
 ### Identity matcher (`s14-identity`, DNA-850)
 
