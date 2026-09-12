@@ -122,6 +122,64 @@ What each piece gives you:
   `packages/billing-connector/src/billing_connector/receipts.py` does with `evaluated` and
   `deferred`.
 
+### Idempotency conflicts, and what a retry may vary (ADR-0007)
+
+The ledger is moving from "a repeated key replays whatever that key holds" to "a repeated key
+replays only for the writer that claimed it, with the request that claimed it"
+(`docs/adr/ADR-0007-idempotency-writer-binding.md`, amending D16). Enforcement is not on yet and is
+gated on `docs/idempotency-compatibility-inventory.md`, but the behaviour a connector must be
+written against is already decided, and the SDK already classifies it.
+
+**A conflict is `rejected`, never `transient`.** `POST /commands` answers 409, batch reports a
+per-item rejected entry inside its envelope, and signed Twenty ingress keeps its 200 with a
+`rejected` disposition. `submit_with_retry` settles on all three and returns; it does not sleep and
+does not burn your attempt budget. This is not a tuning choice — a key's claim is kept for the
+ledger's lifetime, so a conflict retried is a conflict retried forever. Never widen your own retry
+policy to include it.
+
+Two reason codes reach you, and they need different follow-ups:
+
+- `idempotency_conflict` — the key is claimed by a request yours is not a retry of. The fix is to
+  derive a key for the fact you are actually declaring, which is a code change.
+- `idempotency_legacy_unverifiable` — the key was claimed before the binding existed, and the
+  stored event cannot prove the whole request. The fix is the reconciliation path on the inventory
+  page, not a re-submission.
+
+Count both as `rejected` in your receipt, and put the reason code in it. Never the request.
+
+**What your retries may vary.** `PulseCoreClient.submit_command` derives the key from
+`writer_id`, subject, command type, payload and `logical_time` — so an ordinary content change
+derives a *different* key and simply commits, exactly as it does today. The canonical request the
+ledger fingerprints is wider: it also covers `to_state`, `epoch`, `evidence_class` and `evidence`.
+Those are the fields that can change *under one key*, and after enforcement they conflict:
+
+```python
+# Same key both times — payload and effective_at are unchanged — but a different request.
+client.submit_command(command, effective_at=t, evidence={"candidate_count": 1})
+client.submit_command(command, effective_at=t, evidence={"candidate_count": 2})  # 409
+```
+
+Three rules follow, and they are cheap to hold:
+
+1. **Derive everything from the same facts.** If the payload comes from row *N*, the evidence,
+   the `to_state` and the `effective_at` must come from row *N* too — not from a fresh read, a
+   re-count, or the clock.
+2. **Sort anything you send as a list.** List order is semantic in canonical v1 (reordering it
+   would erase a real difference), so an unordered set serialised twice is two requests.
+3. **Treat a mapping table as an input.** If your `to_state` comes from configuration — a
+   `transition_by_outcome` map, say — then changing that map and re-declaring an old cursor
+   position is a changed request under an old key. Advance the cursor or re-key deliberately;
+   do not expect a replay.
+
+`packages/pulse-core/tests/test_idempotency_conflict_contract.py` holds each of these shapes as a
+test, including the connector-kit receipt case: a rerun of an already-declared batch counts every
+submission `replayed` and nothing `committed`. Copy from there rather than re-deriving it.
+
+**Before you ship a new connector**, add its credential to
+`docs/idempotency-compatibility-inventory.md` with its two producer-side columns answered from your
+own submit path. An unregistered producer blocks the rollout gate for everyone, and the preflight
+test fails on the missing row.
+
 ## 3. How to scaffold
 
 One command renders the package from `templates/connector/` and performs every registration in

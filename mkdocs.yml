@@ -37,6 +37,7 @@ nav:
       - Synthea-regen: runbooks/synthea-regen.md
       - Outbox-relay: runbooks/outbox-relay.md
       - Critical-path required checks: runbooks/critical-path-required-checks.md
+      - Idempotency enforcement rollout: runbooks/idempotency-enforcement-rollout.md
   - Connectors:
       - Authoring: connectors/authoring.md
   - Process:
