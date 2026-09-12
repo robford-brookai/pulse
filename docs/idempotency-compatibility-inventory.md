@@ -7,10 +7,13 @@ template the change fills in; task 2.2 added the reconstruction rules and the me
 classifies the rows, task 3.2 adds the connector-side evidence, and the dispositions are decided by
 task 4.1's attended run before any enforcement.
 
-**Status as of task 2.2: every row is `unknown`, and enforcement is blocked.** That is the
-inventory's correct state, not an omission — the classification is derived from a query against a
-populated database, and no such run has happened. Nothing in this change may promote a row; the
-mechanism below is what a reviewed run uses to fill them.
+**Status as of task 3.2: every disposition is `unknown`, and enforcement is blocked.** Task 3.2
+filled the two producer-side columns — "retries keyed" and "varies between retries" — from the
+submit paths committed in this repo, which is evidence a worktree can derive. "Request
+reconstructible" stays unfilled because it is a query against a populated database, and no such run
+has happened. Nothing in this change may promote a disposition; the mechanism below is what a
+reviewed run uses to decide them, and the attended rehearsal that runs it is
+[`docs/runbooks/idempotency-enforcement-rollout.md`](runbooks/idempotency-enforcement-rollout.md).
 
 This page is a gate, not a report. A row at `fix-required` or `unknown` blocks enforcement, and
 "no rows" is not a pass — an empty table means the inventory has not been taken.
@@ -88,25 +91,55 @@ rows below, with the run's receipt as the evidence.
 ## Inventory
 
 One row per credential that submits commands, from `docs/contracts/producer-registry.md`, plus the
-fixed signed-Twenty principal. "Retries keyed" and "varies between retries" are producer-side facts
-and stay at `unknown` until each producer's submit path is audited (task 3.2).
+fixed signed-Twenty principal. "Retries keyed" and "varies between retries" are producer-side facts,
+audited in task 3.2 from each submit path in this repo and cited to the line or the test that shows
+it; a producer with no connector built has no submit path to read and stays `unknown`.
+`packages/pulse-core/tests/test_idempotency_conflict_contract.py::TestRolloutPreflight` checks this
+table mechanically: every registry row that can declare has a row here, the vocabulary is the one
+this page defines, and a `unknown` or `fix-required` disposition blocks.
 
 | Producer | Ingress | Retries keyed | Request reconstructible | Varies between retries | Disposition | Evidence |
 | --- | --- | --- | --- | --- | --- | --- |
-| `twenty-webhook` (signed Twenty principal) | webhook | `unknown` | `unknown` — not yet run | `unknown` | `unknown` | — |
-| `verdict-relay` (warehouse verdict relay) | bearer | `unknown` | `unknown` — not yet run | `unknown` | `unknown` | — |
-| `customer-io` (Customer.io consent ingress) | bearer | `unknown` | `unknown` — not yet run | `unknown` | `unknown` | — |
-| identity-resolution service credential | bearer | `unknown` | `unknown` — not yet run | `unknown` | `unknown` | — |
-| per-human credentials (attributed tooling) | bearer | `unknown` | `unknown` — not yet run | `unknown` | `unknown` | — |
-| `billing-engine` (pulse billing engine / cpt-om) | bearer | `unknown` | `unknown` — spec-only, no deployed keys claimed yet | `unknown` | `unknown` | — |
-| `billing-connector` (`BILLING_CONNECTOR_TOKEN`) | bearer | `unknown` | `unknown` — spec-only, no deployed keys claimed yet | `unknown` | `unknown` | — |
-| `pap` (PAP standard connector) | bearer | `unknown` | `unknown` — spec-only, no connector built | `unknown` | `unknown` | — |
-| `billy` | bearer | `unknown` | `unknown` — planned, no connector built | `unknown` | `unknown` | — |
-| `pocar` | bearer | `unknown` | `unknown` — planned, no connector built | `unknown` | `unknown` | — |
+| `twenty-webhook` (signed Twenty principal, Twenty kanban webhook) | webhook | `yes` — derived per delivery in `pulse_ledger.twenty.mapping._drag` over the delivered record, with `record.updatedAt` as the logical time; a redelivery re-derives the same key | `unknown` — not yet run | `no` for a redelivery — `to_state` and `evidence` are outside the key but are re-derived from the same delivery snapshot, so a redelivery reproduces them exactly. A *new* write reusing one `updatedAt` for a different destination column would keep the key and change the request | `unknown` | `test_idempotency_conflict_contract.py::TestSignedTwentyIngress` |
+| `verdict-relay` (warehouse verdict relay) | bearer | `yes` — `PulseCoreClient.submit_command` derives one per mart row (`verdict_relay.declarer`), and the relay re-declares from its durable cursor after a restart | `unknown` — not yet run | `no` observed, with one configuration-shaped exception — the verdict's own fields come from the mart row, but the paired transition's `to_state` comes from the `transition_by_outcome` map and is outside the key, so re-declaring an old cursor position after that map changes keeps the key and changes the request | `unknown` | `verdict_relay/declarer.py:319`; `test_idempotency_conflict_contract.py::TestFieldsOutsideTheKey::test_to_state_varying_between_retries_conflicts` |
+| `customer-io` (Customer.io consent ingress) | bearer | `yes` — one per landing row, `effective_at` = the row's own `event_time` (`consent_ingress.declarer`) | `unknown` — not yet run | `no` — `to_state` and the payload both come from the pinned landing-row contract, and the declarer sends no `evidence`, `evidence_class` or `epoch`, so every field of the canonical request is a function of the row | `unknown` | `consent_ingress/declarer.py:135`; row contract in `docs/contracts/consumes.md` |
+| identity-resolution service credential (`packages/identity`) | bearer | `yes` — `identity.resolver._declare` submits under the SDK-derived key for each resolution decision | `unknown` — not yet run | **`yes`** — `evidence.candidate_count` and `evidence.matched_fields` travel in `evidence`, which is outside the D16 key and inside canonical request v1. Re-resolving one triggering event after further referrals land derives the same key with a different request, which is a 409 after enforcement where it is a replay today | `unknown` | `identity/resolver.py:398`; `test_idempotency_conflict_contract.py::TestFieldsOutsideTheKey::test_evidence_varying_between_retries_conflicts` |
+| per-human credentials (human actors via attributed tooling) | bearer | `unknown` — the submit path is whatever tooling the human ran; nothing in this repo bounds it | `unknown` — not yet run | `unknown` — same reason | `unknown` | — |
+| `billing-engine` (pulse billing engine / cpt-om) | bearer | `unknown` — spec-only, no deployed keys claimed yet | `unknown` — spec-only, no deployed keys claimed yet | `unknown` | `unknown` | — |
+| `billing-connector` (`BILLING_CONNECTOR_TOKEN`) | bearer | `yes` in the built path — `billing_connector.declare` submits one evaluation snapshot through `submit_with_retry`; spec-only as a deployment, so no keys are claimed yet | `unknown` — spec-only, no deployed keys claimed yet | `no` in the built path, with the relay's configuration-shaped exception — the paired transition's `to_state` comes from `_TRANSITION_BY_OUTCOME` | `unknown` | `billing_connector/declare.py:158` |
+| `pap` (PAP standard connector) | bearer | `unknown` — spec-only, no connector built | `unknown` — spec-only, no connector built | `unknown` | `unknown` | — |
+| `billy` | bearer | `unknown` — planned, no connector built | `unknown` — planned, no connector built | `unknown` | `unknown` | — |
+| `pocar` | bearer | `unknown` — planned, no connector built | `unknown` — planned, no connector built | `unknown` | `unknown` | — |
 
 A `spec-only` or `planned` producer is still `unknown` rather than trivially compatible: "this
 credential has claimed no keys" is a statement about the ledger's contents, and it is true only
 once a run says so. Zeroing it by assumption is the same mistake as an empty table.
+
+## The fields outside the key
+
+The D16 key and canonical request v1 do not cover the same fields, and the gap is where every
+compatibility risk in the table above lives.
+
+| | In the D16 key | In canonical request v1 |
+| --- | --- | --- |
+| `subject_type`, `subject_key`, command/event type, `payload` | yes | yes |
+| `logical_time` | yes | no — it is client-only and is never reconstructed |
+| `effective_at` | only because `PulseCoreClient.submit_command` passes it as `logical_time` | yes |
+| `to_state`, `epoch`, `evidence`, `evidence_class`, evidence bounds | **no** | **yes** |
+
+A producer that varies a field in the last row between retries of one fact keeps deriving the same
+key and starts receiving `idempotency_conflict` after enforcement, where it receives the original
+result today. A producer that varies a field in the first row derives a *different* key and simply
+commits a second event, exactly as it does now — which is why an ordinary payload change is not a
+compatibility risk and a re-read evidence window is.
+
+This is not a defect in either definition. The key cannot be widened without re-keying every
+deployed producer, and the fingerprint cannot be narrowed without letting a changed request replay
+another request's event, which is the disclosure ADR-0007 exists to close. It is a migration fact,
+and the inventory is where it is tracked.
+
+`packages/pulse-core/tests/test_idempotency_conflict_contract.py::TestFieldsOutsideTheKey` holds
+each of these shapes as a test, in the form the deployed producers have them.
 
 ## Rollout gate
 
