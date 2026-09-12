@@ -7,7 +7,8 @@ relay's own business:
 - **The row contract** is pinned: one row per (subject, verdict_type, run), the eight columns in
   `CONTRACT_COLUMNS`, timestamps ISO-8601 and timezone-aware. A row that violates it fails the run
   with `MartContractError` naming the row, before any row of its page is yielded — drift in the
-  warehouse mart surfaces here, not as a half-declared batch.
+  warehouse mart surfaces here, not as a half-declared batch. A violation names the *column*, never
+  the cell: the mart is not first-party data, and this message is logged verbatim by `run.run_once`.
 - **The durable cursor** makes a run resumable: the reader pages on `computed_at` and persists its
   page position together with the per-subject `as_of` watermark map in one save, through the
   ledger's writer-state facility (`pulse_core.cursor.cursor_path`), JSON-native per
@@ -99,9 +100,16 @@ class FixtureRowSource(_KitFixtureRowSource):
 
 
 def _name_row(index: int, row: Mapping[str, object]) -> str:
-    """Identify a row for an error message: page index plus whatever identifying keys it carries."""
+    """Identify a row for an error message: page index plus whatever identifying keys it carries.
+
+    Identifying keys only — the subject key and the verdict type, both pseudonymous codes. The
+    timestamp columns are deliberately not among them: a timestamp fed from a drifted source can
+    hold anything, including payload content, and this string is logged by `run.run_once` and
+    reaches a rejection receipt. The page offset is what locates the row, not its cell values
+    (critical-path-verification task 2.2).
+    """
     keys: list[str] = []
-    for column in ("subject_id", "verdict_type", "computed_at"):
+    for column in ("subject_id", "verdict_type"):
         value = row.get(column)
         if isinstance(value, str):
             keys.append(f"{column}={value}")
@@ -122,9 +130,11 @@ def _validated(index: int, row: Mapping[str, object]) -> MartRow:
         try:
             parsed = datetime.fromisoformat(value)
         except ValueError as exc:
-            raise MartContractError(_name_row(index, row), f"{column} is not ISO-8601: {value!r}") from exc
+            # Never the value: the kit's identical validator refuses to quote it for the reason
+            # that applies here too (`pulse_core.connector.rows.required_timestamp`).
+            raise MartContractError(_name_row(index, row), f"{column} is not ISO-8601") from exc
         if parsed.tzinfo is None:
-            raise MartContractError(_name_row(index, row), f"{column} is timezone-naive: {value!r}")
+            raise MartContractError(_name_row(index, row), f"{column} is timezone-naive")
         instants[column] = parsed
 
     reason = row["reason"]
