@@ -298,14 +298,17 @@ def test_a_failure_after_the_binding_insert_leaves_no_event_key_or_binding(
 # --- keys without a binding, in both directions -------------------------------------------------
 
 
-def test_a_legacy_key_carrying_no_binding_is_refused_with_its_own_reason(ledger_db: psycopg.Connection) -> None:
-    """A key claimed before this change proves no writer, so it is not replayed and not guessed.
+def test_a_legacy_key_whose_event_proves_no_writer_is_refused_with_its_own_reason(
+    ledger_db: psycopg.Connection,
+) -> None:
+    """A key claimed before this change is replayed only from what its original event proves.
 
-    Reconstructing a binding from the original event is task 2.2's work, and it may only do so from
-    an event that proves every canonical field. Until then the answer is the distinct legacy reason,
-    with no binding written.
+    Here it proves nothing: `producer` disagrees with `actor_id`, so no resolved credential stamped
+    the event and no writer is established (D15). The answer is the distinct legacy reason and no
+    binding is written — never a guess. The provable direction, where the rebuild succeeds and the
+    key binds on first retry, is `test_legacy_idempotency_binding.py` (task 2.2).
     """
-    declaration = _declare()
+    declaration = _declare(producer="migration-loader")
     key = _key_for(declaration)
     commit_idempotent(ledger_db, declaration, idempotency_key=key)  # unbound: the pre-change path
     assert _bindings(ledger_db) == []
