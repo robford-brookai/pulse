@@ -124,6 +124,14 @@ def test_dropped_delivery_fails_required_mode(tmp_path: Path) -> None:
     assert result.ok is False
     assert result.failed == 1
     assert "1 failed" in result.message
+    # The evidence/log fix from the coordinator review: name the failing test and its reason,
+    # not just a count, and carry pytest's own output so the CI job log is readable.
+    assert "test_dropped_delivery_is_not_silently_lost" in result.message
+    assert "committed event never reached the consumer queue" in result.message
+    (failure_case,) = [c for c in result.cases if c.outcome == "failed"]
+    assert failure_case.name == "test_dropped_delivery_is_not_silently_lost"
+    assert "committed event never reached the consumer queue" in failure_case.detail
+    assert "1 failed" in result.stdout
 
 
 def test_dropped_delivery_fails_optional_mode_too(tmp_path: Path) -> None:
@@ -219,6 +227,20 @@ def test_write_evidence_carries_required_fields_and_no_forbidden_terms(tmp_path:
     serialized = out_path.read_text()
     for term in gate.FORBIDDEN_TERMS:
         assert term not in serialized.lower()
+
+
+def test_write_evidence_names_the_failing_case(tmp_path: Path) -> None:
+    """The evidence receipt must name the failing test and its reason, not just a count — the
+    gap the coordinator review found in the first CI run."""
+    test_file = _write(tmp_path, "test_dropped.py", _DROPPED_DELIVERY_TEST)
+    result = gate.run_transport_suite([test_file], gate.Mode.REQUIRED, env=_env_with_gate_importable())
+    document = gate.write_evidence(result, [test_file], tmp_path / "evidence" / "transport-gate.json")
+
+    assert document["ok"] is False
+    (case,) = document["cases"]
+    assert case["name"] == "test_dropped_delivery_is_not_silently_lost"
+    assert case["outcome"] == "failed"
+    assert "committed event never reached the consumer queue" in case["detail"]
 
 
 def test_write_evidence_rejects_a_forbidden_term(tmp_path: Path) -> None:

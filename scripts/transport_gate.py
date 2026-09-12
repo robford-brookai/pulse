@@ -37,7 +37,7 @@ import sys
 import tempfile
 import xml.etree.ElementTree as ET
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
@@ -65,6 +65,7 @@ REQUIRED_FIELDS = frozenset({
     "counts",
     "ok",
     "message",
+    "cases",
 })
 
 
@@ -73,6 +74,17 @@ class Mode(str, Enum):
 
     REQUIRED = "required"
     OPTIONAL = "optional"
+
+
+@dataclass(frozen=True)
+class TestCaseOutcome:
+    """One test case's name, outcome, and (for a failure/error/skip) its message — the detail a
+    bare pass/fail count cannot carry, and what task 2.1's coordinator review found missing from
+    the evidence: the receipt named neither the failing test nor the reason."""
+
+    name: str
+    outcome: str  # "passed" | "failed" | "error" | "skipped"
+    detail: str = ""
 
 
 @dataclass(frozen=True)
@@ -87,6 +99,26 @@ class GateResult:
     failed: int
     errors: int
     message: str
+    #: Every non-passing case, name and reason — never just a count. Populated by
+    #: `evaluate_junit`; empty for the timeout/no-evidence paths, which have no JUnit to read.
+    cases: tuple[TestCaseOutcome, ...] = ()
+    #: The subprocess's own stdout/stderr, so a CI job log shows pytest's failure output rather
+    #: than only this gate's one-line summary. Empty unless a suite actually ran.
+    stdout: str = ""
+    stderr: str = ""
+
+
+def _case_outcome(case: ET.Element) -> TestCaseOutcome:
+    """One `<testcase>` element's outcome and, for anything but a clean pass, its own message —
+    what makes the gate's evidence and CI-log message name the actual test and reason, not just a
+    count."""
+    name = case.get("name", "?")
+    for tag, outcome in (("skipped", "skipped"), ("failure", "failed"), ("error", "error")):
+        el = case.find(tag)
+        if el is not None:
+            detail = (el.get("message") or el.text or "").strip()
+            return TestCaseOutcome(name=name, outcome=outcome, detail=detail)
+    return TestCaseOutcome(name=name, outcome="passed")
 
 
 def evaluate_junit(xml_path: Path, mode: Mode) -> GateResult:
@@ -105,29 +137,27 @@ def evaluate_junit(xml_path: Path, mode: Mode) -> GateResult:
         failed += int(suite.get("failures", 0))
         errors += int(suite.get("errors", 0))
         skipped += int(suite.get("skipped", 0))
-    skipped_cases: list[str] = []
-    for case in root.iter("testcase"):
-        skip_el = case.find("skipped")
-        if skip_el is None:
-            continue
-        reason = skip_el.get("message") or ""
-        name = case.get("name", "?")
-        skipped_cases.append(f"{name} ({reason})" if reason else name)
+
+    cases = tuple(_case_outcome(case) for case in root.iter("testcase"))
     passed = collected - failed - errors - skipped
+
+    def _named(outcome: str) -> list[str]:
+        return [f"{c.name}: {c.detail}" if c.detail else c.name for c in cases if c.outcome == outcome]
 
     reasons: list[str] = []
     if failed or errors:
-        reasons.append(f"{failed} failed, {errors} errored")
+        detail = "; ".join(_named("failed") + _named("error"))
+        reasons.append(f"{failed} failed, {errors} errored — {detail}")
     if mode is Mode.REQUIRED:
         if collected == 0:
             reasons.append("no transport tests were collected — the integration check is missing")
         if skipped:
-            reasons.append(f"{skipped} required case(s) skipped: {', '.join(skipped_cases)}")
+            reasons.append(f"{skipped} required case(s) skipped: {', '.join(_named('skipped'))}")
         ok = not reasons
     else:
         ok = not (failed or errors)
         if skipped:
-            reasons.append(f"optional mode: {skipped} case(s) skipped: {', '.join(skipped_cases)}")
+            reasons.append(f"optional mode: {skipped} case(s) skipped: {', '.join(_named('skipped'))}")
 
     message = "; ".join(reasons) if reasons else f"{passed}/{collected} transport tests passed"
     return GateResult(
@@ -139,6 +169,7 @@ def evaluate_junit(xml_path: Path, mode: Mode) -> GateResult:
         failed=failed,
         errors=errors,
         message=message,
+        cases=cases,
     )
 
 
@@ -222,7 +253,8 @@ def run_transport_suite(
         if junit_out is not None:
             junit_out.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(junit_path, junit_out)
-        return evaluate_junit(junit_path, mode)
+        result = evaluate_junit(junit_path, mode)
+        return replace(result, stdout=completed.stdout, stderr=completed.stderr)
 
 
 def _default_commit() -> str:
@@ -259,6 +291,9 @@ def write_evidence(result: GateResult, suite_paths: Sequence[str | Path], out_pa
         },
         "ok": result.ok,
         "message": result.message,
+        "cases": [
+            {"name": c.name, "outcome": c.outcome, "detail": c.detail} for c in result.cases if c.outcome != "passed"
+        ],
     }
     serialized = json.dumps(document, indent=2, sort_keys=True)
     lowered = serialized.lower()
@@ -297,6 +332,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     result = run_transport_suite(args.paths, Mode(args.mode), marker=args.marker, timeout_seconds=args.timeout)
     write_evidence(result, args.paths, args.evidence_out)
+    if not result.ok:
+        # pytest's own failure output (assertion detail, traceback) — the CI job log must show
+        # more than this gate's one-line summary when something actually broke.
+        if result.stdout.strip():
+            print(result.stdout)
+        if result.stderr.strip():
+            print(result.stderr, file=sys.stderr)
     print(result.message)
     return 0 if result.ok else 1
 
