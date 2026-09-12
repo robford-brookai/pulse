@@ -1,6 +1,6 @@
 # Handoff Summary: relay-fairness
 
-Collected 4 handoff(s).
+Collected 5 handoff(s).
 
 ## relay-fairness-task-001
 
@@ -155,6 +155,31 @@ THEN at the requirement level, with the mechanism left implicit):
   an already-applied event is redelivered **THEN** the watermark alone (not the deduper) still
   prevents a second write — proving the two mechanisms are independent, not one relying on
   the other.
+
+## relay-fairness-task-005
+
+### Added Requirements
+
+None. This task produces evidence (a benchmark command, its bounded integration fixture, and a
+runbook) for the existing "Synthetic load receipt measures the finite scan bound" scenario
+(`ledger-distribution` spec) — it implements no new fairness mechanism.
+
+### Modified Requirements
+
+None.
+
+### Removed Requirements
+
+None.
+
+## Design Drift
+
+None against `design.md` or the `ledger-distribution` spec. One clarification worth ratifying
+outside this spec, in the D17 register row itself — see "Notes for Doc-Updater" below.
+
+## New Scenarios
+
+None — the scenario this task owns was already specified; this task is its evidence.
 
 ## Doc-Updater Instructions
 
