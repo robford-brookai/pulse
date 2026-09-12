@@ -13,31 +13,31 @@ No task is dispatched by filing or validating this proposal.
 
 ## 1. Foundations
 
-- [ ] 1.1 Define canonical request v1 and authenticated writer binding at the API boundary; produce golden vectors for UTC aliases, key order, list order, payload/evidence changes, batch and webhook principals. Write the proposed D16 amendment ADR and a compatibility inventory template alongside the tests.
+- [x] 1.1 Define canonical request v1 and authenticated writer binding at the API boundary; produce golden vectors for UTC aliases, key order, list order, payload/evidence changes, batch and webhook principals. Write the proposed D16 amendment ADR and a compatibility inventory template alongside the tests.
       Tests: `packages/pulse-ledger/tests/test_request_fingerprint.py`.
       `[model: opus | deps: — | lane: repo_change | wave: 0]`
 
-- [ ] 1.2 Add the companion binding-table migration, event/key foreign keys, restrictive service grants and version fields; test upgrade from populated pre-binding schema, rollback preservation and atomic binding insertion failure.
+- [x] 1.2 Add the companion binding-table migration, event/key foreign keys, restrictive service grants and version fields; test upgrade from populated pre-binding schema, rollback preservation and atomic binding insertion failure.
       Tests: `packages/pulse-ledger/tests/test_idempotency_binding_migration.py`.
       `[model: sonnet | deps: 1.1 | lane: repo_change | wave: 1 | serial: ledger Alembic migration chain and schema grants]`
 
 ## 2. Implementation and regression evidence
 
-- [ ] 2.1 Implement exact-match replay and collision rejection in the commit path, including a race loser that must compare bindings before returning. Test same/different writer and same/different fingerprint races, no writes on conflict, and original result stability after reversal and same-timestamp/later-start transactions.
+- [x] 2.1 Implement exact-match replay and collision rejection in the commit path, including a race loser that must compare bindings before returning. Test same/different writer and same/different fingerprint races, no writes on conflict, and original result stability after reversal and same-timestamp/later-start transactions.
       Tests: `packages/pulse-ledger/tests/test_idempotency_binding.py`.
       `[model: opus | deps: 1.2 | lane: repo_change | wave: 2]`
 
-- [ ] 2.2 Implement legacy ownership/fingerprint reconstruction from proved event fields; bind verified legacy rows transactionally and reject unverifiable ones with the distinct generic reason. No key deletion or guessed values. Record the non-enforcement inventory that must clear before rollout.
+- [x] 2.2 Implement legacy ownership/fingerprint reconstruction from proved event fields; bind verified legacy rows transactionally and reject unverifiable ones with the distinct generic reason. No key deletion or guessed values. Record the non-enforcement inventory that must clear before rollout.
       Tests: `packages/pulse-ledger/tests/test_legacy_idempotency_binding.py`.
       `[model: sonnet | deps: 2.1 | lane: repo_change | wave: 3]`
 
 ## 3. Integration and acceptance
 
-- [ ] 3.1 Wire 409 idempotency_conflict into single commands and per-item batch results, and 200 rejected disposition into Twenty. Add the non-transient SDK classification and tests proving no prior event/result or sensitive value escapes on a cross-writer conflict.
+- [x] 3.1 Wire 409 idempotency_conflict into single commands and per-item batch results, and 200 rejected disposition into Twenty. Add the non-transient SDK classification and tests proving no prior event/result or sensitive value escapes on a cross-writer conflict.
       Tests: `packages/pulse-ledger/tests/test_api_idempotency_conflict.py`.
       `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 4]`
 
-- [ ] 3.2 Add SDK/connector/webhook compatibility cases for valid existing retries, legacy-unverifiable handling, rollout preflight and safe receipt redaction. Update command/SDK migration guidance and the D16 ADR through the doc-updater; prepare the attended rollout runbook.
+- [x] 3.2 Add SDK/connector/webhook compatibility cases for valid existing retries, legacy-unverifiable handling, rollout preflight and safe receipt redaction. Update command/SDK migration guidance and the D16 ADR through the doc-updater; prepare the attended rollout runbook.
       Tests: `packages/pulse-core/tests/test_idempotency_conflict_contract.py`.
       `[model: sonnet | deps: 3.1 | lane: repo_change | wave: 5]`
 
