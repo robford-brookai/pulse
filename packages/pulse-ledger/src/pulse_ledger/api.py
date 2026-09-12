@@ -11,8 +11,8 @@ What this module is responsible for, and deliberately nothing else:
 - **Boundary coercion.** JSON has no datetimes and no UUIDs; `Declaration` has both. The strings
   are parsed here so nothing downstream has to wonder which it holds.
 - **A rejection surface a client can act on.** 401 unauthenticated, 403 authenticated-but-not-that
-  actor, 422 malformed or catalog-illegal — the last carrying the catalog's reason and version, as
-  the spec requires.
+  actor, 409 idempotency conflict, 422 malformed or catalog-illegal — the last carrying the
+  catalog's reason and version, as the spec requires.
 - **Bulk backfill mode (task 3.5).** `POST /commands:batch` is the same boundary run once per item
   in an array, so the backfill loader authenticates once for a whole reconstructed sequence. The
   `backfill_genesis` and `reconstruction_gap` vocabulary is further restricted to the backfill
@@ -36,6 +36,15 @@ A drag the catalog refuses is fed back rather than raised: a 200 `rejected` rece
 from `IllegalTransitionError`'s fields and the mapping's card ref, plus a comment on the card
 through `pulse_ledger.twenty.client`. A comment that will not post is logged (card ref only) and
 the receipt is returned anyway — a broken feedback channel never costs a correct rejection.
+
+**Idempotency conflicts, in three shapes (ADR-0007, this change's design decision 3).** A key
+already claimed by a request this one is not a retry of raises `IdempotencyConflictError` in the
+commit path, and each ingress carries it out in the vocabulary its callers read: `/commands`
+answers 409 with the coded reason, `:batch` keeps its envelope and reports the conflict as one
+item's rejected result, and the Twenty route keeps its 200-with-a-disposition posture for the
+reason every other webhook verdict does. All three carry the reason code and nothing else — no
+original event id, no result, no fingerprint, no writer of record — because a conflict response
+that said more would be a way to probe what a key already holds with guessed keys.
 
 **Logging posture.** Auth failures log the writer id and the reason. They never log the
 credential, the signature, or the request body — the body is the one thing here that will carry
@@ -77,6 +86,7 @@ from pulse_ledger.auth import (
 )
 from pulse_ledger.commit import CommitResult, Declaration, DeclarationError
 from pulse_ledger.cursor import WriterCursor
+from pulse_ledger.idempotency import IdempotencyConflictError
 from pulse_ledger.twenty.client import RejectionReceipt, format_rejection_comment
 from pulse_ledger.twenty.mapping import (
     V1_BOARD_MAPPINGS,
@@ -369,6 +379,35 @@ DISPOSITION_REJECTED = "rejected"
 #: response is a 500 — a delivery that was not handled must not read to Twenty as handled.
 DISPOSITION_ERROR = "error"
 
+
+def _conflict_disposition(exc: IdempotencyConflictError) -> dict[str, object]:
+    """One refused claim, in the disposition vocabulary — the batch's per-item result and Twenty's.
+
+    The same two fields for both, because it is the same verdict reaching two ingresses that cannot
+    use a status code to carry it: the batch's status belongs to the array, and a 4xx past Twenty's
+    door is a redelivery instruction. What a caller gets is that the item was rejected and why, in
+    the same code `/commands` puts in its 409 body — and, as there, nothing else.
+    """
+    return {"disposition": DISPOSITION_REJECTED, "reason": exc.reason}
+
+
+def _batch_item_response(committer: Committer, declaration: Declaration, key: str | None) -> dict[str, object]:
+    """One item's result inside the batch envelope: its commit, or its own rejected conflict.
+
+    A conflict is the one refusal that belongs to a single item rather than to the request. The
+    array is not an atomic unit across items — each is already its own transaction — so a key one
+    item cannot claim leaves its neighbours' commits standing and costs the array neither its
+    status nor its shape. Everything else a committer can raise still propagates and still aborts
+    the batch, unchanged: a catalog refusal says the writer's *plan* is wrong, not that one row of
+    it collided.
+    """
+    try:
+        return _commit_response(committer(declaration, key))
+    except IdempotencyConflictError as exc:
+        logger.warning("rejected a claimed idempotency key in %s: %s", COMMANDS_BATCH_PATH, exc.reason)
+        return _conflict_disposition(exc)
+
+
 #: Injected like `Committer`: anything that attaches one titled commentary body to one Twenty card
 #: — (card ref, title, body), raising on permanent failure. `TwentyCommentClient.create_comment`
 #: (a note plus its noteTarget binding, task 6.7) in the running service, a fake in tests.
@@ -561,6 +600,14 @@ def _webhook_commit_response(
         result = committer(declaration, drag.idempotency_key)
     except IllegalTransitionError as exc:
         return _rejection_response(drag, exc, post_comment, heal_card)
+    except IdempotencyConflictError as exc:
+        # A verdict, like the catalog's refusal above and unlike the failure below: redelivering it
+        # can only produce the same answer, so it is acknowledged rather than retried forever.
+        # No comment and no heal, though — a conflict is a defect in how the delivery's key was
+        # derived, not a statement that the card's new column is wrong, and neither leg has
+        # anything true to say about it. The card converges on the subject's next projected event.
+        _log_disposition(DISPOSITION_REJECTED, record=str(drag.card_ref), reason=exc.reason)
+        return {"card_ref": str(drag.card_ref), **_conflict_disposition(exc)}
     except Exception as exc:
         # The flagged exception exit (design Risks a): the record ref, the disposition, and the
         # failure's type name. Never the exception's message, never `exc_info` — both can carry
@@ -681,6 +728,25 @@ def _install_error_handlers(app: FastAPI) -> None:
                     "to_state": exc.to_state,
                 }
             },
+        )
+
+    @app.exception_handler(IdempotencyConflictError)
+    async def _idempotency_conflict(request: Request, exc: Exception) -> Response:
+        """409, the coded reason, and nothing about what the key already holds.
+
+        The reason is the one thing a caller may learn — enough to tell an ordinary collision from
+        a legacy key awaiting migration, and to classify the answer as rejected rather than
+        transient — and it is the same code whichever half of the binding mismatched, so a probe
+        cannot tell "another writer owns this" from "you changed the request".
+
+        The log line carries the route and the reason. Not the key (it names a writer), not the
+        body, and not the exception's `idempotency_key` attribute.
+        """
+        assert isinstance(exc, IdempotencyConflictError)  # noqa: S101 — handler is registered for this type
+        logger.warning("rejected a claimed idempotency key at %s: %s", request.url.path, exc.reason)
+        return JSONResponse(
+            status_code=409,
+            content={"detail": {"message": str(exc), "reason": exc.reason}},
         )
 
     @app.exception_handler(WebhookProcessingError)
@@ -886,7 +952,7 @@ def create_app(
             raise MalformedBatchBodyError()
         split = [split_idempotency_key(item) for item in body]
         declarations = [(declaration_from_request(item, writer), key) for item, key in split]
-        return [_commit_response(committer(declaration, key)) for declaration, key in declarations]
+        return [_batch_item_response(committer, declaration, key) for declaration, key in declarations]
 
     if webhook.enabled:
 
