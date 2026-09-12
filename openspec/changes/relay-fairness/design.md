@@ -47,6 +47,22 @@ implementation and the doc-updater's modification of ledger-distribution, not cu
 
 [Extra head queries] → benchmark and inspect query plans on a skewed synthetic backlog. [Fairness state accidentally discarded each pass] → worker-loop regression test. [Changed ordering prose] → review D17 and preserve the existing manual redrive exception explicitly.
 
+## Addenda (doc-updater, from task handoffs)
+
+### D17 register wording (task 3.1) — flagged for human review
+
+Task 3.1's benchmark work proposes clarifying the D17 register row's wording to state the
+publication-order-vs-subscriber-arrival-order distinction explicitly, matching the language this
+change already lands in `ledger-distribution`'s MODIFIED requirement ("This is a publication-order
+guarantee, not a subscriber arrival-order guarantee"). The collected `HANDOFF.md` for that task did
+not survive into `handoffs/relay-fairness/SUMMARY.md` (only `SUMMARY.md` under `handoffs/` is
+committable), so the exact proposed wording is not recoverable here; PR #475's description confirms
+the intent but not the text. The D17 register rows live in
+`design/delivery/pulse-runtime-readiness.md` §1.4/§5 and `docs/adr/ADR-0004-runtime-readiness-decisions.md`
+(append-only) — both outside this change's artifacts and this doc-updater's edit scope. Human
+follow-up: draft the D17 wording addition against those two files directly, using the spec language
+above as the source of truth.
+
 ## Migration Plan
 
 Run tests against real Postgres, then a synthetic LocalStack load with two relays. Publish counts, backlog drain behavior and query timing as a versioned receipt. Deploy only through the existing reviewed runtime process. Revert the relay image if latency regresses; do not delete outbox or idempotency rows.
