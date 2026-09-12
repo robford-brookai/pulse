@@ -54,8 +54,11 @@ The check context is the **job id**, not the workflow name. `quality` is already
    PULSE_TRANSPORT_MODE=required \
      uv run python scripts/transport_gate.py packages/pulse-ledger/tests/integration   # with Docker stopped
    ```
-   PASS: each exits non-zero and names the missing prerequisite (the Postgres binaries; the
-   Docker daemon the LocalStack fixture needs) rather than passing with zero tests. Paste the two
+   PASS: each exits non-zero. The transport gate names the collected test and the Docker
+   connection refusal. The critical gate today fails on `required-mode evidence has no recorded
+   Postgres version` and may still print `6/6 critical tests passed` above it: on a machine with
+   Postgres installed outside `PATH` the test fixture's own discovery finds it, so only the evidence
+   validator enforces the prerequisite (https://github.com/robford-brookai/pulse/issues/482). The exit code is the assertion; paste both
    summary lines on the issue.
 
 4. **Verify the required contexts against the job names that ran.**
