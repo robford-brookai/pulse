@@ -27,7 +27,7 @@ No task is dispatched by filing or validating this proposal.
       Tests: `tests/test_transport_gate_contract.py`.
       `[model: sonnet | deps: 1.2 | lane: repo_change | wave: 2 | serial: Taskfile.yml and integration workflow wiring]`
 
-- [ ] 2.2 Audit reachable PULSE write/consume paths against the inherited typing/coverage/security-suppression exclusions. Add synthetic redaction/query-boundary regression cases and a path→owner-role→risk→disposition inventory. File focused repro-backed fixes for confirmed defects; unresolved reachable defects block readiness.
+- [x] 2.2 Audit reachable PULSE write/consume paths against the inherited typing/coverage/security-suppression exclusions. Add synthetic redaction/query-boundary regression cases and a path→owner-role→risk→disposition inventory. File focused repro-backed fixes for confirmed defects; unresolved reachable defects block readiness.
       Tests: `tests/test_critical_path_debt_inventory.py`.
       `[model: opus | deps: 1.2 | lane: repo_change | wave: 2]`
 
