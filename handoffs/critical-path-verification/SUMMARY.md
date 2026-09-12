@@ -1,6 +1,6 @@
 # Handoff Summary: critical-path-verification
 
-Collected 2 handoff(s).
+Collected 4 handoff(s).
 
 ## critical-path-verification-task-001
 
@@ -110,6 +110,99 @@ None — the three scenarios this task owns ("Missing database prerequisite fail
 from skipped") are already in `specs/critical-path-gates/spec.md`; this task provides their
 evidence-surface and CI-wiring half (the other half of the first two is 1.1's fixture-level gate,
 already shipped).
+
+## critical-path-verification-task-003
+
+### Added Requirements
+
+None — 2.1 is covered by the existing "Transport integration is a distinct required check"
+requirement.
+
+### Modified Requirements
+
+None.
+
+### Removed Requirements
+
+None.
+
+## Design Drift
+
+None. Implementation matches `specs/critical-path-gates/spec.md`: a separate
+`.github/workflows/transport-integration.yml` job runs the existing pinned, credential-free
+LocalStack relay suite (`packages/pulse-ledger/tests/integration/test_localstack_relay.py`,
+`localstack/localstack:4.6`) through a new required-mode selector
+(`scripts/transport_gate.py`, `task test:transport`), bounded by both a subprocess timeout and a
+job-level `timeout-minutes`, with cleanup left to the suite's own `testcontainers` teardown and
+evidence uploaded as a workflow artifact. `task check`/`task test` never reach `test:transport` —
+enforced by `tests/test_transport_gate_contract.py::test_transport_check_is_not_reached_from_task_check`.
+"Required check activation has a receipt" is explicitly task 3.1's scope, not this one; the
+workflow's header comment says so.
+
+The task text's four verification scenarios (dropped delivery, duplicate/redrive, startup
+failure, collection failure) are exercised as fixture-based subprocess cases in
+`tests/test_transport_gate_contract.py`, mirroring how `test_critical_postgres_gate.py` exercises
+task 1.1's scenarios — small synthetic `@pytest.mark.integration` test files run through the gate,
+not a real Docker/LocalStack container, so the contract tests stay fast and credential-free.
+Startup failure and collection failure reuse the same required-mode-fails-closed shape task 1.1
+already established for a missing Postgres binary and zero collection. Dropped delivery and
+duplicate/redrive are new to this task: a failing case must fail the gate in *both* modes (an
+environment gap is forgivable, a lost delivery never is), and a passing duplicate-redelivery case
+must not be flagged, since at-least-once redelivery is `relay.py`'s documented contract, not a
+defect.
+
+## New Scenarios
+
+None beyond what's already in `specs/critical-path-gates/spec.md`.
+
+## critical-path-verification-task-004
+
+## Spec Updates
+
+None. The spec's clauses for this task — the reachable-path exclusion inventory with owner and
+disposition, the synthetic reproducers, and "a confirmed reachable injection or leak blocks
+readiness until its focused fix merges" — were implementable as written.
+
+### Added Requirements
+
+None.
+
+### Modified Requirements
+
+None.
+
+### Removed Requirements
+
+None.
+
+## Design Drift
+
+Three stale statements found in the tree while auditing. None changes the spec; all three sit in
+files this task was not cleared to edit (`pyproject.toml` is in task 2.1's serial lane), so they
+are recorded here rather than fixed.
+
+1. `pyproject.toml`, the `packages/ocean/**` per-file-ignores comment, says "S608 hardcoded SQL
+   (11 sites)". An isolated ruff run reports **14** `S608` sites — 10 in production code and 4 in
+   ocean's own test tree. The count was correct when written and has drifted since. The comment is
+   the only place the number appears; `tests/test_critical_path_debt_inventory.py` now derives it
+   instead, so the fix is to drop the parenthetical rather than to update the number.
+2. The same comment groups `S104 S106 S110 S310 S311 S324 S607 S608` as "security-relevant, and NOT
+   style". The audit agrees with that framing for `S608` and `S106`; `S104` (two container bind
+   addresses under `__main__`) and `S311` (eight jitter/simulation draws) are not security-relevant
+   in their current sites, and keeping them in the same sentence as `S608` makes the group read as
+   more alarming than it is. Proposed for whoever next touches that block: split the comment into
+   the injection/credential rules and the operational-posture rules.
+3. `design/migration/ocean-to-pulse-adaptation-plan.md` and ADR-0002 both describe "sixteen
+   services" as a single population. For reachability they are not one population: fifteen of the
+   sixteen publish to or consume from the bus, and exactly one (`stacte-bridge`) does neither. That
+   distinction carries most of this task's dispositions, and it is now pinned by a test rather than
+   left as prose.
+
+## New Scenarios
+
+None proposed. The two scenarios this task owns — "Reachable security suppression is accounted
+for" and the coverage clause's companion — are covered as written by
+`tests/test_critical_path_debt_inventory.py`.
 
 ## Doc-Updater Instructions
 
