@@ -31,16 +31,58 @@ and the writer's corrected retry can still commit.
 `commit_declaration` remains callable on its own — task 3.5's backfill loader and the reversal path
 have their own idempotency posture — so "every command carries a key" is enforced at the API
 boundary that builds declarations, not here.
+
+## The binding (ADR-0007, amends D16)
+
+A claimed key on its own says *that* some command was answered, never *who* sent it or *what* they
+sent: the text before the colon is client-supplied and the digest after it is the SDK's, over a
+client-only `logical_time` the server never receives. So a caller that presents a `writer` also
+carries a `WriterBinding` — the credential-resolved writer plus the versioned canonical fingerprint
+of the accepted request (`pulse_ledger.request_fingerprint`) — and the binding is claimed in the
+same savepoint as the event and the key. Three rows or none.
+
+Every replay is then answered from the binding rather than from the key: **both** halves must agree
+or the request is refused, including on the race-loser path, where the winner's result is not owed
+to whoever else happened to claim the key. A refusal is one `IdempotencyConflictError` for every
+mismatch — a different writer and a different request are told apart in the ledger, never in the
+response, which would let a caller probe what a key already holds — and it carries no event id, no
+result and no fingerprint. Nothing is written by a refusal: the losing attempt's rows go with its
+savepoint before the conflict is raised.
+
+`writer` is optional, and that is the rollout's expand stage rather than a permanent alternative
+(design decision 5, §Migration Plan). Without one, no binding is written and a claimed key replays
+as it did before — the posture the unwired callers still run under. The two directions that would
+mix the postures unsafely are both refused: an unbound caller is never answered with a bound key's
+result, and a bound caller meeting a key with no binding gets `idempotency_legacy_unverifiable`
+rather than a guessed binding. Reconstructing a binding for such a key from an event that proves
+every canonical field is task 2.2's work; mapping these refusals onto HTTP is task 3.1's.
 """
 
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
+from datetime import datetime
 
 import psycopg
 
+from pulse_ledger.auth import Writer
 from pulse_ledger.commit import CommitResult, Declaration, commit_declaration, load_folded_events
-from pulse_ledger.fold import fold_state
+from pulse_ledger.fold import FoldedEvent, fold_state
+from pulse_ledger.request_fingerprint import (
+    BindingDisposition,
+    WriterBinding,
+    bind_request,
+    classify_binding,
+)
+
+#: A key whose binding names another authenticated writer or another canonical request. One reason
+#: for both, so the response cannot be used to tell which half mismatched (design decision 3).
+IDEMPOTENCY_CONFLICT = "idempotency_conflict"
+
+#: A key claimed before bindings existed, presented by an authenticated writer. Distinct because it
+#: is a migration state with a reviewed reconciliation path (design decision 4), not a collision.
+IDEMPOTENCY_LEGACY_UNVERIFIABLE = "idempotency_legacy_unverifiable"
 
 
 class MissingOutboxRowError(LookupError):
@@ -56,74 +98,201 @@ class MissingOutboxRowError(LookupError):
         super().__init__(f"event {event_id} has no outbox row; its committed sequence cannot be reported")
 
 
+class IdempotencyConflictError(ValueError):
+    """The key is already claimed by a request this one is not a retry of.
+
+    Deliberately says nothing about what the key holds. The message is fixed apart from the reason
+    code, and neither the original event id, the writer of record, nor either fingerprint is on the
+    exception — a fingerprint is derived from `payload` and `evidence` and is not safe to hand back
+    (`pulse_ledger.request_fingerprint`).
+    """
+
+    def __init__(self, idempotency_key: str, *, reason: str = IDEMPOTENCY_CONFLICT) -> None:
+        self.idempotency_key = idempotency_key
+        self.reason = reason
+        super().__init__(f"idempotency key is claimed by another request ({reason})")
+
+
 def commit_idempotent(
     conn: psycopg.Connection,
     declaration: Declaration,
     *,
     idempotency_key: str,
+    writer: Writer | None = None,
     allow_arbitrary_genesis: bool = False,
 ) -> CommitResult:
     """Commit one declaration under a client-supplied idempotency key, or replay it.
 
-    Returns the new commit's result, or — if the key was already claimed — the original commit's
-    result with `replayed=True` and no second event. Raises whatever `commit_declaration` raises
-    (`IllegalTransitionError` for a rejected command) without claiming the key.
+    Returns the new commit's result, or — if the key was already claimed by this same authenticated
+    request — the original commit's result with `replayed=True` and no second event. Raises whatever
+    `commit_declaration` raises (`IllegalTransitionError` for a rejected command) without claiming
+    the key.
+
+    `writer` is the credential-resolved principal: the bearer `Writer`, the batch route's single
+    credential, or `api.WEBHOOK_WRITER` for signed Twenty ingress. Never the key's prefix, which is
+    client-supplied text and authenticates nothing (D15). Supplying one binds the key to that writer
+    and to the canonical fingerprint of this request, and requires both to match before any later
+    replay; omitting one is the pre-enforcement path described in the module docstring.
+
+    Raises `IdempotencyConflictError` when the key is claimed by a request this one is not a retry
+    of. Nothing is written when it does.
     """
+    binding = (
+        bind_request(idempotency_key=idempotency_key, writer=writer, declaration=declaration)
+        if writer is not None
+        else None
+    )
     with conn.transaction():
-        already_committed = _replay_of(conn, idempotency_key)
+        already_committed = _settle(conn, idempotency_key, binding)
         if already_committed is not None:
             return already_committed
         try:
-            # A savepoint, so a failed attempt discards its own three rows without poisoning the
+            # A savepoint, so a failed attempt discards its own rows without poisoning the
             # transaction the lookup below still has to run in.
             with conn.transaction():
                 result = commit_declaration(conn, declaration, allow_arbitrary_genesis=allow_arbitrary_genesis)
                 _claim(conn, idempotency_key, result.event_id)
+                if binding is not None:
+                    _bind(conn, binding, result.event_id)
         except Exception:
-            # Broad on purpose: whatever went wrong stops mattering if the key is claimed now,
-            # because then this command is already committed and the writer is owed that result.
-            winner = _replay_of(conn, idempotency_key)
+            # Broad on purpose: whatever went wrong stops mattering if the key is claimed now — but
+            # only by *this* request. `_settle` is the same check the pre-check ran, so the loser of
+            # a race re-reads the binding rather than collecting the winner's result, and conflicts
+            # if it does not match. Its own rows have already gone with the savepoint.
+            winner = _settle(conn, idempotency_key, binding)
             if winner is None:
                 raise
             return winner
     return result
 
 
+def _settle(conn: psycopg.Connection, key: str, binding: WriterBinding | None) -> CommitResult | None:
+    """What this request may have from a key already claimed: its result, a conflict, or nothing.
+
+    `None` means the key is unclaimed and the caller should attempt the commit. Every other outcome
+    is decided by the binding on record, not by the key's existence — which is the whole of the D16
+    amendment, in one place, so the pre-check and the race loser cannot drift into two answers.
+    """
+    claimed = _claimed_event(conn, key)
+    if claimed is None:
+        return None
+    on_record = _binding_on_record(conn, key)
+    if binding is None:
+        # No credential presented. A key that carries a binding was claimed by an authenticated
+        # writer, and its result is that writer's — the pre-enforcement path may not collect it.
+        if on_record is not None:
+            raise IdempotencyConflictError(key)
+    elif on_record is None:
+        # Claimed before bindings existed. Deriving one from the original event is task 2.2's, and
+        # only from an event that proves every canonical field; guessing one is what ADR-0007 forbids.
+        raise IdempotencyConflictError(key, reason=IDEMPOTENCY_LEGACY_UNVERIFIABLE)
+    elif (
+        classify_binding(on_record, writer_id=binding.writer_id, fingerprint=binding.fingerprint)
+        is BindingDisposition.CONFLICT
+    ):
+        raise IdempotencyConflictError(key)
+    return _replay_of(conn, claimed)
+
+
 def _claim(conn: psycopg.Connection, key: str, event_id: uuid.UUID) -> None:
-    """Bind the key to the event that satisfied it, for the ledger's lifetime (D16)."""
+    """Reserve the key for the event that satisfied it, for the ledger's lifetime (D16)."""
     conn.execute(
         "INSERT INTO ledger.idempotency_keys (key, event_id) VALUES (%s, %s)",
         (key, event_id),
     )
 
 
-def _replay_of(conn: psycopg.Connection, key: str) -> CommitResult | None:
-    """The result the commit that claimed `key` returned, or `None` if the key is unclaimed.
+def _bind(conn: psycopg.Connection, binding: WriterBinding, event_id: uuid.UUID) -> None:
+    """Record who claimed the key and what they sent, beside the claim itself (ADR-0007).
 
-    The state is the fold of the subject's history as it stood when that commit returned — not the
-    subject's state now. A replay answers the command it repeats, and later events (including a
-    reversal of the very event being replayed) are not part of that answer.
+    In the same savepoint as the event and the key insert above: the three rows are one claim, and
+    a binding that named an event its key did not claim is refused by the composite foreign key
+    rather than by an application check (migration 0006).
     """
+    conn.execute(
+        "INSERT INTO ledger.idempotency_bindings (key, writer_id, fingerprint_version, fingerprint, event_id)"
+        " VALUES (%s, %s, %s, %s, %s)",
+        (
+            binding.idempotency_key,
+            binding.writer_id,
+            binding.fingerprint_version,
+            binding.fingerprint,
+            event_id,
+        ),
+    )
+
+
+def _binding_on_record(conn: psycopg.Connection, key: str) -> WriterBinding | None:
+    """The authenticated claim stored against `key`, or `None` for a key claimed without one."""
+    row = conn.execute(
+        "SELECT writer_id, fingerprint, event_id FROM ledger.idempotency_bindings WHERE key = %s",
+        (key,),
+    ).fetchone()
+    if row is None:
+        return None
+    writer_id, fingerprint, event_id = row
+    return WriterBinding(idempotency_key=key, writer_id=writer_id, fingerprint=fingerprint, event_id=event_id)
+
+
+@dataclass(frozen=True)
+class _ClaimedEvent:
+    """The committed event a key names, and what a replayed result is rebuilt from."""
+
+    event_id: uuid.UUID
+    recorded_at: datetime
+    rule_version: str
+    subject_type: str
+    subject_key: str
+
+
+def _claimed_event(conn: psycopg.Connection, key: str) -> _ClaimedEvent | None:
     row = conn.execute(
         "SELECT e.event_id, e.recorded_at, e.rule_version, e.subject_type, e.subject_key"
         " FROM ledger.idempotency_keys k JOIN ledger.events e ON e.event_id = k.event_id"
         " WHERE k.key = %s",
         (key,),
     ).fetchone()
-    if row is None:
-        return None
-    event_id, recorded_at, rule_version, subject_type, subject_key = row
-    history = [
-        event for event in load_folded_events(conn, subject_type, subject_key) if event.recorded_at <= recorded_at
-    ]
+    return None if row is None else _ClaimedEvent(*row)
+
+
+def _replay_of(conn: psycopg.Connection, claimed: _ClaimedEvent) -> CommitResult:
+    """The result the commit that claimed the key returned.
+
+    The state is the fold of the subject's history as it stood when that commit returned — not the
+    subject's state now. A replay answers the command it repeats, and later events (including a
+    reversal of the very event being replayed) are not part of that answer.
+    """
+    seq = _committed_seq(conn, claimed.event_id)
     return CommitResult(
-        event_id=event_id,
-        recorded_at=recorded_at,
-        rule_version=rule_version,
-        outbox_seq=_committed_seq(conn, event_id),
-        state=fold_state(history),
+        event_id=claimed.event_id,
+        recorded_at=claimed.recorded_at,
+        rule_version=claimed.rule_version,
+        outbox_seq=seq,
+        state=fold_state(_history_through(conn, claimed.subject_type, claimed.subject_key, seq)),
         replayed=True,
     )
+
+
+def _history_through(conn: psycopg.Connection, subject_type: str, subject_key: str, seq: int) -> list[FoldedEvent]:
+    """The subject's history as of the commit that was assigned outbox `seq`.
+
+    The boundary is the sequence, not `recorded_at`. Per-subject `seq` is assigned under the
+    commit's own advisory lock, so it is commit order for this subject and nothing later can be
+    inside it — where `recorded_at` is a clock with no uniqueness constraint, and a tie or a
+    straggling transaction would otherwise pull a later event into an earlier commit's answer
+    (design decision 4: sequence/snapshot evidence, not a wall-clock cutoff).
+
+    `load_folded_events` still decides *which* events are part of a fold, so there is one reading of
+    that and not two; this only bounds how far the reading goes.
+    """
+    committed = {
+        row[0]
+        for row in conn.execute(
+            "SELECT event_id FROM ledger.outbox WHERE subject_type = %s AND subject_key = %s AND seq <= %s",
+            (subject_type, subject_key, seq),
+        ).fetchall()
+    }
+    return [event for event in load_folded_events(conn, subject_type, subject_key) if event.event_id in committed]
 
 
 def _committed_seq(conn: psycopg.Connection, event_id: uuid.UUID) -> int:

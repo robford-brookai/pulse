@@ -10,6 +10,13 @@ the client's derivation and the ledger's unique constraint — are tested as the
 are. The rest covers what stands between them: the key row is claimed in the commit's own
 transaction, a rejected command burns no key, and a duplicate that slips past the pre-check is
 absorbed by the constraint rather than becoming a second event.
+
+Every call here is *unbound* — no `writer`, so no binding is written or required. That is the
+rollout's expand stage and the posture the unwired callers still run under, not the finished
+behaviour: what a bound call does with a reused key is `test_idempotency_binding.py`'s subject
+(task 2.1, ADR-0007). The case that used to live here — a key reused for a genuinely different fact
+being answered with the fact the key already held — is the behaviour this change exists to end, and
+its successor is that file's conflict, not an assertion here that absorbing is correct.
 """
 
 from __future__ import annotations
@@ -269,46 +276,15 @@ def _blind_the_pre_check(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 
     Later lookups — the one the failed attempt forces — see the truth again.
     """
-    real_lookup = idempotency_module._replay_of
+    real_settle = idempotency_module._settle
     lookups: list[str] = []
 
-    def _lookup(conn: psycopg.Connection, lookup_key: str) -> object:
+    def _lookup(conn: psycopg.Connection, lookup_key: str, binding: object) -> object:
         lookups.append(lookup_key)
-        return None if len(lookups) == 1 else real_lookup(conn, lookup_key)
+        return None if len(lookups) == 1 else real_settle(conn, lookup_key, binding)  # type: ignore[arg-type]
 
-    monkeypatch.setattr(idempotency_module, "_replay_of", _lookup)
+    monkeypatch.setattr(idempotency_module, "_settle", _lookup)
     return lookups
-
-
-def test_a_key_reused_for_a_different_fact_is_absorbed_by_the_unique_constraint(
-    ledger_db: psycopg.Connection, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The constraint, not the pre-check, is what makes the key unique for the ledger's lifetime.
-
-    A writer reusing a key for a genuinely different fact is answered with the fact the key already
-    holds, and its second fact is not written — the key is the promise, and it was already kept.
-    """
-    first_declaration = _declare()
-    key = _key_for(first_declaration)
-    first = commit_idempotent(ledger_db, first_declaration, idempotency_key=key)
-
-    lookups = _blind_the_pre_check(monkeypatch)
-    # A legal transition on its own merits, so only the key's constraint can stop it.
-    replay = commit_idempotent(
-        ledger_db,
-        _declare(to_state="resolved", effective_at=T0 + timedelta(days=1)),
-        idempotency_key=key,
-    )
-
-    assert len(lookups) == 2  # the blinded pre-check, then the lookup the violation forced
-    assert (replay.replayed, replay.event_id) == (True, first.event_id)
-    assert replay.outbox_seq == first.outbox_seq
-    assert replay.state is not None
-    assert replay.state.state == "received"
-    # The event, state write and outbox row the losing attempt made went with its savepoint.
-    assert len(_rows(ledger_db, "events")) == 1
-    assert len(_rows(ledger_db, "outbox")) == 1
-    assert ledger_db.execute("SELECT state FROM ledger.current_state").fetchone() == ("received",)
 
 
 def test_a_concurrent_duplicate_is_replayed_even_though_it_fails_validation_first(
