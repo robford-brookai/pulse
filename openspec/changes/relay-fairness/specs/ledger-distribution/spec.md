@@ -41,6 +41,34 @@ cross-repo contract, `docs/contracts/consumes.md` is where it belongs.
 - **WHEN** existing projection consumers process these deliveries
 - **THEN** duplicate suppression and each consumer's watermark/replay contract preserve the projection; subscriber arrival order is not assumed
 
+#### Scenario: Reordered delivery converges on the highest sequence
+
+- **GIVEN** a fixed reorder within one subject, with a higher `seq` delivered before lower ones
+- **WHEN** the lower-`seq` events arrive after the higher one
+- **THEN** the record converges on the highest `seq` only; the lower-`seq` deliveries are no-ops,
+  never overwrites
+
+#### Scenario: Same-run redelivery is suppressed by the in-process deduper
+
+- **GIVEN** the same `event_id` is redelivered inside one consumer run
+- **WHEN** it is processed
+- **THEN** the in-process deduper suppresses the second apply; no second write is attempted at all
+
+#### Scenario: A late manual redrive is a watermark no-op, not a deduper no-op
+
+- **GIVEN** a manually redriven dead-lettered row carrying an `event_id` the consumer has never
+  seen, arriving after a later `seq` has already landed
+- **WHEN** it is processed
+- **THEN** the watermark check against the board's current sequence, not the deduper, is what
+  makes it a no-op — the deduper has no memory of a redrive's event id
+
+#### Scenario: Restart preserves the watermark guard independent of the deduper
+
+- **GIVEN** a consumer process restart, which starts a fresh in-process deduper against the same
+  board state
+- **WHEN** an already-applied event is redelivered after the restart
+- **THEN** the watermark alone, without help from the deduper, still prevents a second write
+
 ## ADDED Requirements
 
 ### Requirement: Independent ready subjects receive bounded fair service

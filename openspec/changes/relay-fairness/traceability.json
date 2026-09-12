@@ -13,6 +13,18 @@
     "ledger-distribution/Transport reorder and late redrive preserve projection correctness": [
       "2.2"
     ],
+    "ledger-distribution/Reordered delivery converges on the highest sequence": [
+      "2.2"
+    ],
+    "ledger-distribution/Same-run redelivery is suppressed by the in-process deduper": [
+      "2.2"
+    ],
+    "ledger-distribution/A late manual redrive is a watermark no-op, not a deduper no-op": [
+      "2.2"
+    ],
+    "ledger-distribution/Restart preserves the watermark guard independent of the deduper": [
+      "2.2"
+    ],
     "ledger-distribution/Skewed backlog cannot starve an independent subject": [
       "1.1",
       "1.2"
