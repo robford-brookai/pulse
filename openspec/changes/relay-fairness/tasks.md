@@ -33,7 +33,7 @@ No task is dispatched by filing or validating this proposal.
 
 ## 3. Integration and acceptance
 
-- [ ] 3.1 Add a synthetic skewed-backlog benchmark command and bounded integration fixture; record query plan, budgets, backlog drain and two-relay progress against the baseline. Update the relay runbook and propose D17 wording clarification via HANDOFF; no live deployment in this task.
+- [x] 3.1 Add a synthetic skewed-backlog benchmark command and bounded integration fixture; record query plan, budgets, backlog drain and two-relay progress against the baseline. Update the relay runbook and propose D17 wording clarification via HANDOFF; no live deployment in this task.
       Tests: `packages/pulse-ledger/tests/integration/test_relay_fairness_load.py`.
       `[model: sonnet | deps: 2.2 | lane: repo_change | wave: 4]`
 

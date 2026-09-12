@@ -35,6 +35,7 @@ nav:
       - M1-patients-projection: runbooks/m1-patients-projection.md
       - Verdict-relay: runbooks/verdict-relay.md
       - Synthea-regen: runbooks/synthea-regen.md
+      - Outbox-relay: runbooks/outbox-relay.md
   - Connectors:
       - Authoring: connectors/authoring.md
   - Process:
