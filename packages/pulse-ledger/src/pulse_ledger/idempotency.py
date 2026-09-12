@@ -53,9 +53,16 @@ savepoint before the conflict is raised.
 (design decision 5, §Migration Plan). Without one, no binding is written and a claimed key replays
 as it did before — the posture the unwired callers still run under. The two directions that would
 mix the postures unsafely are both refused: an unbound caller is never answered with a bound key's
-result, and a bound caller meeting a key with no binding gets `idempotency_legacy_unverifiable`
-rather than a guessed binding. Reconstructing a binding for such a key from an event that proves
-every canonical field is task 2.2's work; mapping these refusals onto HTTP is task 3.1's.
+result, and a bound caller meeting a key with no binding is answered only from what the original
+event proves.
+
+That last case is the migration. `pulse_ledger.legacy_binding` rebuilds the canonical request and
+the authenticated writer from the original event's own columns; a key whose event proves all of
+both is bound here, in this transaction, and replays, and a key whose event proves less gets
+`idempotency_legacy_unverifiable` and keeps its reservation with no binding written. Nothing is
+taken from the request in hand — it is compared to the rebuild, never copied into it — so a
+mismatch against a rebuilt binding is an ordinary conflict. Mapping these refusals onto HTTP is
+task 3.1's.
 """
 
 from __future__ import annotations
@@ -69,6 +76,7 @@ import psycopg
 from pulse_ledger.auth import Writer
 from pulse_ledger.commit import CommitResult, Declaration, commit_declaration, load_folded_events
 from pulse_ledger.fold import FoldedEvent, fold_state
+from pulse_ledger.legacy_binding import reconstruct_binding
 from pulse_ledger.request_fingerprint import (
     BindingDisposition,
     WriterBinding,
@@ -183,9 +191,21 @@ def _settle(conn: psycopg.Connection, key: str, binding: WriterBinding | None) -
         if on_record is not None:
             raise IdempotencyConflictError(key)
     elif on_record is None:
-        # Claimed before bindings existed. Deriving one from the original event is task 2.2's, and
-        # only from an event that proves every canonical field; guessing one is what ADR-0007 forbids.
-        raise IdempotencyConflictError(key, reason=IDEMPOTENCY_LEGACY_UNVERIFIABLE)
+        # Claimed before bindings existed. `pulse_ledger.legacy_binding` rebuilds one from the
+        # original event's own columns, or refuses; nothing is derived from the request in hand,
+        # which is only ever compared to what was rebuilt. A key whose event proves nothing keeps
+        # its own reason and its reservation — never a guessed binding (ADR-0007, decision 4).
+        rebuilt = reconstruct_binding(conn, key, claimed.event_id)
+        if rebuilt.binding is None:
+            raise IdempotencyConflictError(key, reason=IDEMPOTENCY_LEGACY_UNVERIFIABLE)
+        if (
+            classify_binding(rebuilt.binding, writer_id=binding.writer_id, fingerprint=binding.fingerprint)
+            is BindingDisposition.CONFLICT
+        ):
+            # A proved binding this request does not match is an ordinary collision, and is refused
+            # on the same footing: the key stays with the writer the original event names.
+            raise IdempotencyConflictError(key)
+        _adopt_legacy(conn, rebuilt.binding, claimed.event_id, binding)
     elif (
         classify_binding(on_record, writer_id=binding.writer_id, fingerprint=binding.fingerprint)
         is BindingDisposition.CONFLICT
@@ -220,6 +240,34 @@ def _bind(conn: psycopg.Connection, binding: WriterBinding, event_id: uuid.UUID)
             event_id,
         ),
     )
+
+
+def _adopt_legacy(
+    conn: psycopg.Connection, rebuilt: WriterBinding, event_id: uuid.UUID, presented: WriterBinding
+) -> None:
+    """Record a binding rebuilt from an original event, in the transaction deciding this replay.
+
+    The write is in the same transaction as the answer it justifies, so a failure anywhere after it
+    takes the binding with it and the key is simply legacy again — a half-migrated key is not a
+    state this path can leave behind.
+
+    One binding per key is the store's rule, so two callers rebuilding the same key concurrently
+    race, and the loser's insert violates the primary key rather than finding a row to read. Its own
+    savepoint keeps that violation off the outer transaction, and the winner's row is then
+    *classified*, not assumed to be equivalent: reconstruction is deterministic from one event, so
+    the rows do agree, but a replay that trusted that without checking would be a replay decided by
+    an argument rather than by what is stored.
+    """
+    try:
+        with conn.transaction():
+            _bind(conn, rebuilt, event_id)
+    except psycopg.errors.UniqueViolation:
+        winner = _binding_on_record(conn, rebuilt.idempotency_key)
+        if (
+            classify_binding(winner, writer_id=presented.writer_id, fingerprint=presented.fingerprint)
+            is not BindingDisposition.REPLAY
+        ):
+            raise IdempotencyConflictError(rebuilt.idempotency_key) from None
 
 
 def _binding_on_record(conn: psycopg.Connection, key: str) -> WriterBinding | None:
