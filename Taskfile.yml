@@ -232,6 +232,17 @@ tasks:
     cmds:
       - uv run pytest {{.TESTED_PATHS}} --import-mode=importlib -m integration
 
+  test:transport:
+    desc: Run the LocalStack transport suite through the required-mode gate (critical-path-verification task 2.1); emits JSON evidence under .planning/evidence/
+    # PULSE_TRANSPORT_MODE selects required (fails closed on a missing environment, zero
+    # collection, a skipped case, or a timeout) versus optional (visible skip); unset locally it
+    # defaults to optional, so a dev without Docker still gets a green `task check`. This target
+    # is deliberately never reached from `check` or `test` (docs/ci-lessons.md: `task check` is
+    # the contract with CI's quality job, which has no Docker/LocalStack) — the separate
+    # transport-integration workflow runs it with PULSE_TRANSPORT_MODE=required instead.
+    cmds:
+      - uv run python scripts/transport_gate.py packages/pulse-ledger/tests/integration
+
   twenty:test:
     desc: Type check and run the Twenty app's vitest suite (packages/twenty-app; no server, no network)
     # The repo's first TypeScript package, deliberately contained: vitest only, no bundler,

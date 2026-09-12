@@ -30,6 +30,7 @@ import boto3
 import psycopg
 import pytest
 from pulse_ledger.commit import Declaration, commit_declaration
+from pulse_ledger.fold import TO_STATE_KEY
 from pulse_ledger.relay import LEDGER_DOMAIN, default_publisher, relay_once
 
 _LOCALSTACK_IMAGE = "localstack/localstack:4.6"  # same tag ledger-postgres's neighbours run
@@ -157,4 +158,7 @@ def test_committed_event_observable_on_localstack_queue(bus_env: None, ledger_db
     assert delivered["detail-type"] == LEDGER_DOMAIN
     assert delivered["detail"]["subject_type"] == "referral"
     assert delivered["detail"]["subject_key"] == subject_key
-    assert delivered["detail"]["payload"] == {"note": "synthetic"}
+    # The stored (and published) payload is the writer's fields plus the state this event moves
+    # the subject to (commit.py's `Declaration.event_payload`) — `to_state` is not a leftover,
+    # it is what makes the event state-bearing at all.
+    assert delivered["detail"]["payload"] == {"note": "synthetic", TO_STATE_KEY: "received"}
